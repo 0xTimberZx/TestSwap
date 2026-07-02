@@ -49,42 +49,55 @@ function readProv() {
 
 // ─── Digit Track Display ──────────────────────────────────────────────────────
 
+let digitMaskTimer = null;
+let maskedSegIndex = -1;
+function startDigitMask() {
+  if (digitMaskTimer) return;
+  digitMaskTimer = setInterval(() => {
+    if (maskedSegIndex < 0) return;
+    const charEl = document.getElementById("dchar" + maskedSegIndex);
+    if (charEl) {
+      charEl.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+      charEl.style.opacity = (0.3 + Math.random() * 0.55).toFixed(2);
+    }
+  }, 90);
+}
+function stopDigitMask() {
+  if (digitMaskTimer) { clearInterval(digitMaskTimer); digitMaskTimer = null; }
+  maskedSegIndex = -1;
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById("dchar" + i);
+    if (el) el.style.opacity = "";
+  }
+}
 function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
   const isWalletConnected = !!userAddress;
-
+  if (isWalletConnected) stopDigitMask();
+  maskedSegIndex = -1;
   for (let i = 0; i < 6; i++) {
     const seg = i + 1;
     const cell    = document.getElementById("dc" + i);
     const charEl  = document.getElementById("dchar" + i);
     if (!cell || !charEl) continue;
-
-    // Remove all state classes
     cell.classList.remove("locked", "active", "future", "gated");
-
     if (seg < segment || (seg === segment && digitLocked[i])) {
-      // Locked digit — always visible
-      const char = ALPHABET[Number(digitCounters[i]) % 36];
-      charEl.textContent = char;
+      charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
+      charEl.style.opacity = "";
       cell.classList.add("locked");
-
     } else if (seg === segment) {
-      // Active digit — wallet-gate the revealed character
       if (isWalletConnected) {
-        const char = ALPHABET[Number(digitCounters[i]) % 36];
-        charEl.textContent = char;
+        charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
+        charEl.style.opacity = "";
         cell.classList.add("active");
-        if (inSettlement) {
-          cell.classList.remove("active");
-          cell.classList.add("locked");
-        }
+        if (inSettlement) { cell.classList.remove("active"); cell.classList.add("locked"); }
       } else {
-        charEl.textContent = "?";
         cell.classList.add("active", "gated");
+        maskedSegIndex = i;
+        startDigitMask();
       }
-
     } else {
-      // Future digit
       charEl.textContent = "·";
+      charEl.style.opacity = "";
       cell.classList.add("future");
     }
   }

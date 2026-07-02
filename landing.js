@@ -38,6 +38,28 @@ function renderWindow(windowBytes6) {
   }
 }
 
+let maskTimer = null;
+function startMask() {
+  if (maskTimer) return;
+  maskTimer = setInterval(() => {
+    for (let i = 0; i < 6; i++) {
+      const el = document.getElementById("c" + i);
+      if (!el) continue;
+      el.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+      el.classList.remove("dim");
+      el.classList.add("masked");
+      el.style.opacity = (0.3 + Math.random() * 0.55).toFixed(2);
+    }
+  }, 90);
+}
+function stopMask() {
+  if (maskTimer) { clearInterval(maskTimer); maskTimer = null; }
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById("c" + i);
+    if (el) { el.classList.remove("masked"); el.style.opacity = ""; }
+  }
+}
+
 function renderTimer(segmentStart, inSettlement) {
   const elapsed  = Math.floor(Date.now() / 1000) - Number(segmentStart);
   const INTERACT = 59 * 60 + 45; // 59:45
@@ -70,15 +92,19 @@ async function updateScroll() {
     const { round, segment, segmentStart, counter, currentWindow, pot, inSettlement } = state;
 
     // Flash chars on counter change
-    if (lastCounter !== null && counter.toString() !== lastCounter) {
-      document.querySelectorAll(".scroll-char").forEach(el => {
-        el.style.borderColor = "var(--green)";
-        setTimeout(() => el.style.borderColor = "", 400);
-      });
+    if (!userAddress) {
+      startMask();
+    } else {
+      stopMask();
+      if (lastCounter !== null && counter.toString() !== lastCounter) {
+        document.querySelectorAll(".scroll-char").forEach(el => {
+          el.style.borderColor = "var(--green)";
+          setTimeout(() => el.style.borderColor = "", 400);
+        });
+      }
+      lastCounter = counter.toString();
+      renderWindow(currentWindow);
     }
-    lastCounter = counter.toString();
-
-    renderWindow(currentWindow);
 
     const roundEl = document.getElementById("scroll-round");
     const segEl   = document.getElementById("scroll-seg");
@@ -138,6 +164,8 @@ async function handleConnect() {
   document.getElementById("wallet-info").classList.remove("hidden");
   document.getElementById("network-badge").classList.remove("hidden");
   document.getElementById("wallet-addr").textContent = fmtAddr(userAddress);
+  stopMask();
+  updateScroll();
 
   listenForAccountChanges((newAddr) => {
     if (!newAddr) {
@@ -158,6 +186,7 @@ function handleDisconnect() {
   document.getElementById("connect-btn").classList.remove("hidden");
   document.getElementById("wallet-info").classList.add("hidden");
   document.getElementById("network-badge").classList.add("hidden");
+  startMask();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -179,6 +208,8 @@ function handleDisconnect() {
       const _el = document.getElementById("wallet-addr");
       if (_el) _el.textContent = fmtAddr(newAddr);
     });
+  } else {
+    startMask();
   }
 
   // Load static stats once

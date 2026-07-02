@@ -115,8 +115,10 @@ async function connectWallet() {
     return false;
   }
   try {
-    await _initProvider();
-    await provider.send("eth_requestAccounts", []);
+    // Request account authorization FIRST. _initProvider() calls signer.getAddress(),
+    // which throws "unknown account #0" in ethers v5 before any account is authorized —
+    // silently failing the whole connect even though the wallet popup succeeded.
+    await window.ethereum.request({ method: "eth_requestAccounts" });
     await _initProvider();
     await _ensureChain();
     _saveSession(userAddress);
