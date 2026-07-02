@@ -1,13 +1,8 @@
 name: TimbSwap Settler
-uses: actions/upload-pages-artifact@v3
-with:
-    path: './timbswap'
 
 on:
   schedule:
-    # Settle check every 10 minutes
     - cron: "*/10 * * * *"
-    # Health check every day at noon UTC
     - cron: "0 12 * * *"
   workflow_dispatch:
     inputs:
