@@ -11,9 +11,10 @@ jobs:
   claude:
     runs-on: ubuntu-latest
     permissions:
-      contents: write          # lets Claude commit/push
+      contents: write
       pull-requests: write
       issues: write
+      id-token: write          # ← ADD THIS — required for Claude's OIDC auth
     steps:
       - uses: actions/checkout@v4
       - uses: anthropics/claude-code-action@v1
