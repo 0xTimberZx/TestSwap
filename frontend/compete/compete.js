@@ -36,16 +36,60 @@ function readProv() {
   return provider || new ethers.providers.JsonRpcProvider(RPC_URL);
 }
 
-// ─── Round State Polling ──────────────────────────────────────────────────────
+// ─── Digit Track Display ──────────────────────────────────────────────────────
 
-function bytes6ToChars(b6) {
-  const hex = b6.replace("0x", "");
-  const chars = [];
+let digitMaskTimer = null;
+let maskedSegIndex = -1;
+function startDigitMask() {
+  if (digitMaskTimer) return;
+  digitMaskTimer = setInterval(() => {
+    if (maskedSegIndex < 0) return;
+    const charEl = document.getElementById("dchar" + maskedSegIndex);
+    if (charEl) {
+      charEl.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+      charEl.style.opacity = (0.3 + Math.random() * 0.55).toFixed(2);
+    }
+  }, 90);
+}
+function stopDigitMask() {
+  if (digitMaskTimer) { clearInterval(digitMaskTimer); digitMaskTimer = null; }
+  maskedSegIndex = -1;
   for (let i = 0; i < 6; i++) {
-    const code = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-    chars.push(code > 0 ? String.fromCharCode(code) : "·");
+    const el = document.getElementById("dchar" + i);
+    if (el) el.style.opacity = "";
   }
-  return chars;
+}
+function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
+  const isWalletConnected = !!userAddress;
+  if (isWalletConnected) stopDigitMask();
+  maskedSegIndex = -1;
+  for (let i = 0; i < 6; i++) {
+    const seg = i + 1;
+    const cell    = document.getElementById("dc" + i);
+    const charEl  = document.getElementById("dchar" + i);
+    if (!cell || !charEl) continue;
+    cell.classList.remove("locked", "active", "future", "gated");
+    if (seg < segment || (seg === segment && digitLocked[i])) {
+      charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
+      charEl.style.opacity = "";
+      cell.classList.add("locked");
+    } else if (seg === segment) {
+      if (isWalletConnected) {
+        charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
+        charEl.style.opacity = "";
+        cell.classList.add("active");
+        if (inSettlement) { cell.classList.remove("active"); cell.classList.add("locked"); }
+      } else {
+        cell.classList.add("active", "gated");
+        maskedSegIndex = i;
+        startDigitMask();
+      }
+    } else {
+      charEl.textContent = "·";
+      charEl.style.opacity = "";
+      cell.classList.add("future");
+    }
+  }
 }
 
 async function pollRoundState() {

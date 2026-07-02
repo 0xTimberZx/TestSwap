@@ -71,42 +71,65 @@ let provider = null;
 let signer   = null;
 let userAddress = null;
 
+// ─── Session Persistence ──────────────────────────────────────────────────
+// Keeps wallet connected across page navigations without re-prompting.
+// sessionStorage clears when the browser tab is closed — no stale state.
+
+const SESSION_KEY = "timbswap_wallet";
+
+function _saveSession(address) {
+  try { sessionStorage.setItem(SESSION_KEY, address); } catch {}
+}
+
+function _clearSession() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+}
+
+function _getSavedAddress() {
+  try { return sessionStorage.getItem(SESSION_KEY); } catch { return null; }
+}
+
+async function _initProvider() {
+  provider    = new ethers.providers.Web3Provider(window.ethereum);
+  signer      = provider.getSigner();
+  userAddress = await signer.getAddress();
+}
+
+async function _ensureChain() {
+  const network = await provider.getNetwork();
+  if (network.chainId === CHAIN_ID) return;
+  try {
+    await window.ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: CHAIN_CONFIG.chainId }]
+    });
+  } catch (switchErr) {
+    if (switchErr.code === 4902) {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [CHAIN_CONFIG]
+      });
+    } else {
+      throw switchErr;
+    }
+  }
+  await _initProvider();
+}
+
 async function connectWallet() {
   if (!window.ethereum) {
     alert("No wallet detected. Please use MetaMask or Brave Wallet.");
     return false;
   }
-
   try {
-    provider = new ethers.providers.Web3Provider(window.ethereum);
-    await provider.send("eth_requestAccounts", []);
-    signer  = provider.getSigner();
-    userAddress = await signer.getAddress();
-
-    // Chain check
-    const network = await provider.getNetwork();
-    if (network.chainId !== CHAIN_ID) {
-      try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: CHAIN_CONFIG.chainId }]
-        });
-      } catch (switchErr) {
-        if (switchErr.code === 4902) {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [CHAIN_CONFIG]
-          });
-        } else {
-          throw switchErr;
-        }
-      }
-      // Re-init after switch
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      signer   = provider.getSigner();
-      userAddress = await signer.getAddress();
-    }
-
+    // Request account authorization FIRST. Calling _initProvider() (which does
+    // signer.getAddress()) before this throws "unknown account #0" in ethers v5
+    // when no account is authorized yet — which silently failed the whole
+    // connect even though the wallet popup succeeded.
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    await _initProvider();
+    await _ensureChain();
+    _saveSession(userAddress);
     return true;
   } catch (err) {
     console.error("connectWallet failed:", err);
@@ -174,17 +197,47 @@ function fmtBytes6(bytes6) {
 
 // ─── Account Switch / Disconnect Listeners ────────────────────────────────────
 
+/**
+ * Call on every page load to silently reconnect if the user was already
+ * connected. Returns the connected address or null.
+ * Usage in each page's init:
+ *   const addr = await autoReconnect();
+ *   if (addr) { showWalletUI(addr); loadUserData(); }
+ */
+async function autoReconnect() {
+  if (!window.ethereum) return null;
+  const saved = _getSavedAddress();
+  if (!saved) return null;
+
+  try {
+    // Check wallet still has the account active (no popup)
+    const accounts = await window.ethereum.request({ method: "eth_accounts" });
+    if (!accounts || accounts.length === 0) { _clearSession(); return null; }
+    if (accounts[0].toLowerCase() !== saved.toLowerCase()) {
+      _clearSession(); return null;
+    }
+    await _initProvider();
+    await _ensureChain();
+    return userAddress;
+  } catch {
+    _clearSession();
+    return null;
+  }
+}
+
 function listenForAccountChanges(onChangeCallback) {
   if (!window.ethereum) return;
   window.ethereum.on("accountsChanged", async (accounts) => {
     if (accounts.length === 0) {
-      provider = null;
-      signer   = null;
+      provider    = null;
+      signer      = null;
       userAddress = null;
+      _clearSession();
     } else {
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      signer   = provider.getSigner();
+      provider    = new ethers.providers.Web3Provider(window.ethereum);
+      signer      = provider.getSigner();
       userAddress = accounts[0];
+      _saveSession(userAddress);
     }
     if (onChangeCallback) onChangeCallback(userAddress);
   });

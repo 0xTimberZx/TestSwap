@@ -271,6 +271,7 @@ a { color: inherit; text-decoration: none; }
   transition: color 0.3s, border-color 0.3s;
 }
 .scroll-char.dim { color: var(--text-3); border-color: transparent; }
+.scroll-char.masked { color: var(--text-2); border-color: var(--border); }
 
 .scroll-meta {
   display: flex;
