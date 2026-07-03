@@ -49,7 +49,34 @@ do a contract round.
     the next interaction (or make settlement permissionless) — that's the
     blockchain-level part.
 
-## 3. (add future contract-level items here)
+## 3. User-callable "Advance" (nudge) on the Compete page
+
+- **Want:** a wallet-gated **Advance / nudge** button (on the meter card and near
+  game registration) that pushes the scroll +1 directly — one nudge at a time
+  for now.
+- **Why it's blocked:** `TimbPrize.nudgeScroll()` is `onlyRouter` — it can only
+  be called by `TimbSwapRouter` inside an eligible swap (`_maybeNudge`). There is
+  **no** user-callable nudge path, so a tap-to-nudge button would revert.
+- **Design decision (not just code):** today you must *swap* to nudge, so nudges
+  cost a trade + fee. A direct nudge button changes the game economics — decide
+  the cost/eligibility model (free? costs TIMBS/ETH? rate-limited?) before adding.
+- **Contract change:** add a user-facing nudge entry point (e.g. on `TimbPrize`
+  or mediated by `GameRegistry`) with whatever cost/guard we choose; keep the
+  settlement-window block and `whenGameStarted` guard. Redeploy + update address
+  in `config.js` + wire the button.
+
+## 4. `batchNudge` — multiple nudges in one call
+
+- **Want:** batch N nudges into a single transaction ("batch 5" = one submit,
+  applied one-at-a-time ×5), to cleanly handle ordering when many nudge requests
+  arrive at once.
+- **Depends on #3** (a user-callable nudge must exist first).
+- **Contract change:** add `batchNudge(uint256 count)` that loops `count` times
+  applying the same per-nudge effect/accounting sequentially in one tx (bounded
+  `count` to cap gas). Emit per-nudge events so the scroll animation/order stays
+  correct. Redeploy + update `config.js` + wire a batch stepper in the UI.
+
+## 5. (add future contract-level items here)
 
 <!--
 Template:

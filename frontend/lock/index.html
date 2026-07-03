@@ -149,6 +149,16 @@
 
   </div>
 
+  <div id="lock-detail-modal" class="ld-modal hidden" onclick="closeLockDetail(event)">
+    <div class="ld-card">
+      <div class="ld-header">
+        <span class="ld-title">Lock Detail</span>
+        <button class="ld-close" onclick="closeLockDetailDirect()">✕</button>
+      </div>
+      <div id="lock-detail-body" class="ld-body"></div>
+    </div>
+  </div>
+
   <script src="../config.js"></script>
   <script src="lock.js"></script>
   <script>

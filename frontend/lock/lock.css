@@ -245,3 +245,64 @@
 @media (max-width: 800px) {
   .lock-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── Public lock: clickable row + detail overlay ─────────────────────────── */
+.lock-row-clickable { cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.lock-row-clickable:hover { border-color: var(--green); background: var(--bg3); }
+
+.ld-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 300;
+}
+.ld-modal.hidden { display: none; }
+.ld-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+.ld-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.ld-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.ld-close {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+.ld-close:hover { color: var(--text); }
+.ld-body { display: flex; flex-direction: column; gap: 2px; }
+.ld-amount {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 12px;
+}
+.ld-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+.ld-key { color: var(--text-3); }
+.ld-val { font-family: var(--mono); color: var(--text); text-align: right; }
+.ld-link { color: var(--blue); }
+.ld-link:hover { text-decoration: underline; }
