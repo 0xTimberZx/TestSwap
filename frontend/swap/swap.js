@@ -347,8 +347,19 @@ async function handleSwap() {
     document.getElementById("amount-in").value = "";
     document.getElementById("amount-out").value = "";
     await refreshBalances();
-    btn.textContent = "Swap successful ✓";
-    setTimeout(() => updateSwapButton("Swap"), 2000);
+    btn.textContent = "Swap confirmed ✓";
+    btn.style.background = "#14f195";
+    // Show view tx link
+    const txLink = document.getElementById("swap-tx-link");
+    if (txLink) {
+      txLink.href = `https://sepolia.arbiscan.io/tx/${tx.hash}`;
+      txLink.classList.remove("hidden");
+    }
+    setTimeout(() => {
+      updateSwapButton("Swap");
+      btn.style.background = "";
+      if (txLink) txLink.classList.add("hidden");
+    }, 8000);
 
   } catch (err) {
     const msg = err?.reason || err?.message || String(err);
@@ -356,7 +367,15 @@ async function handleSwap() {
     DebugHub.logError("handleSwap", err);
     DebugHub.logCheckpoint("Swap Failed", "fail");
     btn.textContent = "Swap failed — try again";
-    setTimeout(() => updateSwapButton(originalText), 2000);
+    btn.style.background = "rgba(239,68,68,0.15)";
+    btn.style.color = "#ef4444";
+    btn.style.borderColor = "#ef4444";
+    setTimeout(() => {
+      updateSwapButton(originalText);
+      btn.style.background = "";
+      btn.style.color = "";
+      btn.style.borderColor = "";
+    }, 3000);
   } finally {
     btn.disabled = false;
   }

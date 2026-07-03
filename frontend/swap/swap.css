@@ -459,3 +459,16 @@
 @media (max-width: 600px) {
   .footer { flex-direction: column; gap: 10px; padding: 20px; text-align: center; }
 }
+
+/* ─── Swap Tx Link ───────────────────────────────────────────────────────── */
+.swap-tx-link {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--green);
+  padding: 8px 0 2px;
+  transition: opacity 0.15s;
+}
+.swap-tx-link:hover { opacity: 0.75; }
+.swap-tx-link.hidden { display: none; }
