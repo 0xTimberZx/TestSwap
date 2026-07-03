@@ -278,8 +278,14 @@ async function loadMyLocks() {
 // ─── Public Registry ──────────────────────────────────────────────────────────
 
 async function loadRegistry() {
+  const section = document.getElementById("registry-section");
   const list    = document.getElementById("registry-list");
   const countEl = document.getElementById("registry-count");
+
+  // Game/registry visibility is wallet-gated — hide the whole card when the
+  // wallet isn't connected so the site shows no game data to onlookers.
+  if (!userAddress) { if (section) section.classList.add("hidden"); return; }
+  if (section) section.classList.remove("hidden");
 
   try {
     const vault = new ethers.Contract(ADDRESSES.TimbLockVault, LOCKVAULT_ABI, readProv());
@@ -321,13 +327,13 @@ async function handleConnect() {
   document.getElementById("wallet-addr").textContent = fmtAddr(userAddress);
 
   updateLockButton();
-  await Promise.all([refreshLockBalance(), loadMyLocks()]);
+  await Promise.all([refreshLockBalance(), loadMyLocks(), loadRegistry()]);
 
   listenForAccountChanges(async (newAddr) => {
     if (!newAddr) { handleDisconnect(); return; }
     document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
     updateLockButton();
-    await Promise.all([refreshLockBalance(), loadMyLocks()]);
+    await Promise.all([refreshLockBalance(), loadMyLocks(), loadRegistry()]);
   });
 }
 
@@ -339,6 +345,7 @@ function handleDisconnect() {
   document.getElementById("network-badge").classList.add("hidden");
   updateLockButton();
   loadMyLocks();
+  loadRegistry(); // now hides the public registry card
 }
 
 // ─── Input Listeners ──────────────────────────────────────────────────────────
@@ -364,7 +371,7 @@ document.getElementById("lock-amount")?.addEventListener("input", updateLockButt
       const _el = document.getElementById("wallet-addr");
       if (_el) _el.textContent = fmtAddr(newAddr);
       updateLockButton();
-      await Promise.all([refreshLockBalance(), loadMyLocks()]);
+      await Promise.all([refreshLockBalance(), loadMyLocks(), loadRegistry()]);
     });
   }
 
