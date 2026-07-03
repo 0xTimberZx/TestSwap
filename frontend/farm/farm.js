@@ -219,20 +219,16 @@ async function handleClaim(pool) {
 
 // ─── Wallet Connect ───────────────────────────────────────────────────────────
 
-async function handleConnect() {
-  DebugHub.logCheckpoint("Wallet Connect Requested", "pass");
-  const ok = await connectWallet();
-  if (!ok) { DebugHub.logCheckpoint("Wallet Connect Failed", "fail"); return; }
-
-  DebugHub.startSession();
-  DebugHub.logSecurity("Chain Check", "pass");
-  DebugHub.logCheckpoint("Wallet Connected", "pass");
-
-  document.getElementById("connect-btn").classList.add("hidden");
-  document.getElementById("wallet-info").classList.remove("hidden");
-  document.getElementById("network-badge").classList.remove("hidden");
-  document.getElementById("wallet-addr").textContent = fmtAddr(userAddress);
-
+// Shared post-connect wiring, used by both a fresh connect and auto-reconnect.
+async function onWalletReady() {
+  showConnectedUI(userAddress);
+  // Optimistically flip the stake buttons to the connected state so they never
+  // read "Connect wallet" while pool data loads (or if a read momentarily fails);
+  // loadAllPools then refines the enabled/disabled state from balances.
+  ["staking", "farm"].forEach(p => {
+    const b = document.getElementById(p + "-stake-btn");
+    if (b) { b.textContent = "Stake"; b.disabled = false; }
+  });
   await loadAllPools();
 
   listenForAccountChanges(async (newAddr) => {
@@ -242,12 +238,22 @@ async function handleConnect() {
   });
 }
 
+async function handleConnect() {
+  DebugHub.logCheckpoint("Wallet Connect Requested", "pass");
+  const ok = await connectWallet();
+  if (!ok) { DebugHub.logCheckpoint("Wallet Connect Failed", "fail"); return; }
+
+  DebugHub.startSession();
+  DebugHub.logSecurity("Chain Check", "pass");
+  DebugHub.logCheckpoint("Wallet Connected", "pass");
+
+  await onWalletReady();
+}
+
 function handleDisconnect() {
   DebugHub.endSession();
   provider = null; signer = null; userAddress = null;
-  document.getElementById("connect-btn").classList.remove("hidden");
-  document.getElementById("wallet-info").classList.add("hidden");
-  document.getElementById("network-badge").classList.add("hidden");
+  showDisconnectedUI();
   ["staking", "farm"].forEach(p => {
     document.getElementById(p + "-stake-btn").textContent = "Connect wallet";
     document.getElementById(p + "-stake-btn").disabled = true;
@@ -262,4 +268,13 @@ function handleDisconnect() {
 (async () => {
   await loadAllPools();
   setInterval(loadAllPools, 15000);
+
+  // Restore an existing wallet session (no popup) so the stake/unstake/claim
+  // controls reflect the connected state right away on navigation.
+  const reconnected = await autoReconnect();
+  if (reconnected) {
+    DebugHub.startSession();
+    DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
+    await onWalletReady();
+  }
 })();

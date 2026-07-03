@@ -36,59 +36,56 @@ function readProv() {
   return provider || new ethers.providers.JsonRpcProvider(RPC_URL);
 }
 
-// ─── Digit Track Display ──────────────────────────────────────────────────────
+// ─── Live Window Display ──────────────────────────────────────────────────────
 
-let digitMaskTimer = null;
-let maskedSegIndex = -1;
-function startDigitMask() {
-  if (digitMaskTimer) return;
-  digitMaskTimer = setInterval(() => {
-    if (maskedSegIndex < 0) return;
-    const charEl = document.getElementById("dchar" + maskedSegIndex);
-    if (charEl) {
-      charEl.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
-      charEl.style.opacity = (0.3 + Math.random() * 0.55).toFixed(2);
-    }
-  }, 90);
-}
-function stopDigitMask() {
-  if (digitMaskTimer) { clearInterval(digitMaskTimer); digitMaskTimer = null; }
-  maskedSegIndex = -1;
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+// bytes6 (e.g. 0x414243…) → array of 6 display chars ("·" for empty slots).
+function bytes6ToChars(b6) {
+  const hex = b6.replace("0x", "");
+  const chars = [];
   for (let i = 0; i < 6; i++) {
-    const el = document.getElementById("dchar" + i);
-    if (el) el.style.opacity = "";
+    const code = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    chars.push(code > 0 ? String.fromCharCode(code) : "·");
+  }
+  return chars;
+}
+
+// ─── Wallet-gated floating mask ────────────────────────────────────────────────
+// Until a wallet is connected the real live window is never shown. One cell at a
+// time drifts to a fresh random character, so onlookers see a plausible but fake
+// string that keeps re-scrambling rather than the real scroll position.
+let maskTimer = null;
+let maskIndex = 0;
+
+function seedMask() {
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById("lc" + i);
+    if (el) {
+      el.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+      el.classList.remove("dim");
+      el.classList.add("masked");
+    }
   }
 }
-function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
-  const isWalletConnected = !!userAddress;
-  if (isWalletConnected) stopDigitMask();
-  maskedSegIndex = -1;
-  for (let i = 0; i < 6; i++) {
-    const seg = i + 1;
-    const cell    = document.getElementById("dc" + i);
-    const charEl  = document.getElementById("dchar" + i);
-    if (!cell || !charEl) continue;
-    cell.classList.remove("locked", "active", "future", "gated");
-    if (seg < segment || (seg === segment && digitLocked[i])) {
-      charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
-      charEl.style.opacity = "";
-      cell.classList.add("locked");
-    } else if (seg === segment) {
-      if (isWalletConnected) {
-        charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
-        charEl.style.opacity = "";
-        cell.classList.add("active");
-        if (inSettlement) { cell.classList.remove("active"); cell.classList.add("locked"); }
-      } else {
-        cell.classList.add("active", "gated");
-        maskedSegIndex = i;
-        startDigitMask();
-      }
-    } else {
-      charEl.textContent = "·";
-      charEl.style.opacity = "";
-      cell.classList.add("future");
+
+function startMask() {
+  if (maskTimer) return;
+  seedMask();
+  maskTimer = setInterval(() => {
+    const el = document.getElementById("lc" + maskIndex);
+    if (el) {
+      el.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+      el.classList.add("masked");
     }
+    maskIndex = (maskIndex + 1) % 6;
+  }, 220);
+}
+
+function stopMask() {
+  if (maskTimer) { clearInterval(maskTimer); maskTimer = null; }
+  for (let i = 0; i < 6; i++) {
+    document.getElementById("lc" + i)?.classList.remove("masked");
   }
 }
 
@@ -110,14 +107,21 @@ async function pollRoundState() {
     document.getElementById("hdr-segment").textContent = `${s.segment}/6`;
     document.getElementById("sub-pot").textContent = "Pot: " + fmt(s.pot) + " ETH";
 
-    const chars = bytes6ToChars(s.currentWindow);
-    chars.forEach((c, i) => {
-      const el = document.getElementById("lc" + i);
-      if (el) {
-        el.textContent = c;
-        el.classList.toggle("dim", c === "·");
-      }
-    });
+    // Wallet-gate the live window: keep the floating mask running until the
+    // user is connected, then reveal the real characters.
+    if (!userAddress) {
+      startMask();
+    } else {
+      stopMask();
+      const chars = bytes6ToChars(s.currentWindow);
+      chars.forEach((c, i) => {
+        const el = document.getElementById("lc" + i);
+        if (el) {
+          el.textContent = c;
+          el.classList.toggle("dim", c === "·");
+        }
+      });
+    }
 
     const timerEl = document.getElementById("sub-timer");
     if (s.inSettlement) {
@@ -354,17 +358,31 @@ async function loadMyEntries() {
       const row = document.createElement("div");
       row.className = "entry-row-item";
 
-      const canClaimRefund = (statusName === "Expired") &&
-        currentRoundNum !== null && currentRoundNum <= entry.lastEligibleRound.toNumber() + 2;
+      // Refund rules mirror GameRegistry.claimRefund: the entry must be past
+      // its last eligible round (it has finished playing) and still inside the
+      // 2-round claim window, and not already Claimed/Inactive. A Pending/Active
+      // entry that hasn't played out yet cannot be cancelled — but its principal
+      // becomes refundable once it expires, so we tell the user exactly when.
+      const lastEligible   = entry.lastEligibleRound.toNumber();
+      const notClaimed     = entry.status !== 3 && entry.status !== 4;
+      const expiredByRound = currentRoundNum !== null && currentRoundNum > lastEligible;
+      const withinWindow   = currentRoundNum !== null && currentRoundNum <= lastEligible + 2;
+      const canClaimRefund = notClaimed && expiredByRound && withinWindow;
+
+      let refundHint = "";
+      if (notClaimed && !canClaimRefund) {
+        if (!expiredByRound)      refundHint = ` · principal refundable after R${lastEligible + 1}`;
+        else if (!withinWindow)   refundHint = ` · refund window closed`;
+      }
 
       row.innerHTML = `
         <div>
           <div class="entry-row-string">${chars.join("")}</div>
-          <div class="entry-row-meta">Round ${round.toString()} · expires R${entry.lastEligibleRound.toString()}</div>
+          <div class="entry-row-meta">Round ${round.toString()} · expires R${lastEligible}${refundHint}</div>
         </div>
         <div style="display:flex; align-items:center; gap:6px;">
           <span class="entry-status-badge ${statusClass}">${statusName}</span>
-          ${canClaimRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${round.toString()})">Refund</button>` : ""}
+          ${canClaimRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${round.toString()})">Refund principal</button>` : ""}
         </div>
       `;
       list.appendChild(row);
@@ -436,22 +454,12 @@ async function loadPastRounds() {
 
 // ─── Wallet Connect ───────────────────────────────────────────────────────────
 
-async function handleConnect() {
-  DebugHub.logCheckpoint("Wallet Connect Requested", "pass");
-  const ok = await connectWallet();
-  if (!ok) { DebugHub.logCheckpoint("Wallet Connect Failed", "fail"); return; }
-
-  DebugHub.startSession();
-  DebugHub.logSecurity("Chain Check", "pass");
-  DebugHub.logCheckpoint("Wallet Connected", "pass");
-
-  document.getElementById("connect-btn").classList.add("hidden");
-  document.getElementById("wallet-info").classList.remove("hidden");
-  document.getElementById("network-badge").classList.remove("hidden");
-  document.getElementById("wallet-addr").textContent = fmtAddr(userAddress);
-
+// Shared post-connect wiring, used by both a fresh connect and auto-reconnect.
+async function onWalletReady() {
+  showConnectedUI(userAddress);
+  stopMask();
   updateEntryButton();
-  await loadMyEntries();
+  await Promise.all([loadMyEntries(), pollRoundState()]);
 
   listenForAccountChanges(async (newAddr) => {
     if (!newAddr) { handleDisconnect(); return; }
@@ -461,22 +469,48 @@ async function handleConnect() {
   });
 }
 
+async function handleConnect() {
+  DebugHub.logCheckpoint("Wallet Connect Requested", "pass");
+  const ok = await connectWallet();
+  if (!ok) { DebugHub.logCheckpoint("Wallet Connect Failed", "fail"); return; }
+
+  DebugHub.startSession();
+  DebugHub.logSecurity("Chain Check", "pass");
+  DebugHub.logCheckpoint("Wallet Connected", "pass");
+
+  await onWalletReady();
+}
+
 function handleDisconnect() {
   DebugHub.endSession();
   provider = null; signer = null; userAddress = null;
-  document.getElementById("connect-btn").classList.remove("hidden");
-  document.getElementById("wallet-info").classList.add("hidden");
-  document.getElementById("network-badge").classList.add("hidden");
+  showDisconnectedUI();
   updateEntryButton();
   loadMyEntries();
+  startMask();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 (async () => {
   await loadEntryCosts();
+
+  // Resolve the wallet session first (no popup) so the very first poll knows
+  // whether to reveal the real window or keep the floating decoy mask, and so
+  // the entry button and "My Entries" reflect the connected state on navigation.
+  const reconnected = await autoReconnect();
+  if (reconnected) {
+    DebugHub.startSession();
+    DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
+    await onWalletReady();
+  } else {
+    // Start the floating decoy mask right away so the window is never shown
+    // unmasked while the first RPC read is in flight.
+    startMask();
+    await loadMyEntries();
+  }
+
   await pollRoundState();
-  await loadMyEntries();
   await loadPastRounds();
 
   setInterval(pollRoundState, 4000);

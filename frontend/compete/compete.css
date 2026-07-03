@@ -59,6 +59,8 @@
   transition: border-color 0.3s;
 }
 .scroll-char-lg.dim { color: var(--text-3); }
+/* Wallet-gated decoy: muted so the floating mask never reads as the real value */
+.scroll-char-lg.masked { color: var(--text-2); }
 
 .round-substats {
   display: flex;

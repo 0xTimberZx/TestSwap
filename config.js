@@ -225,6 +225,30 @@ async function autoReconnect() {
   }
 }
 
+// ─── Shared Nav / Wallet UI Helpers ───────────────────────────────────────────
+// Used by every page so the connected/disconnected header renders identically
+// and the mobile nav toggle works the same everywhere.
+
+function showConnectedUI(address) {
+  document.getElementById("connect-btn")?.classList.add("hidden");
+  document.getElementById("wallet-info")?.classList.remove("hidden");
+  document.getElementById("network-badge")?.classList.remove("hidden");
+  const el = document.getElementById("wallet-addr");
+  if (el) el.textContent = fmtAddr(address);
+}
+
+function showDisconnectedUI() {
+  document.getElementById("connect-btn")?.classList.remove("hidden");
+  document.getElementById("wallet-info")?.classList.add("hidden");
+  document.getElementById("network-badge")?.classList.add("hidden");
+}
+
+// Toggles the mobile nav overlay open/closed. The hamburger is only visible
+// under the responsive breakpoint (see style.css).
+function toggleMobileNav() {
+  document.querySelector(".nav-links")?.classList.toggle("open");
+}
+
 function listenForAccountChanges(onChangeCallback) {
   if (!window.ethereum) return;
   window.ethereum.on("accountsChanged", async (accounts) => {

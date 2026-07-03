@@ -288,20 +288,9 @@ async function loadRegistry() {
 
 // ─── Wallet Connect ───────────────────────────────────────────────────────────
 
-async function handleConnect() {
-  DebugHub.logCheckpoint("Wallet Connect Requested", "pass");
-  const ok = await connectWallet();
-  if (!ok) { DebugHub.logCheckpoint("Wallet Connect Failed", "fail"); return; }
-
-  DebugHub.startSession();
-  DebugHub.logSecurity("Chain Check", "pass");
-  DebugHub.logCheckpoint("Wallet Connected", "pass");
-
-  document.getElementById("connect-btn").classList.add("hidden");
-  document.getElementById("wallet-info").classList.remove("hidden");
-  document.getElementById("network-badge").classList.remove("hidden");
-  document.getElementById("wallet-addr").textContent = fmtAddr(userAddress);
-
+// Shared post-connect wiring, used by both a fresh connect and auto-reconnect.
+async function onWalletReady() {
+  showConnectedUI(userAddress);
   updateLockButton();
   await Promise.all([refreshLockBalance(), loadMyLocks()]);
 
@@ -313,12 +302,22 @@ async function handleConnect() {
   });
 }
 
+async function handleConnect() {
+  DebugHub.logCheckpoint("Wallet Connect Requested", "pass");
+  const ok = await connectWallet();
+  if (!ok) { DebugHub.logCheckpoint("Wallet Connect Failed", "fail"); return; }
+
+  DebugHub.startSession();
+  DebugHub.logSecurity("Chain Check", "pass");
+  DebugHub.logCheckpoint("Wallet Connected", "pass");
+
+  await onWalletReady();
+}
+
 function handleDisconnect() {
   DebugHub.endSession();
   provider = null; signer = null; userAddress = null;
-  document.getElementById("connect-btn").classList.remove("hidden");
-  document.getElementById("wallet-info").classList.add("hidden");
-  document.getElementById("network-badge").classList.add("hidden");
+  showDisconnectedUI();
   updateLockButton();
   loadMyLocks();
 }
@@ -332,4 +331,15 @@ document.getElementById("lock-amount")?.addEventListener("input", updateLockButt
 (async () => {
   await loadWhitelistedTokens();
   await loadRegistry();
+
+  // Restore an existing wallet session (no popup) so the lock form and
+  // "My Locks" reflect the connected state right away on navigation.
+  const reconnected = await autoReconnect();
+  if (reconnected) {
+    DebugHub.startSession();
+    DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
+    await onWalletReady();
+  } else {
+    updateLockButton();
+  }
 })();

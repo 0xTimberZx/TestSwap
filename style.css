@@ -390,6 +390,31 @@ a { color: inherit; text-decoration: none; }
 .footer-left { display: flex; align-items: center; gap: 8px; }
 .footer-left .nav-logo-mark { color: var(--green); }
 
+/* ─── Hamburger (hidden until the responsive breakpoint) ─────────────────────── */
+.nav-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.nav-hamburger span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  margin: 0 auto;
+  background: var(--text-2);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.nav-hamburger:hover span { background: var(--text); }
+
 /* ─── Responsive ────────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .hero {
@@ -401,8 +426,38 @@ a { color: inherit; text-decoration: none; }
   .hero-actions { justify-content: center; }
   .scroll-display { min-width: unset; width: 100%; }
   .features { grid-template-columns: repeat(2, 1fr); }
-  .nav-links { display: none; }
   .footer { flex-direction: column; gap: 12px; padding: 20px 24px; text-align: center; }
+
+  /* Collapse the inline nav into a hamburger-triggered overlay so navigation
+     stays reachable in portrait / narrow viewports. */
+  .nav-hamburger { display: flex; }
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 12px 14px;
+    z-index: 200;
+  }
+  .nav-links.open { display: flex; }
+  .nav-group { width: 100%; }
+  .nav-group-btn { width: 100%; justify-content: space-between; }
+  /* Show each dropdown expanded inline inside the open mobile menu */
+  .nav-dropdown {
+    display: flex;
+    position: static;
+    flex-direction: column;
+    min-width: 0;
+    padding: 0 0 6px 14px;
+    border: none;
+    background: transparent;
+  }
 }
 
 @media (max-width: 480px) {

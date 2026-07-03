@@ -364,6 +364,20 @@ async function handleSwap() {
 
 // ─── Wallet Connect (page-specific wiring) ────────────────────────────────────
 
+// Shared post-connect wiring, used by both a fresh connect and auto-reconnect.
+async function onWalletReady() {
+  showConnectedUI(userAddress);
+  await refreshBalances();
+  await recalcQuote();
+
+  listenForAccountChanges(async (newAddr) => {
+    if (!newAddr) { handleDisconnect(); return; }
+    document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
+    await refreshBalances();
+    await recalcQuote();
+  });
+}
+
 async function handleConnect() {
   DebugHub.logCheckpoint("Wallet Connect Requested", "pass");
   const ok = await connectWallet();
@@ -373,39 +387,35 @@ async function handleConnect() {
   DebugHub.logSecurity("Chain Check", "pass");
   DebugHub.logCheckpoint("Wallet Connected", "pass");
 
-  document.getElementById("connect-btn").classList.add("hidden");
-  document.getElementById("wallet-info").classList.remove("hidden");
-  document.getElementById("network-badge").classList.remove("hidden");
-  document.getElementById("wallet-addr").textContent = fmtAddr(userAddress);
-
-  await refreshBalances();
-  updateSwapButton(tokenIn && tokenOut ? "Swap" : "Select tokens");
-
-  listenForAccountChanges(async (newAddr) => {
-    if (!newAddr) { handleDisconnect(); return; }
-    document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
-    await refreshBalances();
-  });
+  await onWalletReady();
 }
 
 function handleDisconnect() {
   DebugHub.endSession();
   provider = null; signer = null; userAddress = null;
-  document.getElementById("connect-btn").classList.remove("hidden");
-  document.getElementById("wallet-info").classList.add("hidden");
-  document.getElementById("network-badge").classList.add("hidden");
+  showDisconnectedUI();
   updateSwapButton("Connect wallet to swap");
   refreshBalances();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-(() => {
+(async () => {
   // Default to TIMBS in / WETH out
   tokenIn  = DEFAULT_TOKENS.find(t => t.symbol === "TIMBS");
   tokenOut = DEFAULT_TOKENS.find(t => t.symbol === "WETH");
   document.getElementById("token-in-symbol").textContent  = tokenIn.symbol;
   document.getElementById("token-out-symbol").textContent = tokenOut.symbol;
   checkEligibility();
-  recalcQuote();
+
+  // Restore an existing wallet session (no popup) so balances and the swap
+  // button reflect the connected state right away on navigation.
+  const reconnected = await autoReconnect();
+  if (reconnected) {
+    DebugHub.startSession();
+    DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
+    await onWalletReady();
+  } else {
+    await recalcQuote();
+  }
 })();
