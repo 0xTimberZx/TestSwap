@@ -60,7 +60,7 @@ function startDigitMask() {
       charEl.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
       charEl.style.opacity = (0.3 + Math.random() * 0.55).toFixed(2);
     }
-  }, 90);
+  }, 220);
 }
 function stopDigitMask() {
   if (digitMaskTimer) { clearInterval(digitMaskTimer); digitMaskTimer = null; }
@@ -422,19 +422,35 @@ async function loadMyEntries() {
 
       const statusName  = STATUS_NAMES[entry.status] || "Unknown";
       const statusClass = "status-" + statusName.toLowerCase();
-      const canRefund   = statusName === "Expired" && currentRoundNum !== null
-                          && currentRoundNum <= entry.lastEligibleRound.toNumber() + 2;
+
+      // Refund rules mirror GameRegistry.claimRefund: the entry must have played
+      // out (currentRound past its lastEligibleRound) and still be inside the
+      // 2-round claim window, and not already Claimed/Inactive. A Pending/Active
+      // entry can't be cancelled early — but its principal is refundable once it
+      // expires, so we tell the user exactly when instead of leaving it looking
+      // stuck (the game is risk-free: your principal always comes back).
+      const lastEligible   = entry.lastEligibleRound.toNumber();
+      const notClaimed     = entry.status !== 3 && entry.status !== 4;
+      const expiredByRound = currentRoundNum !== null && currentRoundNum > lastEligible;
+      const withinWindow   = currentRoundNum !== null && currentRoundNum <= lastEligible + 2;
+      const canRefund      = notClaimed && expiredByRound && withinWindow;
+
+      let refundHint = "";
+      if (notClaimed && !canRefund) {
+        if (!expiredByRound)    refundHint = ` · principal refundable after R${lastEligible + 1}`;
+        else if (!withinWindow) refundHint = ` · refund window closed`;
+      }
 
       const row = document.createElement("div");
       row.className = "entry-row-item";
       row.innerHTML = `
         <div>
           <div class="entry-row-string">${bytes6ToStr(entry.string6)}</div>
-          <div class="entry-row-meta">Round ${round} · expires R${entry.lastEligibleRound}</div>
+          <div class="entry-row-meta">Round ${round} · expires R${lastEligible}${refundHint}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span class="entry-status-badge ${statusClass}">${statusName}</span>
-          ${canRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${round})">Refund</button>` : ""}
+          ${canRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${round})">Refund principal</button>` : ""}
         </div>`;
       list.appendChild(row);
     }
@@ -589,6 +605,9 @@ function handleDisconnect() {
     if (_el) _el.textContent = fmtAddr(_reconnected);
     DebugHub.startSession();
     DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
+    // Reflect the connected state on the entry button immediately; without this
+    // it keeps reading "Connect wallet to enter" until the user types.
+    updateEntryButton();
     listenForAccountChanges(async (newAddr) => {
       if (!newAddr) { handleDisconnect(); return; }
       const _addrEl = document.getElementById("wallet-addr");

@@ -275,6 +275,13 @@ function handleDisconnect() {
     if (_addrEl) _addrEl.textContent = fmtAddr(_reconnected);
     DebugHub.startSession();
     DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
+    // Optimistically flip the stake buttons to the connected state so they never
+    // read "Connect wallet" while pool data loads (or if a read momentarily
+    // fails); loadAllPools then refines enabled/disabled from balances.
+    ["staking", "farm"].forEach(p => {
+      const b = document.getElementById(p + "-stake-btn");
+      if (b) { b.textContent = "Stake"; b.disabled = false; }
+    });
     listenForAccountChanges(async (newAddr) => {
       if (!newAddr) { handleDisconnect(); return; }
       const _el = document.getElementById("wallet-addr");
