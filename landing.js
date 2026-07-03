@@ -39,18 +39,27 @@ function renderWindow(windowBytes6) {
 }
 
 let maskTimer = null;
+let maskIndex = 0;
 function startMask() {
   if (maskTimer) return;
+  // Seed every cell once so nothing reads as an empty slot while masked.
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById("c" + i);
+    if (!el) continue;
+    el.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+    el.classList.remove("dim");
+    el.classList.add("masked");
+  }
+  // Drift one cell at a time on a calmer cadence so the decoy string
+  // re-scrambles gently rather than flickering all six positions at once.
   maskTimer = setInterval(() => {
-    for (let i = 0; i < 6; i++) {
-      const el = document.getElementById("c" + i);
-      if (!el) continue;
+    const el = document.getElementById("c" + maskIndex);
+    if (el) {
       el.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
-      el.classList.remove("dim");
       el.classList.add("masked");
-      el.style.opacity = (0.3 + Math.random() * 0.55).toFixed(2);
     }
-  }, 90);
+    maskIndex = (maskIndex + 1) % 6;
+  }, 220);
 }
 function stopMask() {
   if (maskTimer) { clearInterval(maskTimer); maskTimer = null; }

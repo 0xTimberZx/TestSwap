@@ -345,9 +345,20 @@ document.getElementById("lock-amount")?.addEventListener("input", updateLockButt
       if (!newAddr) { handleDisconnect(); return; }
       const _el = document.getElementById("wallet-addr");
       if (_el) _el.textContent = fmtAddr(newAddr);
+      updateLockButton();
+      await Promise.all([refreshLockBalance(), loadMyLocks()]);
     });
   }
 
   await loadWhitelistedTokens();
   await loadRegistry();
+
+  // The token list and user data weren't ready during the reconnect above, so
+  // refresh the lock button, balance, and "My Locks" now that they've loaded —
+  // otherwise the button reads "Connect wallet to lock" and My Locks stays empty
+  // even though the wallet is connected.
+  if (_reconnected) {
+    updateLockButton();
+    await Promise.all([refreshLockBalance(), loadMyLocks()]);
+  }
 })();
