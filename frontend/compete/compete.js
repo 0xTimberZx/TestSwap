@@ -16,6 +16,7 @@ const GAME_REGISTRY_ABI = [
   "function getEntry(address player, uint256 round) external view returns (bytes6 string6, uint256 entryRound, uint256 lastEligibleRound, uint256 escrowAmount, address escrowToken, uint8 status, bool exists)",
   "function additionalRoundCost(uint256 extraRounds) external view returns (uint256)",
   "function submitEntry(bytes6 string6, bool useETH, uint256 extraRounds) external payable",
+  "function replaceEntry(bytes6 newString6, uint256 extraRounds) external payable",
   "function claimRefund(uint256 round) external"
 ];
 
@@ -42,6 +43,10 @@ let entryCostETH_wei   = null;
 let entryCostTIMBS_wei = null;
 let currentRoundNum    = null;
 let lastDigitCounters  = null;
+// True when the wallet already has a Pending/Active entry for the next play
+// round. The contract allows only one entry per round, so a second submit
+// reverts (UNPREDICTABLE_GAS_LIMIT) — we route to replaceEntry instead.
+let hasPlayEntry       = false;
 
 function readProv() {
   return provider || new ethers.providers.JsonRpcProvider(RPC_URL);
@@ -79,7 +84,7 @@ function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
     const cell    = document.getElementById("dc" + i);
     const charEl  = document.getElementById("dchar" + i);
     if (!cell || !charEl) continue;
-    cell.classList.remove("locked", "active", "future", "gated");
+    cell.classList.remove("locked", "active", "future", "gated", "settling");
     if (seg < segment || (seg === segment && digitLocked[i])) {
       charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
       charEl.style.opacity = "";
@@ -88,8 +93,11 @@ function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
       if (isWalletConnected) {
         charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
         charEl.style.opacity = "";
+        // Keep the current segment marked as active even during settlement so
+        // the "current part of the meter" indicator never disappears; add a
+        // settling modifier rather than demoting it to a finalized locked cell.
         cell.classList.add("active");
-        if (inSettlement) { cell.classList.remove("active"); cell.classList.add("locked"); }
+        if (inSettlement) cell.classList.add("settling");
       } else {
         cell.classList.add("active", "gated");
         maskedSegIndex = i;
@@ -323,7 +331,8 @@ function updateEntryButton() {
   const btn = document.getElementById("entry-btn");
   if (!userAddress) { btn.textContent = "Connect wallet to enter"; btn.disabled = true; return; }
   if (!isEntryValid()) { btn.textContent = "Enter a valid 6-character string"; btn.disabled = true; return; }
-  btn.textContent = "Submit Entry";
+  // Only one entry per round — if we already have one queued, this replaces it.
+  btn.textContent = hasPlayEntry ? "Update entry" : "Submit Entry";
   btn.disabled    = false;
 }
 
@@ -341,13 +350,19 @@ async function handleSubmitEntry() {
   const entryStr = document.getElementById("entry-string").value;
   const string6  = stringToBytes6(entryStr);
 
+  const replacing = hasPlayEntry;
+  const resetLabel = replacing ? "Update entry" : "Submit Entry";
+
   try {
     btn.disabled = true;
     const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
     const useETH   = selectedToken.isNative;
 
+    // When replacing an existing entry, the original principal stays in escrow
+    // and is reused — only additional-round TIMBS (if any) is pulled. A fresh
+    // entry needs the initial deposit (ETH value, or TIMBS entry cost).
     let timbsNeeded = ethers.BigNumber.from(0);
-    if (!useETH) timbsNeeded = timbsNeeded.add(entryCostTIMBS_wei);
+    if (!replacing && !useETH) timbsNeeded = timbsNeeded.add(entryCostTIMBS_wei);
     if (extraRounds > 0) {
       const extra = await registry.additionalRoundCost(extraRounds);
       timbsNeeded = timbsNeeded.add(extra);
@@ -365,29 +380,35 @@ async function handleSubmitEntry() {
       }
     }
 
-    btn.textContent = "Submitting…";
+    btn.textContent = replacing ? "Updating…" : "Submitting…";
     DebugHub.logCheckpoint("Prize:Entry Requested", "pass");
     const gas   = await getGasParams();
     const nonce = await getPendingNonce();
-    const value = useETH ? entryCostETH_wei : ethers.BigNumber.from(0);
-    const tx    = await registry.submitEntry(string6, useETH, extraRounds, { ...gas, nonce, value });
+    let tx;
+    if (replacing) {
+      // replaceEntry reuses the escrowed principal — no ETH value is sent.
+      tx = await registry.replaceEntry(string6, extraRounds, { ...gas, nonce, value: 0 });
+    } else {
+      const value = useETH ? entryCostETH_wei : ethers.BigNumber.from(0);
+      tx = await registry.submitEntry(string6, useETH, extraRounds, { ...gas, nonce, value });
+    }
     DebugHub.logCheckpoint("Prize:Entry Submitted", "pass");
     await tx.wait();
     DebugHub.logCheckpoint("Prize:Entry Confirmed", "pass");
 
-    btn.textContent = "Entry submitted ✓";
+    btn.textContent = replacing ? "Entry updated ✓" : "Entry submitted ✓";
     document.getElementById("entry-string").value = "";
     extraRounds = 0;
     document.getElementById("extra-rounds-val").textContent = "0";
     await loadMyEntries();
-    setTimeout(() => { btn.textContent = "Submit Entry"; btn.disabled = false; }, 2000);
+    setTimeout(() => { updateEntryButton(); }, 2000);
 
   } catch (err) {
     console.error("Entry failed:", err.message);
     DebugHub.logError("handleSubmitEntry", err);
     DebugHub.logCheckpoint("Prize:Entry Failed", "fail");
     btn.textContent = "Failed — try again";
-    setTimeout(() => { btn.textContent = "Submit Entry"; btn.disabled = false; }, 2500);
+    setTimeout(() => { btn.textContent = resetLabel; btn.disabled = false; }, 2500);
   }
 }
 
@@ -406,19 +427,27 @@ function bytes6ToStr(b6) {
 
 async function loadMyEntries() {
   const list = document.getElementById("my-entries-list");
+  hasPlayEntry = false;
   if (!userAddress) {
     list.innerHTML = '<div class="empty-state">Connect wallet to view entries</div>';
+    updateEntryButton();
     return;
   }
+  const playRound = currentRoundNum !== null ? currentRoundNum + 1 : null;
   try {
     const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, readProv());
     const rounds   = await registry.getPlayerRounds(userAddress);
-    if (!rounds.length) { list.innerHTML = '<div class="empty-state">No entries yet</div>'; return; }
+    if (!rounds.length) { list.innerHTML = '<div class="empty-state">No entries yet</div>'; updateEntryButton(); return; }
 
     list.innerHTML = "";
     for (const round of [...rounds].reverse().slice(0, 6)) {
       const entry = await registry.getEntry(userAddress, round);
       if (!entry.exists) continue;
+
+      // One entry per round: a Pending/Active entry for the next play round means
+      // a new submit would revert, so flag it to route through replaceEntry.
+      if (playRound !== null && Number(round) === playRound &&
+          (entry.status === 0 || entry.status === 1)) hasPlayEntry = true;
 
       const statusName  = STATUS_NAMES[entry.status] || "Unknown";
       const statusClass = "status-" + statusName.toLowerCase();
@@ -454,6 +483,7 @@ async function loadMyEntries() {
         </div>`;
       list.appendChild(row);
     }
+    updateEntryButton();
   } catch (e) {
     console.warn("loadMyEntries:", e.message);
     list.innerHTML = '<div class="empty-state">Could not load entries</div>';

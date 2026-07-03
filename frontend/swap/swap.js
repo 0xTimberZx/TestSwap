@@ -4,8 +4,11 @@ const ROUTER_ABI   = [
   "function getReserves(address tokenA, address tokenB) external view returns (uint256 reserveA, uint256 reserveB)",
   "function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) external pure returns (uint256)",
   "function getAmountIn(uint256 amountOut, uint256 reserveIn, uint256 reserveOut) external pure returns (uint256)",
-  "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address tokenIn, address tokenOut, address to, uint256 deadline, bool influencePrize) external returns (uint256 amountOut)"
+  "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address tokenIn, address tokenOut, address to, uint256 deadline, bool influencePrize) external returns (uint256 amountOut)",
+  "function addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256, uint256, uint256)",
+  "function removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256, uint256)"
 ];
+const FACTORY_ABI = ["function getPairAddress(address tokenA, address tokenB) external view returns (address)"];
 const ERC20_ABI     = [
   "function balanceOf(address account) external view returns (uint256)",
   "function allowance(address owner, address spender) external view returns (uint256)",
@@ -23,6 +26,20 @@ let pickerTarget = null;
 let slippagePct  = 1;
 let isEligiblePair = false;
 let lastEditedSide = "in"; // "in" | "out" — tracks which field user typed in
+let mode          = "swap"; // "swap" | "liquidity"
+let removePct     = 0;      // selected % for remove-liquidity
+let lpPairAddress = null;   // cached LP pair address for the current pair
+let lpBalanceWei  = null;   // cached LP balance for the connected wallet
+
+// Trim a formatUnits string for display: keep the whole part, cap the fraction
+// at 8 places, drop trailing zeros. Avoids the ~20-decimal quote readouts.
+function trimAmount(weiStr) {
+  if (weiStr == null || weiStr === "") return "";
+  const [intPart, frac = ""] = String(weiStr).split(".");
+  if (!frac) return intPart;
+  const trimmed = (intPart + "." + frac.slice(0, 8)).replace(/\.?0+$/, "");
+  return trimmed === "" ? "0" : trimmed;
+}
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -89,9 +106,14 @@ async function selectToken(token) {
     document.getElementById("token-out-symbol").textContent = token.symbol;
   }
   closeTokenPickerDirect();
-  await checkEligibility();
-  await refreshBalances();
-  await recalcQuote();
+  syncLiquidityLabels();
+  if (mode === "liquidity") {
+    await refreshLiquidity();
+  } else {
+    await checkEligibility();
+    await refreshBalances();
+    await recalcQuote();
+  }
 }
 
 function flipTokens() {
@@ -210,7 +232,7 @@ async function recalcQuote() {
       }
       const amountInWei = ethers.utils.parseUnits(amtIn, tokenIn.decimals);
       const amountOutWei = await router.getAmountOut(amountInWei, reserveIn, reserveOut);
-      inputOut.value = ethers.utils.formatUnits(amountOutWei, tokenOut.decimals);
+      inputOut.value = trimAmount(ethers.utils.formatUnits(amountOutWei, tokenOut.decimals));
       renderSwapInfo(amountInWei, amountOutWei, reserveIn, reserveOut);
     } else {
       const amtOut = inputOut.value;
@@ -222,7 +244,7 @@ async function recalcQuote() {
       }
       const amountOutWei = ethers.utils.parseUnits(amtOut, tokenOut.decimals);
       const amountInWei  = await router.getAmountIn(amountOutWei, reserveIn, reserveOut);
-      inputIn.value = ethers.utils.formatUnits(amountInWei, tokenIn.decimals);
+      inputIn.value = trimAmount(ethers.utils.formatUnits(amountInWei, tokenIn.decimals));
       renderSwapInfo(amountInWei, amountOutWei, reserveIn, reserveOut);
     }
 
@@ -381,6 +403,230 @@ async function handleSwap() {
   }
 }
 
+// ─── Liquidity (add / remove) ─────────────────────────────────────────────────
+
+function setMode(m) {
+  mode = m;
+  document.getElementById("tab-swap").classList.toggle("active", m === "swap");
+  document.getElementById("tab-liq").classList.toggle("active", m === "liquidity");
+  document.getElementById("swap-mode").classList.toggle("hidden", m !== "swap");
+  document.getElementById("liquidity-mode").classList.toggle("hidden", m !== "liquidity");
+  const title = document.getElementById("swap-title");
+  if (title) title.textContent = m === "liquidity" ? "Liquidity" : "Swap";
+  if (m === "liquidity") {
+    // The influence / prize panel is swap-only.
+    const prize = document.getElementById("prize-panel");
+    if (prize) prize.style.display = "none";
+    refreshLiquidity();
+  } else {
+    checkEligibility();
+  }
+}
+
+function syncLiquidityLabels() {
+  const a = document.getElementById("lq-symbol-a");
+  const b = document.getElementById("lq-symbol-b");
+  if (a) a.textContent = tokenIn  ? tokenIn.symbol  : "Select";
+  if (b) b.textContent = tokenOut ? tokenOut.symbol : "Select";
+}
+
+async function refreshLiquidity() {
+  syncLiquidityLabels();
+  const balA = document.getElementById("lq-bal-a");
+  const balB = document.getElementById("lq-bal-b");
+  const ratioEl = document.getElementById("lq-ratio");
+  const lpEl = document.getElementById("lq-lp-bal");
+  const lpRemoveEl = document.getElementById("lq-remove-bal");
+  const read = readProviderForEligibility();
+
+  // Balances
+  if (userAddress && tokenIn) {
+    try { const c = new ethers.Contract(tokenIn.address, ERC20_ABI, provider); balA.textContent = `Balance: ${fmt(await c.balanceOf(userAddress), tokenIn.decimals, 4)}`; }
+    catch { balA.textContent = "Balance: —"; }
+  } else balA.textContent = "Balance: —";
+  if (userAddress && tokenOut) {
+    try { const c = new ethers.Contract(tokenOut.address, ERC20_ABI, provider); balB.textContent = `Balance: ${fmt(await c.balanceOf(userAddress), tokenOut.decimals, 4)}`; }
+    catch { balB.textContent = "Balance: —"; }
+  } else balB.textContent = "Balance: —";
+
+  if (tokenIn && tokenOut) {
+    // Pool ratio
+    try {
+      const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, read);
+      const [rA, rB] = await router.getReserves(tokenIn.address, tokenOut.address);
+      if (rA.gt(0) && rB.gt(0)) {
+        const ratio = parseFloat(ethers.utils.formatUnits(rB, tokenOut.decimals)) /
+                      parseFloat(ethers.utils.formatUnits(rA, tokenIn.decimals));
+        ratioEl.textContent = `1 ${tokenIn.symbol} = ${ratio.toFixed(6)} ${tokenOut.symbol}`;
+      } else {
+        ratioEl.textContent = "New pool — you set the price";
+      }
+    } catch { ratioEl.textContent = "—"; }
+
+    // LP pair + balance
+    try {
+      const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_ABI, read);
+      lpPairAddress = await factory.getPairAddress(tokenIn.address, tokenOut.address);
+      if (lpPairAddress && lpPairAddress !== ethers.constants.AddressZero && userAddress) {
+        const lp = new ethers.Contract(lpPairAddress, ERC20_ABI, read);
+        lpBalanceWei = await lp.balanceOf(userAddress);
+        const s = fmt(lpBalanceWei, 18, 6);
+        lpEl.textContent = s;
+        lpRemoveEl.textContent = "LP: " + s;
+      } else {
+        lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —";
+      }
+    } catch { lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —"; }
+  }
+  updateLqButtons();
+}
+
+// Mirror the counterpart amount from the pool ratio (no-op for a brand-new pool).
+async function _mirrorLq(fromId, toId, fromTok, toTok, invert) {
+  const v = document.getElementById(fromId).value;
+  if (!fromTok || !toTok || !v || parseFloat(v) <= 0) { updateLqButtons(); return; }
+  try {
+    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, readProviderForEligibility());
+    const [rA, rB] = await router.getReserves(tokenIn.address, tokenOut.address);
+    const [rFrom, rTo] = invert ? [rB, rA] : [rA, rB];
+    if (rFrom.gt(0) && rTo.gt(0)) {
+      const amt = ethers.utils.parseUnits(v, fromTok.decimals).mul(rTo).div(rFrom);
+      document.getElementById(toId).value = trimAmount(ethers.utils.formatUnits(amt, toTok.decimals));
+    }
+  } catch {}
+  updateLqButtons();
+}
+function onLqAmountA() { return _mirrorLq("lq-amount-a", "lq-amount-b", tokenIn, tokenOut, false); }
+function onLqAmountB() { return _mirrorLq("lq-amount-b", "lq-amount-a", tokenOut, tokenIn, true); }
+
+function updateLqButtons() {
+  const addBtn = document.getElementById("lq-add-btn");
+  const remBtn = document.getElementById("lq-remove-btn");
+  if (!addBtn || !remBtn) return;
+
+  const a = parseFloat(document.getElementById("lq-amount-a").value);
+  const b = parseFloat(document.getElementById("lq-amount-b").value);
+  if (!userAddress)               { addBtn.textContent = "Connect wallet to add liquidity"; addBtn.disabled = true; }
+  else if (!tokenIn || !tokenOut) { addBtn.textContent = "Select tokens"; addBtn.disabled = true; }
+  else if (!a || a <= 0 || !b || b <= 0) { addBtn.textContent = "Enter amounts"; addBtn.disabled = true; }
+  else { addBtn.textContent = `Add ${tokenIn.symbol} + ${tokenOut.symbol}`; addBtn.disabled = false; }
+
+  const hasLp = lpBalanceWei && !lpBalanceWei.isZero();
+  remBtn.disabled = !userAddress || !hasLp || removePct <= 0;
+  remBtn.textContent = (hasLp && removePct > 0) ? `Remove ${removePct}%` : "Remove liquidity";
+}
+
+function setRemovePct(pct) {
+  removePct = pct;
+  document.querySelectorAll(".lq-pct-row .slip-btn").forEach(b => b.classList.remove("slip-active"));
+  if (typeof event !== "undefined" && event?.target) event.target.classList.add("slip-active");
+  updateLqButtons();
+}
+
+function showLqTx(hash) {
+  const link = document.getElementById("lq-tx-link");
+  if (link) { link.href = `https://sepolia.arbiscan.io/tx/${hash}`; link.classList.remove("hidden"); }
+}
+
+async function handleAddLiquidity() {
+  if (!userAddress || !tokenIn || !tokenOut) return;
+  const aStr = document.getElementById("lq-amount-a").value;
+  const bStr = document.getElementById("lq-amount-b").value;
+  if (!aStr || !bStr || parseFloat(aStr) <= 0 || parseFloat(bStr) <= 0) return;
+
+  const btn = document.getElementById("lq-add-btn");
+  const orig = btn.textContent;
+  try {
+    btn.disabled = true;
+    const amtA = ethers.utils.parseUnits(aStr, tokenIn.decimals);
+    const amtB = ethers.utils.parseUnits(bStr, tokenOut.decimals);
+    const slip = Math.floor((100 - slippagePct) * 100);
+    const aMin = amtA.mul(slip).div(10000);
+    const bMin = amtB.mul(slip).div(10000);
+
+    // Approve both tokens to the router if needed.
+    for (const [tok, amt] of [[tokenIn, amtA], [tokenOut, amtB]]) {
+      const c = new ethers.Contract(tok.address, ERC20_ABI, signer);
+      const allow = await c.allowance(userAddress, ADDRESSES.TimbSwapRouter);
+      if (allow.lt(amt)) {
+        btn.textContent = `Approving ${tok.symbol}…`;
+        DebugHub.logCheckpoint("Liquidity Approve Requested", "pass");
+        const gas = await getGasParams(); const nonce = await getPendingNonce();
+        await (await c.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce })).wait();
+      }
+    }
+
+    btn.textContent = "Adding liquidity…";
+    DebugHub.logCheckpoint("Liquidity Add Requested", "pass");
+    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
+    const deadline = Math.floor(Date.now() / 1000) + 1200;
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    const tx = await router.addLiquidity(tokenIn.address, tokenOut.address, amtA, amtB, aMin, bMin, userAddress, deadline, { ...gas, nonce });
+    await tx.wait();
+    DebugHub.logCheckpoint("Liquidity Add Confirmed", "pass");
+
+    document.getElementById("lq-amount-a").value = "";
+    document.getElementById("lq-amount-b").value = "";
+    btn.textContent = "Liquidity added ✓";
+    showLqTx(tx.hash);
+    await refreshLiquidity();
+    setTimeout(() => updateLqButtons(), 6000);
+  } catch (err) {
+    console.error("Add liquidity failed:", err.message);
+    DebugHub.logError("handleAddLiquidity", err);
+    DebugHub.logCheckpoint("Liquidity Add Failed", "fail");
+    btn.textContent = "Failed — try again";
+    setTimeout(() => { btn.textContent = orig; updateLqButtons(); }, 3000);
+  }
+}
+
+async function handleRemoveLiquidity() {
+  if (!userAddress || !tokenIn || !tokenOut) return;
+  if (!lpBalanceWei || lpBalanceWei.isZero() || removePct <= 0) return;
+  if (!lpPairAddress || lpPairAddress === ethers.constants.AddressZero) return;
+
+  const btn = document.getElementById("lq-remove-btn");
+  const orig = btn.textContent;
+  try {
+    btn.disabled = true;
+    const liquidity = lpBalanceWei.mul(removePct).div(100);
+    if (liquidity.isZero()) { updateLqButtons(); return; }
+
+    // Approve the LP token to the router if needed.
+    const lp = new ethers.Contract(lpPairAddress, ERC20_ABI, signer);
+    const allow = await lp.allowance(userAddress, ADDRESSES.TimbSwapRouter);
+    if (allow.lt(liquidity)) {
+      btn.textContent = "Approving LP…";
+      DebugHub.logCheckpoint("Liquidity Remove Approve", "pass");
+      const gas = await getGasParams(); const nonce = await getPendingNonce();
+      await (await lp.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce })).wait();
+    }
+
+    btn.textContent = "Removing…";
+    DebugHub.logCheckpoint("Liquidity Remove Requested", "pass");
+    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
+    const deadline = Math.floor(Date.now() / 1000) + 1200;
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    // amountAMin/amountBMin 0 — acceptable on testnet; the burn returns the pro-rata share.
+    const tx = await router.removeLiquidity(tokenIn.address, tokenOut.address, liquidity, 0, 0, userAddress, deadline, { ...gas, nonce });
+    await tx.wait();
+    DebugHub.logCheckpoint("Liquidity Remove Confirmed", "pass");
+
+    btn.textContent = "Removed ✓";
+    showLqTx(tx.hash);
+    removePct = 0;
+    document.querySelectorAll(".lq-pct-row .slip-btn").forEach(b => b.classList.remove("slip-active"));
+    await refreshLiquidity();
+    setTimeout(() => updateLqButtons(), 6000);
+  } catch (err) {
+    console.error("Remove liquidity failed:", err.message);
+    DebugHub.logError("handleRemoveLiquidity", err);
+    DebugHub.logCheckpoint("Liquidity Remove Failed", "fail");
+    btn.textContent = "Failed — try again";
+    setTimeout(() => { btn.textContent = orig; updateLqButtons(); }, 3000);
+  }
+}
+
 // ─── Wallet Connect (page-specific wiring) ────────────────────────────────────
 
 async function handleConnect() {
@@ -399,6 +645,7 @@ async function handleConnect() {
 
   await refreshBalances();
   updateSwapButton(tokenIn && tokenOut ? "Swap" : "Select tokens");
+  if (mode === "liquidity") await refreshLiquidity();
 
   listenForAccountChanges(async (newAddr) => {
     if (!newAddr) { handleDisconnect(); return; }
@@ -439,6 +686,7 @@ function handleDisconnect() {
     if (_addrEl) _addrEl.textContent = fmtAddr(_reconnected);
     await refreshBalances();
     updateSwapButton(tokenIn && tokenOut ? "Swap" : "Select tokens");
+    if (mode === "liquidity") await refreshLiquidity();
     DebugHub.startSession();
     DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
     listenForAccountChanges(async (newAddr) => {

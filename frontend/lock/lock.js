@@ -195,6 +195,21 @@ function tokenSymbolForAddr(addr) {
   return t ? t.symbol : addr.slice(0, 8) + "…";
 }
 
+// Deterministic short public id for a lock — the raw sequential lockId means
+// nothing to onlookers, so the public registry shows a stable per-lock code.
+function lockPublicId(lock) {
+  const seed = (lock.locker.slice(2) + Number(lock.lockId).toString(16)).toLowerCase();
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return "LK-" + h.toString(36).toUpperCase().padStart(6, "0").slice(0, 6);
+}
+
+// Heavier address mask for the public registry (0x1234…cdef → 0x12…ef).
+function fmtAddrMasked(addr) {
+  if (!addr) return "";
+  return addr.slice(0, 4) + "…" + addr.slice(-2);
+}
+
 function renderLockRow(lock, showLocker = false) {
   const sym     = tokenSymbolForAddr(lock.token);
   const logo    = lock.isTimbs ? "T" : sym.charAt(0);
@@ -205,8 +220,11 @@ function renderLockRow(lock, showLocker = false) {
   const statusClass = "lock-status-" + actualStatus.toLowerCase();
   const canWithdraw = (unlocked || lock.status === 1) && lock.status !== 2;
 
+  // Public registry: opaque id + heavily masked locker. Owner's "My Locks":
+  // keep the real lock number since it's their own and useful for support.
+  const idLabel    = showLocker ? lockPublicId(lock) : "Lock #" + lock.lockId;
   const lockerHtml = showLocker
-    ? `<div class="registry-row-locker">${fmtAddr(lock.locker)}</div>`
+    ? `<div class="registry-row-locker">${fmtAddrMasked(lock.locker)}</div>`
     : "";
 
   return `
@@ -218,7 +236,7 @@ function renderLockRow(lock, showLocker = false) {
           ${lock.isTimbs ? '<span class="timbs-badge">TIMBS</span>' : ""}
         </div>
         <div class="lock-row-meta">
-          Lock #${lock.lockId} · ${rem ? "Unlocks in " + rem : "Ready to withdraw"}
+          ${idLabel} · ${rem ? "Unlocks in " + rem : "Ready to withdraw"}
           ${lockerHtml}
         </div>
       </div>
