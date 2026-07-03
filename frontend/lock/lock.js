@@ -15,7 +15,8 @@ const ERC20_ABI = [
   "function allowance(address owner, address spender) external view returns (uint256)",
   "function approve(address spender, uint256 amount) external returns (bool)",
   "function symbol() external view returns (string)",
-  "function decimals() external view returns (uint8)"
+  "function decimals() external view returns (uint8)",
+  "function totalSupply() external view returns (uint256)"
 ];
 
 // Lock status enum: 0=Active, 1=Unlocked, 2=Withdrawn
@@ -227,8 +228,13 @@ function renderLockRow(lock, showLocker = false) {
     ? `<div class="registry-row-locker">${fmtAddrMasked(lock.locker)}</div>`
     : "";
 
+  // Public rows are tappable → open the detail overlay.
+  const rowAttrs = showLocker
+    ? ` class="lock-row lock-row-clickable" onclick="openLockDetail(${lock.lockId})"`
+    : ` class="lock-row"`;
+
   return `
-    <div class="lock-row">
+    <div${rowAttrs}>
       <div class="lock-row-icon">${logo}</div>
       <div class="lock-row-main">
         <div class="lock-row-amount">
@@ -241,9 +247,67 @@ function renderLockRow(lock, showLocker = false) {
         </div>
       </div>
       <span class="lock-row-status ${statusClass}">${actualStatus}</span>
-      ${canWithdraw ? `<button class="btn-withdraw-mini" onclick="handleWithdraw(${lock.lockId})">Withdraw</button>` : ""}
+      ${canWithdraw ? `<button class="btn-withdraw-mini" onclick="event.stopPropagation(); handleWithdraw(${lock.lockId})">Withdraw</button>` : ""}
     </div>
   `;
+}
+
+// ─── Public lock detail overlay ────────────────────────────────────────────────
+
+function _fmtDateUTC(unixSeconds) {
+  const d = new Date(Number(unixSeconds) * 1000);
+  if (isNaN(d.getTime())) return "—";
+  return d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
+}
+
+async function openLockDetail(lockId) {
+  const modal = document.getElementById("lock-detail-modal");
+  const body  = document.getElementById("lock-detail-body");
+  if (!modal || !body) return;
+  body.innerHTML = '<div class="empty-state">Loading…</div>';
+  modal.classList.remove("hidden");
+
+  try {
+    const vault = new ethers.Contract(ADDRESSES.TimbLockVault, LOCKVAULT_ABI, readProv());
+    const lock  = await vault.getLock(lockId);
+    const erc   = new ethers.Contract(lock.token, ERC20_ABI, readProv());
+    const [sym, dec, supply] = await Promise.all([
+      erc.symbol().catch(() => "???"),
+      erc.decimals().catch(() => 18),
+      erc.totalSupply().catch(() => null),
+    ]);
+
+    const rem      = timeRemaining(lock.unlockAt);
+    const statusN  = LOCK_STATUS[lock.status] || "Unknown";
+    const unlocked = rem === null && lock.status === 0;
+    const status   = unlocked ? "Unlocked" : statusN;
+    const explorer = "https://sepolia.arbiscan.io/token/" + lock.token;
+
+    body.innerHTML = `
+      <div class="ld-amount">
+        ${fmt(lock.amount, dec, 4)} ${sym}
+        ${lock.isTimbs ? '<span class="timbs-badge">TIMBS</span>' : ""}
+      </div>
+      <div class="ld-row"><span class="ld-key">Lock ID</span><span class="ld-val">${lockPublicId(lock)}</span></div>
+      <div class="ld-row"><span class="ld-key">Status</span><span class="ld-val">${status}</span></div>
+      <div class="ld-row"><span class="ld-key">Created</span><span class="ld-val">${_fmtDateUTC(lock.lockedAt)}</span></div>
+      <div class="ld-row"><span class="ld-key">Unlocks</span><span class="ld-val">${rem ? "in " + rem : "now — withdrawable"}</span></div>
+      <div class="ld-row"><span class="ld-key">Token</span><span class="ld-val"><a class="ld-link" href="${explorer}" target="_blank" rel="noopener">${fmtAddrMasked(lock.token)} ↗</a></span></div>
+      <div class="ld-row"><span class="ld-key">Total supply</span><span class="ld-val">${supply ? fmt(supply, dec, 0) + " " + sym : "—"}</span></div>
+      <div class="ld-row"><span class="ld-key">Locker</span><span class="ld-val">${fmtAddrMasked(lock.locker)}</span></div>
+    `;
+  } catch (e) {
+    console.warn("openLockDetail:", e.message);
+    body.innerHTML = '<div class="empty-state">Could not load lock detail</div>';
+  }
+}
+
+function closeLockDetail(e) {
+  if (e && e.target.id !== "lock-detail-modal") return; // only close on backdrop click
+  document.getElementById("lock-detail-modal")?.classList.add("hidden");
+}
+function closeLockDetailDirect() {
+  document.getElementById("lock-detail-modal")?.classList.add("hidden");
 }
 
 // ─── My Locks ─────────────────────────────────────────────────────────────────
