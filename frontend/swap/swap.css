@@ -472,3 +472,73 @@
 }
 .swap-tx-link:hover { opacity: 0.75; }
 .swap-tx-link.hidden { display: none; }
+
+/* ─── Swap / Liquidity mode tabs ──────────────────────────────────────────── */
+.swap-mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  margin-bottom: 16px;
+}
+.mode-tab {
+  flex: 1;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-2);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mode-tab:hover { color: var(--text); }
+.mode-tab.active { background: var(--green); color: #000; }
+
+/* ─── Add liquidity ───────────────────────────────────────────────────────── */
+.lq-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+/* ─── Remove liquidity ────────────────────────────────────────────────────── */
+.lq-remove {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.lq-remove-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.lq-remove-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.lq-pct-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.lq-pct-row .slip-btn { flex: 1; }
+
+.btn-remove-liq {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+.btn-remove-liq:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
+.btn-remove-liq:disabled { opacity: 0.5; cursor: not-allowed; }

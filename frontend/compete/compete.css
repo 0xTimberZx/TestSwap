@@ -102,6 +102,14 @@
   font-size: 14px;
 }
 
+/* Current segment mid-settlement — stays marked (no pulse) so the indicator
+   never vanishes while the digit is being finalized on-chain. */
+.digit-cell.settling .digit-char {
+  animation: none;
+  border-color: var(--blue);
+  background: rgba(40,160,240,0.12);
+}
+
 @keyframes pulse-border {
   0%, 100% { border-color: var(--blue); box-shadow: 0 0 0 0 rgba(40,160,240,0.3); }
   50% { border-color: var(--blue); box-shadow: 0 0 0 6px rgba(40,160,240,0); }
@@ -113,6 +121,8 @@
   letter-spacing: 0.5px;
   color: var(--text-3);
 }
+/* Highlight the current segment's label so "current part of the meter" is obvious */
+.digit-cell.active .digit-seg-label { color: var(--blue); font-weight: 700; }
 
 /* ─── Substats ───────────────────────────────────────────────────────────── */
 .round-substats {

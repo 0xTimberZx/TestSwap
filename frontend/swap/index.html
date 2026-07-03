@@ -80,10 +80,15 @@
     <div class="swap-col">
       <div class="swap-card">
         <div class="swap-card-header">
-          <h2 class="swap-title">Swap</h2>
+          <h2 class="swap-title" id="swap-title">Swap</h2>
           <div class="swap-settings">
             <button class="settings-btn" onclick="toggleSettings()" title="Slippage settings">⚙</button>
           </div>
+        </div>
+
+        <div class="swap-mode-tabs">
+          <button id="tab-swap" class="mode-tab active" onclick="setMode('swap')">Swap</button>
+          <button id="tab-liq" class="mode-tab" onclick="setMode('liquidity')">Liquidity</button>
         </div>
 
         <div id="settings-panel" class="settings-panel hidden">
@@ -96,6 +101,7 @@
           </div>
         </div>
 
+        <div id="swap-mode">
         <div class="token-box">
           <div class="token-box-top">
             <span class="token-box-label">You pay</span>
@@ -164,6 +170,71 @@
         <a id="swap-tx-link" class="swap-tx-link hidden" target="_blank" rel="noopener">
           View transaction on Arbiscan ↗
         </a>
+        </div><!-- /swap-mode -->
+
+        <div id="liquidity-mode" class="hidden">
+          <div class="token-box">
+            <div class="token-box-top">
+              <span class="token-box-label">Deposit</span>
+              <span class="token-box-bal" id="lq-bal-a">Balance: —</span>
+            </div>
+            <div class="token-box-row">
+              <input id="lq-amount-a" class="amount-input" type="number" placeholder="0.0" oninput="onLqAmountA()" />
+              <button class="token-picker-btn" onclick="openTokenPicker('in')">
+                <span id="lq-symbol-a">TIMBS</span><span class="picker-caret">▾</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="swap-arrow-row"><span class="lq-plus">+</span></div>
+
+          <div class="token-box">
+            <div class="token-box-top">
+              <span class="token-box-label">Deposit</span>
+              <span class="token-box-bal" id="lq-bal-b">Balance: —</span>
+            </div>
+            <div class="token-box-row">
+              <input id="lq-amount-b" class="amount-input" type="number" placeholder="0.0" oninput="onLqAmountB()" />
+              <button class="token-picker-btn" onclick="openTokenPicker('out')">
+                <span id="lq-symbol-b">WETH</span><span class="picker-caret">▾</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="lq-info" class="swap-info">
+            <div class="info-row">
+              <span class="info-label">Pool ratio</span>
+              <span class="info-val" id="lq-ratio">—</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Your LP tokens</span>
+              <span class="info-val" id="lq-lp-bal">—</span>
+            </div>
+          </div>
+
+          <button id="lq-add-btn" class="btn-swap" onclick="handleAddLiquidity()" disabled>
+            Connect wallet to add liquidity
+          </button>
+
+          <div class="lq-remove">
+            <div class="lq-remove-head">
+              <span class="lq-remove-title">Remove liquidity</span>
+              <span class="token-box-bal" id="lq-remove-bal">LP: —</span>
+            </div>
+            <div class="lq-pct-row">
+              <button class="slip-btn" onclick="setRemovePct(25)">25%</button>
+              <button class="slip-btn" onclick="setRemovePct(50)">50%</button>
+              <button class="slip-btn" onclick="setRemovePct(100)">Max</button>
+            </div>
+            <button id="lq-remove-btn" class="btn-remove-liq" onclick="handleRemoveLiquidity()" disabled>
+              Remove liquidity
+            </button>
+          </div>
+
+          <a id="lq-tx-link" class="swap-tx-link hidden" target="_blank" rel="noopener">
+            View transaction on Arbiscan ↗
+          </a>
+        </div><!-- /liquidity-mode -->
       </div>
     </div>
 
