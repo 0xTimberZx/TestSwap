@@ -78,17 +78,21 @@ async function loadAllPools() {
 
 // ─── Max Button ───────────────────────────────────────────────────────────────
 
-async function setMaxAmount(pool) {
+async function setAmount(pool, pct) {
   if (!userAddress) return;
   const cfg = poolConfig(pool);
   try {
     const tokenContract = new ethers.Contract(cfg.token, ERC20_ABI, provider);
     const bal = await tokenContract.balanceOf(userAddress);
-    document.getElementById(pool + "-amount").value = ethers.utils.formatUnits(bal, 18);
+    const amount = bal.mul(pct).div(100);
+    document.getElementById(pool + "-amount").value = ethers.utils.formatUnits(amount, 18);
   } catch (e) {
-    console.warn("setMaxAmount:", e.message);
+    console.warn("setAmount:", e.message);
   }
 }
+
+// Legacy alias
+async function setMaxAmount(pool) { return setAmount(pool, 100); }
 
 // ─── Stake ────────────────────────────────────────────────────────────────────
 
