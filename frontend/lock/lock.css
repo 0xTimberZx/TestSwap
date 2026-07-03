@@ -9,7 +9,9 @@
 
 .lock-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0,1fr) lets each column shrink below its content width so the cards
+     never force the grid wider than the viewport on small screens */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 20px;
   margin-bottom: 48px;
 }
@@ -19,6 +21,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 24px;
+  min-width: 0;
 }
 
 .card-title { font-size: 17px; font-weight: 600; margin-bottom: 20px; letter-spacing: -0.3px; }
@@ -243,7 +246,14 @@
 }
 
 @media (max-width: 800px) {
-  .lock-grid { grid-template-columns: 1fr; }
+  .lock-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Phone: reclaim horizontal room so the create-lock card fits narrow screens */
+@media (max-width: 560px) {
+  .lock-page { padding: 32px 14px 64px; }
+  .page-h1 { font-size: 26px; }
+  .lock-card { padding: 18px 16px; }
 }
 
 /* ─── Public lock: clickable row + detail overlay ─────────────────────────── */

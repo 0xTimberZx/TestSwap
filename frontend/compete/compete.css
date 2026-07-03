@@ -136,13 +136,18 @@
 /* ─── Substats ───────────────────────────────────────────────────────────── */
 .round-substats {
   display: flex;
+  flex-wrap: wrap;               /* wrap whole tokens, not mid-phrase */
   justify-content: center;
-  gap: 10px;
+  align-items: center;
+  gap: 6px 10px;
   font-family: var(--mono);
   font-size: 13px;
   color: var(--text-2);
   margin-bottom: 8px;
+  padding: 0 12px;
 }
+/* keep each stat ("35:07 left in segment", "Pot: … ETH") intact on its own line */
+.round-substats > span { white-space: nowrap; }
 .dot-sep { color: var(--text-3); }
 
 .gated-notice {
@@ -466,11 +471,18 @@
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .compete-grid { grid-template-columns: 1fr; }
-  .round-header { flex-direction: column; gap: 16px; }
-  .digit-track { gap: 6px; }
+  .round-header { flex-direction: column; gap: 16px; padding: 22px 18px; }
+  .digit-track { gap: 6px; flex: none; max-width: 100%; }
   .digit-char { width: 40px; height: 52px; font-size: 22px; }
 }
 @media (max-width: 480px) {
+  .compete-page { padding: 28px 14px 64px; }
+  .round-substats { font-size: 12px; }
+  .digit-track { gap: 5px; }
   .digit-char { width: 34px; height: 44px; font-size: 18px; }
   .digit-seg-label { display: none; }
+}
+/* Very narrow phones: make sure all six cells + gaps fit the viewport */
+@media (max-width: 340px) {
+  .digit-char { width: 30px; height: 40px; font-size: 16px; }
 }

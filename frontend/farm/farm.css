@@ -55,7 +55,10 @@
   align-items: center;
   gap: 12px;
   margin-bottom: 20px;
+  flex-wrap: wrap; /* let the APR drop to its own line on narrow cards */
 }
+/* the name/type wrapper must shrink so a long APR doesn't overflow the card */
+.pool-card-head > div { min-width: 0; }
 
 .pool-icon {
   width: 40px;
@@ -82,6 +85,7 @@
   font-size: 15px;
   font-weight: 700;
   color: var(--green);
+  white-space: nowrap; /* keep the number intact; it wraps to its own line if needed */
 }
 
 .pool-stats {
@@ -100,6 +104,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0; /* allow the 3 columns to shrink below their content width */
 }
 
 .pool-stat-label {
@@ -114,6 +119,7 @@
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
+  overflow-wrap: anywhere; /* long mono values wrap instead of forcing overflow */
 }
 .pool-stat-green { color: var(--green); }
 
@@ -122,10 +128,12 @@
   gap: 6px;
   margin-bottom: 14px;
   align-items: center;
+  flex-wrap: wrap; /* MAX/50%/25% wrap under the input on very narrow screens */
 }
 
 .pool-input {
   flex: 1;
+  min-width: 0; /* let the input shrink so the row never overflows */
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -200,4 +208,16 @@
 
 @media (max-width: 800px) {
   .pool-grid { grid-template-columns: 1fr; }
+}
+
+/* Phone: reclaim horizontal room and shrink the mono values so cards fit */
+@media (max-width: 560px) {
+  .farm-page { padding: 32px 14px 64px; }
+  .page-h1 { font-size: 26px; }
+  .pool-card { padding: 18px 16px; }
+  .pool-apr { font-size: 13px; }
+  .pool-stats { gap: 1px; }
+  .pool-stat { padding: 10px 8px; }
+  .pool-stat-val { font-size: 12px; }
+  .btn-pool { padding: 11px 6px; font-size: 12px; }
 }
