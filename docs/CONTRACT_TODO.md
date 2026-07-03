@@ -37,17 +37,31 @@ do a contract round.
 
 - **Symptom:** Compete/landing show "Settling segment…" indefinitely; the
   segment countdown never runs because the round never advances on testnet.
-- **Likely cause:** no keeper is triggering segment settlement / round rollover.
-  Eligible swaps call `nudgeScroll`, but advancing a segment at the end of its
-  window and settling/rolling the round needs a periodic trigger.
+- **Confirmed cause:** `settleSegment()` is `onlySettler` and reverts until the
+  59:45 interaction window elapses (`TimbPrize.sol:346-357`). Nothing is calling
+  it on the testnet, so `_isInSettlementWindow()` stays true forever and the UI
+  shows "Settling…" indefinitely. Eligible swaps only call `nudgeScroll`; they do
+  not advance segments or roll the round.
+
+- **Timing (from `TimbPrize.sol:86-101`):**
+  - `INTERACTION_WINDOW` = 59:45 (nudging open) · `SETTLEMENT_WINDOW` = 15s
+  - `SEGMENT_DURATION` = 1 hour · `SEGMENTS_PER_ROUND` = 6 · `ROUND_DURATION` = 6 hours
+  - `CLAIM_WINDOW_ROUNDS` = 2 (refund/claim window = 12 hours after lastEligibleRound)
+  - Nominal settlement is 15s, but real duration = "until the settler calls
+    `settleSegment()`" — currently unbounded.
+
 - **To resolve (mostly infra, possibly contract):**
-  - Confirm whether settlement is **permissionless** or owner-gated in
-    `TimbPrize` / `GameRegistry`.
-  - If gated: run a keeper (cron/bot) that calls the settle/advance function on
-    schedule.
-  - If we want it trigger-free: a contract change to advance/settle lazily on
-    the next interaction (or make settlement permissionless) — that's the
-    blockchain-level part.
+  - **Keeper cadence:** run a settler bot/cron that calls `settleSegment()` once
+    per segment, **just after each 59:45 mark** (i.e. ~hourly, aligned to
+    `segmentStartTime + INTERACTION_WINDOW`). Calling earlier reverts with
+    `SegmentNotComplete`. One call advances one segment; the 6th call of a round
+    triggers `_settleRound()` which pays out and auto-queues the next round.
+    Poll a little past the mark (e.g. every ~30-60s once elapsed ≥ 59:45) so a
+    missed block doesn't stall a full segment. The keeper wallet must be the
+    configured `settler` address.
+  - Alternatively make it trigger-free: a contract change to advance/settle
+    lazily on the next interaction, or make `settleSegment()` permissionless —
+    that's the blockchain-level part.
 
 ## 3. User-callable "Advance" (nudge) on the Compete page
 
