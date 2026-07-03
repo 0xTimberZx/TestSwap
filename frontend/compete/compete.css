@@ -110,6 +110,15 @@
   background: rgba(40,160,240,0.12);
 }
 
+/* Wallet-gated marquee (spells CONNECT WALLET) — neutral, no pulse, no lock icon */
+.digit-cell.gate-mask .digit-char {
+  animation: none;
+  color: var(--text-2);
+  border-color: var(--border);
+  background: var(--bg3);
+}
+.digit-cell.gate-mask .digit-char::after { content: none; }
+
 @keyframes pulse-border {
   0%, 100% { border-color: var(--blue); box-shadow: 0 0 0 0 rgba(40,160,240,0.3); }
   50% { border-color: var(--blue); box-shadow: 0 0 0 6px rgba(40,160,240,0); }

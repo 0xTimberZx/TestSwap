@@ -146,9 +146,12 @@ async function checkEligibility() {
     const registry = new ethers.Contract(ADDRESSES.EligibleTokenRegistry, ELIGIBLE_ABI, readProviderForEligibility());
     const eligible = await registry.isEligible(tokenIn.address);
     isEligiblePair = eligible;
-    row.classList.toggle("hidden", !eligible);
-    panel.style.display = eligible ? "block" : "none";
-    if (window.renderPrizeIndicators) window.renderPrizeIndicators(eligible);
+    // Game UI (influence toggle + live prize indicators) is wallet-gated —
+    // don't reveal any game state until the user is connected.
+    const showGame = eligible && !!userAddress;
+    row.classList.toggle("hidden", !showGame);
+    panel.style.display = showGame ? "block" : "none";
+    if (window.renderPrizeIndicators) window.renderPrizeIndicators(showGame);
   } catch (e) {
     console.warn("checkEligibility:", e.message);
     row.classList.add("hidden");
@@ -645,12 +648,14 @@ async function handleConnect() {
 
   await refreshBalances();
   updateSwapButton(tokenIn && tokenOut ? "Swap" : "Select tokens");
+  await checkEligibility(); // reveal the (wallet-gated) prize panel now
   if (mode === "liquidity") await refreshLiquidity();
 
   listenForAccountChanges(async (newAddr) => {
     if (!newAddr) { handleDisconnect(); return; }
     document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
     await refreshBalances();
+    await checkEligibility();
   });
 }
 
@@ -662,6 +667,7 @@ function handleDisconnect() {
   document.getElementById("network-badge").classList.add("hidden");
   updateSwapButton("Connect wallet to swap");
   refreshBalances();
+  checkEligibility(); // hide the prize panel / influence row again
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -686,6 +692,7 @@ function handleDisconnect() {
     if (_addrEl) _addrEl.textContent = fmtAddr(_reconnected);
     await refreshBalances();
     updateSwapButton(tokenIn && tokenOut ? "Swap" : "Select tokens");
+    await checkEligibility(); // reveal the (wallet-gated) prize panel now
     if (mode === "liquidity") await refreshLiquidity();
     DebugHub.startSession();
     DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
@@ -694,6 +701,7 @@ function handleDisconnect() {
       const _el = document.getElementById("wallet-addr");
       if (_el) _el.textContent = fmtAddr(newAddr);
       await refreshBalances();
+      await checkEligibility();
     });
   }
 })();

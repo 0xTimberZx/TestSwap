@@ -54,55 +54,64 @@ function readProv() {
 
 // ─── Digit Track Display ──────────────────────────────────────────────────────
 
-let digitMaskTimer = null;
-let maskedSegIndex = -1;
-function startDigitMask() {
-  if (digitMaskTimer) return;
-  digitMaskTimer = setInterval(() => {
-    if (maskedSegIndex < 0) return;
-    const charEl = document.getElementById("dchar" + maskedSegIndex);
-    if (charEl) {
-      charEl.textContent = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
-      charEl.style.opacity = (0.3 + Math.random() * 0.55).toFixed(2);
-    }
-  }, 220);
-}
-function stopDigitMask() {
-  if (digitMaskTimer) { clearInterval(digitMaskTimer); digitMaskTimer = null; }
-  maskedSegIndex = -1;
+// When the wallet is disconnected the whole track is gated: instead of the real
+// digits it runs a slow marquee that spells out CONNECT WALLET across the six
+// cells, so no game state (locked digits, active segment) is visible to onlookers.
+const GATE_PHRASE = "CONNECT·WALLET·"; // · is a dim spacer between the words
+let gateTimer  = null;
+let gateOffset = 0;
+
+function startGateMask() {
   for (let i = 0; i < 6; i++) {
+    const cell = document.getElementById("dc" + i);
+    if (cell) { cell.classList.remove("locked", "active", "future", "settling"); cell.classList.add("gate-mask"); }
+  }
+  if (gateTimer) return;
+  const paint = () => {
+    for (let i = 0; i < 6; i++) {
+      const el = document.getElementById("dchar" + i);
+      if (!el) continue;
+      const ch = GATE_PHRASE[(gateOffset + i) % GATE_PHRASE.length];
+      el.textContent = ch;
+      el.style.opacity = ch === "·" ? "0.2" : "0.8";
+    }
+    gateOffset = (gateOffset + 1) % GATE_PHRASE.length;
+  };
+  paint();
+  gateTimer = setInterval(paint, 320);
+}
+
+function stopGateMask() {
+  if (gateTimer) { clearInterval(gateTimer); gateTimer = null; }
+  for (let i = 0; i < 6; i++) {
+    document.getElementById("dc" + i)?.classList.remove("gate-mask");
     const el = document.getElementById("dchar" + i);
     if (el) el.style.opacity = "";
   }
 }
+
 function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
-  const isWalletConnected = !!userAddress;
-  if (isWalletConnected) stopDigitMask();
-  maskedSegIndex = -1;
+  // Wallet-gated: hide every real digit behind the CONNECT WALLET marquee.
+  if (!userAddress) { startGateMask(); return; }
+  stopGateMask();
+
   for (let i = 0; i < 6; i++) {
     const seg = i + 1;
     const cell    = document.getElementById("dc" + i);
     const charEl  = document.getElementById("dchar" + i);
     if (!cell || !charEl) continue;
-    cell.classList.remove("locked", "active", "future", "gated", "settling");
+    cell.classList.remove("locked", "active", "future", "gated", "settling", "gate-mask");
     if (seg < segment || (seg === segment && digitLocked[i])) {
       charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
       charEl.style.opacity = "";
       cell.classList.add("locked");
     } else if (seg === segment) {
-      if (isWalletConnected) {
-        charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
-        charEl.style.opacity = "";
-        // Keep the current segment marked as active even during settlement so
-        // the "current part of the meter" indicator never disappears; add a
-        // settling modifier rather than demoting it to a finalized locked cell.
-        cell.classList.add("active");
-        if (inSettlement) cell.classList.add("settling");
-      } else {
-        cell.classList.add("active", "gated");
-        maskedSegIndex = i;
-        startDigitMask();
-      }
+      charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
+      charEl.style.opacity = "";
+      // Keep the current segment marked as active even during settlement so the
+      // "current part of the meter" indicator never disappears.
+      cell.classList.add("active");
+      if (inSettlement) cell.classList.add("settling");
     } else {
       charEl.textContent = "·";
       charEl.style.opacity = "";
@@ -645,6 +654,10 @@ function handleDisconnect() {
       updateEntryButton();
       await Promise.all([loadMyEntries(), loadPastRounds(), pollRoundState()]);
     });
+  } else {
+    // Not connected — run the CONNECT WALLET marquee right away so no real
+    // digits flash before the first poll resolves.
+    startGateMask();
   }
 
   await loadEntryCosts();
