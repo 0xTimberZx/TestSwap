@@ -11,7 +11,22 @@ do a contract round.
 
 ---
 
-## 1. Cancel / withdraw a Pending prize entry (pre-round)
+## 1. Cancel / withdraw a Pending prize entry (pre-round) — CODE WRITTEN
+
+**Status:** `GameRegistry.cancelEntry(round)` implemented and compile-verified
+(solc 0.8.24). Frontend "Withdraw" button wired on Compete for Pending entries
+whose round hasn't started. **Needs GameRegistry redeploy:**
+
+1. Deploy updated `GameRegistry` (same constructor args as current).
+2. New registry: `setTimbPrize(<TimbPrize>)`, `setProtocolSink(...)`, and
+   re-set entry costs if they were changed from defaults.
+3. `TimbPrize.setGameRegistry(<new registry>)` (setter exists).
+4. `setCurrentRound` sync: TimbPrize pushes the round on next settle; verify
+   `currentRound` matches after one segment settles.
+5. Update `ADDRESSES.GameRegistry` in BOTH `config.js` and `frontend/config.js`.
+6. Note: entries/escrow in the OLD registry stay there — refund/cancel old
+   entries through the old contract before switching, or drain via claimRefund.
+
 
 - **Want:** withdraw the principal of a queued entry *before* its round plays, so
   the game is truly risk-free / entries feel un-stuck.
@@ -63,7 +78,16 @@ do a contract round.
     lazily on the next interaction, or make `settleSegment()` permissionless —
     that's the blockchain-level part.
 
-## 3. User-callable "Advance" (nudge) on the Compete page
+## 3. User-callable "Advance" (nudge) — CODE WRITTEN (router redeploy)
+
+**Status:** `TimbSwapRouter.advanceScroll(count)` implemented (router is the
+address TimbPrize authorizes, so no TimbPrize change). count=1 = single nudge;
+up to MAX_BATCH_NUDGE=20 = batchNudge (one tx, applied one at a time, in
+order). Compete page has wallet-gated "Advance +1" buttons (meter card +
+entry card), disabled during settlement. Ships in the same router redeploy as
+the native-ETH swaps — redeploy the router once more from this code and
+follow §5's checklist. NOTE: nudges via this path are free (gas only) — the
+economics decision below still stands if you want to charge.
 
 - **Want:** a wallet-gated **Advance / nudge** button (on the meter card and near
   game registration) that pushes the scroll +1 directly — one nudge at a time
@@ -79,7 +103,7 @@ do a contract round.
   settlement-window block and `whenGameStarted` guard. Redeploy + update address
   in `config.js` + wire the button.
 
-## 4. `batchNudge` — multiple nudges in one call
+## 4. `batchNudge` — DONE (covered by §3, advanceScroll(count))
 
 - **Want:** batch N nudges into a single transaction ("batch 5" = one submit,
   applied one-at-a-time ×5), to cleanly handle ordering when many nudge requests

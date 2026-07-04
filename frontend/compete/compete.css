@@ -500,3 +500,21 @@
 @media (max-width: 340px) {
   .digit-char { width: 30px; height: 40px; font-size: 16px; }
 }
+
+/* ─── Advance (user nudge) buttons ─────────────────────────────────────────── */
+.btn-advance {
+  background: rgba(40,160,240,0.1);
+  color: var(--blue);
+  border: 1px solid rgba(40,160,240,0.35);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-advance:hover:not(:disabled) { background: rgba(40,160,240,0.2); border-color: var(--blue); }
+.btn-advance:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-advance.hidden { display: none; }
+.btn-advance-wide { width: 100%; margin-top: 8px; }

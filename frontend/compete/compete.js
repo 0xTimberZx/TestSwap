@@ -17,7 +17,8 @@ const GAME_REGISTRY_ABI = [
   "function additionalRoundCost(uint256 extraRounds) external view returns (uint256)",
   "function submitEntry(bytes6 string6, bool useETH, uint256 extraRounds) external payable",
   "function replaceEntry(bytes6 newString6, uint256 extraRounds) external payable",
-  "function claimRefund(uint256 round) external"
+  "function claimRefund(uint256 round) external",
+  "function cancelEntry(uint256 round) external"
 ];
 
 const TIMBS_ABI = [
@@ -174,6 +175,9 @@ async function pollRoundState() {
     // Show/hide gated notice
     const notice = document.getElementById("gated-notice");
     if (notice) notice.classList.toggle("hidden", !!userAddress);
+
+    // Advance buttons: wallet-gated, disabled during settlement
+    updateAdvanceButtons(!!s.inSettlement);
 
   } catch (e) {
     console.warn("pollRoundState:", e.message);
@@ -472,9 +476,14 @@ async function loadMyEntries() {
       const expiredByRound = currentRoundNum !== null && currentRoundNum > lastEligible;
       const withinWindow   = currentRoundNum !== null && currentRoundNum <= lastEligible + 2;
       const canRefund      = notClaimed && expiredByRound && withinWindow;
+      // Pending entries for a future round can be cancelled outright — the
+      // escrow returns immediately (needs the redeployed GameRegistry).
+      const canCancel      = entry.status === 0 &&
+        currentRoundNum !== null && Number(round) > currentRoundNum;
 
       let refundHint = "";
-      if (notClaimed && !canRefund) {
+      if (canCancel)               refundHint = ` · withdrawable until R${round} starts`;
+      else if (notClaimed && !canRefund) {
         if (!expiredByRound)    refundHint = ` · principal refundable after R${lastEligible + 1}`;
         else if (!withinWindow) refundHint = ` · refund window closed`;
       }
@@ -489,6 +498,7 @@ async function loadMyEntries() {
         <div style="display:flex;align-items:center;gap:6px">
           <span class="entry-status-badge ${statusClass}">${statusName}</span>
           ${canRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${round})">Refund principal</button>` : ""}
+          ${canCancel ? `<button class="btn-claim-mini" onclick="handleCancelEntry(${round})">Withdraw</button>` : ""}
         </div>`;
       list.appendChild(row);
     }
@@ -511,6 +521,59 @@ async function handleClaimRefund(round) {
     DebugHub.logError("handleClaimRefund", err);
     DebugHub.logCheckpoint("Prize:Refund Failed", "fail");
     alert("Refund failed: " + (err?.reason || err.message));
+  }
+}
+
+// ─── Advance (user nudge via router) ──────────────────────────────────────────
+// advanceScroll(count) on the router — count=1 for now; the contract already
+// accepts batches (one tx, applied one nudge at a time) for the future stepper.
+
+const ROUTER_NUDGE_ABI = ["function advanceScroll(uint256 count) external"];
+
+function updateAdvanceButtons(inSettlement) {
+  ["advance-btn-meter", "advance-btn-entry"].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.classList.toggle("hidden", !userAddress);
+    if (typeof inSettlement === "boolean") b.disabled = inSettlement;
+  });
+}
+
+async function handleAdvance(src) {
+  if (!userAddress) return;
+  const btn = document.getElementById(src === "meter" ? "advance-btn-meter" : "advance-btn-entry");
+  const orig = btn ? btn.textContent : "";
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = "Advancing…"; }
+    DebugHub.logCheckpoint("Prize:Advance Requested", "pass");
+    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_NUDGE_ABI, signer);
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    await (await router.advanceScroll(1, { ...gas, nonce })).wait();
+    DebugHub.logCheckpoint("Prize:Advance Confirmed", "pass");
+    if (btn) btn.textContent = "Advanced ✓";
+    await pollRoundState();
+    setTimeout(() => { if (btn) { btn.textContent = orig; btn.disabled = false; } }, 1500);
+  } catch (err) {
+    DebugHub.logError("handleAdvance", err);
+    DebugHub.logCheckpoint("Prize:Advance Failed", "fail");
+    if (btn) { btn.textContent = "Failed"; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000); }
+  }
+}
+
+// ─── Cancel Pending Entry (pre-round withdraw) ────────────────────────────────
+
+async function handleCancelEntry(round) {
+  try {
+    DebugHub.logCheckpoint("Prize:Cancel Requested", "pass");
+    const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    await (await registry.cancelEntry(round, { ...gas, nonce })).wait();
+    DebugHub.logCheckpoint("Prize:Cancel Confirmed", "pass");
+    await loadMyEntries(); // also refreshes hasPlayEntry / the entry button
+  } catch (err) {
+    DebugHub.logError("handleCancelEntry", err);
+    DebugHub.logCheckpoint("Prize:Cancel Failed", "fail");
+    alert("Withdraw failed: " + (err?.reason || err.message));
   }
 }
 

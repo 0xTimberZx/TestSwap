@@ -65,6 +65,9 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     uint256 public constant PROTOCOL_FEE_BPS = 5;
     uint256 public constant BPS_DENOMINATOR  = 10_000;
 
+    /// @notice Gas-bounded cap for batched user nudges per transaction.
+    uint256 public constant MAX_BATCH_NUDGE = 20;
+
     // ─── Events ──────────────────────────────────────────────────────────────
 
     event SwapExecuted(address sender, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, address to);
@@ -94,6 +97,8 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     error InsufficientLiquidity();
     error InsufficientETHSent(uint256 provided, uint256 required);
     error ETHTransferFailed();
+    error InvalidNudgeCount(uint256 count, uint256 max);
+    error PrizeNotSet();
 
     // ─── Modifiers ───────────────────────────────────────────────────────────
 
@@ -433,6 +438,33 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
 
         _maybeNudge(tokenIn, influencePrize);
         emit SwapExecuted(msg.sender, tokenIn, weth, amountIn, amountOut, to);
+    }
+
+    // ─── User Nudge (Advance the prize scroll) ───────────────────────────────
+
+    /**
+     * @notice Nudge the prize scroll directly, without swapping. `count` = 1
+     *         is a single nudge; higher counts are a batch — accepted as one
+     *         transaction and applied one nudge at a time, in order, which
+     *         keeps concurrent batch requests cleanly sequenced on-chain.
+     * @dev The router is the address TimbPrize authorizes for nudgeScroll(),
+     *      so no TimbPrize change is needed. Each iteration inherits
+     *      TimbPrize's own guards (whenGameStarted, settlement-window block) —
+     *      the whole batch reverts if the settlement window opens mid-batch.
+     */
+    function advanceScroll(uint256 count)
+        external
+        nonReentrant
+        whenNotPaused
+    {
+        if (timbPrize == address(0)) revert PrizeNotSet();
+        if (count == 0 || count > MAX_BATCH_NUDGE) {
+            revert InvalidNudgeCount(count, MAX_BATCH_NUDGE);
+        }
+        for (uint256 i = 0; i < count; i++) {
+            ITimbPrize(timbPrize).nudgeScroll();
+        }
+        emit ScrollNudged(msg.sender, address(0)); // address(0) = direct nudge
     }
 
     // ─── Internal: Liquidity Helpers ─────────────────────────────────────────
