@@ -44,6 +44,9 @@ let entryCostETH_wei   = null;
 let entryCostTIMBS_wei = null;
 let currentRoundNum    = null;
 let lastDigitCounters  = null;
+let activeSegIndex     = -1;   // 0-based index into digitCounters for the live segment
+let activeSegCounter   = null; // BigNumber — that segment's current counter
+let advanceCount       = 1;    // chosen batch size for the Advance panel
 // True when the wallet already has a Pending/Active entry for the next play
 // round. The contract allows only one entry per round, so a second submit
 // reverts (UNPREDICTABLE_GAS_LIMIT) — we route to replaceEntry instead.
@@ -176,8 +179,11 @@ async function pollRoundState() {
     const notice = document.getElementById("gated-notice");
     if (notice) notice.classList.toggle("hidden", !!userAddress);
 
-    // Advance buttons: wallet-gated, disabled during settlement
-    updateAdvanceButtons(!!s.inSettlement);
+    // Advance panel: wallet-gated, disabled during settlement; preview needs
+    // the active segment's current digit.
+    activeSegIndex   = s.segment.toNumber() - 1;
+    activeSegCounter = s.digitCounters[activeSegIndex];
+    updateAdvancePanel(!!s.inSettlement);
 
   } catch (e) {
     console.warn("pollRoundState:", e.message);
@@ -524,39 +530,80 @@ async function handleClaimRefund(round) {
   }
 }
 
-// ─── Advance (user nudge via router) ──────────────────────────────────────────
-// advanceScroll(count) on the router — count=1 for now; the contract already
-// accepts batches (one tx, applied one nudge at a time) for the future stepper.
+// ─── Advance Panel (user nudge / batch nudge via router) ──────────────────────
+// advanceScroll(count) on the router: count=1 is a single nudge, up to
+// MAX_BATCH_NUDGE (20 on-chain) applies that many nudges in one transaction,
+// one at a time, in order. The panel's chips/stepper just choose `count`.
 
 const ROUTER_NUDGE_ABI = ["function advanceScroll(uint256 count) external"];
+const ADVANCE_MAX = 20; // mirrors TimbSwapRouter.MAX_BATCH_NUDGE
 
-function updateAdvanceButtons(inSettlement) {
-  ["advance-btn-meter", "advance-btn-entry"].forEach(id => {
-    const b = document.getElementById(id);
-    if (!b) return;
-    b.classList.toggle("hidden", !userAddress);
-    if (typeof inSettlement === "boolean") b.disabled = inSettlement;
-  });
+function setAdvanceCount(n) {
+  advanceCount = Math.max(1, Math.min(ADVANCE_MAX, n));
+  renderAdvancePreview();
+}
+function adjustAdvanceCount(delta) {
+  setAdvanceCount(advanceCount + delta);
 }
 
-async function handleAdvance(src) {
+function renderAdvancePreview() {
+  const chipsWrap = document.getElementById("advance-chips");
+  if (chipsWrap) {
+    chipsWrap.querySelectorAll(".adv-chip").forEach(c => {
+      c.classList.toggle("active", Number(c.dataset.n) === advanceCount);
+    });
+  }
+  const countEl = document.getElementById("advance-count-val");
+  if (countEl) countEl.textContent = advanceCount;
+
+  const submitBtn = document.getElementById("advance-submit-btn");
+  if (submitBtn && !submitBtn.disabled) submitBtn.textContent = `Advance ×${advanceCount}`;
+
+  const previewEl = document.getElementById("advance-preview");
+  const fromEl = previewEl?.querySelector(".ap-from");
+  const toEl   = previewEl?.querySelector(".ap-to");
+  if (!previewEl || !fromEl || !toEl) return;
+
+  if (activeSegIndex < 0 || !activeSegCounter || !userAddress) {
+    previewEl.firstChild.textContent = "SEG — · ";
+    fromEl.textContent = "·"; toEl.textContent = "·";
+    return;
+  }
+  const from = Number(activeSegCounter) % 36;
+  const to   = (from + advanceCount) % 36;
+  previewEl.firstChild.textContent = `SEG ${activeSegIndex + 1} · `;
+  fromEl.textContent = ALPHABET[from];
+  toEl.textContent   = ALPHABET[to];
+}
+
+function updateAdvancePanel(inSettlement) {
+  const panel = document.getElementById("advance-panel");
+  if (!panel) return;
+  panel.classList.toggle("hidden", !userAddress);
+  const submitBtn = document.getElementById("advance-submit-btn");
+  if (submitBtn) submitBtn.disabled = !!inSettlement;
+  renderAdvancePreview();
+}
+
+async function handleAdvance() {
   if (!userAddress) return;
-  const btn = document.getElementById(src === "meter" ? "advance-btn-meter" : "advance-btn-entry");
+  const btn = document.getElementById("advance-submit-btn");
+  const count = advanceCount;
   const orig = btn ? btn.textContent : "";
   try {
-    if (btn) { btn.disabled = true; btn.textContent = "Advancing…"; }
+    if (btn) { btn.disabled = true; btn.textContent = count > 1 ? `Advancing ×${count}…` : "Advancing…"; }
     DebugHub.logCheckpoint("Prize:Advance Requested", "pass");
     const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_NUDGE_ABI, signer);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await (await router.advanceScroll(1, { ...gas, nonce })).wait();
+    await (await router.advanceScroll(count, { ...gas, nonce })).wait();
     DebugHub.logCheckpoint("Prize:Advance Confirmed", "pass");
     if (btn) btn.textContent = "Advanced ✓";
     await pollRoundState();
-    setTimeout(() => { if (btn) { btn.textContent = orig; btn.disabled = false; } }, 1500);
+    setTimeout(() => { if (btn) { btn.disabled = false; renderAdvancePreview(); } }, 1500);
   } catch (err) {
     DebugHub.logError("handleAdvance", err);
     DebugHub.logCheckpoint("Prize:Advance Failed", "fail");
-    if (btn) { btn.textContent = "Failed"; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000); }
+    if (btn) { btn.textContent = "Failed — try again"; setTimeout(() => { btn.disabled = false; renderAdvancePreview(); }, 2000); }
   }
 }
 
