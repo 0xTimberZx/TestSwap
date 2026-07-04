@@ -542,3 +542,31 @@
 }
 .btn-remove-liq:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
 .btn-remove-liq:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── Token picker: import + custom tokens + empty state ──────────────────── */
+.token-list-empty {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 18px 12px;
+}
+.token-list-empty.hidden { display: none; }
+
+.token-import-row {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  margin-top: 4px;
+}
+.token-import-row:hover { border-color: var(--green); }
+
+.token-remove {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.token-remove:hover { color: var(--text); }

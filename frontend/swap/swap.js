@@ -20,7 +20,8 @@ const ERC20_ABI     = [
   "function allowance(address owner, address spender) external view returns (uint256)",
   "function approve(address spender, uint256 amount) external returns (bool)",
   "function decimals() external view returns (uint8)",
-  "function symbol() external view returns (string)"
+  "function symbol() external view returns (string)",
+  "function name() external view returns (string)"
 ];
 const ELIGIBLE_ABI  = ["function isEligible(address token) external view returns (bool)"];
 
@@ -57,7 +58,25 @@ const NATIVE_ETH = {
   symbol: "ETH", name: "Ether (native)", address: "native",
   decimals: 18, logoChar: "Ξ", isNative: true
 };
-const SWAP_TOKENS = [NATIVE_ETH, ...DEFAULT_TOKENS];
+
+// Known extra tokens on Arbitrum Sepolia beyond the shared DEFAULT_TOKENS.
+// LINK address is Chainlink's documented Arbitrum Sepolia token — the picker
+// shows live on-chain symbol/balance, so a wrong address is immediately visible.
+const EXTRA_TOKENS = [
+  { symbol: "LINK", name: "Chainlink", address: "0xb1D4538B4571d411F07960EF2838Ce337FE1E80E", decimals: 18, logoChar: "L" }
+];
+
+// Custom tokens the user imported by pasting an address (persisted per-browser).
+const CUSTOM_TOKENS_KEY = "timbswap_custom_tokens";
+function loadCustomTokens() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_TOKENS_KEY)) || []; } catch { return []; }
+}
+function saveCustomTokens() {
+  try { localStorage.setItem(CUSTOM_TOKENS_KEY, JSON.stringify(customTokens)); } catch {}
+}
+let customTokens = loadCustomTokens();
+
+function allTokens() { return [NATIVE_ETH, ...DEFAULT_TOKENS, ...EXTRA_TOKENS, ...customTokens]; }
 
 function isNative(t)  { return !!(t && t.isNative); }
 // Address used for pool math/eligibility — native ETH trades as WETH.
@@ -79,10 +98,13 @@ async function tokenBalance(t) {
 function renderTokenList() {
   const list = document.getElementById("token-list");
   list.innerHTML = "";
-  SWAP_TOKENS.forEach(t => {
+  allTokens().forEach(t => {
     const row = document.createElement("div");
     row.className = "token-row";
     row.onclick = () => selectToken(t);
+    const removeHtml = t.isCustom
+      ? `<button class="token-remove" title="Remove from list" onclick="event.stopPropagation(); removeCustomToken('${t.address}')">✕</button>`
+      : "";
     row.innerHTML = `
       <div class="token-logo">${t.logoChar}</div>
       <div class="token-info">
@@ -90,17 +112,98 @@ function renderTokenList() {
         <div class="token-name">${t.name}</div>
       </div>
       <div class="token-bal-right" data-addr="${t.address}">—</div>
+      ${removeHtml}
     `;
     list.appendChild(row);
   });
+  // Empty state so the list never looks broken when a filter matches nothing.
+  const empty = document.createElement("div");
+  empty.id = "token-list-empty";
+  empty.className = "token-list-empty hidden";
+  empty.textContent = "No matches — paste a token address (0x…) to import it.";
+  list.appendChild(empty);
 }
 
-function filterTokens() {
-  const q = document.getElementById("token-search").value.toLowerCase();
-  document.querySelectorAll(".token-row").forEach(row => {
-    const txt = row.textContent.toLowerCase();
-    row.style.display = txt.includes(q) ? "flex" : "none";
+async function filterTokens() {
+  const q  = document.getElementById("token-search").value.trim();
+  const ql = q.toLowerCase();
+  let visible = 0;
+  document.querySelectorAll(".token-row:not(#token-import-row)").forEach(row => {
+    const show = row.textContent.toLowerCase().includes(ql);
+    row.style.display = show ? "flex" : "none";
+    if (show) visible++;
   });
+
+  removeImportRow();
+  const empty  = document.getElementById("token-list-empty");
+  const isAddr = /^0x[0-9a-fA-F]{40}$/.test(q);
+  const known  = allTokens().some(t => t.address.toLowerCase() === ql);
+  if (isAddr && !known) {
+    if (empty) empty.classList.add("hidden");
+    await offerImport(q);
+  } else if (empty) {
+    empty.classList.toggle("hidden", visible > 0);
+  }
+}
+
+// ─── Custom token import ──────────────────────────────────────────────────────
+// Pasting an unknown ERC-20 address into the search box looks it up on-chain
+// and offers a tap-to-import row; imported tokens persist in localStorage.
+
+let _importSeq = 0;
+
+async function offerImport(addr) {
+  const list = document.getElementById("token-list");
+  if (!list) return;
+  const seq = ++_importSeq;
+  const row = document.createElement("div");
+  row.className = "token-row token-import-row";
+  row.id = "token-import-row";
+  row.innerHTML = `
+    <div class="token-logo">?</div>
+    <div class="token-info">
+      <div class="token-symbol">Looking up…</div>
+      <div class="token-name">${addr.slice(0, 10)}…${addr.slice(-4)}</div>
+    </div>`;
+  list.appendChild(row);
+
+  try {
+    const c = new ethers.Contract(addr, ERC20_ABI, readProviderForEligibility());
+    const [sym, dec, name] = await Promise.all([
+      c.symbol(),
+      c.decimals(),
+      c.name().catch(() => "Custom token"),
+    ]);
+    if (seq !== _importSeq) return; // superseded by a newer lookup
+    const t = {
+      symbol: sym, name, address: addr, decimals: Number(dec),
+      logoChar: (sym[0] || "?").toUpperCase(), isCustom: true
+    };
+    row.onclick = () => importCustomToken(t);
+    row.querySelector(".token-symbol").textContent = sym;
+    row.querySelector(".token-name").textContent   = name + " · tap to import";
+  } catch {
+    if (seq !== _importSeq) return;
+    row.querySelector(".token-symbol").textContent = "Not an ERC-20";
+    row.querySelector(".token-name").textContent   = "No token found at this address";
+  }
+}
+
+function removeImportRow() {
+  document.getElementById("token-import-row")?.remove();
+}
+
+function importCustomToken(t) {
+  customTokens.push(t);
+  saveCustomTokens();
+  selectToken(t); // selects for the active side and closes the picker
+}
+
+function removeCustomToken(addr) {
+  customTokens = customTokens.filter(t => t.address.toLowerCase() !== addr.toLowerCase());
+  saveCustomTokens();
+  renderTokenList();
+  refreshPickerBalances();
 }
 
 function openTokenPicker(target) {
@@ -120,7 +223,7 @@ function closeTokenPickerDirect() {
 
 async function refreshPickerBalances() {
   if (!userAddress) return;
-  for (const t of SWAP_TOKENS) {
+  for (const t of allTokens()) {
     try {
       const bal = await tokenBalance(t);
       const el = document.querySelector(`.token-bal-right[data-addr="${t.address}"]`);
