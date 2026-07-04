@@ -11,7 +11,22 @@ do a contract round.
 
 ---
 
-## 1. Cancel / withdraw a Pending prize entry (pre-round)
+## 1. Cancel / withdraw a Pending prize entry (pre-round) — CODE WRITTEN
+
+**Status:** `GameRegistry.cancelEntry(round)` implemented and compile-verified
+(solc 0.8.24). Frontend "Withdraw" button wired on Compete for Pending entries
+whose round hasn't started. **Needs GameRegistry redeploy:**
+
+1. Deploy updated `GameRegistry` (same constructor args as current).
+2. New registry: `setTimbPrize(<TimbPrize>)`, `setProtocolSink(...)`, and
+   re-set entry costs if they were changed from defaults.
+3. `TimbPrize.setGameRegistry(<new registry>)` (setter exists).
+4. `setCurrentRound` sync: TimbPrize pushes the round on next settle; verify
+   `currentRound` matches after one segment settles.
+5. Update `ADDRESSES.GameRegistry` in BOTH `config.js` and `frontend/config.js`.
+6. Note: entries/escrow in the OLD registry stay there — refund/cancel old
+   entries through the old contract before switching, or drain via claimRefund.
+
 
 - **Want:** withdraw the principal of a queued entry *before* its round plays, so
   the game is truly risk-free / entries feel un-stuck.

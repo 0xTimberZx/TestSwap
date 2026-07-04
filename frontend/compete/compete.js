@@ -17,7 +17,8 @@ const GAME_REGISTRY_ABI = [
   "function additionalRoundCost(uint256 extraRounds) external view returns (uint256)",
   "function submitEntry(bytes6 string6, bool useETH, uint256 extraRounds) external payable",
   "function replaceEntry(bytes6 newString6, uint256 extraRounds) external payable",
-  "function claimRefund(uint256 round) external"
+  "function claimRefund(uint256 round) external",
+  "function cancelEntry(uint256 round) external"
 ];
 
 const TIMBS_ABI = [
@@ -472,9 +473,14 @@ async function loadMyEntries() {
       const expiredByRound = currentRoundNum !== null && currentRoundNum > lastEligible;
       const withinWindow   = currentRoundNum !== null && currentRoundNum <= lastEligible + 2;
       const canRefund      = notClaimed && expiredByRound && withinWindow;
+      // Pending entries for a future round can be cancelled outright — the
+      // escrow returns immediately (needs the redeployed GameRegistry).
+      const canCancel      = entry.status === 0 &&
+        currentRoundNum !== null && Number(round) > currentRoundNum;
 
       let refundHint = "";
-      if (notClaimed && !canRefund) {
+      if (canCancel)               refundHint = ` · withdrawable until R${round} starts`;
+      else if (notClaimed && !canRefund) {
         if (!expiredByRound)    refundHint = ` · principal refundable after R${lastEligible + 1}`;
         else if (!withinWindow) refundHint = ` · refund window closed`;
       }
@@ -489,6 +495,7 @@ async function loadMyEntries() {
         <div style="display:flex;align-items:center;gap:6px">
           <span class="entry-status-badge ${statusClass}">${statusName}</span>
           ${canRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${round})">Refund principal</button>` : ""}
+          ${canCancel ? `<button class="btn-claim-mini" onclick="handleCancelEntry(${round})">Withdraw</button>` : ""}
         </div>`;
       list.appendChild(row);
     }
@@ -511,6 +518,23 @@ async function handleClaimRefund(round) {
     DebugHub.logError("handleClaimRefund", err);
     DebugHub.logCheckpoint("Prize:Refund Failed", "fail");
     alert("Refund failed: " + (err?.reason || err.message));
+  }
+}
+
+// ─── Cancel Pending Entry (pre-round withdraw) ────────────────────────────────
+
+async function handleCancelEntry(round) {
+  try {
+    DebugHub.logCheckpoint("Prize:Cancel Requested", "pass");
+    const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    await (await registry.cancelEntry(round, { ...gas, nonce })).wait();
+    DebugHub.logCheckpoint("Prize:Cancel Confirmed", "pass");
+    await loadMyEntries(); // also refreshes hasPlayEntry / the entry button
+  } catch (err) {
+    DebugHub.logError("handleCancelEntry", err);
+    DebugHub.logCheckpoint("Prize:Cancel Failed", "fail");
+    alert("Withdraw failed: " + (err?.reason || err.message));
   }
 }
 

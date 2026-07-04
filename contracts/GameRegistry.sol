@@ -138,6 +138,12 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         address indexed player,
         uint256 timbsAmount
     );
+    event EntryCancelled(
+        address indexed player,
+        uint256 indexed round,
+        uint256 refundAmount,
+        address escrowToken
+    );
     event EntryCostUpdated(uint256 timbsCost, uint256 ethCost);
     event CurrentRoundUpdated(uint256 round);
     event TimbPrizeSet(address indexed timbPrize);
@@ -162,6 +168,8 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     error InsufficientAllowance(uint256 required, uint256 available);
     error EntryNotActive(EntryStatus status);
     error AlreadyRefunded();
+    error EntryNotPending(EntryStatus status);
+    error RoundAlreadyStarted(uint256 playRound, uint256 currentRound);
 
     // ─── Modifiers ───────────────────────────────────────────────────────────
 
@@ -477,6 +485,48 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         }
 
         emit EscrowRefunded(msg.sender, round, amount, token);
+    }
+
+    // ─── Entry Cancellation (pre-round withdraw) ──────────────────────────────
+
+    /**
+     * @notice Cancel a Pending entry BEFORE its round starts and reclaim the
+     *         escrowed principal immediately — no waiting for expiry.
+     * @dev Only Pending entries qualify: TimbPrize flips them to Active at
+     *      round start (activateRoundEntries), which closes the cancel window.
+     *      Additional-round TIMBS is already in the protocol sink and stays
+     *      non-refundable. Cancelled entries become Inactive, so winner
+     *      verification can never match them.
+     * @param round The play round the entry was queued for.
+     */
+    function cancelEntry(uint256 round) external nonReentrant {
+        EntryData storage entry = entries[msg.sender][round];
+
+        if (!entry.exists) revert NoEntryFound(msg.sender, round);
+        if (entry.status != EntryStatus.Pending) {
+            revert EntryNotPending(entry.status);
+        }
+        // Belt-and-braces: a Pending entry always plays in a future round, but
+        // never allow cancelling once its round is the current one.
+        if (round <= currentRound) revert RoundAlreadyStarted(round, currentRound);
+
+        uint256 amount = entry.escrowAmount;
+        address token  = entry.escrowToken;
+
+        entry.status       = EntryStatus.Inactive;
+        entry.escrowAmount = 0;
+
+        if (amount > 0) {
+            if (token == address(0)) {
+                (bool ok,) = payable(msg.sender).call{value: amount}("");
+                require(ok, "ETH refund failed");
+            } else {
+                IERC20(token).safeTransfer(msg.sender, amount);
+            }
+        }
+
+        emit EntryCancelled(msg.sender, round, amount, token);
+        emit EntryStatusUpdated(msg.sender, round, EntryStatus.Inactive);
     }
 
     // ─── TimbPrize: Settlement Interface ──────────────────────────────────────
