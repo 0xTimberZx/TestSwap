@@ -78,7 +78,16 @@ whose round hasn't started. **Needs GameRegistry redeploy:**
     lazily on the next interaction, or make `settleSegment()` permissionless —
     that's the blockchain-level part.
 
-## 3. User-callable "Advance" (nudge) on the Compete page
+## 3. User-callable "Advance" (nudge) — CODE WRITTEN (router redeploy)
+
+**Status:** `TimbSwapRouter.advanceScroll(count)` implemented (router is the
+address TimbPrize authorizes, so no TimbPrize change). count=1 = single nudge;
+up to MAX_BATCH_NUDGE=20 = batchNudge (one tx, applied one at a time, in
+order). Compete page has wallet-gated "Advance +1" buttons (meter card +
+entry card), disabled during settlement. Ships in the same router redeploy as
+the native-ETH swaps — redeploy the router once more from this code and
+follow §5's checklist. NOTE: nudges via this path are free (gas only) — the
+economics decision below still stands if you want to charge.
 
 - **Want:** a wallet-gated **Advance / nudge** button (on the meter card and near
   game registration) that pushes the scroll +1 directly — one nudge at a time
@@ -94,7 +103,7 @@ whose round hasn't started. **Needs GameRegistry redeploy:**
   settlement-window block and `whenGameStarted` guard. Redeploy + update address
   in `config.js` + wire the button.
 
-## 4. `batchNudge` — multiple nudges in one call
+## 4. `batchNudge` — DONE (covered by §3, advanceScroll(count))
 
 - **Want:** batch N nudges into a single transaction ("batch 5" = one submit,
   applied one-at-a-time ×5), to cleanly handle ordering when many nudge requests

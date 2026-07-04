@@ -176,6 +176,9 @@ async function pollRoundState() {
     const notice = document.getElementById("gated-notice");
     if (notice) notice.classList.toggle("hidden", !!userAddress);
 
+    // Advance buttons: wallet-gated, disabled during settlement
+    updateAdvanceButtons(!!s.inSettlement);
+
   } catch (e) {
     console.warn("pollRoundState:", e.message);
     DebugHub.logError("pollRoundState", e);
@@ -518,6 +521,42 @@ async function handleClaimRefund(round) {
     DebugHub.logError("handleClaimRefund", err);
     DebugHub.logCheckpoint("Prize:Refund Failed", "fail");
     alert("Refund failed: " + (err?.reason || err.message));
+  }
+}
+
+// ─── Advance (user nudge via router) ──────────────────────────────────────────
+// advanceScroll(count) on the router — count=1 for now; the contract already
+// accepts batches (one tx, applied one nudge at a time) for the future stepper.
+
+const ROUTER_NUDGE_ABI = ["function advanceScroll(uint256 count) external"];
+
+function updateAdvanceButtons(inSettlement) {
+  ["advance-btn-meter", "advance-btn-entry"].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.classList.toggle("hidden", !userAddress);
+    if (typeof inSettlement === "boolean") b.disabled = inSettlement;
+  });
+}
+
+async function handleAdvance(src) {
+  if (!userAddress) return;
+  const btn = document.getElementById(src === "meter" ? "advance-btn-meter" : "advance-btn-entry");
+  const orig = btn ? btn.textContent : "";
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = "Advancing…"; }
+    DebugHub.logCheckpoint("Prize:Advance Requested", "pass");
+    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_NUDGE_ABI, signer);
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    await (await router.advanceScroll(1, { ...gas, nonce })).wait();
+    DebugHub.logCheckpoint("Prize:Advance Confirmed", "pass");
+    if (btn) btn.textContent = "Advanced ✓";
+    await pollRoundState();
+    setTimeout(() => { if (btn) { btn.textContent = orig; btn.disabled = false; } }, 1500);
+  } catch (err) {
+    DebugHub.logError("handleAdvance", err);
+    DebugHub.logCheckpoint("Prize:Advance Failed", "fail");
+    if (btn) { btn.textContent = "Failed"; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000); }
   }
 }
 
