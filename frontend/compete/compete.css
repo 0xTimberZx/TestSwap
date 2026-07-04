@@ -501,20 +501,141 @@
   .digit-char { width: 30px; height: 40px; font-size: 16px; }
 }
 
-/* ─── Advance (user nudge) buttons ─────────────────────────────────────────── */
-.btn-advance {
-  background: rgba(40,160,240,0.1);
-  color: var(--blue);
-  border: 1px solid rgba(40,160,240,0.35);
-  border-radius: var(--radius);
-  padding: 8px 14px;
-  font-family: var(--sans);
+/* ─── Advance Panel (user nudge / batch nudge) ─────────────────────────────── */
+.advance-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(40,160,240,0.08), var(--bg2) 55%);
+  border: 1px solid rgba(40,160,240,0.3);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.advance-panel.hidden { display: none; }
+.advance-panel::before {
+  /* faint animated sweep to sell the "charge" feel without being loud */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 40%, rgba(40,160,240,0.08) 50%, transparent 60%);
+  background-size: 220% 100%;
+  animation: advance-sweep 5s linear infinite;
+  pointer-events: none;
+}
+@keyframes advance-sweep {
+  0%   { background-position: 130% 0; }
+  100% { background-position: -30% 0; }
+}
+
+.advance-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.advance-icon {
+  font-size: 22px;
+  filter: drop-shadow(0 0 6px rgba(40,160,240,0.6));
+  flex-shrink: 0;
+}
+.advance-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.advance-sub   { font-size: 12px; color: var(--text-2); }
+.advance-preview {
+  margin-left: auto;
+  font-family: var(--mono);
   font-size: 13px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.advance-preview .ap-from { color: var(--text-3); }
+.advance-preview .ap-to   { color: var(--blue); font-weight: 700; }
+
+.advance-controls {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.advance-chips { display: flex; gap: 6px; }
+.adv-chip {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  border-radius: 20px;
+  padding: 6px 13px;
+  font-family: var(--mono);
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.btn-advance:hover:not(:disabled) { background: rgba(40,160,240,0.2); border-color: var(--blue); }
-.btn-advance:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-advance.hidden { display: none; }
-.btn-advance-wide { width: 100%; margin-top: 8px; }
+.adv-chip:hover { border-color: var(--blue); color: var(--text); }
+.adv-chip.active {
+  background: rgba(40,160,240,0.18);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.advance-stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 6px;
+}
+.advance-stepper button {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg);
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.advance-stepper button:hover { background: var(--blue-dim); color: var(--text); }
+#advance-count-val {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 20px;
+  text-align: center;
+}
+
+.btn-advance-submit {
+  margin-left: auto;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 11px 22px;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 0 rgba(40,160,240,0.5);
+  transition: box-shadow 0.2s, opacity 0.15s, transform 0.1s;
+}
+.btn-advance-submit:hover:not(:disabled) {
+  box-shadow: 0 0 18px rgba(40,160,240,0.55);
+  transform: translateY(-1px);
+}
+.btn-advance-submit:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+@media (max-width: 640px) {
+  .advance-head { flex-wrap: wrap; }
+  .advance-preview { margin-left: 0; width: 100%; }
+  .advance-controls { justify-content: center; }
+  .btn-advance-submit { margin-left: 0; width: 100%; }
+}

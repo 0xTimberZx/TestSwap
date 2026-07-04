@@ -119,10 +119,6 @@
         <span class="round-label">SEGMENT</span>
         <span class="round-num" id="hdr-segment">—/6</span>
       </div>
-
-      <button id="advance-btn-meter" class="btn-advance hidden" onclick="handleAdvance('meter')">
-        Advance +1
-      </button>
     </div>
 
     <!-- Segment timer + pot -->
@@ -132,6 +128,37 @@
       <span id="sub-pot">Pot: —</span>
       <span class="dot-sep">·</span>
       <span id="sub-entries">— entries</span>
+    </div>
+
+    <!-- ─── Advance Panel (wallet-gated user nudge / batch nudge) ───────────── -->
+    <div id="advance-panel" class="advance-panel hidden">
+      <div class="advance-head">
+        <span class="advance-icon">⚡</span>
+        <div>
+          <div class="advance-title">Advance the Scroll</div>
+          <div class="advance-sub">Push the active digit forward — gas only, no swap needed</div>
+        </div>
+        <div class="advance-preview" id="advance-preview">SEG — · <span class="ap-from">·</span> → <span class="ap-to">·</span></div>
+      </div>
+
+      <div class="advance-controls">
+        <div class="advance-chips" id="advance-chips">
+          <button class="adv-chip" data-n="1" onclick="setAdvanceCount(1)">+1</button>
+          <button class="adv-chip" data-n="5" onclick="setAdvanceCount(5)">+5</button>
+          <button class="adv-chip" data-n="10" onclick="setAdvanceCount(10)">+10</button>
+          <button class="adv-chip" data-n="20" onclick="setAdvanceCount(20)">+20 Max</button>
+        </div>
+
+        <div class="advance-stepper">
+          <button onclick="adjustAdvanceCount(-1)" aria-label="Decrease">−</button>
+          <span id="advance-count-val">1</span>
+          <button onclick="adjustAdvanceCount(1)" aria-label="Increase">+</button>
+        </div>
+
+        <button id="advance-submit-btn" class="btn-advance-submit" onclick="handleAdvance()">
+          Advance ×1
+        </button>
+      </div>
     </div>
 
     <!-- Wallet-gated reveal notice -->
@@ -186,9 +213,6 @@
 
         <button id="entry-btn" class="btn-entry" onclick="handleSubmitEntry()" disabled>
           Connect wallet to enter
-        </button>
-        <button id="advance-btn-entry" class="btn-advance btn-advance-wide hidden" onclick="handleAdvance('entry')">
-          Advance the scroll +1
         </button>
       </div>
 
