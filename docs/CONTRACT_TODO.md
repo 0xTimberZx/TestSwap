@@ -90,7 +90,37 @@ do a contract round.
   `count` to cap gas). Emit per-nudge events so the scroll animation/order stays
   correct. Redeploy + update `config.js` + wire a batch stepper in the UI.
 
-## 5. (add future contract-level items here)
+## 5. Native ETH swaps — CODE WRITTEN, needs router redeploy
+
+- **Status:** `TimbSwapRouter.sol` now has `swapExactETHForTokens` (payable) and
+  `swapExactTokensForETH`, compile-verified on solc 0.8.24. The Swap page
+  frontend is already wired: ETH appears as a native token, ETH↔WETH is a 1:1
+  wrap/unwrap directly on the WETH contract (works with the CURRENT deployment,
+  no redeploy needed), and ETH↔token routes through the new router functions.
+- **No new ETH funding needed:** WETH↔ETH is a wrap/unwrap on the WETH contract
+  (always 1:1, no pool); TIMBS↔ETH rides the existing TIMBS/WETH pool + unwrap.
+- **Fee model:** ETH-in swaps charge the same 0.05% protocol fee on top of
+  amountIn, paid to the treasury as WETH; the frontend sends
+  `msg.value = amountIn + fee`. Token-in→ETH swaps collect the fee in tokenIn
+  exactly like today.
+
+### Redeploy checklist (Remix, owner wallet)
+
+1. Deploy the updated `TimbSwapRouter` with the SAME constructor args as the
+   current one: `(factory, treasury, eligibleRegistry, timbPrize)`.
+2. On the NEW router: `setWeth(0x980B62Da83eFf3D4576C647993b0c1D7faf17c73)`.
+3. On `TimbPrize`: `setRouter(<new router>)` — otherwise nudges revert
+   (`onlyRouter` still points at the old router).
+4. Optional hygiene: `pause()` the OLD router so no one keeps trading through it.
+5. Update `ADDRESSES.TimbSwapRouter` in BOTH `config.js` and
+   `frontend/config.js` to the new address.
+6. Users' token approvals target the old router; the frontend already checks
+   allowance per-swap and will prompt a fresh approve automatically.
+7. Smoke test: WETH→ETH unwrap (works pre-redeploy too), ETH→TIMBS,
+   TIMBS→ETH, and one eligible swap with influence ON to confirm the nudge
+   fires from the new router.
+
+## 6. (add future contract-level items here)
 
 <!--
 Template:

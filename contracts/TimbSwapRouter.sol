@@ -92,6 +92,8 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     error WethNotSet();
     error RefundFailed();
     error InsufficientLiquidity();
+    error InsufficientETHSent(uint256 provided, uint256 required);
+    error ETHTransferFailed();
 
     // ─── Modifiers ───────────────────────────────────────────────────────────
 
@@ -331,6 +333,106 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         if (amountIn > amountInMax) revert ExcessiveInputAmount();
 
         _executeSwap(tokenIn, tokenOut, amountIn, amountOut, to, influencePrize);
+    }
+
+    // ─── Swap: Native ETH ─────────────────────────────────────────────────────
+
+    /**
+     * @notice Swap an exact amount of native ETH for as much tokenOut as possible.
+     * @dev ETH is wrapped to WETH and traded through the WETH/tokenOut pair.
+     *      msg.value must cover amountIn plus the protocol fee (paid to the
+     *      treasury as WETH, mirroring token-in swaps); excess ETH is refunded.
+     */
+    function swapExactETHForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address tokenOut,
+        address to,
+        uint256 deadline,
+        bool    influencePrize
+    )
+        external
+        payable
+        nonReentrant
+        whenNotPaused
+        ensure(deadline)
+        returns (uint256 amountOut)
+    {
+        if (weth == address(0)) revert WethNotSet();
+        if (amountIn == 0)      revert ZeroAmount();
+        if (to == address(0))   revert ZeroAddress();
+
+        // Fee mirrors _collectProtocolFee: charged on top of amountIn, skipped
+        // entirely when no treasury is configured.
+        uint256 fee = treasury != address(0)
+            ? (amountIn * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR
+            : 0;
+        if (msg.value < amountIn + fee) {
+            revert InsufficientETHSent(msg.value, amountIn + fee);
+        }
+
+        address pair = _getPair(weth, tokenOut);
+        (uint256 reserveIn, uint256 reserveOut) = _getReserves(pair, weth);
+        amountOut = _getAmountOut(amountIn, reserveIn, reserveOut);
+        if (amountOut < amountOutMin) {
+            revert InsufficientOutputAmount(amountOut, amountOutMin);
+        }
+
+        // Wrap once: swap amount to the pair, protocol fee (as WETH) to treasury.
+        IWETH(weth).deposit{value: amountIn + fee}();
+        IWETH(weth).transfer(pair, amountIn);
+        if (fee > 0) {
+            IWETH(weth).transfer(treasury, fee);
+            emit ProtocolFeeSent(treasury, weth, fee);
+        }
+
+        _swapOnPair(pair, weth, amountOut, to);
+        _maybeNudge(weth, influencePrize);
+        _refundExcessETH(amountIn + fee);
+        emit SwapExecuted(msg.sender, weth, tokenOut, amountIn, amountOut, to);
+    }
+
+    /**
+     * @notice Swap an exact amount of tokenIn for as much native ETH as possible.
+     * @dev Trades through the tokenIn/WETH pair; the router receives the WETH,
+     *      unwraps it, and forwards native ETH to `to`.
+     */
+    function swapExactTokensForETH(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address tokenIn,
+        address to,
+        uint256 deadline,
+        bool    influencePrize
+    )
+        external
+        nonReentrant
+        whenNotPaused
+        ensure(deadline)
+        returns (uint256 amountOut)
+    {
+        if (weth == address(0)) revert WethNotSet();
+        if (amountIn == 0)      revert ZeroAmount();
+        if (to == address(0))   revert ZeroAddress();
+
+        address pair = _getPair(tokenIn, weth);
+        (uint256 reserveIn, uint256 reserveOut) = _getReserves(pair, tokenIn);
+        amountOut = _getAmountOut(amountIn, reserveIn, reserveOut);
+        if (amountOut < amountOutMin) {
+            revert InsufficientOutputAmount(amountOut, amountOutMin);
+        }
+
+        IERC20(tokenIn).safeTransferFrom(msg.sender, pair, amountIn);
+        _collectProtocolFee(tokenIn, amountIn);
+
+        // Receive the WETH here, unwrap, and forward native ETH to the recipient.
+        _swapOnPair(pair, tokenIn, amountOut, address(this));
+        IWETH(weth).withdraw(amountOut);
+        (bool ok,) = payable(to).call{value: amountOut}("");
+        if (!ok) revert ETHTransferFailed();
+
+        _maybeNudge(tokenIn, influencePrize);
+        emit SwapExecuted(msg.sender, tokenIn, weth, amountIn, amountOut, to);
     }
 
     // ─── Internal: Liquidity Helpers ─────────────────────────────────────────

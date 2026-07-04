@@ -5,8 +5,14 @@ const ROUTER_ABI   = [
   "function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) external pure returns (uint256)",
   "function getAmountIn(uint256 amountOut, uint256 reserveIn, uint256 reserveOut) external pure returns (uint256)",
   "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address tokenIn, address tokenOut, address to, uint256 deadline, bool influencePrize) external returns (uint256 amountOut)",
+  "function swapExactETHForTokens(uint256 amountIn, uint256 amountOutMin, address tokenOut, address to, uint256 deadline, bool influencePrize) external payable returns (uint256 amountOut)",
+  "function swapExactTokensForETH(uint256 amountIn, uint256 amountOutMin, address tokenIn, address to, uint256 deadline, bool influencePrize) external returns (uint256 amountOut)",
   "function addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256, uint256, uint256)",
   "function removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256, uint256)"
+];
+const WETH_ABI = [
+  "function deposit() external payable",
+  "function withdraw(uint256 amount) external"
 ];
 const FACTORY_ABI = ["function getPairAddress(address tokenA, address tokenB) external view returns (address)"];
 const ERC20_ABI     = [
@@ -41,12 +47,39 @@ function trimAmount(weiStr) {
   return trimmed === "" ? "0" : trimmed;
 }
 
+// ─── Native ETH support ───────────────────────────────────────────────────────
+// ETH is a swap-page-local pseudo-token (not in DEFAULT_TOKENS, so other pages
+// never see it). ETH↔WETH is a 1:1 wrap/unwrap on the WETH contract — no pool,
+// no fee, no slippage. ETH↔token routes through the WETH pool via the router's
+// swapExactETHForTokens / swapExactTokensForETH.
+
+const NATIVE_ETH = {
+  symbol: "ETH", name: "Ether (native)", address: "native",
+  decimals: 18, logoChar: "Ξ", isNative: true
+};
+const SWAP_TOKENS = [NATIVE_ETH, ...DEFAULT_TOKENS];
+
+function isNative(t)  { return !!(t && t.isNative); }
+// Address used for pool math/eligibility — native ETH trades as WETH.
+function effAddr(t)   { return isNative(t) ? ADDRESSES.WETH : t.address; }
+// ETH↔WETH in either direction is a wrap/unwrap, not a pool trade.
+function isWrapPair() {
+  if (!tokenIn || !tokenOut) return false;
+  return (isNative(tokenIn)  && tokenOut.address === ADDRESSES.WETH) ||
+         (isNative(tokenOut) && tokenIn.address  === ADDRESSES.WETH);
+}
+
+async function tokenBalance(t) {
+  if (isNative(t)) return provider.getBalance(userAddress);
+  return new ethers.Contract(t.address, ERC20_ABI, provider).balanceOf(userAddress);
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 function renderTokenList() {
   const list = document.getElementById("token-list");
   list.innerHTML = "";
-  DEFAULT_TOKENS.forEach(t => {
+  SWAP_TOKENS.forEach(t => {
     const row = document.createElement("div");
     row.className = "token-row";
     row.onclick = () => selectToken(t);
@@ -87,10 +120,9 @@ function closeTokenPickerDirect() {
 
 async function refreshPickerBalances() {
   if (!userAddress) return;
-  for (const t of DEFAULT_TOKENS) {
+  for (const t of SWAP_TOKENS) {
     try {
-      const c = new ethers.Contract(t.address, ERC20_ABI, provider);
-      const bal = await c.balanceOf(userAddress);
+      const bal = await tokenBalance(t);
       const el = document.querySelector(`.token-bal-right[data-addr="${t.address}"]`);
       if (el) el.textContent = fmt(bal, t.decimals, 4);
     } catch {}
@@ -143,8 +175,16 @@ async function checkEligibility() {
   }
 
   try {
+    // Wrap/unwrap never touches a pool or the router, so no influence/nudge.
+    if (isWrapPair()) {
+      isEligiblePair = false;
+      row.classList.add("hidden");
+      panel.style.display = "none";
+      if (window.renderPrizeIndicators) window.renderPrizeIndicators(false);
+      return;
+    }
     const registry = new ethers.Contract(ADDRESSES.EligibleTokenRegistry, ELIGIBLE_ABI, readProviderForEligibility());
-    const eligible = await registry.isEligible(tokenIn.address);
+    const eligible = await registry.isEligible(effAddr(tokenIn));
     isEligiblePair = eligible;
     // Game UI (influence toggle + live prize indicators) is wallet-gated —
     // don't reveal any game state until the user is connected.
@@ -177,13 +217,11 @@ async function refreshBalances() {
 
   try {
     if (tokenIn) {
-      const c = new ethers.Contract(tokenIn.address, ERC20_ABI, provider);
-      const bal = await c.balanceOf(userAddress);
+      const bal = await tokenBalance(tokenIn);
       balIn.textContent = `Balance: ${fmt(bal, tokenIn.decimals, 4)}`;
     }
     if (tokenOut) {
-      const c = new ethers.Contract(tokenOut.address, ERC20_ABI, provider);
-      const bal = await c.balanceOf(userAddress);
+      const bal = await tokenBalance(tokenOut);
       balOut.textContent = `Balance: ${fmt(bal, tokenOut.decimals, 4)}`;
     }
   } catch (e) {
@@ -216,8 +254,20 @@ async function recalcQuote() {
   const readProv = readProviderForEligibility();
   const router   = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, readProv);
 
+  // ETH ↔ WETH is a 1:1 wrap/unwrap — mirror the amount, no pool quote.
+  if (isWrapPair()) {
+    const src = lastEditedSide === "in" ? inputIn : inputOut;
+    const dst = lastEditedSide === "in" ? inputOut : inputIn;
+    dst.value = src.value;
+    infoBox.classList.add("hidden");
+    if (!src.value || parseFloat(src.value) <= 0) { updateSwapButton("Enter an amount"); return; }
+    if (!userAddress) { updateSwapButton("Connect wallet to swap"); return; }
+    updateSwapButton(isNative(tokenIn) ? "Wrap ETH → WETH" : "Unwrap WETH → ETH");
+    return;
+  }
+
   try {
-    const [reserveIn, reserveOut] = await router.getReserves(tokenIn.address, tokenOut.address);
+    const [reserveIn, reserveOut] = await router.getReserves(effAddr(tokenIn), effAddr(tokenOut));
 
     if (reserveIn.eq(0) || reserveOut.eq(0)) {
       infoBox.classList.add("hidden");
@@ -329,22 +379,25 @@ async function handleSwap() {
 
   try {
     const amountInWei = ethers.utils.parseUnits(amtIn, tokenIn.decimals);
-    const tokenContract = new ethers.Contract(tokenIn.address, ERC20_ABI, signer);
 
-    // Check allowance
-    const allowance = await tokenContract.allowance(userAddress, ADDRESSES.TimbSwapRouter);
-    if (allowance.lt(amountInWei)) {
-      btn.disabled = true;
-      btn.textContent = "Approving…";
-      DebugHub.logCheckpoint("Approve Requested", "pass");
+    // Native ETH never needs an ERC20 approval; wrap pairs skip it too since
+    // WETH.deposit/withdraw act on the caller's own balance.
+    if (!isNative(tokenIn) && !isWrapPair()) {
+      const tokenContract = new ethers.Contract(tokenIn.address, ERC20_ABI, signer);
+      const allowance = await tokenContract.allowance(userAddress, ADDRESSES.TimbSwapRouter);
+      if (allowance.lt(amountInWei)) {
+        btn.disabled = true;
+        btn.textContent = "Approving…";
+        DebugHub.logCheckpoint("Approve Requested", "pass");
 
-      const gas = await getGasParams();
-      const nonce = await getPendingNonce();
-      const approveTx = await tokenContract.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce });
+        const gas = await getGasParams();
+        const nonce = await getPendingNonce();
+        const approveTx = await tokenContract.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce });
 
-      DebugHub.logCheckpoint("Approve Submitted", "pass");
-      await approveTx.wait();
-      DebugHub.logCheckpoint("Approve Confirmed", "pass");
+        DebugHub.logCheckpoint("Approve Submitted", "pass");
+        await approveTx.wait();
+        DebugHub.logCheckpoint("Approve Confirmed", "pass");
+      }
     }
 
     // Execute swap
@@ -360,10 +413,33 @@ async function handleSwap() {
     const gas = await getGasParams();
     const nonce = await getPendingNonce();
 
-    const tx = await router.swapExactTokensForTokens(
-      amountInWei, minOut, tokenIn.address, tokenOut.address, userAddress, deadline, influencePrize,
-      { ...gas, nonce }
-    );
+    let tx;
+    if (isWrapPair()) {
+      // 1:1 wrap/unwrap directly on the WETH contract — no pool, no fee.
+      const wethC = new ethers.Contract(ADDRESSES.WETH, WETH_ABI, signer);
+      btn.textContent = isNative(tokenIn) ? "Wrapping…" : "Unwrapping…";
+      tx = isNative(tokenIn)
+        ? await wethC.deposit({ ...gas, nonce, value: amountInWei })
+        : await wethC.withdraw(amountInWei, { ...gas, nonce });
+    } else if (isNative(tokenIn)) {
+      // ETH → token: msg.value must cover amountIn plus the 0.05% protocol fee.
+      const fee = amountInWei.mul(5).div(10000);
+      tx = await router.swapExactETHForTokens(
+        amountInWei, minOut, tokenOut.address, userAddress, deadline, influencePrize,
+        { ...gas, nonce, value: amountInWei.add(fee) }
+      );
+    } else if (isNative(tokenOut)) {
+      // token → ETH: router swaps to WETH, unwraps, and sends native ETH.
+      tx = await router.swapExactTokensForETH(
+        amountInWei, minOut, tokenIn.address, userAddress, deadline, influencePrize,
+        { ...gas, nonce }
+      );
+    } else {
+      tx = await router.swapExactTokensForTokens(
+        amountInWei, minOut, tokenIn.address, tokenOut.address, userAddress, deadline, influencePrize,
+        { ...gas, nonce }
+      );
+    }
 
     DebugHub.logCheckpoint("Swap Submitted", "pass");
     await tx.wait();
@@ -444,13 +520,21 @@ async function refreshLiquidity() {
 
   // Balances
   if (userAddress && tokenIn) {
-    try { const c = new ethers.Contract(tokenIn.address, ERC20_ABI, provider); balA.textContent = `Balance: ${fmt(await c.balanceOf(userAddress), tokenIn.decimals, 4)}`; }
+    try { balA.textContent = `Balance: ${fmt(await tokenBalance(tokenIn), tokenIn.decimals, 4)}`; }
     catch { balA.textContent = "Balance: —"; }
   } else balA.textContent = "Balance: —";
   if (userAddress && tokenOut) {
-    try { const c = new ethers.Contract(tokenOut.address, ERC20_ABI, provider); balB.textContent = `Balance: ${fmt(await c.balanceOf(userAddress), tokenOut.decimals, 4)}`; }
+    try { balB.textContent = `Balance: ${fmt(await tokenBalance(tokenOut), tokenOut.decimals, 4)}`; }
     catch { balB.textContent = "Balance: —"; }
   } else balB.textContent = "Balance: —";
+
+  // Liquidity pools hold WETH, not native ETH — pick WETH for LP positions.
+  if (isNative(tokenIn) || isNative(tokenOut)) {
+    ratioEl.textContent = "Use WETH (wrap ETH on the Swap tab)";
+    lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —";
+    updateLqButtons();
+    return;
+  }
 
   if (tokenIn && tokenOut) {
     // Pool ratio
@@ -511,6 +595,7 @@ function updateLqButtons() {
   const b = parseFloat(document.getElementById("lq-amount-b").value);
   if (!userAddress)               { addBtn.textContent = "Connect wallet to add liquidity"; addBtn.disabled = true; }
   else if (!tokenIn || !tokenOut) { addBtn.textContent = "Select tokens"; addBtn.disabled = true; }
+  else if (isNative(tokenIn) || isNative(tokenOut)) { addBtn.textContent = "Use WETH for liquidity"; addBtn.disabled = true; }
   else if (!a || a <= 0 || !b || b <= 0) { addBtn.textContent = "Enter amounts"; addBtn.disabled = true; }
   else { addBtn.textContent = `Add ${tokenIn.symbol} + ${tokenOut.symbol}`; addBtn.disabled = false; }
 
@@ -533,6 +618,7 @@ function showLqTx(hash) {
 
 async function handleAddLiquidity() {
   if (!userAddress || !tokenIn || !tokenOut) return;
+  if (isNative(tokenIn) || isNative(tokenOut)) return; // LP positions use WETH
   const aStr = document.getElementById("lq-amount-a").value;
   const bStr = document.getElementById("lq-amount-b").value;
   if (!aStr || !bStr || parseFloat(aStr) <= 0 || parseFloat(bStr) <= 0) return;
