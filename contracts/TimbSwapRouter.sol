@@ -14,6 +14,7 @@ using SafeERC20 for IERC20;
 interface IFactory {
     function getPairAddress(address, address) external view returns (address);
     function feeTo() external view returns (address);
+    function createPair(address tokenA, address tokenB) external returns (address pair);
 }
 
 interface IPair {
@@ -161,6 +162,18 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     {
         pair = IFactory(factory).getPairAddress(tokenA, tokenB);
         if (pair == address(0)) revert PairNotFound(tokenA, tokenB);
+    }
+
+    /// @dev Add-liquidity only: creates the pair on demand instead of reverting.
+    /// Swaps/removeLiquidity keep using _getPair (nothing to trade or remove
+    /// against a pair that doesn't exist yet).
+    function _getOrCreatePair(address tokenA, address tokenB)
+        internal returns (address pair)
+    {
+        pair = IFactory(factory).getPairAddress(tokenA, tokenB);
+        if (pair == address(0)) {
+            pair = IFactory(factory).createPair(tokenA, tokenB);
+        }
     }
 
     function _getReserves(address pair, address tokenA)
@@ -568,8 +581,8 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         address tokenA,
         address tokenB,
         LiquidityParams memory p
-    ) internal view returns (LiquidityState memory s) {
-        s.pair = _getPair(tokenA, tokenB);
+    ) internal returns (LiquidityState memory s) {
+        s.pair = _getOrCreatePair(tokenA, tokenB);
         (s.amountA, s.amountB) = _optimalLiquidityAmounts(s.pair, tokenA, p);
     }
 
@@ -629,8 +642,8 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         uint256 ethDesired,
         uint256 amountTokenMin,
         uint256 amountETHMin
-    ) internal view returns (LiquidityState memory s) {
-        s.pair = _getPair(token, weth);
+    ) internal returns (LiquidityState memory s) {
+        s.pair = _getOrCreatePair(token, weth);
         (uint256 resToken, uint256 resETH) = _getReserves(s.pair, token);
         (s.amountA, s.amountB) = _optimalAmounts(
             amountTokenDesired,

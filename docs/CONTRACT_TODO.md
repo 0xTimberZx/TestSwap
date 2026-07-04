@@ -144,7 +144,28 @@ economics decision below still stands if you want to charge.
    TIMBS→ETH, and one eligible swap with influence ON to confirm the nudge
    fires from the new router.
 
-## 6. (add future contract-level items here)
+## 6. `addLiquidity`/`addLiquidityETH` revert on a brand-new pair — CODE WRITTEN, needs router redeploy
+
+- **Symptom:** Adding liquidity for a token pair that has no pool yet fails
+  gas estimation (`UNPREDICTABLE_GAS_LIMIT`); swaps on existing pairs are fine.
+- **Confirmed cause:** `_getPair()` only looks up `factory.getPairAddress(...)`
+  and reverts with `PairNotFound` if it's `address(0)` — neither
+  `addLiquidity` nor `addLiquidityETH` ever called `factory.createPair(...)`,
+  so the very first LP for a pair had no way to bootstrap it (`createPair`
+  itself has no auth restriction, callable by anyone, factory-side).
+- **Fix:** added `_getOrCreatePair()` (creates the pair via
+  `factory.createPair` if missing) and pointed only the two add-liquidity
+  prepare paths at it. Swaps and `removeLiquidity` still use the original
+  `_getPair()` and correctly keep reverting on a nonexistent pair — auto-
+  creating there would let anyone spam empty pairs via a swap call, or
+  "remove" liquidity from a pool that was never funded.
+- **Status:** compile-verified on solc 0.8.24 (viaIR). Needs a router
+  redeploy — follow §5's checklist (same constructor args, `setWeth`,
+  `TimbPrize.setRouter(new)`, update `ADDRESSES.TimbSwapRouter` in both
+  config.js files). Until redeployed, adding liquidity to a not-yet-created
+  pair still reverts on the currently deployed router.
+
+## 7. (add future contract-level items here)
 
 <!--
 Template:
