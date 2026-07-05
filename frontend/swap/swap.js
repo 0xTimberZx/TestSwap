@@ -14,7 +14,10 @@ const WETH_ABI = [
   "function deposit() external payable",
   "function withdraw(uint256 amount) external"
 ];
-const FACTORY_ABI = ["function getPairAddress(address tokenA, address tokenB) external view returns (address)"];
+const FACTORY_ABI = [
+  "function getPairAddress(address tokenA, address tokenB) external view returns (address)",
+  "function createPair(address tokenA, address tokenB) external returns (address pair)"
+];
 const ERC20_ABI     = [
   "function balanceOf(address account) external view returns (uint256)",
   "function allowance(address owner, address spender) external view returns (uint256)",
@@ -746,6 +749,20 @@ async function handleAddLiquidity() {
         const gas = await getGasParams(); const nonce = await getPendingNonce();
         await (await c.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce })).wait();
       }
+    }
+
+    // Brand-new pool: the DEPLOYED router's addLiquidity reverts with
+    // PairNotFound if the pair doesn't exist (its create-on-add fix needs
+    // the §6 redeploy). factory.createPair is permissionless, so create it
+    // here first — one extra tx, and a harmless skip once the pair exists.
+    const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_ABI, signer);
+    const pairAddr = await factory.getPairAddress(tokenIn.address, tokenOut.address);
+    if (!pairAddr || pairAddr === ethers.constants.AddressZero) {
+      btn.textContent = `Creating ${tokenIn.symbol}/${tokenOut.symbol} pair…`;
+      DebugHub.logCheckpoint("Liquidity Pair Create Requested", "pass");
+      const gasCp = await getGasParams(); const nonceCp = await getPendingNonce();
+      await (await factory.createPair(tokenIn.address, tokenOut.address, { ...gasCp, nonce: nonceCp })).wait();
+      DebugHub.logCheckpoint("Liquidity Pair Created", "pass");
     }
 
     btn.textContent = "Adding liquidity…";
