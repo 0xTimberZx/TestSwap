@@ -22,6 +22,14 @@
 // calling settleSegment() while a segment is overdue, so a lagging chain of
 // events (including a round rollover) resolves as one connected sequence
 // instead of trickling out over several 10-minute cron ticks.
+//
+// It also LINGERS: GitHub throttles the */10 cron to ~hourly in practice,
+// and while a segment sits unsettled the whole game is stuck in its
+// settlement window (nudges revert on-chain). Rather than exit when the
+// segment isn't due, the run sleeps until the boundary and settles within
+// seconds of it (budgeted by SETTLER_LINGER_MINUTES, default 55, enforced
+// alongside the workflow's timeout + a concurrency group so overlapping
+// scheduled runs queue instead of double-settling).
 
 const { ethers } = require("ethers");
 
@@ -70,6 +78,19 @@ async function notify(msg) {
 // Hard cap on settle calls per run — one full round is 6 segments; a few
 // extra covers a genuinely lagging backlog without ever looping unbounded.
 const MAX_SETTLES_PER_RUN = 8;
+
+// ─── Linger mode ─────────────────────────────────────────────────────────────
+// GitHub throttles the */10 cron to roughly hourly in practice, and the
+// nominal 15-second settlement window really lasts "until this script lands
+// a settle" — during which nudging is blocked on-chain. So instead of
+// exiting when the segment isn't ready, the run stays alive and sleeps
+// until the segment boundary, settles within seconds of it, then looks for
+// the next boundary inside its budget. This turns an up-to-an-hour dead
+// window into a few seconds.
+const LINGER_BUDGET_MS =
+  Number(process.env.SETTLER_LINGER_MINUTES || 55) * 60 * 1000;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function settleOnce(provider, wallet, prize, round, segment) {
   // Gas config — 130% buffer on fee params (ecosystem pattern)
@@ -131,10 +152,11 @@ async function main() {
   //    iteration re-reads on-chain state, so a round rollover mid-loop is
   //    picked up correctly on the very next iteration.
 
-  let settledCount = 0;
+  const startedAt   = Date.now();
+  let settledCount  = 0;
   let roundsRolled  = 0;
 
-  for (let i = 0; i < MAX_SETTLES_PER_RUN; i++) {
+  while (settledCount < MAX_SETTLES_PER_RUN) {
     const round     = await prize.currentRound();
     const segment   = await prize.currentSegment();
     const remaining = await prize.timeRemainingInSegment();
@@ -142,8 +164,16 @@ async function main() {
     console.log(`[settler] Round #${round} | Segment ${segment}/6 | ${remaining}s remaining`);
 
     if (remaining > 0n) {
-      console.log(`[settler] Segment not ready — ${remaining}s left. Nothing else overdue.`);
-      break;
+      // Not due yet — linger to the boundary if it fits in this run's
+      // budget, otherwise hand off to the next scheduled run.
+      const waitMs = Number(remaining) * 1000 + 5_000; // small buffer past 59:45
+      if (Date.now() - startedAt + waitMs > LINGER_BUDGET_MS) {
+        console.log(`[settler] Next boundary is beyond this run's linger budget — exiting; next run picks it up.`);
+        break;
+      }
+      console.log(`[settler] Lingering ${Math.round(waitMs / 1000)}s until the segment boundary…`);
+      await sleep(waitMs);
+      continue;
     }
 
     console.log(`[settler] Segment ready. Calling settleSegment()...`);

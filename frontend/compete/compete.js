@@ -61,6 +61,7 @@ let lastDigitCounters  = null;
 let activeSegIndex     = -1;   // 0-based index into digitCounters for the live segment
 let activeSegCounter   = null; // BigNumber — that segment's current counter
 let advanceCount       = 1;    // chosen batch size for the Advance panel
+let advanceInSettlement = false; // on-chain settlement window blocks nudges
 // True when the wallet already has a Pending/Active entry for the next play
 // round. The contract allows only one entry per round, so a second submit
 // reverts (UNPREDICTABLE_GAS_LIMIT) — we route to replaceEntry instead.
@@ -140,6 +141,49 @@ function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
 
 // ─── Poll Round State ─────────────────────────────────────────────────────────
 
+// Transition tracking for DebugHub — see _trackRoundTransitions.
+let _lastRound        = null;   // last seen round number
+let _lastSegment      = null;   // last seen segment number
+let _lastInSettlement = null;   // last seen settlement flag
+let _settlementSince  = null;   // ms timestamp when the current window began
+let _overdueLogged    = false;  // one alarm per window, not one per poll
+const SETTLEMENT_OVERDUE_MS = 2 * 60 * 1000; // nominal window is 15s
+
+function _trackRoundTransitions(s) {
+  const round        = s.round.toNumber();
+  const segment      = s.segment.toNumber();
+  const inSettlement = !!s.inSettlement;
+
+  if (_lastRound !== null && round !== _lastRound) {
+    DebugHub.logCheckpoint("Prize:Round Rolled", "pass");
+  } else if (_lastSegment !== null && segment !== _lastSegment) {
+    DebugHub.logCheckpoint("Prize:Segment Advanced", "pass");
+  }
+
+  if (_lastInSettlement !== null && inSettlement !== _lastInSettlement) {
+    DebugHub.logCheckpoint(
+      inSettlement ? "Prize:Settlement Window Entered" : "Prize:Settlement Window Exited",
+      "pass"
+    );
+  }
+  if (inSettlement) {
+    if (_settlementSince === null) _settlementSince = Date.now();
+    if (!_overdueLogged && Date.now() - _settlementSince > SETTLEMENT_OVERDUE_MS) {
+      // The settler keeper should land within seconds of the boundary —
+      // minutes in this state means the game is stalled and nudges revert.
+      DebugHub.logCheckpoint("Prize:Settlement Overdue", "fail");
+      _overdueLogged = true;
+    }
+  } else {
+    _settlementSince = null;
+    _overdueLogged   = false;
+  }
+
+  _lastRound        = round;
+  _lastSegment      = segment;
+  _lastInSettlement = inSettlement;
+}
+
 async function pollRoundState() {
   try {
     const prize   = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_ABI, readProv());
@@ -154,6 +198,14 @@ async function pollRoundState() {
     const s = await prize.getRoundState();
     currentRoundNum = s.round.toNumber();
 
+    // Game-state transition telemetry. Today's stagnation incident was
+    // invisible in the DebugHub export (only sessions + RPC noise), so
+    // record round/segment/settlement transitions — fired on CHANGE only,
+    // never per 4-second poll — plus an explicit overdue alarm when a
+    // settlement window outlives its nominal 15 seconds by 2+ minutes
+    // (i.e. the settler keeper isn't landing).
+    _trackRoundTransitions(s);
+
     document.getElementById("hdr-round").textContent      = "#" + s.round.toString();
     document.getElementById("hdr-segment-num").textContent = s.segment.toString();
 
@@ -164,7 +216,13 @@ async function pollRoundState() {
         const vault = new ethers.Contract(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI, readProv());
         const accrued = await vault.previewAccrued();
         if (!accrued.isZero()) potTxt += ` (+${fmt(accrued)} yield accruing)`;
-      } catch {}
+      } catch (yieldErr) {
+        // Once per session — this runs on a 4s poll and would spam DebugHub.
+        if (!window.__yieldReadErrorLogged) {
+          window.__yieldReadErrorLogged = true;
+          DebugHub.logError("pollRoundState.previewAccrued", yieldErr);
+        }
+      }
     }
     document.getElementById("sub-pot").textContent = potTxt;
 
@@ -523,6 +581,7 @@ async function loadMyEntries() {
     const res = await registry.getTicketsOf(userAddress);
     const ticketList = res.list ?? res[0];
     const displays   = res.displayStatuses ?? res[1];
+    DebugHub.logCheckpoint("Compete:Tickets Loaded", "pass");
     if (!ticketList.length) {
       list.innerHTML = '<div class="empty-state">No tickets yet</div>';
       updateEntryButton();
@@ -565,6 +624,8 @@ async function loadMyEntries() {
     updateEntryButton();
   } catch (e) {
     console.warn("loadMyEntries:", e.message);
+    DebugHub.logError("loadMyEntries", e);
+    DebugHub.logCheckpoint("Compete:Tickets Loaded", "fail");
     list.innerHTML = '<div class="empty-state">Could not load tickets</div>';
   }
 }
@@ -611,7 +672,13 @@ function renderAdvancePreview() {
   if (countEl) countEl.textContent = advanceCount;
 
   const submitBtn = document.getElementById("advance-submit-btn");
-  if (submitBtn && !submitBtn.disabled) submitBtn.textContent = `Advance ×${advanceCount}`;
+  if (submitBtn) {
+    // During the settlement window nudgeScroll reverts on-chain, so say WHY
+    // the button is off instead of leaving a stale "Advance ×N" label.
+    submitBtn.textContent = advanceInSettlement
+      ? "Settling — opens next segment"
+      : `Advance ×${advanceCount}`;
+  }
 
   const previewEl = document.getElementById("advance-preview");
   const fromEl = previewEl?.querySelector(".ap-from");
@@ -631,11 +698,12 @@ function renderAdvancePreview() {
 }
 
 function updateAdvancePanel(inSettlement) {
+  advanceInSettlement = !!inSettlement;
   const panel = document.getElementById("advance-panel");
   if (!panel) return;
   panel.classList.toggle("hidden", !userAddress);
   const submitBtn = document.getElementById("advance-submit-btn");
-  if (submitBtn) submitBtn.disabled = !!inSettlement;
+  if (submitBtn) submitBtn.disabled = advanceInSettlement;
   renderAdvancePreview();
 }
 

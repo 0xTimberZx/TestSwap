@@ -15,11 +15,18 @@ on:
           - settle
           - health
 
+# One settler at a time: runs linger up to ~55 min waiting for the segment
+# boundary, so overlapping scheduled ticks must queue, not double-settle.
+concurrency:
+  group: timbswap-settler
+  cancel-in-progress: false
+
 jobs:
   settle:
     name: Settle segment
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Must exceed the settler's linger budget (SETTLER_LINGER_MINUTES, 55).
+    timeout-minutes: 62
 
     steps:
       - name: Checkout repo

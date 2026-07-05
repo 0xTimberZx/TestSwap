@@ -272,7 +272,42 @@ coordinated deploy. All three contracts compile clean on solc 0.8.24
 11. Old contracts: pause the old registry; drain old entries through it
     (cancel/refund) — escrow does not migrate.
 
-## 9. (add future contract-level items here)
+## 9. Keeper-bound settlement window — two live incidents, mitigated, contract fix open
+
+The "15-second" settlement window's real duration is *until the settler
+lands a `settleSegment()`*. While it's open, `nudgeScroll` reverts
+(`InSettlementWindow`) — the whole game reads as frozen and nobody can
+advance the meter. Two incidents on launch day of the ticket-model round:
+
+1. **Settler address timing gap (resolved).** The game was deployed and
+   started while `scripts/settler.js` on `main` still hardcoded the OLD
+   TimbPrize (the address update rode a not-yet-merged PR). The keeper
+   spent ~5 hours dutifully tending the dead game while the live one sat
+   in its first settlement window. Lesson: the settler address is
+   duplicated between `config.js` and `scripts/settler.js` — a future
+   hardening is to make the settler read one source of truth so a config
+   update can't leave the keeper pointing at an old game.
+2. **GitHub cron throttling (mitigated).** The `*/10` schedule actually
+   fires roughly hourly on shared runners, so every segment spent up to
+   an hour in "Settling…" limbo with nudges reverting.
+
+**Mitigation shipped (infra):** settler "linger mode" — each run sleeps
+until the segment boundary and settles within seconds of it
+(`SETTLER_LINGER_MINUTES`, default 55; workflow `timeout-minutes: 62`
+plus a concurrency group so overlapping ticks queue). Frontend now also
+records `Prize:Settlement Overdue` (fail) to DebugHub when a window
+outlives its nominal 15s by 2+ minutes, so a stalled keeper is visible
+in exports instead of silent.
+
+**Permanent fix is contract-level (this file's actual scope):**
+- Make `settleSegment()` permissionless once `elapsed >= INTERACTION_WINDOW`
+  (drop `onlySettler`, keep the timing guard — it's the timing that
+  protects the game, not the caller), and/or
+- Lazy settlement: any first interaction (nudge/entry) after the boundary
+  triggers the settle inline, so the game can never stall while in use.
+  Requires TimbPrize redeploy; revisit at the next contract round.
+
+## 10. (add future contract-level items here)
 
 <!--
 Template:
