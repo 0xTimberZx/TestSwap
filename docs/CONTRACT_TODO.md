@@ -11,7 +11,10 @@ do a contract round.
 
 ---
 
-## 1. Cancel / withdraw a Pending prize entry (pre-round) — CODE WRITTEN
+## 1. Cancel / withdraw a Pending prize entry (pre-round) — SUPERSEDED BY §8
+
+> The v1 `cancelEntry(round)` below was rewritten as the ticket-model
+> `cancelEntry()` (→ Cancelled status) in §8's GameRegistry v2. Deploy §8.
 
 **Status:** `GameRegistry.cancelEntry(round)` implemented and compile-verified
 (solc 0.8.24). Frontend "Withdraw" button wired on Compete for Pending entries
@@ -165,7 +168,10 @@ economics decision below still stands if you want to charge.
   config.js files). Until redeployed, adding liquidity to a not-yet-created
   pair still reverts on the currently deployed router.
 
-## 7. Entry cost shows 0.0000 ETH and ETH entries always revert — CODE WRITTEN, needs redeploy + setEntryCosts
+## 7. Entry cost shows 0.0000 ETH and ETH entries always revert — SUPERSEDED BY §8
+
+> Both fixes below are carried into §8's GameRegistry v2, and §8's checklist
+> step 4 sets the agreed costs (1000 TIMBS / 0.0001 ETH). Deploy §8.
 
 - **Symptom:** Compete's "Entry cost" reads 0.0000 ETH, and submitting an ETH
   entry always fails gas estimation (`UNPREDICTABLE_GAS_LIMIT` on
@@ -189,7 +195,73 @@ economics decision below still stands if you want to charge.
   make sure step 2 (`setEntryCosts(...)`) actually runs with the intended
   TIMBS/ETH cost values; skipping it reproduces this exact symptom again.
 
-## 8. (add future contract-level items here)
+## 8. THE TICKET-MODEL ROUND — GameRegistry v2 + TimbYieldVault + TimbPrize v2 (CODE WRITTEN)
+
+**Supersedes the redeploy halves of §1 and §7** — everything lands in this one
+coordinated deploy. All three contracts compile clean on solc 0.8.24
+(optimizer 200, no viaIR needed; registry ~13KB, prize ~12KB, vault ~4KB).
+
+### What changed
+
+**GameRegistry v2 — ticket model:**
+- Every entry mints a Ticket (global id) with lineage links. `replaceEntry`
+  now mints a NEW ticket and Concedes the senior one (visible, tethered,
+  principal carried over; extra-round TIMBS must be re-paid). Statuses:
+  Pending / Active / Conceded / Ineligible / Cancelled / Closed
+  (Cancelled reads as Closed once its play round begins — derived).
+- REAL one-live-ticket-per-wallet enforcement (v1 only guarded per-round, so
+  wallets could stack tickets across rounds).
+- Tickets index into EVERY round they play (v1 bug: extra-round entries
+  could never win or activate beyond their first round).
+- `cancelEntry()` (pre-round withdraw, → Cancelled), `claimRefund(ticketId)`
+  (post-run, → Closed), claim-window lapse → Ineligible with escrow absorbed
+  to the Treasury sink, `onRoundSettled` hook replaces the v1
+  expire/markInactive flow (which never actually fired — v1 only scanned the
+  just-settled round's entrants, where nothing is ever expired yet).
+- Yield-weight hooks into TimbYieldVault on Active enter/exit (try/catch —
+  vault failure can never brick the game).
+
+**TimbYieldVault (new) — PoolTogether-style, fully internal:**
+- Active tickets' escrow counts as weight ONLY (principal never leaves the
+  registry). While weight > 0, yield accrues per-second ∝ weight, capped by
+  the vault's treasury-funded ETH reserve; reserve dry ⇒ accrual pauses.
+- Yield goes to ONE place: the prize pot, harvested by TimbPrize at each
+  round settlement. Depositors get principal back + a shot at the pot.
+
+**TimbPrize v2:**
+- `_harvestYield()` at settlement — 4th pot source (swap fees, seeding,
+  snowball/unclaimed, now escrow yield). `YieldHarvested` event.
+- `recycleUnclaimed(round)` — returns expired-window unclaimed winnings to
+  the live pot ("seeding from unclaimed rounds"; v1 stranded them forever).
+- FIXED: `IPrizeEscrow.pay` selector mismatch (2-arg declared vs 3-arg real)
+  that made every `claimWinnings` revert against the deployed escrow.
+- Registry interface swapped to `onRoundSettled` hook.
+
+### Deploy checklist (Remix, owner wallet, Arb Sepolia)
+
+1. **GameRegistry v2**: deploy `(TIMBSToken, TimbTreasury, address(0))`.
+2. **TimbYieldVault**: deploy `()`.
+3. **TimbPrize v2**: deploy `(PrizeEscrow, <registry v2>, TimbSwapRouter)`.
+4. Wire registry: `setTimbPrize(<prize v2>)`, `setYieldVault(<vault>)`,
+   `setEntryCosts(1000000000000000000000, 100000000000000)`
+   (= 1000 TIMBS, 0.0001 ETH — the agreed initial costs).
+5. Wire vault: `setGameRegistry(<registry v2>)`, `setTimbPrize(<prize v2>)`,
+   `setTimbsWeight1e18(100000000000)` (1e11 ⇒ 1000 TIMBS ≙ 0.0001 ETH
+   weight, entry-cost parity), `setYieldAPRBps(<e.g. 1000 = 10%>)`,
+   then `fund()` with ETH from the Treasury (this reserve IS the yield).
+6. Wire prize: `setYieldVault(<vault>)`, `setEligibleRegistry(<existing>)`,
+   `setSettler(<settler wallet>)`.
+7. Repoint neighbors: `PrizeEscrow.setTimbPrize(<prize v2>)`,
+   `TimbSwapRouter.setTimbPrize(<prize v2>)`.
+8. `prize2.startGame()` — fresh round #1.
+9. Update `ADDRESSES` in BOTH `config.js` and `frontend/config.js`:
+   `GameRegistry`, `TimbPrize`, and the new `TimbYieldVault`.
+10. **`scripts/settler.js` hardcodes `TIMBPRIZE_ADDR` — update it to the new
+    TimbPrize or the keeper keeps settling the old game.**
+11. Old contracts: pause the old registry; drain old entries through it
+    (cancel/refund) — escrow does not migrate.
+
+## 9. (add future contract-level items here)
 
 <!--
 Template:

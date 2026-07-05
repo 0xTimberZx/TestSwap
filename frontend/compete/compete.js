@@ -8,17 +8,29 @@ const TIMBPRIZE_ABI = [
   "function gameStarted() external view returns (bool)"
 ];
 
+// GameRegistry v2 — ticket model. Every entry is a Ticket with an id;
+// replacement mints a new ticket and the senior one becomes Conceded,
+// tethered beneath the replacement via supersedes/supersededBy links.
+const TICKET_TUPLE =
+  "tuple(uint256 id, address owner, bytes6 string6, uint256 playRound, " +
+  "uint256 lastEligibleRound, uint256 escrowAmount, address escrowToken, " +
+  "uint8 status, uint256 supersedes, uint256 supersededBy, uint256 createdAt)";
+
 const GAME_REGISTRY_ABI = [
   "function currentRound() external view returns (uint256)",
   "function entryCostTIMBS() external view returns (uint256)",
   "function entryCostETH() external view returns (uint256)",
-  "function getPlayerRounds(address player) external view returns (uint256[])",
-  "function getEntry(address player, uint256 round) external view returns (bytes6 string6, uint256 entryRound, uint256 lastEligibleRound, uint256 escrowAmount, address escrowToken, uint8 status, bool exists)",
   "function additionalRoundCost(uint256 extraRounds) external view returns (uint256)",
+  "function activeTicketOf(address owner) external view returns (uint256)",
+  `function getTicketsOf(address owner) external view returns (${TICKET_TUPLE}[] list, uint8[] displayStatuses)`,
   "function submitEntry(bytes6 string6, bool useETH, uint256 extraRounds) external payable",
-  "function replaceEntry(bytes6 newString6, uint256 extraRounds) external payable",
-  "function claimRefund(uint256 round) external",
-  "function cancelEntry(uint256 round) external"
+  "function replaceEntry(bytes6 newString6, uint256 extraRounds) external",
+  "function claimRefund(uint256 ticketId) external",
+  "function cancelEntry() external"
+];
+
+const YIELD_VAULT_ABI = [
+  "function previewAccrued() external view returns (uint256)"
 ];
 
 const TIMBS_ABI = [
@@ -33,7 +45,9 @@ const ELIGIBLE_REGISTRY_ABI = [
 const ERC20_SYMBOL_ABI = ["function symbol() external view returns (string)"];
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const STATUS_NAMES = ["Pending", "Active", "Expired", "Claimed", "Inactive"];
+// Ticket lifecycle (GameRegistry v2): Cancelled reads as Closed once its
+// play round begins (the contract's effectiveStatus handles that).
+const STATUS_NAMES = ["Pending", "Active", "Conceded", "Ineligible", "Cancelled", "Closed"];
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -142,7 +156,17 @@ async function pollRoundState() {
 
     document.getElementById("hdr-round").textContent      = "#" + s.round.toString();
     document.getElementById("hdr-segment-num").textContent = s.segment.toString();
-    document.getElementById("sub-pot").textContent     = "Pot: " + fmt(s.pot) + " ETH";
+
+    // Pot + live yield accruing from active-ticket escrow (4th pot source).
+    let potTxt = "Pot: " + fmt(s.pot) + " ETH";
+    if (ADDRESSES.TimbYieldVault && !/^0x0{40}$/.test(ADDRESSES.TimbYieldVault.replace("0x",""))) {
+      try {
+        const vault = new ethers.Contract(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI, readProv());
+        const accrued = await vault.previewAccrued();
+        if (!accrued.isZero()) potTxt += ` (+${fmt(accrued)} yield accruing)`;
+      } catch {}
+    }
+    document.getElementById("sub-pot").textContent = potTxt;
 
     const timerEl = document.getElementById("sub-timer");
     if (s.inSettlement) {
@@ -405,8 +429,9 @@ async function handleSubmitEntry() {
     const nonce = await getPendingNonce();
     let tx;
     if (replacing) {
-      // replaceEntry reuses the escrowed principal — no ETH value is sent.
-      tx = await registry.replaceEntry(string6, extraRounds, { ...gas, nonce, value: 0 });
+      // replaceEntry concedes the senior ticket and mints a replacement —
+      // the principal carries over, so no ETH value (non-payable in v2).
+      tx = await registry.replaceEntry(string6, extraRounds, { ...gas, nonce });
     } else {
       const value = useETH ? entryCostETH_wei : ethers.BigNumber.from(0);
       tx = await registry.submitEntry(string6, useETH, extraRounds, { ...gas, nonce, value });
@@ -444,6 +469,47 @@ function bytes6ToStr(b6) {
   return s;
 }
 
+// Renders one ticket card. Conceded ancestors render tethered beneath their
+// replacement, dimmed, so the chain aiming for victory stays readable.
+function renderTicketRow(t, displayStatus, opts) {
+  const statusName  = STATUS_NAMES[displayStatus] || "Unknown";
+  const statusClass = "status-" + statusName.toLowerCase();
+  const isETH       = t.escrowToken === "0x0000000000000000000000000000000000000000";
+  const principal   = t.escrowAmount.isZero()
+    ? ""
+    : ` · ${isETH ? fmtETH(t.escrowAmount) : fmtTIMBS(t.escrowAmount)}`;
+  const playRound = t.playRound.toNumber();
+  const lastRound = t.lastEligibleRound.toNumber();
+  const roundsTxt = playRound === lastRound ? `R${playRound}` : `R${playRound}–R${lastRound}`;
+
+  // Raw status drives the action buttons; display status drives the badge.
+  const raw = t.status;
+  const canCancel = raw === 0 && currentRoundNum !== null && playRound > currentRoundNum;
+  const expired   = currentRoundNum !== null && currentRoundNum > lastRound;
+  const inWindow  = currentRoundNum !== null && currentRoundNum <= lastRound + 2;
+  const canRefund = (raw === 0 || raw === 1) && expired && inWindow && !t.escrowAmount.isZero();
+
+  let hint = "";
+  if (canCancel)                       hint = ` · withdrawable until R${playRound} starts`;
+  else if (raw === 1 && !expired)      hint = ` · earning yield for the pool`;
+  else if (canRefund)                  hint = ` · principal refundable now`;
+  else if ((raw === 0 || raw === 1) && expired && !inWindow) hint = ` · refund window closed`;
+
+  const row = document.createElement("div");
+  row.className = "entry-row-item" + (opts.tethered ? " ticket-conceded" : "");
+  row.innerHTML = `
+    <div>
+      <div class="entry-row-string">${opts.tethered ? '<span class="tether-mark">⤷</span> ' : ""}${bytes6ToStr(t.string6)}</div>
+      <div class="entry-row-meta">Ticket #${t.id} · plays ${roundsTxt}${principal}${hint}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span class="entry-status-badge ${statusClass}">${statusName}</span>
+      ${canRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${t.id})">Refund principal</button>` : ""}
+      ${canCancel ? `<button class="btn-claim-mini" onclick="handleCancelEntry()">Withdraw</button>` : ""}
+    </div>`;
+  return row;
+}
+
 async function loadMyEntries() {
   const list = document.getElementById("my-entries-list");
   hasPlayEntry = false;
@@ -452,75 +518,63 @@ async function loadMyEntries() {
     updateEntryButton();
     return;
   }
-  const playRound = currentRoundNum !== null ? currentRoundNum + 1 : null;
   try {
     const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, readProv());
-    const rounds   = await registry.getPlayerRounds(userAddress);
-    if (!rounds.length) { list.innerHTML = '<div class="empty-state">No entries yet</div>'; updateEntryButton(); return; }
+    const res = await registry.getTicketsOf(userAddress);
+    const ticketList = res.list ?? res[0];
+    const displays   = res.displayStatuses ?? res[1];
+    if (!ticketList.length) {
+      list.innerHTML = '<div class="empty-state">No tickets yet</div>';
+      updateEntryButton();
+      return;
+    }
+
+    // Index by id; find chain heads (not superseded by anything).
+    const byId = new Map();
+    const displayById = new Map();
+    ticketList.forEach((t, i) => {
+      byId.set(t.id.toString(), t);
+      displayById.set(t.id.toString(), displays[i]);
+    });
+
+    // One eligible live ticket per wallet — determines Submit vs Update.
+    hasPlayEntry = ticketList.some(t =>
+      t.status === 0 ||
+      (t.status === 1 && currentRoundNum !== null && currentRoundNum <= t.lastEligibleRound.toNumber())
+    );
+
+    const heads = ticketList
+      .filter(t => t.supersededBy.isZero())
+      .sort((a, b) => b.id.toNumber() - a.id.toNumber())
+      .slice(0, 8);
 
     list.innerHTML = "";
-    for (const round of [...rounds].reverse().slice(0, 6)) {
-      const entry = await registry.getEntry(userAddress, round);
-      if (!entry.exists) continue;
-
-      // One entry per round: a Pending/Active entry for the next play round means
-      // a new submit would revert, so flag it to route through replaceEntry.
-      if (playRound !== null && Number(round) === playRound &&
-          (entry.status === 0 || entry.status === 1)) hasPlayEntry = true;
-
-      const statusName  = STATUS_NAMES[entry.status] || "Unknown";
-      const statusClass = "status-" + statusName.toLowerCase();
-
-      // Refund rules mirror GameRegistry.claimRefund: the entry must have played
-      // out (currentRound past its lastEligibleRound) and still be inside the
-      // 2-round claim window, and not already Claimed/Inactive. A Pending/Active
-      // entry can't be cancelled early — but its principal is refundable once it
-      // expires, so we tell the user exactly when instead of leaving it looking
-      // stuck (the game is risk-free: your principal always comes back).
-      const lastEligible   = entry.lastEligibleRound.toNumber();
-      const notClaimed     = entry.status !== 3 && entry.status !== 4;
-      const expiredByRound = currentRoundNum !== null && currentRoundNum > lastEligible;
-      const withinWindow   = currentRoundNum !== null && currentRoundNum <= lastEligible + 2;
-      const canRefund      = notClaimed && expiredByRound && withinWindow;
-      // Pending entries for a future round can be cancelled outright — the
-      // escrow returns immediately (needs the redeployed GameRegistry).
-      const canCancel      = entry.status === 0 &&
-        currentRoundNum !== null && Number(round) > currentRoundNum;
-
-      let refundHint = "";
-      if (canCancel)               refundHint = ` · withdrawable until R${round} starts`;
-      else if (notClaimed && !canRefund) {
-        if (!expiredByRound)    refundHint = ` · principal refundable after R${lastEligible + 1}`;
-        else if (!withinWindow) refundHint = ` · refund window closed`;
+    for (const head of heads) {
+      list.appendChild(renderTicketRow(head, displayById.get(head.id.toString()), { tethered: false }));
+      // Walk conceded ancestry, newest first, tethered beneath the head.
+      let cursor = head.supersedes;
+      let depth  = 0;
+      while (!cursor.isZero() && depth < 8) {
+        const anc = byId.get(cursor.toString());
+        if (!anc) break;
+        list.appendChild(renderTicketRow(anc, displayById.get(anc.id.toString()), { tethered: true }));
+        cursor = anc.supersedes;
+        depth++;
       }
-
-      const row = document.createElement("div");
-      row.className = "entry-row-item";
-      row.innerHTML = `
-        <div>
-          <div class="entry-row-string">${bytes6ToStr(entry.string6)}</div>
-          <div class="entry-row-meta">Round ${round} · expires R${lastEligible}${refundHint}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span class="entry-status-badge ${statusClass}">${statusName}</span>
-          ${canRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${round})">Refund principal</button>` : ""}
-          ${canCancel ? `<button class="btn-claim-mini" onclick="handleCancelEntry(${round})">Withdraw</button>` : ""}
-        </div>`;
-      list.appendChild(row);
     }
     updateEntryButton();
   } catch (e) {
     console.warn("loadMyEntries:", e.message);
-    list.innerHTML = '<div class="empty-state">Could not load entries</div>';
+    list.innerHTML = '<div class="empty-state">Could not load tickets</div>';
   }
 }
 
-async function handleClaimRefund(round) {
+async function handleClaimRefund(ticketId) {
   try {
     DebugHub.logCheckpoint("Prize:Refund Requested", "pass");
     const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await (await registry.claimRefund(round, { ...gas, nonce })).wait();
+    await (await registry.claimRefund(ticketId, { ...gas, nonce })).wait();
     DebugHub.logCheckpoint("Prize:Refund Confirmed", "pass");
     await loadMyEntries();
   } catch (err) {
@@ -609,12 +663,13 @@ async function handleAdvance() {
 
 // ─── Cancel Pending Entry (pre-round withdraw) ────────────────────────────────
 
-async function handleCancelEntry(round) {
+async function handleCancelEntry() {
   try {
     DebugHub.logCheckpoint("Prize:Cancel Requested", "pass");
     const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await (await registry.cancelEntry(round, { ...gas, nonce })).wait();
+    // v2: cancels the wallet's live Pending ticket (pre-round) — no args.
+    await (await registry.cancelEntry({ ...gas, nonce })).wait();
     DebugHub.logCheckpoint("Prize:Cancel Confirmed", "pass");
     await loadMyEntries(); // also refreshes hasPlayEntry / the entry button
   } catch (err) {
