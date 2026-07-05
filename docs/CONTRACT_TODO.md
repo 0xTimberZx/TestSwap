@@ -321,7 +321,18 @@ in exports instead of silent.
 Compile-verified on solc 0.8.24. **Deploy via §10's checklist** (TimbPrize
 redeploy; the keeper keeps running unchanged as a liveness backstop).
 
-## 10. THE KEEPER-INDEPENDENCE ROUND — TimbPrize v3 + Router redeploy (CODE WRITTEN)
+## 10. THE KEEPER-INDEPENDENCE ROUND — TimbPrize v3 + Router v6 (DEPLOYED)
+
+**Status: live.** Deployed addresses:
+- `TimbSwapRouter` v6: `0x6E53dc53Ea7B2fd8be171D74A381f009dA5F94bD`
+- `TimbPrize` v3: `0xd2D25b99Bd356019413139bf80D56aBaAedDBd6A`
+
+`ADDRESSES` updated in both `config.js` files; `scripts/settler.js`
+repointed. Settlement is now permissionless + lazy; addLiquidity
+creates pairs on demand at the router level (the Swap page's
+createPair pre-step remains as a harmless no-op). Verify the step-5
+neighbor repoints (GameRegistry / YieldVault / PrizeEscrow →
+prize v3) and `startGame()` ran — this doc can't check on-chain state.
 
 One coordinated deploy that clears everything still pending: §9 (both
 settlement fixes, TimbPrize) and §5/§6 (native-ETH liquidity + create-on-add,
