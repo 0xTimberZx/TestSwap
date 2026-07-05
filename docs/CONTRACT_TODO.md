@@ -165,7 +165,31 @@ economics decision below still stands if you want to charge.
   config.js files). Until redeployed, adding liquidity to a not-yet-created
   pair still reverts on the currently deployed router.
 
-## 7. (add future contract-level items here)
+## 7. Entry cost shows 0.0000 ETH and ETH entries always revert — CODE WRITTEN, needs redeploy + setEntryCosts
+
+- **Symptom:** Compete's "Entry cost" reads 0.0000 ETH, and submitting an ETH
+  entry always fails gas estimation (`UNPREDICTABLE_GAS_LIMIT` on
+  `submitEntry`), even sending the "correct" (zero) amount.
+- **Confirmed root cause (two separate issues, both on `GameRegistry`):**
+  1. `entryCostTIMBS`/`entryCostETH` are plain state variables, only ever set
+     via the owner-only `setEntryCosts(timbsCost, ethCost)` — they are **not**
+     initialized in the constructor. The registry deployed for §1's
+     `cancelEntry` redeploy was apparently never followed up with a
+     `setEntryCosts(...)` call, so both read as 0 — that's the literal "entry
+     cost disappeared."
+  2. Independent of #1, `submitEntry`'s ETH-escrow check was
+     `if (msg.value == 0 || msg.value < entryCostETH) revert
+     WrongEscrowAmount(...)`. The `msg.value == 0 ||` clause is redundant
+     whenever `entryCostETH > 0` (since `0 < entryCostETH` already reverts),
+     but it makes a **free entry (entryCostETH == 0) impossible** — the
+     correct `msg.value == 0` always trips that first clause. Fixed to just
+     `if (msg.value < entryCostETH) revert ...`.
+- **Status:** fixed and compile-verified on solc 0.8.24 in `GameRegistry.sol`.
+  Needs the redeploy already tracked in §1's checklist — when redeploying,
+  make sure step 2 (`setEntryCosts(...)`) actually runs with the intended
+  TIMBS/ETH cost values; skipping it reproduces this exact symptom again.
+
+## 8. (add future contract-level items here)
 
 <!--
 Template:

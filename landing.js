@@ -69,25 +69,6 @@ function stopMask() {
   }
 }
 
-function renderTimer(segmentStart, inSettlement) {
-  const elapsed  = Math.floor(Date.now() / 1000) - Number(segmentStart);
-  const INTERACT = 59 * 60 + 45; // 59:45
-  const el = document.getElementById("scroll-timer");
-  if (!el) return;
-
-  if (inSettlement) {
-    el.textContent = "SETTLING";
-    el.style.color = "var(--blue)";
-    return;
-  }
-
-  const remaining = Math.max(0, INTERACT - elapsed);
-  const m = Math.floor(remaining / 60).toString().padStart(2, "0");
-  const s = (remaining % 60).toString().padStart(2, "0");
-  el.textContent = `${m}:${s}`;
-  el.style.color = remaining < 60 ? "var(--green)" : "var(--text-3)";
-}
-
 let lastCounter = null;
 let lastSegment = null;
 
@@ -98,7 +79,7 @@ async function updateScroll() {
     if (!started) return;
 
     const state = await prize.getRoundState();
-    const { round, segment, segmentStart, counter, currentWindow, pot, inSettlement } = state;
+    const { round, counter, currentWindow, pot } = state;
 
     // Flash chars on counter change
     if (!userAddress) {
@@ -116,14 +97,10 @@ async function updateScroll() {
     }
 
     const roundEl = document.getElementById("scroll-round");
-    const segEl   = document.getElementById("scroll-seg");
     const potEl   = document.getElementById("scroll-pot");
 
     if (roundEl) roundEl.textContent = `Round ${round}`;
-    if (segEl)   segEl.textContent   = `Seg ${segment}/6`;
     if (potEl)   potEl.textContent   = `Prize Pot: ${fmt(pot)} ETH`;
-
-    renderTimer(segmentStart, inSettlement);
 
     // Also update stats bar pot
     const statPot = document.getElementById("stat-pot");
@@ -227,20 +204,4 @@ function handleDisconnect() {
   // Start scroll polling immediately — no wallet needed
   await updateScroll();
   setInterval(updateScroll, 3000);  // poll every 3s
-  setInterval(() => {               // update timer every second
-    const segEl = document.getElementById("scroll-timer");
-    if (segEl && segEl.textContent !== "SETTLING") {
-      // lightweight timer tick — full state refresh on next 3s poll
-      const [m, s] = segEl.textContent.split(":").map(Number);
-      if (!isNaN(m) && !isNaN(s)) {
-        const total = m * 60 + s;
-        if (total > 0) {
-          const nm = Math.floor((total - 1) / 60).toString().padStart(2, "0");
-          const ns = ((total - 1) % 60).toString().padStart(2, "0");
-          segEl.textContent = `${nm}:${ns}`;
-          segEl.style.color = (total - 1) < 60 ? "var(--green)" : "var(--text-3)";
-        }
-      }
-    }
-  }, 1000);
 })();

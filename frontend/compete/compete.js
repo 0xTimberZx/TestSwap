@@ -140,8 +140,8 @@ async function pollRoundState() {
     const s = await prize.getRoundState();
     currentRoundNum = s.round.toNumber();
 
-    document.getElementById("hdr-round").textContent   = "#" + s.round.toString();
-    document.getElementById("hdr-segment").textContent = `${s.segment}/6`;
+    document.getElementById("hdr-round").textContent      = "#" + s.round.toString();
+    document.getElementById("hdr-segment-num").textContent = s.segment.toString();
     document.getElementById("sub-pot").textContent     = "Pot: " + fmt(s.pot) + " ETH";
 
     const timerEl = document.getElementById("sub-timer");
@@ -219,7 +219,7 @@ async function updateCostDisplay() {
     try {
       const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, readProv());
       const extra = await registry.additionalRoundCost(extraRounds);
-      noteEl.textContent = `+ ${fmtTIMBS(extra)} TIMBS · non-refundable`;
+      noteEl.textContent = `+ ${fmtTIMBS(extra)} · non-refundable`;
       noteEl.classList.remove("hidden");
     } catch { noteEl.classList.add("hidden"); }
   } else if (noteEl) {

@@ -35,6 +35,9 @@
   font-weight: 700;
   color: var(--text);
 }
+/* Matches the active digit cell's highlight color (.digit-cell.active) so the
+   segment numerator visually ties back to which meter cell is live. */
+.hdr-segment-num { color: var(--blue); }
 
 /* ─── Digit Track ────────────────────────────────────────────────────────── */
 .digit-track {

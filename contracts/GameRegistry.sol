@@ -311,7 +311,11 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         address escrowToken;
 
         if (useETH) {
-            if (msg.value == 0 || msg.value < entryCostETH) {
+            // msg.value < entryCostETH alone covers underpayment even when
+            // entryCostETH is 0 — an explicit `msg.value == 0` check here
+            // would wrongly reject the correct (free) escrow amount whenever
+            // entry costs haven't been configured yet.
+            if (msg.value < entryCostETH) {
                 revert WrongEscrowAmount(msg.value, entryCostETH);
             }
             escrowAmount = entryCostETH;
