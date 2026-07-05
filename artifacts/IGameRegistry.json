@@ -38,11 +38,9 @@
 		"gasEstimates": null,
 		"methodIdentifiers": {
 			"activateRoundEntries(uint256,address[])": "1330cd86",
-			"expireEntry(address,uint256)": "47f43ef2",
-			"getEntry(address,uint256)": "b8a740e0",
 			"getRoundEntrants(uint256)": "454ac84e",
 			"getStringEntrants(uint256,bytes6)": "9fd11627",
-			"markInactive(address,uint256)": "7a03ce4f",
+			"onRoundSettled(uint256)": "07e5fcee",
 			"setCurrentRound(uint256)": "3bc91e28",
 			"verifyEntryExisted(address,uint256)": "a96de4f5",
 			"verifyEntryValid(address,uint256)": "c106aee3"
@@ -65,78 +63,6 @@
 			"name": "activateRoundEntries",
 			"outputs": [],
 			"stateMutability": "nonpayable",
-			"type": "function"
-		},
-		{
-			"inputs": [
-				{
-					"internalType": "address",
-					"name": "player",
-					"type": "address"
-				},
-				{
-					"internalType": "uint256",
-					"name": "round",
-					"type": "uint256"
-				}
-			],
-			"name": "expireEntry",
-			"outputs": [],
-			"stateMutability": "nonpayable",
-			"type": "function"
-		},
-		{
-			"inputs": [
-				{
-					"internalType": "address",
-					"name": "player",
-					"type": "address"
-				},
-				{
-					"internalType": "uint256",
-					"name": "round",
-					"type": "uint256"
-				}
-			],
-			"name": "getEntry",
-			"outputs": [
-				{
-					"internalType": "bytes6",
-					"name": "",
-					"type": "bytes6"
-				},
-				{
-					"internalType": "uint256",
-					"name": "",
-					"type": "uint256"
-				},
-				{
-					"internalType": "uint256",
-					"name": "",
-					"type": "uint256"
-				},
-				{
-					"internalType": "uint256",
-					"name": "",
-					"type": "uint256"
-				},
-				{
-					"internalType": "address",
-					"name": "",
-					"type": "address"
-				},
-				{
-					"internalType": "uint8",
-					"name": "",
-					"type": "uint8"
-				},
-				{
-					"internalType": "bool",
-					"name": "",
-					"type": "bool"
-				}
-			],
-			"stateMutability": "view",
 			"type": "function"
 		},
 		{
@@ -185,17 +111,12 @@
 		{
 			"inputs": [
 				{
-					"internalType": "address",
-					"name": "player",
-					"type": "address"
-				},
-				{
 					"internalType": "uint256",
-					"name": "round",
+					"name": "settledRound",
 					"type": "uint256"
 				}
 			],
-			"name": "markInactive",
+			"name": "onRoundSettled",
 			"outputs": [],
 			"stateMutability": "nonpayable",
 			"type": "function"

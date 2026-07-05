@@ -30,16 +30,11 @@
 				"inputs": [
 					{
 						"internalType": "uint256",
-						"name": "playRound",
+						"name": "ticketId",
 						"type": "uint256"
 					}
 				],
-				"name": "ActiveEntryExists",
-				"type": "error"
-			},
-			{
-				"inputs": [],
-				"name": "AlreadyRefunded",
+				"name": "ActiveTicketExists",
 				"type": "error"
 			},
 			{
@@ -64,25 +59,8 @@
 				"type": "error"
 			},
 			{
-				"inputs": [
-					{
-						"internalType": "enum GameRegistry.EntryStatus",
-						"name": "status",
-						"type": "uint8"
-					}
-				],
-				"name": "EntryNotActive",
-				"type": "error"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "enum GameRegistry.EntryStatus",
-						"name": "status",
-						"type": "uint8"
-					}
-				],
-				"name": "EntryNotExpired",
+				"inputs": [],
+				"name": "EthTransferFailed",
 				"type": "error"
 			},
 			{
@@ -115,28 +93,28 @@
 			{
 				"inputs": [
 					{
-						"internalType": "uint256",
-						"name": "length",
-						"type": "uint256"
+						"internalType": "address",
+						"name": "player",
+						"type": "address"
 					}
 				],
-				"name": "InvalidStringLength",
+				"name": "NoLiveTicket",
 				"type": "error"
 			},
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
 					},
 					{
-						"internalType": "uint256",
-						"name": "round",
-						"type": "uint256"
+						"internalType": "address",
+						"name": "caller",
+						"type": "address"
 					}
 				],
-				"name": "NoEntryFound",
+				"name": "NotTicketOwner",
 				"type": "error"
 			},
 			{
@@ -185,12 +163,104 @@
 			{
 				"inputs": [
 					{
+						"internalType": "uint256",
+						"name": "playRound",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "currentRound",
+						"type": "uint256"
+					}
+				],
+				"name": "RoundAlreadyStarted",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
 						"internalType": "address",
 						"name": "token",
 						"type": "address"
 					}
 				],
 				"name": "SafeERC20FailedOperation",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					}
+				],
+				"name": "TicketNotFound",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "enum GameRegistry.TicketStatus",
+						"name": "status",
+						"type": "uint8"
+					}
+				],
+				"name": "TicketNotPending",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "enum GameRegistry.TicketStatus",
+						"name": "status",
+						"type": "uint8"
+					}
+				],
+				"name": "TicketNotRefundable",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "enum GameRegistry.TicketStatus",
+						"name": "status",
+						"type": "uint8"
+					}
+				],
+				"name": "TicketNotReplaceable",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "lastEligibleRound",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "currentRound",
+						"type": "uint256"
+					}
+				],
+				"name": "TicketStillEligible",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "requested",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "max",
+						"type": "uint256"
+					}
+				],
+				"name": "TooManyExtraRounds",
 				"type": "error"
 			},
 			{
@@ -218,25 +288,6 @@
 				"inputs": [],
 				"name": "ZeroAmount",
 				"type": "error"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "timbsAmount",
-						"type": "uint256"
-					}
-				],
-				"name": "AdditionalRoundSinked",
-				"type": "event"
 			},
 			{
 				"anonymous": false,
@@ -282,128 +333,17 @@
 					{
 						"indexed": true,
 						"internalType": "uint256",
-						"name": "playRound",
+						"name": "ticketId",
 						"type": "uint256"
 					},
 					{
 						"indexed": false,
-						"internalType": "bytes6",
-						"name": "oldString",
-						"type": "bytes6"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes6",
-						"name": "newString",
-						"type": "bytes6"
-					},
-					{
-						"indexed": false,
 						"internalType": "uint256",
-						"name": "additionalTimbs",
+						"name": "timbsAmount",
 						"type": "uint256"
 					}
 				],
-				"name": "EntryReplaced",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
-					{
-						"indexed": true,
-						"internalType": "uint256",
-						"name": "round",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "enum GameRegistry.EntryStatus",
-						"name": "newStatus",
-						"type": "uint8"
-					}
-				],
-				"name": "EntryStatusUpdated",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
-					{
-						"indexed": true,
-						"internalType": "uint256",
-						"name": "playRound",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "bytes6",
-						"name": "string6",
-						"type": "bytes6"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "escrowAmount",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "escrowToken",
-						"type": "address"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "lastEligibleRound",
-						"type": "uint256"
-					}
-				],
-				"name": "EntrySubmitted",
-				"type": "event"
-			},
-			{
-				"anonymous": false,
-				"inputs": [
-					{
-						"indexed": true,
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
-					{
-						"indexed": true,
-						"internalType": "uint256",
-						"name": "round",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "uint256",
-						"name": "amount",
-						"type": "uint256"
-					},
-					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "token",
-						"type": "address"
-					}
-				],
-				"name": "EscrowRefunded",
+				"name": "ExtraRoundsSunk",
 				"type": "event"
 			},
 			{
@@ -456,6 +396,193 @@
 				"inputs": [
 					{
 						"indexed": true,
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "round",
+						"type": "uint256"
+					}
+				],
+				"name": "TicketActivated",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "refundAmount",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "escrowToken",
+						"type": "address"
+					}
+				],
+				"name": "TicketCancelled",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "refundAmount",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "escrowToken",
+						"type": "address"
+					}
+				],
+				"name": "TicketClosed",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "oldTicketId",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "newTicketId",
+						"type": "uint256"
+					}
+				],
+				"name": "TicketConceded",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "round",
+						"type": "uint256"
+					}
+				],
+				"name": "TicketExpired",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "absorbedAmount",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "escrowToken",
+						"type": "address"
+					}
+				],
+				"name": "TicketIneligible",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "owner",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bytes6",
+						"name": "string6",
+						"type": "bytes6"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "playRound",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "lastEligibleRound",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "escrowAmount",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "escrowToken",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "supersedes",
+						"type": "uint256"
+					}
+				],
+				"name": "TicketMinted",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
 						"internalType": "address",
 						"name": "timbPrize",
 						"type": "address"
@@ -478,6 +605,45 @@
 				"type": "event"
 			},
 			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "vault",
+						"type": "address"
+					}
+				],
+				"name": "YieldVaultSet",
+				"type": "event"
+			},
+			{
+				"inputs": [],
+				"name": "CLAIM_WINDOW_ROUNDS",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "MAX_EXTRA_ROUNDS",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
 				"inputs": [
 					{
 						"internalType": "uint256",
@@ -493,6 +659,25 @@
 				"name": "activateRoundEntries",
 				"outputs": [],
 				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "activeTicketOf",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
 				"type": "function"
 			},
 			{
@@ -518,7 +703,40 @@
 				"inputs": [
 					{
 						"internalType": "uint256",
-						"name": "round",
+						"name": "ticketId",
+						"type": "uint256"
+					}
+				],
+				"name": "adminAbsorbEscrow",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					}
+				],
+				"name": "adminMarkIneligible",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "cancelEntry",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "ticketId",
 						"type": "uint256"
 					}
 				],
@@ -543,52 +761,17 @@
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					},
-					{
 						"internalType": "uint256",
-						"name": "",
+						"name": "ticketId",
 						"type": "uint256"
 					}
 				],
-				"name": "entries",
+				"name": "effectiveStatus",
 				"outputs": [
 					{
-						"internalType": "bytes6",
-						"name": "string6",
-						"type": "bytes6"
-					},
-					{
-						"internalType": "uint256",
-						"name": "entryRound",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "lastEligibleRound",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "escrowAmount",
-						"type": "uint256"
-					},
-					{
-						"internalType": "address",
-						"name": "escrowToken",
-						"type": "address"
-					},
-					{
-						"internalType": "enum GameRegistry.EntryStatus",
-						"name": "status",
+						"internalType": "enum GameRegistry.TicketStatus",
+						"name": "",
 						"type": "uint8"
-					},
-					{
-						"internalType": "bool",
-						"name": "exists",
-						"type": "bool"
 					}
 				],
 				"stateMutability": "view",
@@ -623,85 +806,6 @@
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
-					{
-						"internalType": "uint256",
-						"name": "round",
-						"type": "uint256"
-					}
-				],
-				"name": "expireEntry",
-				"outputs": [],
-				"stateMutability": "nonpayable",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
-					{
-						"internalType": "uint256",
-						"name": "round",
-						"type": "uint256"
-					}
-				],
-				"name": "getEntry",
-				"outputs": [
-					{
-						"components": [
-							{
-								"internalType": "bytes6",
-								"name": "string6",
-								"type": "bytes6"
-							},
-							{
-								"internalType": "uint256",
-								"name": "entryRound",
-								"type": "uint256"
-							},
-							{
-								"internalType": "uint256",
-								"name": "lastEligibleRound",
-								"type": "uint256"
-							},
-							{
-								"internalType": "uint256",
-								"name": "escrowAmount",
-								"type": "uint256"
-							},
-							{
-								"internalType": "address",
-								"name": "escrowToken",
-								"type": "address"
-							},
-							{
-								"internalType": "enum GameRegistry.EntryStatus",
-								"name": "status",
-								"type": "uint8"
-							},
-							{
-								"internalType": "bool",
-								"name": "exists",
-								"type": "bool"
-							}
-						],
-						"internalType": "struct GameRegistry.EntryData",
-						"name": "",
-						"type": "tuple"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
 						"internalType": "bytes6",
 						"name": "string6",
 						"type": "bytes6"
@@ -713,81 +817,6 @@
 						"internalType": "uint256",
 						"name": "",
 						"type": "uint256"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					}
-				],
-				"name": "getPlayerHistory",
-				"outputs": [
-					{
-						"components": [
-							{
-								"internalType": "bytes6",
-								"name": "string6",
-								"type": "bytes6"
-							},
-							{
-								"internalType": "uint256",
-								"name": "entryRound",
-								"type": "uint256"
-							},
-							{
-								"internalType": "uint256",
-								"name": "lastEligibleRound",
-								"type": "uint256"
-							},
-							{
-								"internalType": "uint256",
-								"name": "escrowAmount",
-								"type": "uint256"
-							},
-							{
-								"internalType": "address",
-								"name": "escrowToken",
-								"type": "address"
-							},
-							{
-								"internalType": "enum GameRegistry.EntryStatus",
-								"name": "status",
-								"type": "uint8"
-							},
-							{
-								"internalType": "bool",
-								"name": "exists",
-								"type": "bool"
-							}
-						],
-						"internalType": "struct GameRegistry.EntryData[]",
-						"name": "history",
-						"type": "tuple[]"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					}
-				],
-				"name": "getPlayerRounds",
-				"outputs": [
-					{
-						"internalType": "uint256[]",
-						"name": "",
-						"type": "uint256[]"
 					}
 				],
 				"stateMutability": "view",
@@ -840,6 +869,187 @@
 				"inputs": [
 					{
 						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					}
+				],
+				"name": "getTicket",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "id",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "owner",
+								"type": "address"
+							},
+							{
+								"internalType": "bytes6",
+								"name": "string6",
+								"type": "bytes6"
+							},
+							{
+								"internalType": "uint256",
+								"name": "playRound",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "lastEligibleRound",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "escrowAmount",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "escrowToken",
+								"type": "address"
+							},
+							{
+								"internalType": "enum GameRegistry.TicketStatus",
+								"name": "status",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint256",
+								"name": "supersedes",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "supersededBy",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "createdAt",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct GameRegistry.Ticket",
+						"name": "t",
+						"type": "tuple"
+					},
+					{
+						"internalType": "enum GameRegistry.TicketStatus",
+						"name": "displayStatus",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					}
+				],
+				"name": "getTicketChain",
+				"outputs": [
+					{
+						"internalType": "uint256[]",
+						"name": "ancestors",
+						"type": "uint256[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "owner_",
+						"type": "address"
+					}
+				],
+				"name": "getTicketsOf",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "id",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "owner",
+								"type": "address"
+							},
+							{
+								"internalType": "bytes6",
+								"name": "string6",
+								"type": "bytes6"
+							},
+							{
+								"internalType": "uint256",
+								"name": "playRound",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "lastEligibleRound",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "escrowAmount",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "escrowToken",
+								"type": "address"
+							},
+							{
+								"internalType": "enum GameRegistry.TicketStatus",
+								"name": "status",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint256",
+								"name": "supersedes",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "supersededBy",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "createdAt",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct GameRegistry.Ticket[]",
+						"name": "list",
+						"type": "tuple[]"
+					},
+					{
+						"internalType": "enum GameRegistry.TicketStatus[]",
+						"name": "displayStatuses",
+						"type": "uint8[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
 						"name": "",
 						"type": "uint256"
 					},
@@ -861,19 +1071,27 @@
 				"type": "function"
 			},
 			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
+				"inputs": [],
+				"name": "nextTicketId",
+				"outputs": [
 					{
 						"internalType": "uint256",
-						"name": "round",
+						"name": "",
 						"type": "uint256"
 					}
 				],
-				"name": "markInactive",
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "settledRound",
+						"type": "uint256"
+					}
+				],
+				"name": "onRoundSettled",
 				"outputs": [],
 				"stateMutability": "nonpayable",
 				"type": "function"
@@ -906,30 +1124,6 @@
 						"internalType": "bool",
 						"name": "",
 						"type": "bool"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					},
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					}
-				],
-				"name": "playerRounds",
-				"outputs": [
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
 					}
 				],
 				"stateMutability": "view",
@@ -970,7 +1164,7 @@
 				],
 				"name": "replaceEntry",
 				"outputs": [],
-				"stateMutability": "payable",
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -1057,6 +1251,19 @@
 			{
 				"inputs": [
 					{
+						"internalType": "address",
+						"name": "_vault",
+						"type": "address"
+					}
+				],
+				"name": "setYieldVault",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
 						"internalType": "uint256",
 						"name": "",
 						"type": "uint256"
@@ -1107,6 +1314,99 @@
 				"type": "function"
 			},
 			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "ticketAt",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "tickets",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "id",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address",
+						"name": "owner",
+						"type": "address"
+					},
+					{
+						"internalType": "bytes6",
+						"name": "string6",
+						"type": "bytes6"
+					},
+					{
+						"internalType": "uint256",
+						"name": "playRound",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "lastEligibleRound",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "escrowAmount",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address",
+						"name": "escrowToken",
+						"type": "address"
+					},
+					{
+						"internalType": "enum GameRegistry.TicketStatus",
+						"name": "status",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint256",
+						"name": "supersedes",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "supersededBy",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "createdAt",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
 				"inputs": [],
 				"name": "timbPrize",
 				"outputs": [
@@ -1150,30 +1450,6 @@
 				"name": "unpause",
 				"outputs": [],
 				"stateMutability": "nonpayable",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "bytes6",
-						"name": "s",
-						"type": "bytes6"
-					}
-				],
-				"name": "validateString",
-				"outputs": [
-					{
-						"internalType": "bool",
-						"name": "valid",
-						"type": "bool"
-					},
-					{
-						"internalType": "string",
-						"name": "reason",
-						"type": "string"
-					}
-				],
-				"stateMutability": "pure",
 				"type": "function"
 			},
 			{
@@ -1235,8 +1511,17 @@
 				"type": "function"
 			},
 			{
-				"stateMutability": "payable",
-				"type": "receive"
+				"inputs": [],
+				"name": "yieldVault",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
 			}
 		],
 		"devdoc": {
@@ -1264,37 +1549,10 @@
 			},
 			"kind": "dev",
 			"methods": {
-				"activateRoundEntries(uint256,address[])": {
-					"details": "Called by TimbPrize when a new round begins.      Sets all Pending entries for this round to Active.      Only TimbPrize can call.",
-					"params": {
-						"players": "Array of player addresses with entries in this round.",
-						"round": "The round number being activated."
-					}
-				},
 				"claimRefund(uint256)": {
-					"details": "Available after entry's lastEligibleRound has passed AND      claim window (2 rounds) has not closed.      Caller must be the original entry owner.",
 					"params": {
-						"round": "The round the entry was playing in."
+						"ticketId": "The ticket to close."
 					}
-				},
-				"constructor": {
-					"params": {
-						"_protocolSink": "Address that receives additional-round TIMBS sinks.",
-						"_timbPrize": "TimbPrize contract (can be set later via setTimbPrize).",
-						"_timbsToken": "TIMBS ERC-20 address."
-					}
-				},
-				"expireEntry(address,uint256)": {
-					"details": "Called by TimbPrize at round close for entries past their window."
-				},
-				"getIdenticalCount(bytes6)": {
-					"details": "Frontend calls this after entry submission to show collision count."
-				},
-				"getStringEntrants(uint256,bytes6)": {
-					"details": "Used by TimbPrize at settlement to find winner candidates.      Returns raw list — settlement applies dual-layer filter."
-				},
-				"markInactive(address,uint256)": {
-					"details": "Called by TimbPrize when unclaimed window expires."
 				},
 				"owner()": {
 					"details": "Returns the address of the current owner."
@@ -1303,160 +1561,142 @@
 					"details": "Leaves the contract without owner. It will not be possible to call `onlyOwner` functions. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby disabling any functionality that is only available to the owner."
 				},
 				"replaceEntry(bytes6,uint256)": {
-					"details": "All-in-one atomic transaction:   1. Pre-flight: verify contract can pull new fees.   2. Old initial deposit transfers to new string entry.   3. Old additional-round TIMBS already in sink — no action needed.   4. New string set on-chain.   5. New additional-round TIMBS pulled to sink if extraRounds > 0.      Pre-flight check happens BEFORE any state changes (defiSKILL).",
 					"params": {
-						"extraRounds": "New total extra rounds beyond N+1.",
-						"newString6": "New 6-char string."
+						"extraRounds": "Extra rounds for the NEW ticket (paid fresh in TIMBS).",
+						"newString6": "New (or same) 6-char entry string."
 					}
 				},
-				"setCurrentRound(uint256)": {
-					"details": "Called by TimbPrize at each round start."
-				},
-				"setEntryCosts(uint256,uint256)": {
-					"details": "Called by owner when governance updates entryCostTIMBS or      when TIMBS/ETH price moves and ETH cost needs updating."
-				},
 				"submitEntry(bytes6,bool,uint256)": {
-					"details": "Entries set in currentRound play in currentRound + 1.      ETH entries: send msg.value == entryCostETH.      TIMBS entries: approve this contract for entryCostTIMBS first.      Additional rounds: must also approve        extraRounds × entryCostTIMBS additional TIMBS.",
+					"details": "One eligible live ticket per wallet — enforced across rounds, not      just per-round. ETH entries: msg.value >= entryCostETH (excess      refunded). TIMBS entries: approve entryCostTIMBS first. Extra      rounds: TIMBS only, forfeited to the protocol sink, non-refundable.",
 					"params": {
-						"extraRounds": "Additional rounds to keep string active beyond N+1.                      Each costs entryCostTIMBS TIMBS (non-refundable).",
-						"string6": "6-char entry string (A-Z, 0-9, no repeats, uppercase).",
-						"useETH": "True = pay initial cost in ETH, false = TIMBS."
+						"extraRounds": "Rounds beyond the first (≤ MAX_EXTRA_ROUNDS).",
+						"string6": "6-char entry string (A-Z / 0-9, no repeats).",
+						"useETH": "True = principal in ETH, false = TIMBS."
 					}
 				},
 				"transferOwnership(address)": {
 					"details": "Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner."
-				},
-				"validateString(bytes6)": {
-					"returns": {
-						"reason": "Empty string if valid, human-readable reason if not.",
-						"valid": "True if the string passes all validation rules."
-					}
-				},
-				"verifyEntryExisted(address,uint256)": {
-					"params": {
-						"player": "Wallet address.",
-						"round": "Round number to check."
-					},
-					"returns": {
-						"exists": "True if entry was submitted for this round.",
-						"string6": "The entry string (bytes6(0) if not found)."
-					}
-				},
-				"verifyEntryValid(address,uint256)": {
-					"params": {
-						"player": "Wallet address.",
-						"round": "Round number."
-					},
-					"returns": {
-						"string6": "The current entry string.",
-						"valid": " True if entry is Active and round <= lastEligibleRound."
-					}
 				}
 			},
-			"title": "GameRegistry",
+			"title": "GameRegistry (v2 — ticket model)",
 			"version": 1
 		},
 		"userdoc": {
 			"kind": "user",
 			"methods": {
+				"CLAIM_WINDOW_ROUNDS()": {
+					"notice": "Refund claim window after lastEligibleRound (in rounds)."
+				},
+				"MAX_EXTRA_ROUNDS()": {
+					"notice": "Cap on extra rounds per ticket — bounds the round-index loop."
+				},
 				"activateRoundEntries(uint256,address[])": {
-					"notice": "Activate entries for a round at round start."
+					"notice": "Activate Pending tickets at round start. Registers their escrow         weight in the yield vault — Active tickets earn for the pot."
+				},
+				"activeTicketOf(address)": {
+					"notice": "wallet → its current live ticket id (0 = none)."
 				},
 				"additionalRoundCost(uint256)": {
-					"notice": "Returns additional round cost for N extra rounds."
+					"notice": "Extra-round cost helper."
+				},
+				"adminAbsorbEscrow(uint256)": {
+					"notice": "Sweep escrow stranded on an Ineligible ticket to the sink         (e.g. after an ETH send to the sink failed during settlement)."
+				},
+				"adminMarkIneligible(uint256)": {
+					"notice": "Escape hatch for a ticket/game inconsistency (\"contract error         between ticket and game\") — flags the ticket Ineligible.         Escrow stays on the ticket for a follow-up adminAbsorbEscrow         or manual resolution."
+				},
+				"cancelEntry()": {
+					"notice": "Cancel the wallet's Pending ticket before its round starts and         reclaim the principal immediately. The ticket becomes Cancelled         (no tally, ineligible) and reads as Closed once its play round         begins."
 				},
 				"claimRefund(uint256)": {
-					"notice": "Claim principal escrow refund for an expired entry."
+					"notice": "Withdraw the principal of a ticket whose run has ended, within         the claim window. Ticket becomes Closed (terminal, hidden)."
 				},
 				"currentRound()": {
-					"notice": "Current active round number (set by TimbPrize)."
+					"notice": "Current active round number (pushed by TimbPrize)."
 				},
-				"entries(address,uint256)": {
-					"notice": "wallet → round → EntryData."
+				"effectiveStatus(uint256)": {
+					"notice": "Status as it should be displayed: Cancelled reads as Closed         once its play round has begun (settlement rolled the round)."
 				},
 				"entryCostETH()": {
-					"notice": "Entry cost in ETH wei (derived from TIMBS price, owner-updatable)."
+					"notice": "Entry cost in ETH wei (governance-set)."
 				},
 				"entryCostTIMBS()": {
-					"notice": "Entry cost in TIMBS (governance-set, mirrors TIMBSToken.entryCostTIMBS)."
-				},
-				"expireEntry(address,uint256)": {
-					"notice": "Mark an entry as expired after its lastEligibleRound passes."
-				},
-				"getEntry(address,uint256)": {
-					"notice": "Returns a player's entry for a specific round."
+					"notice": "Entry cost in TIMBS (governance-set)."
 				},
 				"getIdenticalCount(bytes6)": {
-					"notice": "Returns identical entry count for a string in the next round."
-				},
-				"getPlayerHistory(address)": {
-					"notice": "Returns a player's full entry history."
-				},
-				"getPlayerRounds(address)": {
-					"notice": "Returns all rounds a player has entries in."
+					"notice": "Identical-string count for the next round (collision display)."
 				},
 				"getRoundEntrants(uint256)": {
-					"notice": "Returns all wallet addresses with entries in a round."
+					"notice": "Wallets with a ticket eligible in a round."
 				},
 				"getStringEntrants(uint256,bytes6)": {
-					"notice": "Returns all wallets that submitted a given string for a round."
+					"notice": "Wallets holding a given string for a round (raw; settlement         applies the dual-layer filter over this list)."
+				},
+				"getTicket(uint256)": {
+					"notice": "One ticket + its display status."
+				},
+				"getTicketChain(uint256)": {
+					"notice": "Conceded ancestry of a ticket, newest → oldest."
+				},
+				"getTicketsOf(address)": {
+					"notice": "Every ticket a wallet has ever minted, with display statuses."
 				},
 				"hasEntryInRound(uint256,address)": {
-					"notice": "round → wallet → index in roundEntrants (for dedup check)."
+					"notice": "round → wallet → already in roundEntrants."
 				},
-				"markInactive(address,uint256)": {
-					"notice": "Mark an entry as Inactive (claim window closed, no claim made)."
+				"nextTicketId()": {
+					"notice": "Next ticket id (first ticket = 1; 0 = null)."
+				},
+				"onRoundSettled(uint256)": {
+					"notice": "Post-settlement hook, called once per settled round:         1. Tickets whose run ended this round stop earning yield and            free their wallet to enter again (refund window opens).         2. Tickets whose claim window just lapsed become Ineligible and            their unclaimed escrow is absorbed to the protocol sink."
 				},
 				"paused()": {
-					"notice": "Emergency pause — blocks new entries, refunds always available."
-				},
-				"playerRounds(address,uint256)": {
-					"notice": "wallet → rounds they have active entries in (for history)."
+					"notice": "Emergency pause — blocks new tickets; refunds always available."
 				},
 				"protocolSink()": {
-					"notice": "Protocol sink — receives additional-round TIMBS (out of circulation)."
+					"notice": "Protocol sink (Treasury) — receives extra-round TIMBS and         absorbed escrow from claim-window-lapsed tickets."
 				},
 				"replaceEntry(bytes6,uint256)": {
-					"notice": "Replace an existing entry string and/or round count."
+					"notice": "Replace the wallet's live ticket with a new one (same string         allowed). The senior ticket becomes Conceded — visible, tethered         beneath the replacement, ineligible to win. Its principal moves         onto the new ticket. Extra-round TIMBS must be paid again for         the replacement to carry extra rounds."
 				},
 				"roundEntrants(uint256,uint256)": {
-					"notice": "round → all wallets that submitted entries."
+					"notice": "round → wallets with a ticket eligible in that round (deduped)."
 				},
 				"setCurrentRound(uint256)": {
-					"notice": "Update current round number."
+					"notice": "Update current round number — called by TimbPrize at round start."
 				},
 				"setEntryCosts(uint256,uint256)": {
-					"notice": "Update entry costs."
-				},
-				"setProtocolSink(address)": {
-					"notice": "Update protocol sink address."
-				},
-				"setTimbPrize(address)": {
-					"notice": "Set or update TimbPrize address."
+					"notice": "Governance-driven entry costs (per eligible token)."
 				},
 				"stringEntrants(uint256,bytes6,uint256)": {
-					"notice": "round → string → wallets that submitted that string.         Used for settlement winner lookup."
+					"notice": "round → string → wallets that hold that string for the round.         Stale rows (conceded/replaced) are filtered at verification."
 				},
 				"submitEntry(bytes6,bool,uint256)": {
-					"notice": "Submit a new entry for the next round."
+					"notice": "Mint a ticket for the next round."
+				},
+				"ticketAt(address,uint256)": {
+					"notice": "wallet → round → the ticket id eligible for that round."
+				},
+				"tickets(uint256)": {
+					"notice": "ticket id → ticket."
 				},
 				"timbPrize()": {
-					"notice": "TimbPrize — only address allowed to call settlement updates."
+					"notice": "TimbPrize — only address allowed to drive round lifecycle."
 				},
 				"timbsToken()": {
 					"notice": "TIMBS token."
 				},
-				"validateString(bytes6)": {
-					"notice": "Public view to validate a string before submitting."
-				},
 				"verifyEntryExisted(address,uint256)": {
-					"notice": "Layer 1: Verify entry existed at round start."
+					"notice": "Layer 1: a ticket existed for this player and round."
 				},
 				"verifyEntryValid(address,uint256)": {
-					"notice": "Layer 2: Verify entry is still valid at settlement."
+					"notice": "Layer 2: the ticket is Active and eligible for this round."
+				},
+				"yieldVault()": {
+					"notice": "TimbYieldVault — receives active-escrow weight updates."
 				}
 			},
-			"notice": "Prize game entry storage, escrow, and lifecycle management. Responsibilities:   - Store player entries (6-char strings) for each round.   - Hold entry escrow (ETH or TIMBS) — ringfenced, never mingles     with protocol revenue or prize pool.   - Enforce string validation (6 chars, A-Z 0-9, no repeats, all caps).   - Manage entry lifecycle: Pending → Active → Expired → Claimed/Inactive.   - Handle entry replacement (all-in-one tx): old deposit transfers,     old additional-round TIMBS kept as protocol sink.   - Process principal refunds for expired entries.   - Expose dual-layer verification for TimbPrize settlement. Entry rules:   - 1 entry per wallet per round (replaceable).   - Entries set in round N play in round N+1.   - Initial entry cost: ETH (address(0)) or TIMBS — always refundable.   - Additional rounds: TIMBS only, non-refundable, protocol sink.   - ETH cost derived from TIMBSToken.entryCostTIMBS at entry time.   - No repeating characters in string.   - Claim window: 2 rounds after lastEligibleRound. Security (defiSKILL):   - ReentrancyGuard on all state-changing functions.   - msg.sender verified as entry owner before any escrow operation.   - ETH held as msg.value, TIMBS via safeTransferFrom.   - Additional-round TIMBS sent directly to protocol sink address     (never held in this contract).   - Pre-flight approval check on replacement before any state changes.   - Emergency pause on new entries — refunds always available.   - Only TimbPrize (authorised) can update entry status at settlement. Deployment:   1. Deploy GameRegistry(timbsToken, protocolSink, timbPrize)   2. setEntryCostParams(entryCostTIMBS, ethCostWei)   3. timbPrize.setGameRegistry(address(this))   4. Verify on Sourcify",
+			"notice": "Prize game ticket storage, escrow, lifecycle, and yield-weight hooks. Ticket model:   - Every entry mints a Ticket with a globally unique id.   - One eligible live ticket per wallet, enforced via activeTicketOf.   - Replacement mints a NEW ticket; the senior ticket becomes Conceded and     stays visible, cross-linked (supersedes / supersededBy). The principal     moves onto the replacement; extra-round TIMBS on the conceded ticket is     already forfeited to the protocol sink (Treasury) and must be re-paid     for the replacement to carry extra rounds again.   - Tickets are indexed into EVERY round they are eligible for     (playRound..lastEligibleRound), fixing the v1 bug where extra-round     entries could never win or activate beyond their first round. Ticket statuses:   Pending    — waiting for its play round to begin.   Active     — counted into the round; escrow weight registered in the                yield vault (earning for the prize pool); eligible to win.                After lastEligibleRound passes it is refundable (derived,                not a stored status) within the claim window.   Conceded   — replaced; ineligible to win; principal moved to replacement;                stays visible tethered beneath the replacement.   Ineligible — claim window lapsed unclaimed (escrow absorbed to protocol                sink) or admin-flagged ticket/game inconsistency.   Cancelled  — voluntary pre-round withdrawal; principal refunded; no tally.                Reported as Closed (derived) once its play round begins.   Closed     — principal withdrawn; terminal; hidden from active lists. Yield hooks (TimbYieldVault):   - Weight registered when a ticket becomes Active, removed the moment it     stops being eligible (conceded / expired / ineligible / refunded).   - Principal NEVER moves to the vault — weight is bookkeeping only; the     vault pays yield to the prize pot from its own treasury-funded reserve.   - All vault calls are try/catch guarded so the game can never brick on     vault failure. Security:   - ReentrancyGuard on all state-changing user functions.   - Escrow ring-fenced: ETH/TIMBS held here equals the sum of live +     refundable ticket principal; never mingles with protocol revenue.   - Only TimbPrize can drive round lifecycle (activate / settle hooks).   - Emergency pause blocks new/replacement tickets; refunds & cancels     always available. Deployment:   1. Deploy GameRegistry(timbsToken, protocolSink, timbPrize?)   2. setEntryCosts(1000e18, 0.0001e18)   3. setYieldVault(vault); vault.setGameRegistry(this)   4. timbPrize.setGameRegistry(this)",
 			"version": 1
 		}
 	},
@@ -1464,13 +1704,13 @@
 		"compilationTarget": {
 			"contracts/GameRegistry.sol": "GameRegistry"
 		},
-		"evmVersion": "london",
+		"evmVersion": "shanghai",
 		"libraries": {},
 		"metadata": {
 			"bytecodeHash": "ipfs"
 		},
 		"optimizer": {
-			"enabled": true,
+			"enabled": false,
 			"runs": 200
 		},
 		"remappings": []
@@ -1557,11 +1797,11 @@
 			]
 		},
 		"contracts/GameRegistry.sol": {
-			"keccak256": "0xa09a5351eaa5d3f2c79e7f25c9af38b35380ea68921bc8bf85c86d8cc33ea2bf",
+			"keccak256": "0x4997290fafcb913c82638b90e09b70c946f63ee2d6372976d9505450f9adfb96",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://26f16270ace2bc7c3da4cd4b03d7e20e2b583aebb049d1892323cf76ec4c352c",
-				"dweb:/ipfs/QmZDhrZsBsfhDfcCFJ8CAxQZ7yTNVVy9b864bM79FELTtc"
+				"bzz-raw://9c715b4ad51157e5d9e311358d2e42ec885613dd13d3b1ac02689d423811380a",
+				"dweb:/ipfs/QmVUfqUePxQi3uH9oNJRE3QB8C28JLdDqUo82x3BBeCaMs"
 			]
 		}
 	},

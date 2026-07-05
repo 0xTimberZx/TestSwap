@@ -33,6 +33,11 @@
 			},
 			{
 				"inputs": [],
+				"name": "ETHTransferFailed",
+				"type": "error"
+			},
+			{
+				"inputs": [],
 				"name": "ExcessiveInputAmount",
 				"type": "error"
 			},
@@ -80,6 +85,22 @@
 				"type": "error"
 			},
 			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "provided",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "required",
+						"type": "uint256"
+					}
+				],
+				"name": "InsufficientETHSent",
+				"type": "error"
+			},
+			{
 				"inputs": [],
 				"name": "InsufficientLiquidity",
 				"type": "error"
@@ -98,6 +119,22 @@
 					}
 				],
 				"name": "InsufficientOutputAmount",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "count",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "max",
+						"type": "uint256"
+					}
+				],
+				"name": "InvalidNudgeCount",
 				"type": "error"
 			},
 			{
@@ -136,6 +173,11 @@
 					}
 				],
 				"name": "PairNotFound",
+				"type": "error"
+			},
+			{
+				"inputs": [],
+				"name": "PrizeNotSet",
 				"type": "error"
 			},
 			{
@@ -445,6 +487,19 @@
 			},
 			{
 				"inputs": [],
+				"name": "MAX_BATCH_NUDGE",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
 				"name": "PROTOCOL_FEE_BPS",
 				"outputs": [
 					{
@@ -572,6 +627,19 @@
 					}
 				],
 				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "count",
+						"type": "uint256"
+					}
+				],
+				"name": "advanceScroll",
+				"outputs": [],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -925,6 +993,94 @@
 					},
 					{
 						"internalType": "address",
+						"name": "tokenOut",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "deadline",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bool",
+						"name": "influencePrize",
+						"type": "bool"
+					}
+				],
+				"name": "swapExactETHForTokens",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "amountOut",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "amountIn",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amountOutMin",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address",
+						"name": "tokenIn",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "deadline",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bool",
+						"name": "influencePrize",
+						"type": "bool"
+					}
+				],
+				"name": "swapExactTokensForETH",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "amountOut",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "amountIn",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amountOutMin",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address",
 						"name": "tokenIn",
 						"type": "address"
 					},
@@ -1098,11 +1254,20 @@
 			},
 			"kind": "dev",
 			"methods": {
+				"advanceScroll(uint256)": {
+					"details": "The router is the address TimbPrize authorizes for nudgeScroll(),      so no TimbPrize change is needed. Each iteration inherits      TimbPrize's own guards (whenGameStarted, settlement-window block) —      the whole batch reverts if the settlement window opens mid-batch."
+				},
 				"owner()": {
 					"details": "Returns the address of the current owner."
 				},
 				"renounceOwnership()": {
 					"details": "Leaves the contract without owner. It will not be possible to call `onlyOwner` functions. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby disabling any functionality that is only available to the owner."
+				},
+				"swapExactETHForTokens(uint256,uint256,address,address,uint256,bool)": {
+					"details": "ETH is wrapped to WETH and traded through the WETH/tokenOut pair.      msg.value must cover amountIn plus the protocol fee (paid to the      treasury as WETH, mirroring token-in swaps); excess ETH is refunded."
+				},
+				"swapExactTokensForETH(uint256,uint256,address,address,uint256,bool)": {
+					"details": "Trades through the tokenIn/WETH pair; the router receives the WETH,      unwraps it, and forwards native ETH to `to`."
 				},
 				"transferOwnership(address)": {
 					"details": "Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner."
@@ -1114,17 +1279,29 @@
 		"userdoc": {
 			"kind": "user",
 			"methods": {
+				"MAX_BATCH_NUDGE()": {
+					"notice": "Gas-bounded cap for batched user nudges per transaction."
+				},
 				"addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)": {
 					"notice": "Add liquidity to a token/token pair."
 				},
 				"addLiquidityETH(address,uint256,uint256,uint256,address,uint256)": {
 					"notice": "Add liquidity to a WETH/token pair using native ETH."
 				},
+				"advanceScroll(uint256)": {
+					"notice": "Nudge the prize scroll directly, without swapping. `count` = 1         is a single nudge; higher counts are a batch — accepted as one         transaction and applied one nudge at a time, in order, which         keeps concurrent batch requests cleanly sequenced on-chain."
+				},
 				"removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)": {
 					"notice": "Remove liquidity from a token/token pair."
 				},
 				"removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)": {
 					"notice": "Remove liquidity from a WETH/token pair, receiving native ETH."
+				},
+				"swapExactETHForTokens(uint256,uint256,address,address,uint256,bool)": {
+					"notice": "Swap an exact amount of native ETH for as much tokenOut as possible."
+				},
+				"swapExactTokensForETH(uint256,uint256,address,address,uint256,bool)": {
+					"notice": "Swap an exact amount of tokenIn for as much native ETH as possible."
 				},
 				"swapExactTokensForTokens(uint256,uint256,address,address,address,uint256,bool)": {
 					"notice": "Swap an exact amount of tokenIn for as much tokenOut as possible."
@@ -1141,13 +1318,13 @@
 		"compilationTarget": {
 			"contracts/TimbSwapRouter.sol": "TimbSwapRouter"
 		},
-		"evmVersion": "london",
+		"evmVersion": "shanghai",
 		"libraries": {},
 		"metadata": {
 			"bytecodeHash": "ipfs"
 		},
 		"optimizer": {
-			"enabled": true,
+			"enabled": false,
 			"runs": 200
 		},
 		"remappings": []
@@ -1234,11 +1411,11 @@
 			]
 		},
 		"contracts/TimbSwapRouter.sol": {
-			"keccak256": "0x312e4979faf74f705e3b927a105ec8e7cd85e7a7c0c2df6debc5e8919bd0f416",
+			"keccak256": "0x8ae186c503a0759aaf54d6d478568e14be41675a03f0cffa981f9257bab0fe2d",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://77a716ea477d6ade26d143348d915a7bb0d52a2e4d2e4f53f7ce212e3db9c9d1",
-				"dweb:/ipfs/QmeWVkpYhP256f4P26UwZvstyYkvnFR5ypuufZFKdwJaRq"
+				"bzz-raw://e288db10c2fc914c6b71fa8323df9ff80a88c3757162ac5e36816f9a87268b79",
+				"dweb:/ipfs/QmTpJAJSxE6rxUVwXWZqqpSgGdEBqfXxSFVn9AwifGLa7D"
 			]
 		}
 	},
