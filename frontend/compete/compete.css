@@ -35,6 +35,9 @@
   font-weight: 700;
   color: var(--text);
 }
+/* Matches the active digit cell's highlight color (.digit-cell.active) so the
+   segment numerator visually ties back to which meter cell is live. */
+.hdr-segment-num { color: var(--blue); }
 
 /* ─── Digit Track ────────────────────────────────────────────────────────── */
 .digit-track {
@@ -367,11 +370,26 @@
   font-weight: 600;
   white-space: nowrap;
 }
-.status-pending  { background: rgba(40,160,240,0.12); color: var(--blue); }
-.status-active   { background: rgba(20,241,149,0.12); color: var(--green); }
-.status-expired  { background: rgba(255,255,255,0.05); color: var(--text-3); }
-.status-claimed  { background: rgba(20,241,149,0.2); color: var(--green); }
-.status-inactive { background: rgba(255,255,255,0.04); color: var(--text-3); }
+/* Ticket lifecycle badges (GameRegistry v2) */
+.status-pending    { background: rgba(40,160,240,0.12);  color: var(--blue); }
+.status-active     { background: rgba(20,241,149,0.12);  color: var(--green); }
+.status-conceded   { background: rgba(255,255,255,0.05); color: var(--text-3); }
+.status-ineligible { background: rgba(255,92,92,0.12);   color: #ff5c5c; }
+.status-cancelled  { background: rgba(255,184,74,0.12);  color: #ffb84a; }
+.status-closed     { background: rgba(255,255,255,0.04); color: var(--text-3); }
+
+/* Conceded ticket tethered beneath its replacement in the chain */
+.ticket-conceded {
+  opacity: 0.55;
+  margin-left: 18px;
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+}
+.ticket-conceded .entry-row-string { text-decoration: line-through; text-decoration-thickness: 1px; }
+.tether-mark { color: var(--text-3); font-weight: 400; margin-right: 2px; }
+
+/* Yield framing line under the entry card subtitle */
+.card-sub-yield { color: var(--green); opacity: 0.75; margin-top: -6px; }
 
 .btn-claim-mini {
   background: var(--green);

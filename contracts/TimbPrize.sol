@@ -11,7 +11,10 @@ using SafeERC20 for IERC20;
 // ─── Interfaces ──────────────────────────────────────────────────────────
 
 interface IPrizeEscrow {
-    function pay(address to, uint256 amount) external;
+    // NOTE: 3-arg signature matching PrizeEscrow.pay(to, amount, round).
+    // The old 2-arg interface declaration had a selector mismatch that made
+    // every claimWinnings() call revert against the real escrow.
+    function pay(address to, uint256 amount, uint256 round) external;
     function balance() external view returns (uint256);
     function deposit() external payable;
 }
@@ -26,13 +29,12 @@ interface IGameRegistry {
     function getRoundEntrants(uint256 round)
         external view returns (address[] memory);
     function activateRoundEntries(uint256 round, address[] calldata players) external;
-    function expireEntry(address player, uint256 round) external;
-    function markInactive(address player, uint256 round) external;
+    function onRoundSettled(uint256 settledRound) external;
     function setCurrentRound(uint256 round) external;
-    function getEntry(address player, uint256 round)
-        external view returns (
-            bytes6, uint256, uint256, uint256, address, uint8, bool
-        );
+}
+
+interface ITimbYieldVault {
+    function harvest() external returns (uint256);
 }
 
 interface IEligibleTokenRegistry {
@@ -117,6 +119,10 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     /// @notice Settler address — authorised to call settleSegment().
     address public settler;
 
+    /// @notice TimbYieldVault — active-escrow yield harvested into the pot
+    ///         at each round settlement (address(0) = yield disabled).
+    address public yieldVault;
+
     /// @notice Scroll position counter — increments +1 per eligible swap.
     uint256 public positionCounter;
 
@@ -171,6 +177,9 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     /// @notice Whether a winner has claimed for a round.
     mapping(uint256 => mapping(address => bool)) public hasClaimed;
 
+    /// @notice Whether a round's unclaimed winnings were recycled to the pot.
+    mapping(uint256 => bool) public roundRecycled;
+
     /// @notice Per-function pause flags.
     bool public entriesPaused;
     bool public settlementPaused;
@@ -193,6 +202,8 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     );
     event WinningsClaimed(address indexed winner, uint256 indexed round, uint256 amount);
     event PotFunded(uint256 amount, address indexed from);
+    event YieldHarvested(uint256 indexed round, uint256 amount);
+    event UnclaimedRecycled(uint256 indexed round, uint256 amount);
     event ProtocolCutTaken(uint256 amount);
     event SettlerUpdated(address indexed newSettler);
     event WinnersPerRoundSet(uint256 count);
@@ -206,6 +217,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     error GameAlreadyStarted();
     error NotSettler();
     error NotRouter();
+    error NotYieldVault();
     error SegmentNotComplete(uint256 elapsed, uint256 required);
     error NotInSettlementWindow();
     error InSettlementWindow();
@@ -374,6 +386,10 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     function _settleRound() internal {
         uint256 round = currentRound;
 
+        // 4th pot source: harvest active-escrow yield BEFORE the split so
+        // this round's winners benefit from this round's accrual.
+        _harvestYield(round);
+
         bytes6 winningString = _buildWinningString();
         roundWinningString[round] = winningString;
         emit PositionFrozen(round, positionCounter, winningString);
@@ -382,7 +398,11 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             _findVerifiedWinners(round, winningString);
 
         _distributePotAndRecord(round, winners, winnerCount);
-        _processExpiredEntries(round);
+
+        // Registry post-settlement hook: ends yield weight for tickets whose
+        // run finished this round, and absorbs escrow of tickets whose claim
+        // window just lapsed (→ Ineligible).
+        IGameRegistry(gameRegistry).onRoundSettled(round);
 
         uint256 totalEntries =
             IGameRegistry(gameRegistry).getRoundEntrants(round).length;
@@ -517,32 +537,20 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Expires entries in GameRegistry whose lastEligibleRound < currentRound.
-     *      Also marks inactive entries whose claim window has closed.
+     * @dev Pull accrued active-escrow yield from the vault into the pot.
+     *      try/catch + failure-tolerant vault: settlement can never brick
+     *      on the yield path. Harvested ETH lands on this contract (vault
+     *      pays msg-caller) and is forwarded straight into PrizeEscrow.
      */
-    function _processExpiredEntries(uint256 settledRound) internal {
-        address[] memory entrants =
-            IGameRegistry(gameRegistry).getRoundEntrants(settledRound);
-
-        for (uint256 i = 0; i < entrants.length; i++) {
-            (
-                ,
-                ,
-                uint256 lastEligibleRound,
-                ,
-                ,
-                ,
-            ) = IGameRegistry(gameRegistry).getEntry(entrants[i], settledRound);
-
-            if (lastEligibleRound < currentRound) {
-                // Check if claim window has also closed
-                if (currentRound > lastEligibleRound + CLAIM_WINDOW_ROUNDS) {
-                    IGameRegistry(gameRegistry).markInactive(entrants[i], settledRound);
-                } else {
-                    IGameRegistry(gameRegistry).expireEntry(entrants[i], settledRound);
-                }
+    function _harvestYield(uint256 round) internal {
+        if (yieldVault == address(0)) return;
+        try ITimbYieldVault(yieldVault).harvest() returns (uint256 amount) {
+            if (amount > 0) {
+                currentAccumulatedRewards += amount;
+                IPrizeEscrow(prizeEscrow).deposit{value: amount}();
+                emit YieldHarvested(round, amount);
             }
-        }
+        } catch {}
     }
 
     // ─── Claims ───────────────────────────────────────────────────────────────
@@ -569,8 +577,37 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         hasClaimed[round][msg.sender] = true;
         gameUnclaimed_winningsPool -= payout;
 
-        IPrizeEscrow(prizeEscrow).pay(msg.sender, payout);
+        IPrizeEscrow(prizeEscrow).pay(msg.sender, payout, round);
         emit WinningsClaimed(msg.sender, round, payout);
+    }
+
+    /**
+     * @notice Recycle unclaimed winnings from a round whose claim window has
+     *         expired back into the live pot ("seeding from unclaimed
+     *         rounds"). The ETH never left PrizeEscrow — this is pure
+     *         bookkeeping between the unclaimed pool and the live pot.
+     */
+    function recycleUnclaimed(uint256 round) external onlyOwner {
+        if (roundWinningString[round] == bytes6(0)) revert RoundNotSettled(round);
+        // Claim window must be over (mirrors the claimWinnings deadline).
+        if (currentRound <= round + CLAIM_WINDOW_ROUNDS + 1) revert ClaimWindowExpired(round);
+        if (roundRecycled[round]) revert AlreadyClaimed(address(0), round);
+        roundRecycled[round] = true;
+
+        uint256 perWinner = roundPerWinnerAmount[round];
+        uint256 recycled  = 0;
+        address[] memory winners = roundWinners[round];
+        for (uint256 i = 0; i < winners.length; i++) {
+            if (!hasClaimed[round][winners[i]]) {
+                recycled += perWinner;
+                hasClaimed[round][winners[i]] = true; // permanently forfeit
+            }
+        }
+        if (recycled == 0) return;
+
+        gameUnclaimed_winningsPool -= recycled;
+        currentAccumulatedRewards  += recycled;
+        emit UnclaimedRecycled(round, recycled);
     }
 
     // ─── Pot Funding ──────────────────────────────────────────────────────────
@@ -677,6 +714,11 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         prizeEscrow = _escrow;
     }
 
+    /// @notice Set the yield vault (address(0) disables the yield source).
+    function setYieldVault(address _vault) external onlyOwner {
+        yieldVault = _vault;
+    }
+
     function setWinnersPerRound(uint256 _count) external onlyOwner {
         if (_count == 0) revert InvalidWinnersCount();
         winnersPerRound = _count;
@@ -697,4 +739,10 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     function unpauseEntries()    external onlyOwner { entriesPaused    = false; }
     function pauseSettlement()   external onlyOwner { settlementPaused = true; }
     function unpauseSettlement() external onlyOwner { settlementPaused = false; }
+
+    /// @dev Accept ETH only from the yield vault (harvest in-flight) — it is
+    ///      immediately forwarded to PrizeEscrow inside _harvestYield().
+    receive() external payable {
+        if (msg.sender != yieldVault) revert NotYieldVault();
+    }
 }

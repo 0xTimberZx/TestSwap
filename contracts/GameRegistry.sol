@@ -6,148 +6,168 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+interface ITimbYieldVault {
+    function register(uint256 ticketId, address token, uint256 amount) external;
+    function remove(uint256 ticketId) external;
+}
+
 /**
- * @title GameRegistry
- * @notice Prize game entry storage, escrow, and lifecycle management.
+ * @title GameRegistry (v2 — ticket model)
+ * @notice Prize game ticket storage, escrow, lifecycle, and yield-weight hooks.
  *
- * Responsibilities:
- *   - Store player entries (6-char strings) for each round.
- *   - Hold entry escrow (ETH or TIMBS) — ringfenced, never mingles
- *     with protocol revenue or prize pool.
- *   - Enforce string validation (6 chars, A-Z 0-9, no repeats, all caps).
- *   - Manage entry lifecycle: Pending → Active → Expired → Claimed/Inactive.
- *   - Handle entry replacement (all-in-one tx): old deposit transfers,
- *     old additional-round TIMBS kept as protocol sink.
- *   - Process principal refunds for expired entries.
- *   - Expose dual-layer verification for TimbPrize settlement.
+ * Ticket model:
+ *   - Every entry mints a Ticket with a globally unique id.
+ *   - One eligible live ticket per wallet, enforced via activeTicketOf.
+ *   - Replacement mints a NEW ticket; the senior ticket becomes Conceded and
+ *     stays visible, cross-linked (supersedes / supersededBy). The principal
+ *     moves onto the replacement; extra-round TIMBS on the conceded ticket is
+ *     already forfeited to the protocol sink (Treasury) and must be re-paid
+ *     for the replacement to carry extra rounds again.
+ *   - Tickets are indexed into EVERY round they are eligible for
+ *     (playRound..lastEligibleRound), fixing the v1 bug where extra-round
+ *     entries could never win or activate beyond their first round.
  *
- * Entry rules:
- *   - 1 entry per wallet per round (replaceable).
- *   - Entries set in round N play in round N+1.
- *   - Initial entry cost: ETH (address(0)) or TIMBS — always refundable.
- *   - Additional rounds: TIMBS only, non-refundable, protocol sink.
- *   - ETH cost derived from TIMBSToken.entryCostTIMBS at entry time.
- *   - No repeating characters in string.
- *   - Claim window: 2 rounds after lastEligibleRound.
+ * Ticket statuses:
+ *   Pending    — waiting for its play round to begin.
+ *   Active     — counted into the round; escrow weight registered in the
+ *                yield vault (earning for the prize pool); eligible to win.
+ *                After lastEligibleRound passes it is refundable (derived,
+ *                not a stored status) within the claim window.
+ *   Conceded   — replaced; ineligible to win; principal moved to replacement;
+ *                stays visible tethered beneath the replacement.
+ *   Ineligible — claim window lapsed unclaimed (escrow absorbed to protocol
+ *                sink) or admin-flagged ticket/game inconsistency.
+ *   Cancelled  — voluntary pre-round withdrawal; principal refunded; no tally.
+ *                Reported as Closed (derived) once its play round begins.
+ *   Closed     — principal withdrawn; terminal; hidden from active lists.
  *
- * Security (defiSKILL):
- *   - ReentrancyGuard on all state-changing functions.
- *   - msg.sender verified as entry owner before any escrow operation.
- *   - ETH held as msg.value, TIMBS via safeTransferFrom.
- *   - Additional-round TIMBS sent directly to protocol sink address
- *     (never held in this contract).
- *   - Pre-flight approval check on replacement before any state changes.
- *   - Emergency pause on new entries — refunds always available.
- *   - Only TimbPrize (authorised) can update entry status at settlement.
+ * Yield hooks (TimbYieldVault):
+ *   - Weight registered when a ticket becomes Active, removed the moment it
+ *     stops being eligible (conceded / expired / ineligible / refunded).
+ *   - Principal NEVER moves to the vault — weight is bookkeeping only; the
+ *     vault pays yield to the prize pot from its own treasury-funded reserve.
+ *   - All vault calls are try/catch guarded so the game can never brick on
+ *     vault failure.
+ *
+ * Security:
+ *   - ReentrancyGuard on all state-changing user functions.
+ *   - Escrow ring-fenced: ETH/TIMBS held here equals the sum of live +
+ *     refundable ticket principal; never mingles with protocol revenue.
+ *   - Only TimbPrize can drive round lifecycle (activate / settle hooks).
+ *   - Emergency pause blocks new/replacement tickets; refunds & cancels
+ *     always available.
  *
  * Deployment:
- *   1. Deploy GameRegistry(timbsToken, protocolSink, timbPrize)
- *   2. setEntryCostParams(entryCostTIMBS, ethCostWei)
- *   3. timbPrize.setGameRegistry(address(this))
- *   4. Verify on Sourcify
+ *   1. Deploy GameRegistry(timbsToken, protocolSink, timbPrize?)
+ *   2. setEntryCosts(1000e18, 0.0001e18)
+ *   3. setYieldVault(vault); vault.setGameRegistry(this)
+ *   4. timbPrize.setGameRegistry(this)
  */
 contract GameRegistry is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ─── Types ───────────────────────────────────────────────────────────────
 
-    enum EntryStatus { Pending, Active, Expired, Claimed, Inactive }
+    enum TicketStatus { Pending, Active, Conceded, Ineligible, Cancelled, Closed }
 
-    /// @dev address(0) = ETH entry, any other address = token entry.
-    struct EntryData {
-        bytes6      string6;           // 6-char alphanumeric entry string
-        uint256     entryRound;        // Round in which entry was submitted
-        uint256     lastEligibleRound; // Last round this entry plays
-        uint256     escrowAmount;      // Principal held (ETH wei or TIMBS wei)
-        address     escrowToken;       // address(0) = ETH, else token address
-        EntryStatus status;
-        bool        exists;            // Guard for uninitialized reads
+    struct Ticket {
+        uint256      id;
+        address      owner;
+        bytes6       string6;           // 6-char alphanumeric entry string
+        uint256      playRound;         // first round this ticket plays
+        uint256      lastEligibleRound; // last round this ticket plays
+        uint256      escrowAmount;      // principal held (ETH wei or TIMBS wei)
+        address      escrowToken;       // address(0) = ETH, else TIMBS
+        TicketStatus status;
+        uint256      supersedes;        // conceded ancestor id (0 = none)
+        uint256      supersededBy;      // replacement id (0 = live end of chain)
+        uint256      createdAt;         // block timestamp at mint
     }
+
+    // ─── Constants ───────────────────────────────────────────────────────────
+
+    /// @notice Cap on extra rounds per ticket — bounds the round-index loop.
+    uint256 public constant MAX_EXTRA_ROUNDS = 12;
+
+    /// @notice Refund claim window after lastEligibleRound (in rounds).
+    uint256 public constant CLAIM_WINDOW_ROUNDS = 2;
 
     // ─── State ───────────────────────────────────────────────────────────────
 
     /// @notice TIMBS token.
     IERC20 public immutable timbsToken;
 
-    /// @notice Protocol sink — receives additional-round TIMBS (out of circulation).
+    /// @notice Protocol sink (Treasury) — receives extra-round TIMBS and
+    ///         absorbed escrow from claim-window-lapsed tickets.
     address public protocolSink;
 
-    /// @notice TimbPrize — only address allowed to call settlement updates.
+    /// @notice TimbPrize — only address allowed to drive round lifecycle.
     address public timbPrize;
 
-    /// @notice Entry cost in TIMBS (governance-set, mirrors TIMBSToken.entryCostTIMBS).
+    /// @notice TimbYieldVault — receives active-escrow weight updates.
+    address public yieldVault;
+
+    /// @notice Entry cost in TIMBS (governance-set).
     uint256 public entryCostTIMBS;
 
-    /// @notice Entry cost in ETH wei (derived from TIMBS price, owner-updatable).
+    /// @notice Entry cost in ETH wei (governance-set).
     uint256 public entryCostETH;
 
-    /// @notice Additional round cost = entryCostTIMBS × N extra rounds.
-    ///         Derived — not stored separately.
-
-    /// @notice Current active round number (set by TimbPrize).
+    /// @notice Current active round number (pushed by TimbPrize).
     uint256 public currentRound;
 
-    /// @notice Emergency pause — blocks new entries, refunds always available.
+    /// @notice Emergency pause — blocks new tickets; refunds always available.
     bool public paused;
 
-    /// @notice wallet → round → EntryData.
-    mapping(address => mapping(uint256 => EntryData)) public entries;
+    /// @notice Next ticket id (first ticket = 1; 0 = null).
+    uint256 public nextTicketId = 1;
 
-    /// @notice round → string → wallets that submitted that string.
-    ///         Used for settlement winner lookup.
-    mapping(uint256 => mapping(bytes6 => address[])) public stringEntrants;
+    /// @notice ticket id → ticket.
+    mapping(uint256 => Ticket) public tickets;
 
-    /// @notice wallet → rounds they have active entries in (for history).
-    mapping(address => uint256[]) public playerRounds;
+    /// @notice wallet → its current live ticket id (0 = none).
+    mapping(address => uint256) public activeTicketOf;
 
-    /// @notice round → all wallets that submitted entries.
+    /// @notice wallet → all ticket ids ever minted (history, incl. terminal).
+    mapping(address => uint256[]) private _ticketsOf;
+
+    /// @notice wallet → round → the ticket id eligible for that round.
+    mapping(address => mapping(uint256 => uint256)) public ticketAt;
+
+    /// @notice round → wallets with a ticket eligible in that round (deduped).
     mapping(uint256 => address[]) public roundEntrants;
 
-    /// @notice round → wallet → index in roundEntrants (for dedup check).
+    /// @notice round → wallet → already in roundEntrants.
     mapping(uint256 => mapping(address => bool)) public hasEntryInRound;
+
+    /// @notice round → string → wallets that hold that string for the round.
+    ///         Stale rows (conceded/replaced) are filtered at verification.
+    mapping(uint256 => mapping(bytes6 => address[])) public stringEntrants;
 
     // ─── Events ──────────────────────────────────────────────────────────────
 
-    event EntrySubmitted(
-        address indexed player,
-        uint256 indexed playRound,
+    event TicketMinted(
+        uint256 indexed ticketId,
+        address indexed owner,
         bytes6  string6,
+        uint256 playRound,
+        uint256 lastEligibleRound,
         uint256 escrowAmount,
         address escrowToken,
-        uint256 lastEligibleRound
+        uint256 supersedes
     );
-    event EntryReplaced(
-        address indexed player,
-        uint256 indexed playRound,
-        bytes6  oldString,
-        bytes6  newString,
-        uint256 additionalTimbs
-    );
-    event EntryStatusUpdated(
-        address indexed player,
-        uint256 indexed round,
-        EntryStatus newStatus
-    );
-    event EscrowRefunded(
-        address indexed player,
-        uint256 indexed round,
-        uint256 amount,
-        address token
-    );
-    event AdditionalRoundSinked(
-        address indexed player,
-        uint256 timbsAmount
-    );
-    event EntryCancelled(
-        address indexed player,
-        uint256 indexed round,
-        uint256 refundAmount,
-        address escrowToken
-    );
+    event TicketActivated(uint256 indexed ticketId, uint256 indexed round);
+    event TicketConceded(uint256 indexed oldTicketId, uint256 indexed newTicketId);
+    event TicketCancelled(uint256 indexed ticketId, uint256 refundAmount, address escrowToken);
+    event TicketExpired(uint256 indexed ticketId, uint256 indexed round);
+    event TicketClosed(uint256 indexed ticketId, uint256 refundAmount, address escrowToken);
+    event TicketIneligible(uint256 indexed ticketId, uint256 absorbedAmount, address escrowToken);
+    event ExtraRoundsSunk(address indexed player, uint256 indexed ticketId, uint256 timbsAmount);
     event EntryCostUpdated(uint256 timbsCost, uint256 ethCost);
     event CurrentRoundUpdated(uint256 round);
     event TimbPrizeSet(address indexed timbPrize);
     event ProtocolSinkSet(address indexed sink);
+    event YieldVaultSet(address indexed vault);
     event Paused(address indexed by);
     event Unpaused(address indexed by);
 
@@ -157,19 +177,22 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     error ZeroAmount();
     error ContractPaused();
     error NotTimbPrize();
-    error InvalidStringLength(uint256 length);
     error InvalidCharacter(bytes1 char);
     error RepeatingCharacter(bytes1 char);
-    error ActiveEntryExists(uint256 playRound);
-    error NoEntryFound(address player, uint256 round);
-    error EntryNotExpired(EntryStatus status);
+    error ActiveTicketExists(uint256 ticketId);
+    error NoLiveTicket(address player);
+    error TicketNotFound(uint256 ticketId);
+    error NotTicketOwner(uint256 ticketId, address caller);
+    error TicketNotPending(TicketStatus status);
+    error TicketNotReplaceable(TicketStatus status);
+    error TicketNotRefundable(TicketStatus status);
+    error TicketStillEligible(uint256 lastEligibleRound, uint256 currentRound);
     error ClaimWindowClosed(uint256 lastEligibleRound, uint256 currentRound);
+    error RoundAlreadyStarted(uint256 playRound, uint256 currentRound);
     error WrongEscrowAmount(uint256 sent, uint256 required);
     error InsufficientAllowance(uint256 required, uint256 available);
-    error EntryNotActive(EntryStatus status);
-    error AlreadyRefunded();
-    error EntryNotPending(EntryStatus status);
-    error RoundAlreadyStarted(uint256 playRound, uint256 currentRound);
+    error TooManyExtraRounds(uint256 requested, uint256 max);
+    error EthTransferFailed();
 
     // ─── Modifiers ───────────────────────────────────────────────────────────
 
@@ -185,103 +208,122 @@ contract GameRegistry is Ownable, ReentrancyGuard {
 
     // ─── Constructor ─────────────────────────────────────────────────────────
 
-    /**
-     * @param _timbsToken    TIMBS ERC-20 address.
-     * @param _protocolSink  Address that receives additional-round TIMBS sinks.
-     * @param _timbPrize     TimbPrize contract (can be set later via setTimbPrize).
-     */
     constructor(
         address _timbsToken,
         address _protocolSink,
         address _timbPrize
     ) Ownable(msg.sender) {
-        if (_timbsToken    == address(0)) revert ZeroAddress();
-        if (_protocolSink  == address(0)) revert ZeroAddress();
+        if (_timbsToken   == address(0)) revert ZeroAddress();
+        if (_protocolSink == address(0)) revert ZeroAddress();
         timbsToken   = IERC20(_timbsToken);
         protocolSink = _protocolSink;
         timbPrize    = _timbPrize; // allowed address(0) at deploy
     }
 
-    // ─── String Validation ────────────────────────────────────────────────────
+    // ─── String Validation ───────────────────────────────────────────────────
 
-    /**
-     * @notice Validates a 6-char bytes6 entry string.
-     * @dev Rules:
-     *   - Exactly 6 bytes (enforced by bytes6 type).
-     *   - Each character: A-Z (0x41–0x5A) or 0-9 (0x30–0x39).
-     *   - No repeating characters.
-     *   - All uppercase (frontend enforces, contract validates).
-     * @param s The bytes6 string to validate.
-     */
+    /// @dev 6 chars, A-Z / 0-9 only, no repeats (bitmask over 36 symbols).
     function _validateString(bytes6 s) internal pure {
-        // Track seen characters via bitmask (36 possible chars: A-Z=26, 0-9=10)
         uint64 seen = 0;
-
         for (uint256 i = 0; i < 6; i++) {
             bytes1 c = s[i];
-
-            // Must be A-Z or 0-9
-            bool isUpper  = c >= 0x41 && c <= 0x5A; // A-Z
-            bool isDigit  = c >= 0x30 && c <= 0x39; // 0-9
+            bool isUpper = c >= 0x41 && c <= 0x5A;
+            bool isDigit = c >= 0x30 && c <= 0x39;
             if (!isUpper && !isDigit) revert InvalidCharacter(c);
-
-            // Map to index 0-35: A=0..Z=25, 0=26..9=35
             uint256 idx = isUpper
                 ? uint256(uint8(c)) - 0x41
                 : uint256(uint8(c)) - 0x30 + 26;
-
-            // Check for repeat
             uint64 bit = uint64(1 << idx);
             if (seen & bit != 0) revert RepeatingCharacter(c);
             seen |= bit;
         }
     }
 
-    /**
-     * @notice Public view to validate a string before submitting.
-     * @return valid True if the string passes all validation rules.
-     * @return reason Empty string if valid, human-readable reason if not.
-     */
-    function validateString(bytes6 s)
-        external
-        pure
-        returns (bool valid, string memory reason)
-    {
-        // Check each char
-        uint64 seen = 0;
-        for (uint256 i = 0; i < 6; i++) {
-            bytes1 c = s[i];
-            bool isUpper = c >= 0x41 && c <= 0x5A;
-            bool isDigit = c >= 0x30 && c <= 0x39;
-            if (!isUpper && !isDigit) {
-                return (false, "Invalid character: must be A-Z or 0-9");
-            }
-            uint256 idx = isUpper
-                ? uint256(uint8(c)) - 0x41
-                : uint256(uint8(c)) - 0x30 + 26;
-            uint64 bit = uint64(1 << idx);
-            if (seen & bit != 0) {
-                return (false, "Repeating character not allowed");
-            }
-            seen |= bit;
-        }
-        return (true, "");
+    // ─── Internal: Ticket Lifecycle Helpers ──────────────────────────────────
+
+    /// @dev True while a ticket blocks its wallet from minting another.
+    function _isLive(Ticket storage t) internal view returns (bool) {
+        if (t.status == TicketStatus.Pending) return true;
+        if (t.status == TicketStatus.Active && currentRound <= t.lastEligibleRound) return true;
+        return false;
     }
 
-    // ─── Entry Submission ─────────────────────────────────────────────────────
+    /// @dev Mints a ticket and indexes it into every round it plays.
+    function _mintTicket(
+        address owner_,
+        bytes6  string6,
+        uint256 playRound,
+        uint256 lastRound,
+        uint256 escrowAmount,
+        address escrowToken,
+        uint256 supersedes
+    ) internal returns (uint256 id) {
+        id = nextTicketId++;
+        tickets[id] = Ticket({
+            id:                id,
+            owner:             owner_,
+            string6:           string6,
+            playRound:         playRound,
+            lastEligibleRound: lastRound,
+            escrowAmount:      escrowAmount,
+            escrowToken:       escrowToken,
+            status:            TicketStatus.Pending,
+            supersedes:        supersedes,
+            supersededBy:      0,
+            createdAt:         block.timestamp
+        });
+        activeTicketOf[owner_] = id;
+        _ticketsOf[owner_].push(id);
+
+        for (uint256 r = playRound; r <= lastRound; r++) {
+            ticketAt[owner_][r] = id;
+            stringEntrants[r][string6].push(owner_);
+            if (!hasEntryInRound[r][owner_]) {
+                hasEntryInRound[r][owner_] = true;
+                roundEntrants[r].push(owner_);
+            }
+        }
+
+        emit TicketMinted(
+            id, owner_, string6, playRound, lastRound,
+            escrowAmount, escrowToken, supersedes
+        );
+    }
+
+    /// @dev Vault weight on — never bricks the game on vault failure.
+    function _vaultRegister(uint256 ticketId, address token, uint256 amount) internal {
+        if (yieldVault == address(0) || amount == 0) return;
+        try ITimbYieldVault(yieldVault).register(ticketId, token, amount) {} catch {}
+    }
+
+    /// @dev Vault weight off — idempotent, never bricks the game.
+    function _vaultRemove(uint256 ticketId) internal {
+        if (yieldVault == address(0)) return;
+        try ITimbYieldVault(yieldVault).remove(ticketId) {} catch {}
+    }
+
+    /// @dev Pay out ETH or TIMBS principal.
+    function _payEscrow(address to, address token, uint256 amount) internal {
+        if (amount == 0) return;
+        if (token == address(0)) {
+            (bool ok,) = payable(to).call{value: amount}("");
+            if (!ok) revert EthTransferFailed();
+        } else {
+            IERC20(token).safeTransfer(to, amount);
+        }
+    }
+
+    // ─── Submit Entry (mint ticket) ──────────────────────────────────────────
 
     /**
-     * @notice Submit a new entry for the next round.
-     * @dev Entries set in currentRound play in currentRound + 1.
-     *      ETH entries: send msg.value == entryCostETH.
-     *      TIMBS entries: approve this contract for entryCostTIMBS first.
-     *      Additional rounds: must also approve
-     *        extraRounds × entryCostTIMBS additional TIMBS.
-     *
-     * @param string6       6-char entry string (A-Z, 0-9, no repeats, uppercase).
-     * @param useETH        True = pay initial cost in ETH, false = TIMBS.
-     * @param extraRounds   Additional rounds to keep string active beyond N+1.
-     *                      Each costs entryCostTIMBS TIMBS (non-refundable).
+     * @notice Mint a ticket for the next round.
+     * @dev One eligible live ticket per wallet — enforced across rounds, not
+     *      just per-round. ETH entries: msg.value >= entryCostETH (excess
+     *      refunded). TIMBS entries: approve entryCostTIMBS first. Extra
+     *      rounds: TIMBS only, forfeited to the protocol sink, non-refundable.
+     * @param string6     6-char entry string (A-Z / 0-9, no repeats).
+     * @param useETH      True = principal in ETH, false = TIMBS.
+     * @param extraRounds Rounds beyond the first (≤ MAX_EXTRA_ROUNDS).
      */
     function submitEntry(
         bytes6  string6,
@@ -293,353 +335,288 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         nonReentrant
         whenNotPaused
     {
-        uint256 playRound = currentRound + 1;
-
-        // Must not have an active entry for the play round
-        if (entries[msg.sender][playRound].exists) {
-            if (entries[msg.sender][playRound].status == EntryStatus.Active ||
-                entries[msg.sender][playRound].status == EntryStatus.Pending) {
-                revert ActiveEntryExists(playRound);
-            }
+        if (extraRounds > MAX_EXTRA_ROUNDS) {
+            revert TooManyExtraRounds(extraRounds, MAX_EXTRA_ROUNDS);
         }
 
-        // Validate string
+        // One eligible live ticket per wallet.
+        uint256 liveId = activeTicketOf[msg.sender];
+        if (liveId != 0 && _isLive(tickets[liveId])) {
+            revert ActiveTicketExists(liveId);
+        }
+
         _validateString(string6);
 
-        // Handle initial escrow
+        uint256 playRound = currentRound + 1;
         uint256 escrowAmount;
         address escrowToken;
 
         if (useETH) {
-            if (msg.value == 0 || msg.value < entryCostETH) {
+            // `<` alone also covers the free-entry (cost 0) case correctly.
+            if (msg.value < entryCostETH) {
                 revert WrongEscrowAmount(msg.value, entryCostETH);
             }
             escrowAmount = entryCostETH;
             escrowToken  = address(0);
-            // Refund overpayment
             if (msg.value > entryCostETH) {
                 (bool ok,) = payable(msg.sender).call{value: msg.value - entryCostETH}("");
-                require(ok, "ETH refund failed");
+                if (!ok) revert EthTransferFailed();
             }
         } else {
             if (msg.value > 0) {
-                // Refund any ETH sent with TIMBS entry
                 (bool ok,) = payable(msg.sender).call{value: msg.value}("");
-                require(ok, "ETH refund failed");
+                if (!ok) revert EthTransferFailed();
             }
             escrowAmount = entryCostTIMBS;
             escrowToken  = address(timbsToken);
             timbsToken.safeTransferFrom(msg.sender, address(this), entryCostTIMBS);
         }
 
-        // Handle additional rounds — TIMBS only, sent to protocol sink
+        uint256 id = _mintTicket(
+            msg.sender, string6, playRound, playRound + extraRounds,
+            escrowAmount, escrowToken, 0
+        );
+
+        // Extra rounds — TIMBS only, straight to the protocol sink.
         uint256 additionalCost = extraRounds * entryCostTIMBS;
         if (additionalCost > 0) {
             timbsToken.safeTransferFrom(msg.sender, protocolSink, additionalCost);
-            emit AdditionalRoundSinked(msg.sender, additionalCost);
+            emit ExtraRoundsSunk(msg.sender, id, additionalCost);
         }
-
-        uint256 lastEligibleRound = playRound + extraRounds;
-
-        // Store entry
-        entries[msg.sender][playRound] = EntryData({
-            string6:           string6,
-            entryRound:        currentRound,
-            lastEligibleRound: lastEligibleRound,
-            escrowAmount:      escrowAmount,
-            escrowToken:       escrowToken,
-            status:            EntryStatus.Pending,
-            exists:            true
-        });
-
-        // Index for settlement lookup
-        if (!hasEntryInRound[playRound][msg.sender]) {
-            stringEntrants[playRound][string6].push(msg.sender);
-            roundEntrants[playRound].push(msg.sender);
-            hasEntryInRound[playRound][msg.sender] = true;
-            playerRounds[msg.sender].push(playRound);
-        } else {
-            // String changed — update stringEntrants index
-            // (old string remains in old bucket — settlement checks current entry)
-            stringEntrants[playRound][string6].push(msg.sender);
-        }
-
-        emit EntrySubmitted(
-            msg.sender,
-            playRound,
-            string6,
-            escrowAmount,
-            escrowToken,
-            lastEligibleRound
-        );
     }
 
-    // ─── Entry Replacement ────────────────────────────────────────────────────
+    // ─── Replace Entry (concede + mint) ──────────────────────────────────────
 
     /**
-     * @notice Replace an existing entry string and/or round count.
-     * @dev All-in-one atomic transaction:
-     *   1. Pre-flight: verify contract can pull new fees.
-     *   2. Old initial deposit transfers to new string entry.
-     *   3. Old additional-round TIMBS already in sink — no action needed.
-     *   4. New string set on-chain.
-     *   5. New additional-round TIMBS pulled to sink if extraRounds > 0.
-     *
-     *      Pre-flight check happens BEFORE any state changes (defiSKILL).
-     *
-     * @param newString6  New 6-char string.
-     * @param extraRounds New total extra rounds beyond N+1.
+     * @notice Replace the wallet's live ticket with a new one (same string
+     *         allowed). The senior ticket becomes Conceded — visible, tethered
+     *         beneath the replacement, ineligible to win. Its principal moves
+     *         onto the new ticket. Extra-round TIMBS must be paid again for
+     *         the replacement to carry extra rounds.
+     * @param newString6  New (or same) 6-char entry string.
+     * @param extraRounds Extra rounds for the NEW ticket (paid fresh in TIMBS).
      */
     function replaceEntry(bytes6 newString6, uint256 extraRounds)
         external
-        payable
         nonReentrant
         whenNotPaused
     {
-        uint256 playRound = currentRound + 1;
-        EntryData storage entry = entries[msg.sender][playRound];
+        uint256 oldId = activeTicketOf[msg.sender];
+        if (oldId == 0) revert NoLiveTicket(msg.sender);
 
-        if (!entry.exists) revert NoEntryFound(msg.sender, playRound);
-        if (entry.status != EntryStatus.Pending &&
-            entry.status != EntryStatus.Active) {
-            revert EntryNotActive(entry.status);
+        Ticket storage old = tickets[oldId];
+        if (!_isLive(old)) revert TicketNotReplaceable(old.status);
+
+        if (extraRounds > MAX_EXTRA_ROUNDS) {
+            revert TooManyExtraRounds(extraRounds, MAX_EXTRA_ROUNDS);
         }
-
-        // Validate new string
         _validateString(newString6);
 
-        // Pre-flight: verify we can pull additional-round TIMBS if needed
+        // Pre-flight the extra-round TIMBS pull before any state changes.
         uint256 additionalCost = extraRounds * entryCostTIMBS;
         if (additionalCost > 0) {
-            uint256 allowance = timbsToken.allowance(msg.sender, address(this));
-            if (allowance < additionalCost) {
-                revert InsufficientAllowance(additionalCost, allowance);
+            uint256 allowance_ = timbsToken.allowance(msg.sender, address(this));
+            if (allowance_ < additionalCost) {
+                revert InsufficientAllowance(additionalCost, allowance_);
             }
         }
 
-        bytes6 oldString = entry.string6;
+        // Concede the senior ticket; principal carries to the replacement.
+        uint256 principal = old.escrowAmount;
+        address token     = old.escrowToken;
+        old.status        = TicketStatus.Conceded;
+        old.escrowAmount  = 0;
+        _vaultRemove(oldId);
 
-        // Update string — initial deposit stays in escrow (transfers to new string)
-        entry.string6           = newString6;
-        entry.lastEligibleRound = playRound + extraRounds;
+        uint256 playRound = currentRound + 1;
+        uint256 newId = _mintTicket(
+            msg.sender, newString6, playRound, playRound + extraRounds,
+            principal, token, oldId
+        );
+        old.supersededBy = newId;
 
-        // Update string entrants index
-        stringEntrants[playRound][newString6].push(msg.sender);
-
-        // Pull new additional-round TIMBS to sink (old additional already in sink)
         if (additionalCost > 0) {
             timbsToken.safeTransferFrom(msg.sender, protocolSink, additionalCost);
-            emit AdditionalRoundSinked(msg.sender, additionalCost);
+            emit ExtraRoundsSunk(msg.sender, newId, additionalCost);
         }
 
-        emit EntryReplaced(
-            msg.sender,
-            playRound,
-            oldString,
-            newString6,
-            additionalCost
-        );
+        emit TicketConceded(oldId, newId);
     }
 
-    // ─── Escrow Refund ────────────────────────────────────────────────────────
+    // ─── Cancel (voluntary pre-round withdrawal) ─────────────────────────────
 
     /**
-     * @notice Claim principal escrow refund for an expired entry.
-     * @dev Available after entry's lastEligibleRound has passed AND
-     *      claim window (2 rounds) has not closed.
-     *      Caller must be the original entry owner.
-     * @param round The round the entry was playing in.
+     * @notice Cancel the wallet's Pending ticket before its round starts and
+     *         reclaim the principal immediately. The ticket becomes Cancelled
+     *         (no tally, ineligible) and reads as Closed once its play round
+     *         begins.
      */
-    function claimRefund(uint256 round) external nonReentrant {
-        EntryData storage entry = entries[msg.sender][round];
+    function cancelEntry() external nonReentrant {
+        uint256 id = activeTicketOf[msg.sender];
+        if (id == 0) revert NoLiveTicket(msg.sender);
 
-        if (!entry.exists) revert NoEntryFound(msg.sender, round);
-        if (entry.status == EntryStatus.Claimed ||
-            entry.status == EntryStatus.Inactive) {
-            revert AlreadyRefunded();
+        Ticket storage t = tickets[id];
+        if (t.status != TicketStatus.Pending) revert TicketNotPending(t.status);
+        if (t.playRound <= currentRound) {
+            revert RoundAlreadyStarted(t.playRound, currentRound);
         }
 
-        // Entry must be expired (past lastEligibleRound)
-        if (currentRound <= entry.lastEligibleRound) {
-            revert EntryNotExpired(entry.status);
-        }
+        uint256 amount = t.escrowAmount;
+        address token  = t.escrowToken;
+        t.status       = TicketStatus.Cancelled;
+        t.escrowAmount = 0;
+        activeTicketOf[msg.sender] = 0;
 
-        // Claim window: must be within 2 rounds of lastEligibleRound
-        uint256 claimDeadline = entry.lastEligibleRound + 2;
-        if (currentRound > claimDeadline) {
-            revert ClaimWindowClosed(entry.lastEligibleRound, currentRound);
-        }
-
-        uint256 amount = entry.escrowAmount;
-        address token  = entry.escrowToken;
-
-        entry.status       = EntryStatus.Claimed;
-        entry.escrowAmount = 0;
-
-        if (token == address(0)) {
-            // ETH refund
-            (bool ok,) = payable(msg.sender).call{value: amount}("");
-            require(ok, "ETH refund failed");
-        } else {
-            IERC20(token).safeTransfer(msg.sender, amount);
-        }
-
-        emit EscrowRefunded(msg.sender, round, amount, token);
+        _payEscrow(msg.sender, token, amount);
+        emit TicketCancelled(id, amount, token);
     }
 
-    // ─── Entry Cancellation (pre-round withdraw) ──────────────────────────────
+    // ─── Refund (post-expiry principal withdrawal) ───────────────────────────
 
     /**
-     * @notice Cancel a Pending entry BEFORE its round starts and reclaim the
-     *         escrowed principal immediately — no waiting for expiry.
-     * @dev Only Pending entries qualify: TimbPrize flips them to Active at
-     *      round start (activateRoundEntries), which closes the cancel window.
-     *      Additional-round TIMBS is already in the protocol sink and stays
-     *      non-refundable. Cancelled entries become Inactive, so winner
-     *      verification can never match them.
-     * @param round The play round the entry was queued for.
+     * @notice Withdraw the principal of a ticket whose run has ended, within
+     *         the claim window. Ticket becomes Closed (terminal, hidden).
+     * @param ticketId The ticket to close.
      */
-    function cancelEntry(uint256 round) external nonReentrant {
-        EntryData storage entry = entries[msg.sender][round];
-
-        if (!entry.exists) revert NoEntryFound(msg.sender, round);
-        if (entry.status != EntryStatus.Pending) {
-            revert EntryNotPending(entry.status);
+    function claimRefund(uint256 ticketId) external nonReentrant {
+        Ticket storage t = tickets[ticketId];
+        if (t.id == 0)               revert TicketNotFound(ticketId);
+        if (t.owner != msg.sender)   revert NotTicketOwner(ticketId, msg.sender);
+        // Active is the normal path; Pending covers a ticket whose activation
+        // was missed (safety hatch) — both hold escrow.
+        if (t.status != TicketStatus.Active && t.status != TicketStatus.Pending) {
+            revert TicketNotRefundable(t.status);
         }
-        // Belt-and-braces: a Pending entry always plays in a future round, but
-        // never allow cancelling once its round is the current one.
-        if (round <= currentRound) revert RoundAlreadyStarted(round, currentRound);
-
-        uint256 amount = entry.escrowAmount;
-        address token  = entry.escrowToken;
-
-        entry.status       = EntryStatus.Inactive;
-        entry.escrowAmount = 0;
-
-        if (amount > 0) {
-            if (token == address(0)) {
-                (bool ok,) = payable(msg.sender).call{value: amount}("");
-                require(ok, "ETH refund failed");
-            } else {
-                IERC20(token).safeTransfer(msg.sender, amount);
-            }
+        if (currentRound <= t.lastEligibleRound) {
+            revert TicketStillEligible(t.lastEligibleRound, currentRound);
+        }
+        if (currentRound > t.lastEligibleRound + CLAIM_WINDOW_ROUNDS) {
+            revert ClaimWindowClosed(t.lastEligibleRound, currentRound);
         }
 
-        emit EntryCancelled(msg.sender, round, amount, token);
-        emit EntryStatusUpdated(msg.sender, round, EntryStatus.Inactive);
+        uint256 amount = t.escrowAmount;
+        address token  = t.escrowToken;
+        t.status       = TicketStatus.Closed;
+        t.escrowAmount = 0;
+        _vaultRemove(ticketId);
+        if (activeTicketOf[msg.sender] == ticketId) activeTicketOf[msg.sender] = 0;
+
+        _payEscrow(msg.sender, token, amount);
+        emit TicketClosed(ticketId, amount, token);
     }
 
-    // ─── TimbPrize: Settlement Interface ──────────────────────────────────────
+    // ─── TimbPrize: Round Lifecycle ──────────────────────────────────────────
 
     /**
-     * @notice Activate entries for a round at round start.
-     * @dev Called by TimbPrize when a new round begins.
-     *      Sets all Pending entries for this round to Active.
-     *      Only TimbPrize can call.
-     * @param round The round number being activated.
-     * @param players Array of player addresses with entries in this round.
+     * @notice Activate Pending tickets at round start. Registers their escrow
+     *         weight in the yield vault — Active tickets earn for the pot.
      */
     function activateRoundEntries(uint256 round, address[] calldata players)
         external
         onlyTimbPrize
     {
         for (uint256 i = 0; i < players.length; i++) {
-            EntryData storage entry = entries[players[i]][round];
-            if (entry.exists && entry.status == EntryStatus.Pending) {
-                entry.status = EntryStatus.Active;
-                emit EntryStatusUpdated(players[i], round, EntryStatus.Active);
+            uint256 id = ticketAt[players[i]][round];
+            if (id == 0) continue;
+            Ticket storage t = tickets[id];
+            if (t.status == TicketStatus.Pending && t.playRound <= round) {
+                t.status = TicketStatus.Active;
+                _vaultRegister(id, t.escrowToken, t.escrowAmount);
+                emit TicketActivated(id, round);
             }
         }
     }
 
     /**
-     * @notice Mark an entry as expired after its lastEligibleRound passes.
-     * @dev Called by TimbPrize at round close for entries past their window.
+     * @notice Post-settlement hook, called once per settled round:
+     *         1. Tickets whose run ended this round stop earning yield and
+     *            free their wallet to enter again (refund window opens).
+     *         2. Tickets whose claim window just lapsed become Ineligible and
+     *            their unclaimed escrow is absorbed to the protocol sink.
      */
-    function expireEntry(address player, uint256 round)
-        external
-        onlyTimbPrize
-    {
-        EntryData storage entry = entries[player][round];
-        if (entry.exists && entry.status == EntryStatus.Active) {
-            entry.status = EntryStatus.Expired;
-            emit EntryStatusUpdated(player, round, EntryStatus.Expired);
+    function onRoundSettled(uint256 settledRound) external onlyTimbPrize {
+        // 1. End-of-run: eligibility ended with this round.
+        address[] storage ended = roundEntrants[settledRound];
+        for (uint256 i = 0; i < ended.length; i++) {
+            uint256 id = ticketAt[ended[i]][settledRound];
+            if (id == 0) continue;
+            Ticket storage t = tickets[id];
+            if (t.status == TicketStatus.Active &&
+                t.lastEligibleRound == settledRound) {
+                _vaultRemove(id);
+                if (activeTicketOf[t.owner] == id) activeTicketOf[t.owner] = 0;
+                emit TicketExpired(id, settledRound);
+            }
+        }
+
+        // 2. Claim-window lapse: lastEligibleRound == settledRound - 2 closes
+        //    now (refund window spans the two rounds after the run ends).
+        if (settledRound <= CLAIM_WINDOW_ROUNDS) return;
+        uint256 lapsedRound = settledRound - CLAIM_WINDOW_ROUNDS;
+        address[] storage lapsed = roundEntrants[lapsedRound];
+        for (uint256 i = 0; i < lapsed.length; i++) {
+            uint256 id = ticketAt[lapsed[i]][lapsedRound];
+            if (id == 0) continue;
+            Ticket storage t = tickets[id];
+            if (t.lastEligibleRound != lapsedRound) continue;
+            if (t.status != TicketStatus.Active &&
+                t.status != TicketStatus.Pending) continue;
+
+            uint256 amount = t.escrowAmount;
+            address token  = t.escrowToken;
+            t.status = TicketStatus.Ineligible;
+            _vaultRemove(id);
+            if (activeTicketOf[t.owner] == id) activeTicketOf[t.owner] = 0;
+
+            if (amount > 0) {
+                if (token == address(0)) {
+                    // Best-effort: never brick settlement on a sink transfer.
+                    (bool ok,) = payable(protocolSink).call{value: amount}("");
+                    if (ok) t.escrowAmount = 0;
+                } else {
+                    t.escrowAmount = 0;
+                    IERC20(token).safeTransfer(protocolSink, amount);
+                }
+            }
+            emit TicketIneligible(id, amount, token);
         }
     }
 
-    /**
-     * @notice Mark an entry as Inactive (claim window closed, no claim made).
-     * @dev Called by TimbPrize when unclaimed window expires.
-     */
-    function markInactive(address player, uint256 round)
-        external
-        onlyTimbPrize
-    {
-        EntryData storage entry = entries[player][round];
-        if (entry.exists && (
-            entry.status == EntryStatus.Expired ||
-            entry.status == EntryStatus.Active
-        )) {
-            // Unclaimed escrow — absorbed into protocol
-            // ETH escrow sent to protocolSink by TimbPrize after calling this
-            entry.status = EntryStatus.Inactive;
-            emit EntryStatusUpdated(player, round, EntryStatus.Inactive);
-        }
-    }
-
-    /**
-     * @notice Update current round number.
-     * @dev Called by TimbPrize at each round start.
-     */
+    /// @notice Update current round number — called by TimbPrize at round start.
     function setCurrentRound(uint256 round) external onlyTimbPrize {
         currentRound = round;
         emit CurrentRoundUpdated(round);
     }
 
-    // ─── Dual-Layer Verification ──────────────────────────────────────────────
+    // ─── Dual-Layer Verification (TimbPrize settlement) ──────────────────────
 
-    /**
-     * @notice Layer 1: Verify entry existed at round start.
-     * @param player  Wallet address.
-     * @param round   Round number to check.
-     * @return exists True if entry was submitted for this round.
-     * @return string6 The entry string (bytes6(0) if not found).
-     */
+    /// @notice Layer 1: a ticket existed for this player and round.
     function verifyEntryExisted(address player, uint256 round)
         external
         view
         returns (bool exists, bytes6 string6)
     {
-        EntryData storage entry = entries[player][round];
-        if (!entry.exists) return (false, bytes6(0));
-        return (true, entry.string6);
+        uint256 id = ticketAt[player][round];
+        if (id == 0) return (false, bytes6(0));
+        return (true, tickets[id].string6);
     }
 
-    /**
-     * @notice Layer 2: Verify entry is still valid at settlement.
-     * @param player  Wallet address.
-     * @param round   Round number.
-     * @return valid  True if entry is Active and round <= lastEligibleRound.
-     * @return string6 The current entry string.
-     */
+    /// @notice Layer 2: the ticket is Active and eligible for this round.
     function verifyEntryValid(address player, uint256 round)
         external
         view
         returns (bool valid, bytes6 string6)
     {
-        EntryData storage entry = entries[player][round];
-        if (!entry.exists)                          return (false, bytes6(0));
-        if (entry.status != EntryStatus.Active &&
-            entry.status != EntryStatus.Pending)   return (false, bytes6(0));
-        if (round > entry.lastEligibleRound)        return (false, bytes6(0));
-        return (true, entry.string6);
+        uint256 id = ticketAt[player][round];
+        if (id == 0) return (false, bytes6(0));
+        Ticket storage t = tickets[id];
+        if (t.status != TicketStatus.Active)                       return (false, bytes6(0));
+        if (round < t.playRound || round > t.lastEligibleRound)    return (false, bytes6(0));
+        return (true, t.string6);
     }
 
-    /**
-     * @notice Returns all wallets that submitted a given string for a round.
-     * @dev Used by TimbPrize at settlement to find winner candidates.
-     *      Returns raw list — settlement applies dual-layer filter.
-     */
+    /// @notice Wallets holding a given string for a round (raw; settlement
+    ///         applies the dual-layer filter over this list).
     function getStringEntrants(uint256 round, bytes6 string6)
         external
         view
@@ -648,9 +625,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         return stringEntrants[round][string6];
     }
 
-    /**
-     * @notice Returns all wallet addresses with entries in a round.
-     */
+    /// @notice Wallets with a ticket eligible in a round.
     function getRoundEntrants(uint256 round)
         external
         view
@@ -659,106 +634,129 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         return roundEntrants[round];
     }
 
+    // ─── Views: Tickets ──────────────────────────────────────────────────────
+
     /**
-     * @notice Returns identical entry count for a string in the next round.
-     * @dev Frontend calls this after entry submission to show collision count.
+     * @notice Status as it should be displayed: Cancelled reads as Closed
+     *         once its play round has begun (settlement rolled the round).
      */
-    function getIdenticalCount(bytes6 string6)
+    function effectiveStatus(uint256 ticketId) public view returns (TicketStatus) {
+        Ticket storage t = tickets[ticketId];
+        if (t.status == TicketStatus.Cancelled && currentRound >= t.playRound) {
+            return TicketStatus.Closed;
+        }
+        return t.status;
+    }
+
+    /// @notice One ticket + its display status.
+    function getTicket(uint256 ticketId)
         external
         view
-        returns (uint256)
+        returns (Ticket memory t, TicketStatus displayStatus)
     {
+        t = tickets[ticketId];
+        if (t.id == 0) revert TicketNotFound(ticketId);
+        displayStatus = effectiveStatus(ticketId);
+    }
+
+    /// @notice Every ticket a wallet has ever minted, with display statuses.
+    function getTicketsOf(address owner_)
+        external
+        view
+        returns (Ticket[] memory list, TicketStatus[] memory displayStatuses)
+    {
+        uint256[] storage ids = _ticketsOf[owner_];
+        list            = new Ticket[](ids.length);
+        displayStatuses = new TicketStatus[](ids.length);
+        for (uint256 i = 0; i < ids.length; i++) {
+            list[i]            = tickets[ids[i]];
+            displayStatuses[i] = effectiveStatus(ids[i]);
+        }
+    }
+
+    /// @notice Conceded ancestry of a ticket, newest → oldest.
+    function getTicketChain(uint256 ticketId)
+        external
+        view
+        returns (uint256[] memory ancestors)
+    {
+        // Count first (chain is bounded by replacements made; hard cap 64).
+        uint256 count;
+        uint256 cursor = tickets[ticketId].supersedes;
+        while (cursor != 0 && count < 64) { count++; cursor = tickets[cursor].supersedes; }
+
+        ancestors = new uint256[](count);
+        cursor = tickets[ticketId].supersedes;
+        for (uint256 i = 0; i < count; i++) {
+            ancestors[i] = cursor;
+            cursor = tickets[cursor].supersedes;
+        }
+    }
+
+    /// @notice Identical-string count for the next round (collision display).
+    function getIdenticalCount(bytes6 string6) external view returns (uint256) {
         return stringEntrants[currentRound + 1][string6].length;
     }
 
-    // ─── Owner: Config ────────────────────────────────────────────────────────
+    /// @notice Extra-round cost helper.
+    function additionalRoundCost(uint256 extraRounds) external view returns (uint256) {
+        return extraRounds * entryCostTIMBS;
+    }
 
-    /**
-     * @notice Update entry costs.
-     * @dev Called by owner when governance updates entryCostTIMBS or
-     *      when TIMBS/ETH price moves and ETH cost needs updating.
-     */
-    function setEntryCosts(uint256 _timbsCost, uint256 _ethCost)
-        external
-        onlyOwner
-    {
+    // ─── Owner: Config ───────────────────────────────────────────────────────
+
+    /// @notice Governance-driven entry costs (per eligible token).
+    function setEntryCosts(uint256 _timbsCost, uint256 _ethCost) external onlyOwner {
         if (_timbsCost == 0 || _ethCost == 0) revert ZeroAmount();
         entryCostTIMBS = _timbsCost;
         entryCostETH   = _ethCost;
         emit EntryCostUpdated(_timbsCost, _ethCost);
     }
 
-    /**
-     * @notice Set or update TimbPrize address.
-     */
     function setTimbPrize(address _timbPrize) external onlyOwner {
         if (_timbPrize == address(0)) revert ZeroAddress();
         timbPrize = _timbPrize;
         emit TimbPrizeSet(_timbPrize);
     }
 
-    /**
-     * @notice Update protocol sink address.
-     */
     function setProtocolSink(address _sink) external onlyOwner {
         if (_sink == address(0)) revert ZeroAddress();
         protocolSink = _sink;
         emit ProtocolSinkSet(_sink);
     }
 
+    function setYieldVault(address _vault) external onlyOwner {
+        yieldVault = _vault; // address(0) allowed = yield disabled
+        emit YieldVaultSet(_vault);
+    }
+
+    /// @notice Escape hatch for a ticket/game inconsistency ("contract error
+    ///         between ticket and game") — flags the ticket Ineligible.
+    ///         Escrow stays on the ticket for a follow-up adminAbsorbEscrow
+    ///         or manual resolution.
+    function adminMarkIneligible(uint256 ticketId) external onlyOwner {
+        Ticket storage t = tickets[ticketId];
+        if (t.id == 0) revert TicketNotFound(ticketId);
+        t.status = TicketStatus.Ineligible;
+        _vaultRemove(ticketId);
+        if (activeTicketOf[t.owner] == ticketId) activeTicketOf[t.owner] = 0;
+        emit TicketIneligible(ticketId, t.escrowAmount, t.escrowToken);
+    }
+
+    /// @notice Sweep escrow stranded on an Ineligible ticket to the sink
+    ///         (e.g. after an ETH send to the sink failed during settlement).
+    function adminAbsorbEscrow(uint256 ticketId) external onlyOwner {
+        Ticket storage t = tickets[ticketId];
+        if (t.id == 0) revert TicketNotFound(ticketId);
+        if (t.status != TicketStatus.Ineligible) revert TicketNotRefundable(t.status);
+        uint256 amount = t.escrowAmount;
+        if (amount == 0) revert ZeroAmount();
+        address token = t.escrowToken;
+        t.escrowAmount = 0;
+        _payEscrow(protocolSink, token, amount);
+        emit TicketIneligible(ticketId, amount, token);
+    }
+
     function pause()   external onlyOwner { paused = true;  emit Paused(msg.sender); }
     function unpause() external onlyOwner { paused = false; emit Unpaused(msg.sender); }
-
-    // ─── View Helpers ─────────────────────────────────────────────────────────
-
-    /**
-     * @notice Returns a player's entry for a specific round.
-     */
-    function getEntry(address player, uint256 round)
-        external
-        view
-        returns (EntryData memory)
-    {
-        return entries[player][round];
-    }
-
-    /**
-     * @notice Returns all rounds a player has entries in.
-     */
-    function getPlayerRounds(address player)
-        external
-        view
-        returns (uint256[] memory)
-    {
-        return playerRounds[player];
-    }
-
-    /**
-     * @notice Returns a player's full entry history.
-     */
-    function getPlayerHistory(address player)
-        external
-        view
-        returns (EntryData[] memory history)
-    {
-        uint256[] memory rounds = playerRounds[player];
-        history = new EntryData[](rounds.length);
-        for (uint256 i = 0; i < rounds.length; i++) {
-            history[i] = entries[player][rounds[i]];
-        }
-    }
-
-    /**
-     * @notice Returns additional round cost for N extra rounds.
-     */
-    function additionalRoundCost(uint256 extraRounds)
-        external
-        view
-        returns (uint256)
-    {
-        return extraRounds * entryCostTIMBS;
-    }
-
-    /// @dev Accept ETH for escrow (entry deposits).
-    receive() external payable {}
 }
