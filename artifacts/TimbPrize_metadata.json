@@ -115,6 +115,11 @@
 				"type": "error"
 			},
 			{
+				"inputs": [],
+				"name": "NotYieldVault",
+				"type": "error"
+			},
+			{
 				"inputs": [
 					{
 						"internalType": "address",
@@ -425,6 +430,25 @@
 				"anonymous": false,
 				"inputs": [
 					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "round",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "UnclaimedRecycled",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
 						"indexed": false,
 						"internalType": "uint256",
 						"name": "count",
@@ -457,6 +481,25 @@
 					}
 				],
 				"name": "WinningsClaimed",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "round",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "YieldHarvested",
 				"type": "event"
 			},
 			{
@@ -908,6 +951,19 @@
 				"type": "function"
 			},
 			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "round",
+						"type": "uint256"
+					}
+				],
+				"name": "recycleUnclaimed",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
 				"inputs": [],
 				"name": "renounceOwnership",
 				"outputs": [],
@@ -947,6 +1003,25 @@
 						"internalType": "uint256",
 						"name": "",
 						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "roundRecycled",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
 					}
 				],
 				"stateMutability": "view",
@@ -1183,6 +1258,19 @@
 				"type": "function"
 			},
 			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_vault",
+						"type": "address"
+					}
+				],
+				"name": "setYieldVault",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
 				"inputs": [],
 				"name": "settleSegment",
 				"outputs": [],
@@ -1287,6 +1375,23 @@
 				],
 				"stateMutability": "view",
 				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "yieldVault",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"stateMutability": "payable",
+				"type": "receive"
 			}
 		],
 		"devdoc": {
@@ -1400,11 +1505,17 @@
 				"protocolCutBps()": {
 					"notice": "Owner-set protocol cut % from round settlement (basis points)."
 				},
+				"recycleUnclaimed(uint256)": {
+					"notice": "Recycle unclaimed winnings from a round whose claim window has         expired back into the live pot (\"seeding from unclaimed         rounds\"). The ETH never left PrizeEscrow — this is pure         bookkeeping between the unclaimed pool and the live pot."
+				},
 				"roundPerWinnerAmount(uint256)": {
 					"notice": "Per-winner payout amount per round."
 				},
 				"roundPotAmount(uint256)": {
 					"notice": "Frozen pot for each round (post-protocol-cut)."
+				},
+				"roundRecycled(uint256)": {
+					"notice": "Whether a round's unclaimed winnings were recycled to the pot."
 				},
 				"roundRemainder(uint256)": {
 					"notice": "Remainder (r) for each round."
@@ -1427,6 +1538,9 @@
 				"segmentStartTime()": {
 					"notice": "Timestamp when the current segment started."
 				},
+				"setYieldVault(address)": {
+					"notice": "Set the yield vault (address(0) disables the yield source)."
+				},
 				"settler()": {
 					"notice": "Settler address — authorised to call settleSegment()."
 				},
@@ -1435,6 +1549,9 @@
 				},
 				"winnersPerRound()": {
 					"notice": "Number of winners per round (owner-configurable)."
+				},
+				"yieldVault()": {
+					"notice": "TimbYieldVault — active-escrow yield harvested into the pot         at each round settlement (address(0) = yield disabled)."
 				}
 			},
 			"notice": "Prize game round logic, scroll mechanic, settlement, and payouts. Architecture:   - Perpetual self-continuing rounds (6 hours each).   - 6 segments per round: 59:45 interaction + 0:15 settlement.   - positionCounter increments +1 per eligible swap (via nudgeScroll).   - Winning string = 6-char window in 36-char alphabet at freeze point.   - Freeze: keccak256(blockhash(block.number-1) + counter + roundNumber).   - Winners: exact 6-char match, equal split, remainder (r) snowballs.   - Prize ETH held in PrizeEscrow, paid on winner claim.   - Dual-layer verification at settlement via GameRegistry. Prize pool accounting (balance sheet):   currentAccumulatedRewards — live building pot   gameUnclaimed_winningsPool — documented winners pending claim   Entry escrow in GameRegistry — completely separate, never touched here Security:   - ReentrancyGuard on claimWinnings(), nudgeScroll(), settleSegment().   - Settler address (owner initially) is the only caller for settlement.   - Settlement reverts if called before segment timer expires.   - nudgeScroll() blocked during 0:15 settlement window.   - Winner claim verified via dual-layer GameRegistry check.   - ETH never held here — all prize ETH in PrizeEscrow.   - Per-function pause (entries, settlement pausable independently). Deployment:   1. Deploy PrizeEscrow → Deploy TimbPrize(escrow, registry, router)   2. registry.setTimbPrize(address(this))   3. router.setTimbPrize(address(this))   4. setEligibleRegistry(address)   5. Fund PrizeEscrow with initial ETH   6. startGame() — begins round #1",
@@ -1538,11 +1655,11 @@
 			]
 		},
 		"contracts/TimbPrize.sol": {
-			"keccak256": "0x34ae1e4312c67c44a0c86a43bc81fc67c2e8234ab7b6b10be914b2f1b69630b6",
+			"keccak256": "0x66f8d6bb08a3520d74c7d4a4fb0ac55b249380c5a6f2e0e297b2e5091c141f24",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e6158f6b3376adc1589277d50472561c2707a61e43f36ad267a3ce46dbe03b06",
-				"dweb:/ipfs/QmVoNNthAT6PBtZhz6pEDiBP1TgwfvLfXRbvG2NJSZE5pG"
+				"bzz-raw://ae80c381d9213a0a916b70f7b6aa1209b6cf20ca7c467887217426c71e4ccd01",
+				"dweb:/ipfs/QmULzJxGaiuupLCwPRF77CJG8zpv2C2teLBcGJ9rzNkr11"
 			]
 		}
 	},

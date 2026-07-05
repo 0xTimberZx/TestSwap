@@ -123,13 +123,13 @@
 		"compilationTarget": {
 			"contracts/TimbSwapRouter.sol": "IPair"
 		},
-		"evmVersion": "london",
+		"evmVersion": "shanghai",
 		"libraries": {},
 		"metadata": {
 			"bytecodeHash": "ipfs"
 		},
 		"optimizer": {
-			"enabled": true,
+			"enabled": false,
 			"runs": 200
 		},
 		"remappings": []
@@ -216,11 +216,11 @@
 			]
 		},
 		"contracts/TimbSwapRouter.sol": {
-			"keccak256": "0x312e4979faf74f705e3b927a105ec8e7cd85e7a7c0c2df6debc5e8919bd0f416",
+			"keccak256": "0x8ae186c503a0759aaf54d6d478568e14be41675a03f0cffa981f9257bab0fe2d",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://77a716ea477d6ade26d143348d915a7bb0d52a2e4d2e4f53f7ce212e3db9c9d1",
-				"dweb:/ipfs/QmeWVkpYhP256f4P26UwZvstyYkvnFR5ypuufZFKdwJaRq"
+				"bzz-raw://e288db10c2fc914c6b71fa8323df9ff80a88c3757162ac5e36816f9a87268b79",
+				"dweb:/ipfs/QmTpJAJSxE6rxUVwXWZqqpSgGdEBqfXxSFVn9AwifGLa7D"
 			]
 		}
 	},

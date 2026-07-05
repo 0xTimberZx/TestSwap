@@ -26,78 +26,6 @@
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
-					{
-						"internalType": "uint256",
-						"name": "round",
-						"type": "uint256"
-					}
-				],
-				"name": "expireEntry",
-				"outputs": [],
-				"stateMutability": "nonpayable",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
-					{
-						"internalType": "uint256",
-						"name": "round",
-						"type": "uint256"
-					}
-				],
-				"name": "getEntry",
-				"outputs": [
-					{
-						"internalType": "bytes6",
-						"name": "",
-						"type": "bytes6"
-					},
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					},
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					},
-					{
-						"internalType": "uint8",
-						"name": "",
-						"type": "uint8"
-					},
-					{
-						"internalType": "bool",
-						"name": "",
-						"type": "bool"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
 						"internalType": "uint256",
 						"name": "round",
 						"type": "uint256"
@@ -141,17 +69,12 @@
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "player",
-						"type": "address"
-					},
-					{
 						"internalType": "uint256",
-						"name": "round",
+						"name": "settledRound",
 						"type": "uint256"
 					}
 				],
-				"name": "markInactive",
+				"name": "onRoundSettled",
 				"outputs": [],
 				"stateMutability": "nonpayable",
 				"type": "function"
@@ -336,11 +259,11 @@
 			]
 		},
 		"contracts/TimbPrize.sol": {
-			"keccak256": "0x34ae1e4312c67c44a0c86a43bc81fc67c2e8234ab7b6b10be914b2f1b69630b6",
+			"keccak256": "0x66f8d6bb08a3520d74c7d4a4fb0ac55b249380c5a6f2e0e297b2e5091c141f24",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e6158f6b3376adc1589277d50472561c2707a61e43f36ad267a3ce46dbe03b06",
-				"dweb:/ipfs/QmVoNNthAT6PBtZhz6pEDiBP1TgwfvLfXRbvG2NJSZE5pG"
+				"bzz-raw://ae80c381d9213a0a916b70f7b6aa1209b6cf20ca7c467887217426c71e4ccd01",
+				"dweb:/ipfs/QmULzJxGaiuupLCwPRF77CJG8zpv2C2teLBcGJ9rzNkr11"
 			]
 		}
 	},

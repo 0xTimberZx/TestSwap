@@ -37,15 +37,21 @@
 		},
 		"gasEstimates": null,
 		"methodIdentifiers": {
-			"deposit()": "d0e30db0"
+			"harvest()": "4641257d"
 		}
 	},
 	"abi": [
 		{
 			"inputs": [],
-			"name": "deposit",
-			"outputs": [],
-			"stateMutability": "payable",
+			"name": "harvest",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "nonpayable",
 			"type": "function"
 		}
 	]

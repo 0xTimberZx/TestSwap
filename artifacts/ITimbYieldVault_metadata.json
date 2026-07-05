@@ -7,9 +7,15 @@
 		"abi": [
 			{
 				"inputs": [],
-				"name": "deposit",
-				"outputs": [],
-				"stateMutability": "payable",
+				"name": "harvest",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			}
 		],
@@ -26,7 +32,7 @@
 	},
 	"settings": {
 		"compilationTarget": {
-			"contracts/TimbTreasury.sol": "IPrizeEscrow"
+			"contracts/TimbPrize.sol": "ITimbYieldVault"
 		},
 		"evmVersion": "shanghai",
 		"libraries": {},
@@ -120,12 +126,12 @@
 				"dweb:/ipfs/QmadRjHbkicwqwwh61raUEapaVEtaLMcYbQZWs9gUkgj3u"
 			]
 		},
-		"contracts/TimbTreasury.sol": {
-			"keccak256": "0xc94ef1613cc2b0fb954cbd753a4b70137a85633b98a9b5b7c0ab62be1ec2800d",
+		"contracts/TimbPrize.sol": {
+			"keccak256": "0x66f8d6bb08a3520d74c7d4a4fb0ac55b249380c5a6f2e0e297b2e5091c141f24",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e03183290e722b3397170d2a3c42e10dfac1c978df89415f31fa889513decd93",
-				"dweb:/ipfs/QmTbLtH5u6BCuKyfiUWRVwHefu6gg9vJCfsqSg2pXk8J7a"
+				"bzz-raw://ae80c381d9213a0a916b70f7b6aa1209b6cf20ca7c467887217426c71e4ccd01",
+				"dweb:/ipfs/QmULzJxGaiuupLCwPRF77CJG8zpv2C2teLBcGJ9rzNkr11"
 			]
 		}
 	},
