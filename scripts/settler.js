@@ -27,7 +27,7 @@
 // and while a segment sits unsettled the whole game is stuck in its
 // settlement window (nudges revert on-chain). Rather than exit when the
 // segment isn't due, the run sleeps until the boundary and settles within
-// seconds of it (budgeted by SETTLER_LINGER_MINUTES, default 55, enforced
+// seconds of it (budgeted by SETTLER_LINGER_MINUTES, default 65, enforced
 // alongside the workflow's timeout + a concurrency group so overlapping
 // scheduled runs queue instead of double-settling).
 
@@ -87,8 +87,15 @@ const MAX_SETTLES_PER_RUN = 8;
 // until the segment boundary, settles within seconds of it, then looks for
 // the next boundary inside its budget. This turns an up-to-an-hour dead
 // window into a few seconds.
+//
+// The budget must EXCEED one full segment (59:45): a run landing right
+// after a boundary sees ~59.8 min remaining, and with a smaller budget it
+// bails instead of covering that boundary (observed live: 3454s remaining
+// vs the original 55-min budget). At 65 min every run is guaranteed to
+// linger to exactly one boundary, settle it, then hand off to the next
+// queued run.
 const LINGER_BUDGET_MS =
-  Number(process.env.SETTLER_LINGER_MINUTES || 55) * 60 * 1000;
+  Number(process.env.SETTLER_LINGER_MINUTES || 65) * 60 * 1000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
