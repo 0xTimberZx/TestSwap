@@ -61,6 +61,7 @@ let lastDigitCounters  = null;
 let activeSegIndex     = -1;   // 0-based index into digitCounters for the live segment
 let activeSegCounter   = null; // BigNumber — that segment's current counter
 let advanceCount       = 1;    // chosen batch size for the Advance panel
+let advanceInSettlement = false; // on-chain settlement window blocks nudges
 // True when the wallet already has a Pending/Active entry for the next play
 // round. The contract allows only one entry per round, so a second submit
 // reverts (UNPREDICTABLE_GAS_LIMIT) — we route to replaceEntry instead.
@@ -611,7 +612,13 @@ function renderAdvancePreview() {
   if (countEl) countEl.textContent = advanceCount;
 
   const submitBtn = document.getElementById("advance-submit-btn");
-  if (submitBtn && !submitBtn.disabled) submitBtn.textContent = `Advance ×${advanceCount}`;
+  if (submitBtn) {
+    // During the settlement window nudgeScroll reverts on-chain, so say WHY
+    // the button is off instead of leaving a stale "Advance ×N" label.
+    submitBtn.textContent = advanceInSettlement
+      ? "Settling — opens next segment"
+      : `Advance ×${advanceCount}`;
+  }
 
   const previewEl = document.getElementById("advance-preview");
   const fromEl = previewEl?.querySelector(".ap-from");
@@ -631,11 +638,12 @@ function renderAdvancePreview() {
 }
 
 function updateAdvancePanel(inSettlement) {
+  advanceInSettlement = !!inSettlement;
   const panel = document.getElementById("advance-panel");
   if (!panel) return;
   panel.classList.toggle("hidden", !userAddress);
   const submitBtn = document.getElementById("advance-submit-btn");
-  if (submitBtn) submitBtn.disabled = !!inSettlement;
+  if (submitBtn) submitBtn.disabled = advanceInSettlement;
   renderAdvancePreview();
 }
 
