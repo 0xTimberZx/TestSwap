@@ -62,9 +62,11 @@ interface IEligibleTokenRegistry {
  *
  * Security:
  *   - ReentrancyGuard on claimWinnings(), nudgeScroll(), settleSegment().
- *   - Settler address (owner initially) is the only caller for settlement.
- *   - Settlement reverts if called before segment timer expires.
- *   - nudgeScroll() blocked during 0:15 settlement window.
+ *   - settleSegment() is PERMISSIONLESS — the timing guard (reverts before
+ *     the interaction window elapses) is what protects the game, not the
+ *     caller. The settler keeper remains as a liveness backstop.
+ *   - nudgeScroll() settles a due segment lazily instead of reverting, so
+ *     the game cannot stall in its settlement window while in use.
  *   - Winner claim verified via dual-layer GameRegistry check.
  *   - ETH never held here — all prize ETH in PrizeEscrow.
  *   - Per-function pause (entries, settlement pausable independently).
@@ -232,11 +234,8 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     error SettlingDigit();
 
     // ─── Modifiers ────────────────────────────────────────────────────────────
-
-    modifier onlySettler() {
-        if (msg.sender != settler) revert NotSettler();
-        _;
-    }
+    // (No onlySettler — settleSegment() is permissionless; `settler` remains
+    //  as the keeper's identity for ops/telemetry only.)
 
     modifier onlyRouter() {
         if (msg.sender != router) revert NotRouter();
@@ -296,7 +295,13 @@ contract TimbPrize is Ownable, ReentrancyGuard {
      * @notice Nudge the active digit +1.
      * @dev Only affects the current segment's digit counter.
      *      Global positionCounter also increments (for entropy + analytics).
-     *      Blocked during settlement window.
+     *
+     *      LAZY SETTLEMENT: if the segment's interaction window has already
+     *      elapsed, the nudge settles it first (locking the digit exactly as
+     *      the keeper would — no nudges landed since the boundary) and then
+     *      applies to the fresh segment. The game can never sit stuck in a
+     *      settlement window while someone is playing it; nudges only stay
+     *      blocked if settlement itself is paused by the owner.
      */
     function nudgeScroll()
         external
@@ -304,7 +309,10 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         onlyRouter
         whenGameStarted
     {
-        if (_isInSettlementWindow()) revert InSettlementWindow();
+        if (_isInSettlementWindow()) {
+            if (settlementPaused) revert InSettlementWindow();
+            _settleDueSegment();
+        }
         positionCounter++;
         segmentDigitCounter[currentSegment]++;
         emit ScrollNudged(positionCounter, currentRound, currentSegment);
@@ -355,12 +363,26 @@ contract TimbPrize is Ownable, ReentrancyGuard {
 
     // ─── Settlement ───────────────────────────────────────────────────────────
 
+    /**
+     * @notice Settle the current segment once its interaction window elapsed.
+     * @dev PERMISSIONLESS — the timing guard is what protects the game, not
+     *      the caller: nothing about the outcome depends on who lands this
+     *      transaction, so any wallet may unstick the game. The settler
+     *      keeper keeps running as a liveness backstop, and nudgeScroll
+     *      settles lazily too (see below), so the game can never stall in
+     *      its settlement window while it is being used.
+     */
     function settleSegment()
         external
         nonReentrant
-        onlySettler
         whenGameStarted
     {
+        _settleDueSegment();
+    }
+
+    /// @dev Shared by settleSegment() and the lazy path in nudgeScroll().
+    ///      Callers hold the reentrancy guard.
+    function _settleDueSegment() internal {
         if (settlementPaused) revert SettlementPaused();
 
         uint256 elapsed = block.timestamp - segmentStartTime;

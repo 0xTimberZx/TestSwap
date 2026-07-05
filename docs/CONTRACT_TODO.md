@@ -51,7 +51,11 @@ whose round hasn't started. **Needs GameRegistry redeploy:**
   "Update entry" so users can at least change a stuck Pending entry instead of
   hitting `UNPREDICTABLE_GAS_LIMIT` from the one-entry-per-round rule.
 
-## 2. Prize round stuck in "Settling…" (round not advancing)
+## 2. Prize round stuck in "Settling…" — RESOLVED (keeper + §9 fixes)
+
+> Settler keeper shipped (linger mode settles at the boundary), and §9's
+> permissionless + lazy settlement removes the dependency entirely once
+> §10 deploys. Kept below for the original analysis.
 
 - **Symptom:** Compete/landing show "Settling segment…" indefinitely; the
   segment countdown never runs because the round never advances on testnet.
@@ -81,7 +85,7 @@ whose round hasn't started. **Needs GameRegistry redeploy:**
     lazily on the next interaction, or make `settleSegment()` permissionless —
     that's the blockchain-level part.
 
-## 3. User-callable "Advance" (nudge) — CODE WRITTEN (router redeploy)
+## 3. User-callable "Advance" (nudge) — DEPLOYED (router 0xbD18…6F67)
 
 **Status:** `TimbSwapRouter.advanceScroll(count)` implemented (router is the
 address TimbPrize authorizes, so no TimbPrize change). count=1 = single nudge;
@@ -117,7 +121,7 @@ economics decision below still stands if you want to charge.
   `count` to cap gas). Emit per-nudge events so the scroll animation/order stays
   correct. Redeploy + update `config.js` + wire a batch stepper in the UI.
 
-## 5. Native ETH swaps — CODE WRITTEN, needs router redeploy
+## 5. Native ETH swaps — DEPLOYED (router 0xbD18…6F67)
 
 - **Status:** `TimbSwapRouter.sol` now has `swapExactETHForTokens` (payable) and
   `swapExactTokensForETH`, compile-verified on solc 0.8.24. The Swap page
@@ -147,7 +151,11 @@ economics decision below still stands if you want to charge.
    TIMBS→ETH, and one eligible swap with influence ON to confirm the nudge
    fires from the new router.
 
-## 6. `addLiquidity`/`addLiquidityETH` revert on a brand-new pair — CODE WRITTEN, needs router redeploy
+## 6. `addLiquidity`/`addLiquidityETH` revert on a brand-new pair — CODE WRITTEN, deploy via §10
+
+> Interim frontend workaround SHIPPED: the Swap page calls the factory's
+> permissionless `createPair` first for brand-new pools, so this works
+> today on the deployed router. §10's redeploy bakes it into the router.
 
 - **Symptom:** Adding liquidity for a token pair that has no pool yet fails
   gas estimation (`UNPREDICTABLE_GAS_LIMIT`); swaps on existing pairs are fine.
@@ -272,7 +280,7 @@ coordinated deploy. All three contracts compile clean on solc 0.8.24
 11. Old contracts: pause the old registry; drain old entries through it
     (cancel/refund) — escrow does not migrate.
 
-## 9. Keeper-bound settlement window — two live incidents, mitigated, contract fix open
+## 9. Keeper-bound settlement window — CODE WRITTEN (both fixes), deploy via §10
 
 The "15-second" settlement window's real duration is *until the settler
 lands a `settleSegment()`*. While it's open, `nudgeScroll` reverts
@@ -299,15 +307,58 @@ records `Prize:Settlement Overdue` (fail) to DebugHub when a window
 outlives its nominal 15s by 2+ minutes, so a stalled keeper is visible
 in exports instead of silent.
 
-**Permanent fix is contract-level (this file's actual scope):**
-- Make `settleSegment()` permissionless once `elapsed >= INTERACTION_WINDOW`
-  (drop `onlySettler`, keep the timing guard — it's the timing that
-  protects the game, not the caller), and/or
-- Lazy settlement: any first interaction (nudge/entry) after the boundary
-  triggers the settle inline, so the game can never stall while in use.
-  Requires TimbPrize redeploy; revisit at the next contract round.
+**Permanent fix — IMPLEMENTED in `TimbPrize.sol` (both halves):**
+- `settleSegment()` is now PERMISSIONLESS: `onlySettler` dropped, timing
+  guard kept (it's the timing that protects the game, not the caller).
+  The `settler` role remains as the keeper's identity only.
+- Lazy settlement: `nudgeScroll()` settles a due segment inline (locking
+  the digit exactly as the keeper would — no nudges landed since the
+  boundary) and applies the nudge to the fresh segment, so the game can
+  never stall in its settlement window while in use. Nudges only stay
+  blocked when settlement is owner-paused.
+- Frontend: the Advance button stays enabled through the window and reads
+  "Advance ×N — rolls the segment".
+Compile-verified on solc 0.8.24. **Deploy via §10's checklist** (TimbPrize
+redeploy; the keeper keeps running unchanged as a liveness backstop).
 
-## 10. (add future contract-level items here)
+## 10. THE KEEPER-INDEPENDENCE ROUND — TimbPrize v3 + Router redeploy (CODE WRITTEN)
+
+One coordinated deploy that clears everything still pending: §9 (both
+settlement fixes, TimbPrize) and §5/§6 (native-ETH liquidity + create-on-add,
+router — code merged since PR #13, never deployed). Both compile clean on
+solc 0.8.24 (router needs viaIR in Remix, per its header).
+
+### Deploy checklist (Remix, owner wallet, Arb Sepolia)
+
+1. **Router v6**: deploy `TimbSwapRouter` with the SAME constructor args as
+   the current one `(TimbSwapFactory, TimbTreasury, EligibleTokenRegistry,
+   <old prize — repointed in step 3>)`.
+2. **TimbPrize v3**: deploy `(PrizeEscrow, <GameRegistry v2:
+   0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774>, <router v6>)`.
+3. Wire router v6: `setWeth(0x980B62Da83eFf3D4576C647993b0c1D7faf17c73)`,
+   `setTimbPrize(<prize v3>)`.
+4. Wire prize v3: `setYieldVault(<TimbYieldVault:
+   0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F>)`,
+   `setEligibleRegistry(<existing>)`. (`setSettler` optional — settlement
+   is permissionless now; the role is identity/telemetry only.)
+5. Repoint neighbors at prize v3: `GameRegistry.setTimbPrize`,
+   `TimbYieldVault.setTimbPrize`, `PrizeEscrow.setTimbPrize`.
+6. Optional hygiene: `pause()` the OLD router.
+7. `prize3.startGame()` — fresh round #1.
+8. Update `ADDRESSES.TimbSwapRouter` + `ADDRESSES.TimbPrize` in BOTH
+   `config.js` and `frontend/config.js`.
+9. **Update `TIMBPRIZE_ADDR` in `scripts/settler.js`** — the keeper stays
+   as a liveness backstop even though settlement is permissionless.
+10. Old game: entries in GameRegistry carry over (registry is NOT
+    redeployed), but the round counter restarts at 1 — pending tickets
+    queued for the old game's next round will activate at the new game's
+    round 2. Cancel/refund through the registry beforehand if that
+    matters.
+11. Smoke test: LINK+WETH addLiquidity (create-on-add, no frontend
+    pre-create needed anymore), one Advance during a settlement window
+    (should roll the segment, not revert), one ETH↔TIMBS swap.
+
+## 11. (add future contract-level items here)
 
 <!--
 Template:
