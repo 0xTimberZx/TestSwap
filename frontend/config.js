@@ -29,8 +29,6 @@ const ADDRESSES = {
   TimbStaking:          "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   TimbFarm:             "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
   TimbLockVault:        "0x0157086E7670D1eFb15DC6b5158eE78279927a41",
-  // Set after the ticket-model redeploy (docs/CONTRACT_TODO.md §8).
-  // Empty = yield display disabled; pages must guard before querying.
   TimbYieldVault:       "0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F",
   TimbTreasury:         "0x486Fa4D8351EF81136E83340eA1e3aa2272c9955",
   TimbGovernance:       "0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061",
