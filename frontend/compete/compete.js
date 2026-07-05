@@ -673,10 +673,11 @@ function renderAdvancePreview() {
 
   const submitBtn = document.getElementById("advance-submit-btn");
   if (submitBtn) {
-    // During the settlement window nudgeScroll reverts on-chain, so say WHY
-    // the button is off instead of leaving a stale "Advance ×N" label.
+    // TimbPrize v3 settles lazily: a nudge during the settlement window
+    // rolls the segment first, then applies to the fresh digit — so the
+    // button stays usable and just says what the first push will do.
     submitBtn.textContent = advanceInSettlement
-      ? "Settling — opens next segment"
+      ? `Advance ×${advanceCount} — rolls the segment`
       : `Advance ×${advanceCount}`;
   }
 
@@ -702,8 +703,8 @@ function updateAdvancePanel(inSettlement) {
   const panel = document.getElementById("advance-panel");
   if (!panel) return;
   panel.classList.toggle("hidden", !userAddress);
-  const submitBtn = document.getElementById("advance-submit-btn");
-  if (submitBtn) submitBtn.disabled = advanceInSettlement;
+  // Stays enabled during the settlement window — TimbPrize v3 settles the
+  // due segment lazily on the first nudge instead of reverting.
   renderAdvancePreview();
 }
 
