@@ -195,7 +195,18 @@ economics decision below still stands if you want to charge.
   make sure step 2 (`setEntryCosts(...)`) actually runs with the intended
   TIMBS/ETH cost values; skipping it reproduces this exact symptom again.
 
-## 8. THE TICKET-MODEL ROUND — GameRegistry v2 + TimbYieldVault + TimbPrize v2 (CODE WRITTEN)
+## 8. THE TICKET-MODEL ROUND — GameRegistry v2 + TimbYieldVault + TimbPrize v2 (DEPLOYED)
+
+**Status: live.** Deployed addresses:
+- `GameRegistry` v2: `0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774`
+- `TimbPrize` v2: `0x03a895DD42893dD20EF39420fDc93FE86E3c6055`
+- `TimbYieldVault`: `0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F`
+
+`ADDRESSES` updated in both `config.js` and `frontend/config.js`;
+`scripts/settler.js`'s `TIMBPRIZE_ADDR` updated to the v2 address.
+Double-check the wiring steps below were completed on-chain (setTimbPrize,
+setYieldVault, setEntryCosts, vault funding/rate, PrizeEscrow/Router
+repoint, startGame) — this doc can't verify on-chain state itself.
 
 **Supersedes the redeploy halves of §1 and §7** — everything lands in this one
 coordinated deploy. All three contracts compile clean on solc 0.8.24

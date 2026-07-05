@@ -24,14 +24,12 @@ const ADDRESSES = {
   TimbSwapFactory:      "0xCCd6d3f0A86042d2B7056eDd381d367126628AF5",
   TimbSwapRouter:       "0xbD183E52806D6fddA680cFe3e7929E869Abf6F67",
   EligibleTokenRegistry:"0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04",
-  GameRegistry:         "0x9DbECa18edE251Ef526458b48a94af7B4446f72D",
-  TimbPrize:            "0xB42fC21808Eb2b6ff0A9B50654185e496EC6cDa4",
+  GameRegistry:         "0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774",
+  TimbPrize:            "0x03a895DD42893dD20EF39420fDc93FE86E3c6055",
   TimbStaking:          "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   TimbFarm:             "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
   TimbLockVault:        "0x0157086E7670D1eFb15DC6b5158eE78279927a41",
-  // Set after the ticket-model redeploy (docs/CONTRACT_TODO.md §8).
-  // Empty = yield display disabled; pages must guard before querying.
-  TimbYieldVault:       "",
+  TimbYieldVault:       "0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F",
   TimbTreasury:         "0x486Fa4D8351EF81136E83340eA1e3aa2272c9955",
   TimbGovernance:       "0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061",
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",

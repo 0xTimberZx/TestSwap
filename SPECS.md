@@ -22,8 +22,9 @@
 | TimbSwapFactory | 0xCCd6d3f0A86042d2B7056eDd381d367126628AF5 | Sourcify ✅ |
 | TimbSwapRouter v3 | 0x781833D60800b93C3a9EFf234b15934F9AE0C5E7 | Sourcify ✅ |
 | EligibleTokenRegistry | 0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04 | Sourcify ✅ |
-| GameRegistry | 0xf6fC4c726071Bd2Ce32826324E52dfC5A24FCb97 | Sourcify ✅ |
-| TimbPrize | 0x257F3658e29a7026CeebdcB352509d82A0993e4b | Sourcify ✅ |
+| GameRegistry v2 | 0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774 | Sourcify ✅ |
+| TimbPrize v2 | 0x03a895DD42893dD20EF39420fDc93FE86E3c6055 | Sourcify ✅ |
+| TimbYieldVault | 0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F | Sourcify ✅ |
 | TimbStaking | 0xe776c7b700B190ED8248741F9b518B08d8733C8F | Sourcify ✅ |
 | TimbFarm | 0xE319E2206F71A5cD8dd2c411C6F29712935f9011 | Sourcify ✅ |
 | TimbLockVault | 0x0157086E7670D1eFb15DC6b5158eE78279927a41 | Sourcify ✅ |

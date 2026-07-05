@@ -31,7 +31,7 @@ const RPC_URL       = process.env.ARB_SEPOLIA_RPC;
 const PRIVATE_KEY   = process.env.SETTLER_PRIVATE_KEY;
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;
-const TIMBPRIZE_ADDR = "0xB42fC21808Eb2b6ff0A9B50654185e496EC6cDa4";
+const TIMBPRIZE_ADDR = "0x03a895DD42893dD20EF39420fDc93FE86E3c6055"; // TimbPrize v2 (ticket model + yield vault)
 
 // ─── ABI (minimal) ───────────────────────────────────────────────────────────
 
