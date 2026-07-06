@@ -742,10 +742,12 @@ function renderAdvancePreview() {
   const submitBtn = document.getElementById("advance-submit-btn");
   if (submitBtn) {
     // Game semantics: the 59:45–60:00 intermission belongs to calculations.
-    // USER nudges are deactivated during it (swap-driven nudges keep
-    // flowing at the contract level and settle the segment lazily).
+    // USER nudges are deactivated during it, but settleSegment() is
+    // permissionless — so the button repurposes into a direct settle
+    // action. Any player can push a stalled intermission into the next
+    // segment instead of waiting on the keeper cron.
     submitBtn.textContent = advanceInSettlement
-      ? "Intermission — calculations in progress"
+      ? "Settle & start next segment"
       : `Advance ×${advanceCount}`;
   }
 
@@ -771,10 +773,12 @@ function updateAdvancePanel(inSettlement) {
   const panel = document.getElementById("advance-panel");
   if (!panel) return;
   panel.classList.toggle("hidden", !userAddress);
-  // User nudges are deactivated during the intermission (design intent);
-  // eligible-swap nudges keep flowing and lazy-settle at the contract level.
+  // User nudges are deactivated during the intermission (design intent),
+  // but the button stays ENABLED: it becomes a permissionless
+  // settleSegment() call (see handleAdvance), so any player can unstick
+  // a stalled settlement window without waiting for the keeper.
   const submitBtn = document.getElementById("advance-submit-btn");
-  if (submitBtn) submitBtn.disabled = advanceInSettlement;
+  if (submitBtn) submitBtn.disabled = false;
   renderAdvancePreview();
 }
 
@@ -797,8 +801,44 @@ function advanceRevertSelector(err) {
   return m ? m[0].toLowerCase() : null;
 }
 
+// During the settlement window the Advance button routes here instead:
+// settleSegment() is permissionless on TimbPrize v3.1, so any connected
+// player can land the settle and start the next segment. If the keeper
+// (or another player) wins the race, the estimate reverts — re-poll and
+// report "already settled" instead of an error.
+const PRIZE_SETTLE_ABI = ["function settleSegment() external"];
+
+async function handleSettleNow() {
+  const btn = document.getElementById("advance-submit-btn");
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = "Settling…"; }
+    DebugHub.logCheckpoint("Prize:Settle Requested", "pass");
+    const prize = new ethers.Contract(ADDRESSES.TimbPrize, PRIZE_SETTLE_ABI, signer);
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    await (await prize.settleSegment({ ...gas, nonce })).wait();
+    DebugHub.logCheckpoint("Prize:Settle Confirmed", "pass");
+    if (btn) btn.textContent = "Settled ✓ — next segment live";
+    await pollRoundState();
+    setTimeout(() => { if (btn) { btn.disabled = false; renderAdvancePreview(); } }, 1500);
+  } catch (err) {
+    await pollRoundState();
+    if (!advanceInSettlement) {
+      // Someone else's settle landed first — that's a win, not a failure.
+      DebugHub.logCheckpoint("Prize:Settle Raced", "pass");
+      if (btn) { btn.textContent = "Already settled ✓"; setTimeout(() => { btn.disabled = false; renderAdvancePreview(); }, 1500); }
+      return;
+    }
+    const sel = advanceRevertSelector(err);
+    if (sel) DebugHub.logError("handleSettleNow.revertSelector", new Error("selector " + sel));
+    DebugHub.logError("handleSettleNow", err);
+    DebugHub.logCheckpoint("Prize:Settle Failed", "fail");
+    if (btn) { btn.textContent = "Failed — try again"; setTimeout(() => { btn.disabled = false; renderAdvancePreview(); }, 2000); }
+  }
+}
+
 async function handleAdvance() {
   if (!userAddress) return;
+  if (advanceInSettlement) return handleSettleNow();
   const btn = document.getElementById("advance-submit-btn");
   const count = advanceCount;
   const orig = btn ? btn.textContent : "";
