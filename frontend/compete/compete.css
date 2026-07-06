@@ -12,7 +12,7 @@
   justify-content: space-between;
   gap: 24px;
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius-lg);
   padding: 24px 28px;
   margin-bottom: 12px;
@@ -174,7 +174,7 @@
 
 .compete-card {
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius-lg);
   padding: 22px;
 }
@@ -196,7 +196,7 @@
 .entry-input {
   width: 100%;
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 14px;
   font-family: var(--mono);
@@ -247,7 +247,7 @@
   align-items: center;
   gap: 5px;
   background: var(--bg);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: 20px;
   padding: 6px 12px;
   font-family: var(--mono);
@@ -265,7 +265,7 @@
   top: calc(100% + 6px);
   right: 0;
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   min-width: 100px;
   padding: 4px;
@@ -296,7 +296,7 @@
 .extra-stepper-mini { display: flex; align-items: center; gap: 8px; }
 .extra-stepper-mini button {
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   color: var(--text-2);
   width: 22px; height: 22px;
   border-radius: 4px;
@@ -338,7 +338,7 @@
   background: var(--bg3);
   color: var(--text-3);
   cursor: not-allowed;
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
 }
 
 /* ─── My Entries ─────────────────────────────────────────────────────────── */
@@ -349,7 +349,7 @@
   align-items: center;
   justify-content: space-between;
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 10px 12px;
   gap: 8px;
@@ -437,7 +437,7 @@
   gap: 16px;
   flex-wrap: wrap;
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 12px 16px;
 }
@@ -582,7 +582,7 @@
 .advance-chips { display: flex; gap: 6px; }
 .adv-chip {
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   color: var(--text-2);
   border-radius: 20px;
   padding: 6px 13px;
@@ -604,7 +604,7 @@
   align-items: center;
   gap: 10px;
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: 20px;
   padding: 4px 6px;
 }
@@ -672,7 +672,7 @@
 }
 .replace-warn-card {
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius-lg);
   max-width: 420px;
   width: 100%;
@@ -720,3 +720,6 @@
   transition: opacity 0.15s;
 }
 .btn-replace-warn-ok:hover { opacity: 0.85; }
+
+/* ─── Light-mode card spacing (+20%) ──────────────────────────────────────── */
+:root[data-theme="light"] .compete-grid { gap: 19px; margin-bottom: 48px; }

@@ -11,7 +11,7 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 1px;
   background: var(--border);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 32px;
@@ -50,7 +50,7 @@
 
 .gov-card {
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius-lg);
   padding: 24px;
 }
@@ -92,7 +92,7 @@
 .gov-input {
   flex: 1;
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 11px 14px;
   font-family: var(--mono);
@@ -104,7 +104,7 @@
 
 .gov-max-btn {
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   color: var(--green);
   font-size: 12px;
   font-weight: 700;
@@ -133,14 +133,14 @@
   background: var(--bg3);
   color: var(--text-3);
   cursor: not-allowed;
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
 }
 
 .btn-gov-secondary {
   flex: 1;
   background: transparent;
   color: var(--text-2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 12px;
   font-size: 14px;
@@ -162,7 +162,7 @@
 .proposals-list { display: flex; flex-direction: column; gap: 12px; }
 
 .proposal-row {
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 18px 20px;
   display: flex;
@@ -311,7 +311,7 @@
 
 .btn-resolve {
   background: var(--bg);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   color: var(--text-3);
   border-radius: 6px;
   padding: 5px 12px;
@@ -321,3 +321,6 @@
   transition: all 0.15s;
 }
 .btn-resolve:hover { border-color: var(--text-2); color: var(--text-2); }
+
+/* ─── Light-mode card spacing (+20%) ──────────────────────────────────────── */
+:root[data-theme="light"] .gov-grid { gap: 24px; }

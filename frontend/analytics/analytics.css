@@ -24,7 +24,7 @@
 
 .metric-card {
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 18px 16px;
 }
@@ -57,7 +57,7 @@
 /* ─── Data Card ──────────────────────────────────────────────────────────── */
 .data-card {
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -67,7 +67,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--bw) solid var(--border);
 }
 
 .data-card-title {
@@ -101,7 +101,7 @@
   font-weight: 600;
   text-align: left;
   padding: 10px 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--bw) solid var(--border);
   white-space: nowrap;
 }
 
@@ -147,3 +147,6 @@
 @media (max-width: 480px) {
   .metrics-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── Light-mode card spacing (+20%) ──────────────────────────────────────── */
+:root[data-theme="light"] .metrics-grid { gap: 14px; }

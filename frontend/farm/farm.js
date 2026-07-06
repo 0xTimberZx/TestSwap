@@ -25,8 +25,14 @@ const ERC20_ABI = [
   "function approve(address spender, uint256 amount) external returns (bool)"
 ];
 
+// Read-only queries always go to the canonical Arbitrum Sepolia RPC —
+// never the wallet's in-app provider. Mobile wallets sometimes serve
+// eth_call/eth_getBalance from a different network than they display,
+// which reads as zero balances (or stale state) for perfectly funded
+// accounts. The wallet provider is only used for signing transactions.
+let _publicProv = null;
 function readProv() {
-  return provider || new ethers.providers.JsonRpcProvider(RPC_URL);
+  return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
 }
 
 // pool = "staking" | "farm"
