@@ -743,7 +743,7 @@ function renderAdvancePreview() {
   if (submitBtn) {
     // Game semantics: the 59:45–60:00 intermission belongs to calculations.
     // USER nudges are deactivated during it. The button holds disabled for
-    // the first 5 seconds ("calculating") to give the keeper/lazy settle
+    // the first 6 seconds ("calculating") to give the keeper/lazy settle
     // its moment, then re-arms as a direct permissionless settleSegment()
     // push — any player can start the next segment instead of waiting on
     // the keeper cron.
@@ -775,18 +775,18 @@ function renderAdvancePreview() {
   toEl.textContent   = ALPHABET[to];
 }
 
-// The settle push holds back for the intermission's first 5 seconds —
+// The settle push holds back for the intermission's first 6 seconds —
 // the calculation moment — then the button re-enables itself to push
 // into the next segment (see renderAdvancePreview).
 let settlementSeenAt = 0;
-const SETTLE_BTN_HOLD_MS = 5000;
+const SETTLE_BTN_HOLD_MS = 6000;
 
 function updateAdvancePanel(inSettlement) {
   const wasInSettlement = advanceInSettlement;
   advanceInSettlement = !!inSettlement;
   if (advanceInSettlement && !wasInSettlement) {
     settlementSeenAt = Date.now();
-    // Re-render right at the 5s mark so the button re-arms itself
+    // Re-render right at the 6s mark so the button re-arms itself
     // without waiting for the next 4s poll tick.
     setTimeout(renderAdvancePreview, SETTLE_BTN_HOLD_MS + 100);
   }
