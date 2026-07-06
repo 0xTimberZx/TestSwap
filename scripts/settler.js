@@ -109,9 +109,10 @@ async function notify(msg) {
   }
 }
 
-// Hard cap on settle calls per run — one full round is 6 segments; a few
-// extra covers a genuinely lagging backlog without ever looping unbounded.
-const MAX_SETTLES_PER_RUN = 8;
+// Hard cap on settle calls per run — a ~340-min run covers up to 6 live
+// boundaries, plus a backlogged round on arrival; 14 bounds the loop
+// without ever cutting a healthy run short.
+const MAX_SETTLES_PER_RUN = 14;
 
 // ─── Linger mode ─────────────────────────────────────────────────────────────
 // GitHub throttles the */10 cron to roughly hourly in practice, and the
@@ -125,11 +126,16 @@ const MAX_SETTLES_PER_RUN = 8;
 // The budget must EXCEED one full segment (59:45): a run landing right
 // after a boundary sees ~59.8 min remaining, and with a smaller budget it
 // bails instead of covering that boundary (observed live: 3454s remaining
-// vs the original 55-min budget). At 65 min every run is guaranteed to
-// linger to exactly one boundary, settle it, then hand off to the next
-// queued run.
+// vs the original 55-min budget).
+//
+// Originally 65 min — one boundary per run, handing off to the next cron
+// tick. GitHub then left a 2.4-hour cron hole and Round 2 segment 1 ran
+// 8734s past its 60:00 mark before anything settled it. Each run now
+// lingers up to ~340 min (GitHub-hosted jobs cap at 6 h), covering ~5
+// hourly boundaries back-to-back, so a single missed cron tick no longer
+// strands the game — the previous run is still alive and settling.
 const LINGER_BUDGET_MS =
-  Number(process.env.SETTLER_LINGER_MINUTES || 65) * 60 * 1000;
+  Number(process.env.SETTLER_LINGER_MINUTES || 340) * 60 * 1000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
