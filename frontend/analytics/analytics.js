@@ -22,6 +22,7 @@ const STAKING_ABI = ["function totalStaked() external view returns (uint256)"];
 const FARM_ABI    = ["function totalStaked() external view returns (uint256)"];
 const VAULT_ABI   = ["function totalLocks() external view returns (uint256)"];
 const REGISTRY_ABI = ["function getRoundEntrants(uint256 round) external view returns (address[])"];
+const FACTORY_MIN_ABI = ["function getPairAddress(address tokenA, address tokenB) external view returns (address)"];
 
 // TimbYieldVault — ticket capital earns yield for the prize pot.
 const YV_ABI = [
@@ -100,14 +101,42 @@ async function loadLiveMetrics() {
     const wethFloat  = parseFloat(ethers.utils.formatUnits(wethReserve, 18));
     const priceETH   = timbsFloat > 0 ? (wethFloat / timbsFloat).toFixed(8) : "—";
 
+    // USD anchor: the USDC/WETH pool prices ETH in dollars, and every
+    // native pair derives its USD value through it (TIMBS→ETH→USD).
+    // No pool yet (or empty) → USD readouts simply don't render.
+    let usdPerEth = null;
+    try {
+      const factory  = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_MIN_ABI, prov);
+      const usdcPair = await factory.getPairAddress(ADDRESSES.USDC, ADDRESSES.WETH);
+      if (usdcPair !== ethers.constants.AddressZero) {
+        const pc = new ethers.Contract(usdcPair, PAIR_ABI, prov);
+        const [ur, ut0] = await Promise.all([pc.getReserves(), pc.token0()]);
+        const usdcIs0 = ut0.toLowerCase() === ADDRESSES.USDC.toLowerCase();
+        const usdc = parseFloat(ethers.utils.formatUnits(usdcIs0 ? ur.reserve0 : ur.reserve1, 6));
+        const weth = parseFloat(ethers.utils.formatUnits(usdcIs0 ? ur.reserve1 : ur.reserve0, 18));
+        if (usdc > 0 && weth > 0) usdPerEth = usdc / weth;
+      }
+    } catch {}
+    const usd = (eth) => {
+      if (usdPerEth === null) return null;
+      const v = eth * usdPerEth;
+      if (v === 0) return "0";
+      // Sub-cent values (a single TIMBS) keep two significant digits
+      // instead of rounding to $0.
+      if (v < 0.01) return v.toPrecision(2);
+      return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+    };
+
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
 
     set("m-price",        priceETH + " ETH");
-    set("m-price-sub",    "per TIMBS");
+    const priceUsd = priceETH !== "—" ? usd(parseFloat(priceETH)) : null;
+    set("m-price-sub",    priceUsd ? `per TIMBS · ≈ $${priceUsd}` : "per TIMBS");
     set("m-timbs-reserve", fmt(timbsReserve, 18, 0) + " TIMBS");
     set("m-weth-reserve",  fmt(wethReserve, 18, 4)  + " WETH");
     set("m-pot",          fmt(pot, 18, 4) + " ETH");
-    set("m-pot-sub",      `Round ${round} · Seg ${segment}/6`);
+    const potUsd = usd(parseFloat(ethers.utils.formatUnits(pot, 18)));
+    set("m-pot-sub",      `Round ${round} · Seg ${segment}/6` + (potUsd ? ` · ≈ $${potUsd}` : ""));
     set("m-scroll",       counter.toString());
     set("m-staked",       fmt(staked, 18, 0) + " TIMBS");
     set("m-lp-staked",    fmt(lpStaked, 18, 4) + " LP");

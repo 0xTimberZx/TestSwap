@@ -67,7 +67,11 @@ const NATIVE_ETH = {
 // LINK address is Chainlink's documented Arbitrum Sepolia token — the picker
 // shows live on-chain symbol/balance, so a wrong address is immediately visible.
 const EXTRA_TOKENS = [
-  { symbol: "LINK", name: "Chainlink", address: "0xb1D4538B4571d411F07960EF2838Ce337FE1E80E", decimals: 18, logoChar: "L" }
+  { symbol: "LINK", name: "Chainlink", address: "0xb1D4538B4571d411F07960EF2838Ce337FE1E80E", decimals: 18, logoChar: "L" },
+  // Circle's canonical Arbitrum Sepolia USDC — 6 decimals, all math in this
+  // file is per-token-decimals so no special casing needed.
+  { symbol: "USDC", name: "USD Coin", address: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", decimals: 6, logoChar: "$" }
+  // TestUSDT joins here once deployed (contracts/TestUSDT.sol) — 6 decimals.
 ];
 
 // Custom tokens the user imported by pasting an address (persisted per-browser).
