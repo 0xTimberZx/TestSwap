@@ -388,7 +388,43 @@ solc 0.8.24 (router needs viaIR in Remix, per its header).
     pre-create needed anymore), one Advance during a settlement window
     (should roll the segment, not revert), one ETH↔TIMBS swap.
 
-## 11. (add future contract-level items here)
+## 11. THE CONTINUOUS METER — TimbPrize v3.2 (CODE WRITTEN, needs redeploy)
+
+### The meter never clears
+- Want: the six digit counters are a CONTINUOUS scroll. Round 1 ending
+  `ABCJLA` means round 2's segments resume from A,B,C,J,L,A — visible on
+  the meter from the moment the round starts, with nudging picking up from
+  wherever each digit sat. No blanks, no reset to 'A'.
+- Blocked by (v3.1 behavior): `_settleDueSegment` zeroed the incoming
+  segment's counter on every advance, and `_settleRound` zeroed ALL six
+  counters at rollover — the J and L were erased on-chain the moment
+  round 2 started.
+- Contract change (both in `_settleDueSegment`/`_settleRound`): counters
+  are never reset; only `segmentDigitLocked` releases at rollover. The
+  winning string still snapshots the locked values at each round's end.
+- Frontend (`compete.js renderDigitTrack`): future segments now render
+  their carried digit dimmed (`.future`) instead of a `·` placeholder.
+
+### Deploy checklist (Remix, owner wallet, Arb Sepolia)
+
+Same shape as §10 steps 2–10, prize-only (router v6 is unaffected):
+
+1. **TimbPrize v3.2**: deploy `(PrizeEscrow, GameRegistry v2:
+   0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774, Router v6:
+   0x6E53dc53Ea7B2fd8be171D74A381f009dA5F94bD)`. viaIR ON.
+2. Wire prize v3.2: `setYieldVault(0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F)`,
+   `setEligibleRegistry(<existing>)`.
+3. Repoint neighbors: `Router.setTimbPrize`, `GameRegistry.setTimbPrize`,
+   `TimbYieldVault.setTimbPrize`, `PrizeEscrow.setTimbPrize`.
+4. `startGame()` — fresh round #1 (counters all start at A once; they
+   never reset again after this).
+5. Update `ADDRESSES.TimbPrize` in BOTH `config.js` and
+   `frontend/config.js`, and `TIMBPRIZE_ADDR` in `scripts/settler.js`.
+6. Smoke test: meter should show all six digits (no dots) as soon as the
+   game starts; after the first round settles, verify the counters carry
+   into round 2 unchanged with locks released.
+
+## 12. (add future contract-level items here)
 
 <!--
 Template:
