@@ -254,6 +254,25 @@
 
   </div>
 
+  <!-- ─── Replace-entry warning (entries don't stack) ─────────────────────── -->
+  <div id="replace-warn-overlay" class="replace-warn-overlay hidden" onclick="dismissReplaceWarning(event)">
+    <div class="replace-warn-card" onclick="event.stopPropagation()">
+      <div class="replace-warn-icon">⚠</div>
+      <h3 class="replace-warn-title">One ticket per wallet — entries don't stack</h3>
+      <p class="replace-warn-body">
+        You already have a live ticket this game. Submitting now
+        <strong>replaces</strong> it: your current ticket is conceded
+        (it can no longer win), its principal carries over to the new
+        ticket, and any extra-round TIMBS on it stays forfeited.
+      </p>
+      <label class="replace-warn-dontshow">
+        <input type="checkbox" id="replace-warn-dontshow" />
+        <span>Don't show this again</span>
+      </label>
+      <button class="btn-replace-warn-ok" onclick="confirmReplaceWarning()">I understand</button>
+    </div>
+  </div>
+
   <footer class="footer">
     <div class="footer-left"><span class="nav-logo-mark">⬡</span> TimbSwap — Arbitrum Sepolia</div>
     <div class="footer-links">
