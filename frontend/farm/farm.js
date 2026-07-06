@@ -58,12 +58,16 @@ async function loadPool(pool) {
     document.getElementById(pool + "-apr").textContent = (apr.toNumber() / 100).toFixed(1) + "% APR";
 
     if (userAddress) {
-      const [mine, earned] = await Promise.all([
+      const wallet = new ethers.Contract(cfg.token, ERC20_ABI, readProv());
+      const [mine, earned, inWallet] = await Promise.all([
         contract.stakedBalance(userAddress),
-        contract.earned(userAddress)
+        contract.earned(userAddress),
+        wallet.balanceOf(userAddress)
       ]);
       document.getElementById(pool + "-mine").textContent = fmt(mine, 18, 4);
       document.getElementById(pool + "-earned").textContent = fmtTIMBS(earned, 4);
+      document.getElementById(pool + "-wallet").textContent =
+        fmt(inWallet, 18, 4) + (pool === "staking" ? " TIMBS" : " LP");
 
       document.getElementById(pool + "-stake-btn").disabled = false;
       document.getElementById(pool + "-stake-btn").textContent = "Stake";
@@ -72,6 +76,7 @@ async function loadPool(pool) {
     } else {
       document.getElementById(pool + "-mine").textContent = "—";
       document.getElementById(pool + "-earned").textContent = "—";
+      document.getElementById(pool + "-wallet").textContent = "—";
     }
   } catch (e) {
     console.warn(`loadPool(${pool}):`, e.message);
@@ -88,7 +93,7 @@ async function setAmount(pool, pct) {
   if (!userAddress) return;
   const cfg = poolConfig(pool);
   try {
-    const tokenContract = new ethers.Contract(cfg.token, ERC20_ABI, provider);
+    const tokenContract = new ethers.Contract(cfg.token, ERC20_ABI, readProv());
     const bal = await tokenContract.balanceOf(userAddress);
     const amount = bal.mul(pct).div(100);
     document.getElementById(pool + "-amount").value = ethers.utils.formatUnits(amount, 18);
