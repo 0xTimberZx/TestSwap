@@ -228,7 +228,7 @@ async function pollRoundState() {
 
     const timerEl = document.getElementById("sub-timer");
     if (s.inSettlement) {
-      timerEl.textContent = "Settling segment…";
+      timerEl.textContent = "Intermission — calculating…";
     } else {
       const elapsed    = Math.floor(Date.now() / 1000) - s.segmentStart.toNumber();
       const remaining  = Math.max(0, (59 * 60 + 45) - elapsed);
@@ -711,11 +711,11 @@ function renderAdvancePreview() {
 
   const submitBtn = document.getElementById("advance-submit-btn");
   if (submitBtn) {
-    // TimbPrize v3 settles lazily: a nudge during the settlement window
-    // rolls the segment first, then applies to the fresh digit — so the
-    // button stays usable and just says what the first push will do.
+    // Game semantics: the 59:45–60:00 intermission belongs to calculations.
+    // USER nudges are deactivated during it (swap-driven nudges keep
+    // flowing at the contract level and settle the segment lazily).
     submitBtn.textContent = advanceInSettlement
-      ? `Advance ×${advanceCount} — rolls the segment`
+      ? "Intermission — calculations in progress"
       : `Advance ×${advanceCount}`;
   }
 
@@ -741,9 +741,30 @@ function updateAdvancePanel(inSettlement) {
   const panel = document.getElementById("advance-panel");
   if (!panel) return;
   panel.classList.toggle("hidden", !userAddress);
-  // Stays enabled during the settlement window — TimbPrize v3 settles the
-  // due segment lazily on the first nudge instead of reverting.
+  // User nudges are deactivated during the intermission (design intent);
+  // eligible-swap nudges keep flowing and lazy-settle at the contract level.
+  const submitBtn = document.getElementById("advance-submit-btn");
+  if (submitBtn) submitBtn.disabled = advanceInSettlement;
   renderAdvancePreview();
+}
+
+// Wallets often mask estimation reverts as opaque -32603 errors. Decode the
+// custom-error selector so a mis-wired deployment names its own fix.
+const ADVANCE_REVERTS = {
+  "0x38a1d6d8": "Router doesn't know the prize contract — call setTimbPrize(<TimbPrize>) on TimbSwapRouter (owner).",   // PrizeNotSet()
+  "0x91655201": "TimbPrize doesn't recognize this router — call setRouter(<TimbSwapRouter>) on TimbPrize (owner).",     // NotRouter()
+  "0x3a5f7b57": "The game hasn't been started — call startGame() on TimbPrize (owner).",                                // GameNotStarted()
+  "0x717824fb": "Settlement is paused — nudges stay blocked until unpauseSettlement().",                                // InSettlementWindow()
+};
+
+function advanceRevertSelector(err) {
+  const d = err?.data?.originalError?.data ?? err?.error?.data?.data ??
+            err?.error?.data ?? err?.data;
+  const hex = typeof d === "string" ? d
+    : (typeof d?.data === "string" ? d.data : null);
+  if (hex && hex.startsWith("0x") && hex.length >= 10) return hex.slice(0, 10).toLowerCase();
+  const m = String(err?.message || "").match(/0x[0-9a-fA-F]{8}/);
+  return m ? m[0].toLowerCase() : null;
 }
 
 async function handleAdvance() {
@@ -762,8 +783,11 @@ async function handleAdvance() {
     await pollRoundState();
     setTimeout(() => { if (btn) { btn.disabled = false; renderAdvancePreview(); } }, 1500);
   } catch (err) {
+    const sel = advanceRevertSelector(err);
+    if (sel) DebugHub.logError("handleAdvance.revertSelector", new Error("selector " + sel));
     DebugHub.logError("handleAdvance", err);
     DebugHub.logCheckpoint("Prize:Advance Failed", "fail");
+    if (sel && ADVANCE_REVERTS[sel]) alert(ADVANCE_REVERTS[sel]);
     if (btn) { btn.textContent = "Failed — try again"; setTimeout(() => { btn.disabled = false; renderAdvancePreview(); }, 2000); }
   }
 }

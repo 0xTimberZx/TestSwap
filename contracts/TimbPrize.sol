@@ -322,10 +322,31 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         return _isInSettlementWindow();
     }
 
+    /// @dev Elapsed time in the current segment. Saturates at 0 while a
+    ///      grid-anchored segment's official start is still a few seconds in
+    ///      the future (a settle that lands inside the 59:45–60:00
+    ///      intermission dates the next segment at the exact 60:00 mark).
+    function _elapsedInSegment() internal view returns (uint256) {
+        return block.timestamp > segmentStartTime
+            ? block.timestamp - segmentStartTime
+            : 0;
+    }
+
+    /// @dev Grid-anchored start for the next segment: segments live on exact
+    ///      60-minute marks ("next segment before 60:01"), so a settle
+    ///      landing anywhere inside the following slot anchors to the
+    ///      boundary. Only a deep stall — a full extra slot with no settle —
+    ///      falls back to wall clock to catch up.
+    function _nextSegmentStart() internal view returns (uint256) {
+        uint256 gridNext = segmentStartTime + SEGMENT_DURATION;
+        return block.timestamp < gridNext + SEGMENT_DURATION
+            ? gridNext
+            : block.timestamp;
+    }
+
     function _isInSettlementWindow() internal view returns (bool) {
         if (!gameStarted) return false;
-        uint256 elapsed = block.timestamp - segmentStartTime;
-        return elapsed >= INTERACTION_WINDOW;
+        return _elapsedInSegment() >= INTERACTION_WINDOW;
     }
 
     // ─── Digit Window Derivation ──────────────────────────────────────────────
@@ -385,16 +406,16 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     function _settleDueSegment() internal {
         if (settlementPaused) revert SettlementPaused();
 
-        uint256 elapsed = block.timestamp - segmentStartTime;
+        uint256 elapsed = _elapsedInSegment();
         if (elapsed < INTERACTION_WINDOW) {
             revert SegmentNotComplete(elapsed, INTERACTION_WINDOW);
         }
 
         if (currentSegment < SEGMENTS_PER_ROUND) {
-            // Lock current segment digit and advance
+            // Lock current segment digit and advance on the 60-minute grid
             segmentDigitLocked[currentSegment] = true;
             currentSegment++;
-            segmentStartTime = block.timestamp;
+            segmentStartTime = _nextSegmentStart();
             // Reset new segment's counter
             segmentDigitCounter[currentSegment] = 0;
             emit SegmentAdvanced(currentRound, currentSegment, block.timestamp);
@@ -439,10 +460,13 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             block.timestamp
         );
 
-        // Auto-queue next round — reset all digit counters
+        // Auto-queue next round — reset all digit counters. The new round's
+        // first segment starts on the 60-minute grid, same as a plain
+        // segment advance.
+        uint256 nextStart = _nextSegmentStart();
         currentRound++;
         currentSegment   = 1;
-        segmentStartTime = block.timestamp;
+        segmentStartTime = nextStart;
         for (uint256 i = 1; i <= SEGMENTS_PER_ROUND; i++) {
             segmentDigitCounter[i] = 0;
             segmentDigitLocked[i]  = false;
@@ -704,7 +728,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     }
 
     function timeRemainingInSegment() external view returns (uint256) {
-        uint256 elapsed = block.timestamp - segmentStartTime;
+        uint256 elapsed = _elapsedInSegment();
         if (elapsed >= INTERACTION_WINDOW) return 0;
         return INTERACTION_WINDOW - elapsed;
     }
