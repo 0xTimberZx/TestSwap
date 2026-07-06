@@ -92,48 +92,58 @@
 
     <!-- ─── Live Metrics ───────────────────────────────────────────────── -->
     <div class="section-label">LIVE</div>
-    <div class="metrics-grid">
-      <div class="metric-card">
+    <!-- Wallet-gated metric filter — connected wallets can slice the grid
+         by what the number relates to; visitors just see everything. -->
+    <div id="metric-filter" class="metric-filter hidden">
+      <button class="mf-btn mf-active" data-cat="all" onclick="setMetricFilter('all')">All</button>
+      <button class="mf-btn" data-cat="platform" onclick="setMetricFilter('platform')">Platform</button>
+      <button class="mf-btn" data-cat="token" onclick="setMetricFilter('token')">Token</button>
+      <button class="mf-btn" data-cat="earnings" onclick="setMetricFilter('earnings')">Earnings</button>
+      <button class="mf-btn" data-cat="locks" onclick="setMetricFilter('locks')">Locks</button>
+    </div>
+
+    <div class="metrics-grid" id="live-metrics-grid">
+      <div class="metric-card" data-cat="token">
         <div class="metric-label">TIMBS Price</div>
         <div class="metric-val" id="m-price">—</div>
         <div class="metric-sub" id="m-price-sub">per ETH</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card" data-cat="platform">
         <div class="metric-label">Pool Reserves</div>
         <div class="metric-val" id="m-timbs-reserve">—</div>
         <div class="metric-sub" id="m-weth-reserve">— WETH</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card" data-cat="platform">
         <div class="metric-label">Prize Pot</div>
         <div class="metric-val metric-green" id="m-pot">—</div>
         <div class="metric-sub" id="m-pot-sub">Round — · Seg —/6</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card" data-cat="platform">
         <div class="metric-label">Scroll Position</div>
         <div class="metric-val metric-mono" id="m-scroll">—</div>
         <div class="metric-sub">nudges since genesis</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card" data-cat="earnings">
         <div class="metric-label">Total Staked</div>
         <div class="metric-val" id="m-staked">—</div>
         <div class="metric-sub">TIMBS single-asset</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card" data-cat="earnings">
         <div class="metric-label">LP Staked</div>
         <div class="metric-val" id="m-lp-staked">—</div>
         <div class="metric-sub">TIMBS/ETH LP tokens</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card" data-cat="token">
         <div class="metric-label">Circulating Supply</div>
         <div class="metric-val" id="m-supply">—</div>
         <div class="metric-sub">of 100M hard cap</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card" data-cat="locks">
         <div class="metric-label">Total Locks</div>
         <div class="metric-val" id="m-locks">—</div>
         <div class="metric-sub">across all tokens</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card" data-cat="earnings">
         <div class="metric-label">Vault Yield</div>
         <div class="metric-val metric-green" id="m-yield">—</div>
         <div class="metric-sub" id="m-yield-sub">accruing for the pot</div>
