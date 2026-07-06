@@ -27,7 +27,7 @@
 .pool-card {
   position: relative;
   background: var(--bg2);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius-lg);
   padding: 24px;
 }
@@ -65,7 +65,7 @@
   height: 40px;
   border-radius: 50%;
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -135,7 +135,7 @@
   flex: 1;
   min-width: 0; /* let the input shrink so the row never overflows */
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   border-radius: var(--radius);
   padding: 12px 14px;
   font-family: var(--mono);
@@ -147,7 +147,7 @@
 
 .pool-max-btn {
   background: var(--bg3);
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   color: var(--green);
   font-size: 11px;
   font-weight: 700;
@@ -172,7 +172,7 @@
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid var(--border);
+  border: var(--bw) solid var(--border);
   transition: all 0.15s;
 }
 
@@ -221,3 +221,6 @@
   .pool-stat-val { font-size: 12px; }
   .btn-pool { padding: 11px 6px; font-size: 12px; }
 }
+
+/* ─── Light-mode card spacing (+20%) ──────────────────────────────────────── */
+:root[data-theme="light"] .pool-grid { gap: 24px; }
