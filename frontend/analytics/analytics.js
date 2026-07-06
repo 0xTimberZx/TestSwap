@@ -401,6 +401,25 @@ async function loadVault() {
   }
 }
 
+// ─── Metric filter (wallet-gated) ─────────────────────────────────────────────
+// Connected wallets get a pill row that slices the live-metrics grid by
+// category (data-cat on each card). Disconnecting hides the row and always
+// restores the full grid, so visitors never see a partial view.
+
+function setMetricFilter(cat) {
+  document.querySelectorAll("#metric-filter .mf-btn").forEach(b =>
+    b.classList.toggle("mf-active", b.dataset.cat === cat));
+  document.querySelectorAll("#live-metrics-grid .metric-card").forEach(c =>
+    c.classList.toggle("hidden", cat !== "all" && c.dataset.cat !== cat));
+}
+
+function updateMetricFilterGate() {
+  const bar = document.getElementById("metric-filter");
+  if (!bar) return;
+  bar.classList.toggle("hidden", !userAddress);
+  if (!userAddress) setMetricFilter("all");
+}
+
 // ─── Wallet Connect (minimal — analytics is mostly read-only) ─────────────────
 
 async function handleConnect() {
@@ -416,6 +435,7 @@ async function handleConnect() {
     document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
   });
   loadVault(); // unlock the gated internals
+  updateMetricFilterGate();
 }
 
 function handleDisconnect() {
@@ -425,6 +445,7 @@ function handleDisconnect() {
   document.getElementById("wallet-info").classList.add("hidden");
   document.getElementById("network-badge").classList.add("hidden");
   loadVault(); // re-gate the internals
+  updateMetricFilterGate();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -439,6 +460,7 @@ function handleDisconnect() {
     const _el = document.getElementById("wallet-addr");
     if (_el) _el.textContent = fmtAddr(_reconnected);
     DebugHub.startSession();
+    updateMetricFilterGate();
   }
 
   await Promise.all([

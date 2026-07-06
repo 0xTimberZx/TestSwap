@@ -150,3 +150,30 @@
 
 /* ─── Light-mode card spacing (+20%) ──────────────────────────────────────── */
 :root[data-theme="light"] .metrics-grid { gap: 14px; }
+
+/* ─── Metric filter (wallet-gated) ──────────────────────────────────────────
+   Pill row above the live metrics; slices the grid by category. Hidden for
+   disconnected visitors — they see the full grid. */
+.metric-filter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.mf-btn {
+  background: var(--bg2);
+  border: var(--bw) solid var(--border);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.mf-btn:hover { color: var(--text); }
+.mf-btn.mf-active {
+  color: var(--green);
+  border-color: var(--green);
+  background: rgba(20,241,149,0.08);
+}
