@@ -445,6 +445,39 @@ function stringToBytes6(str) {
   return hex;
 }
 
+// ─── Replace warning (entries don't stack) ────────────────────────────────
+// Players mid-game submitting again may expect a SECOND stacked entry.
+// One live ticket per wallet: a new submit concedes the old ticket. Warn
+// once (dismissable forever via "don't show again"); "I understand"
+// proceeds, tapping outside cancels the submit.
+
+const REPLACE_WARN_KEY = "timbswap_replace_warn_off";
+let _replaceWarnResolve = null;
+
+function showReplaceWarning() {
+  try { if (localStorage.getItem(REPLACE_WARN_KEY) === "1") return Promise.resolve(true); } catch {}
+  const overlay = document.getElementById("replace-warn-overlay");
+  if (!overlay) return Promise.resolve(true);
+  overlay.classList.remove("hidden");
+  return new Promise((resolve) => { _replaceWarnResolve = resolve; });
+}
+
+function _closeReplaceWarning(confirmed) {
+  const overlay = document.getElementById("replace-warn-overlay");
+  if (overlay) overlay.classList.add("hidden");
+  if (confirmed && document.getElementById("replace-warn-dontshow")?.checked) {
+    try { localStorage.setItem(REPLACE_WARN_KEY, "1"); } catch {}
+  }
+  if (_replaceWarnResolve) { _replaceWarnResolve(confirmed); _replaceWarnResolve = null; }
+}
+
+function confirmReplaceWarning() { _closeReplaceWarning(true); }
+function dismissReplaceWarning(e) {
+  // Backdrop taps only — clicks inside the card stopPropagation.
+  if (e && e.target !== e.currentTarget) return;
+  _closeReplaceWarning(false);
+}
+
 async function handleSubmitEntry() {
   if (!userAddress || !isEntryValid()) return;
   const btn      = document.getElementById("entry-btn");
@@ -453,6 +486,11 @@ async function handleSubmitEntry() {
 
   const replacing = hasPlayEntry;
   const resetLabel = replacing ? "Update entry" : "Submit Entry";
+
+  if (replacing) {
+    const proceed = await showReplaceWarning();
+    if (!proceed) return; // tapped outside — nothing sent
+  }
 
   try {
     btn.disabled = true;

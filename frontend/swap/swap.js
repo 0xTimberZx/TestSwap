@@ -751,27 +751,60 @@ async function handleAddLiquidity() {
       }
     }
 
-    // Brand-new pool: the DEPLOYED router's addLiquidity reverts with
-    // PairNotFound if the pair doesn't exist (its create-on-add fix needs
-    // the §6 redeploy). factory.createPair is permissionless, so create it
-    // here first — one extra tx, and a harmless skip once the pair exists.
-    const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_ABI, signer);
-    const pairAddr = await factory.getPairAddress(tokenIn.address, tokenOut.address);
-    if (!pairAddr || pairAddr === ethers.constants.AddressZero) {
-      btn.textContent = `Creating ${tokenIn.symbol}/${tokenOut.symbol} pair…`;
-      DebugHub.logCheckpoint("Liquidity Pair Create Requested", "pass");
-      const gasCp = await getGasParams(); const nonceCp = await getPendingNonce();
-      await (await factory.createPair(tokenIn.address, tokenOut.address, { ...gasCp, nonce: nonceCp })).wait();
-      DebugHub.logCheckpoint("Liquidity Pair Created", "pass");
-    }
+    // Router v6 creates a missing pair INSIDE addLiquidity, so go straight
+    // to the add — no fragile pre-create step (wallets wrap its estimation
+    // reverts as opaque -32603 errors). On failure, decode the revert
+    // selector to self-diagnose instead of surfacing wallet noise.
+    const SEL_PAIR_NOT_FOUND = "0x4db171d4"; // PairNotFound(addr,addr) — pre-v6 router
+    const SEL_CREATE_PAUSED  = "0xaaed1932"; // PairCreationPaused() — factory paused
+
+    const revertSel = (err) => {
+      const d = err?.data?.originalError?.data ?? err?.error?.data?.data ??
+                err?.error?.data ?? err?.data;
+      const hex = typeof d === "string" ? d
+        : (typeof d?.data === "string" ? d.data : null);
+      if (hex && hex.startsWith("0x") && hex.length >= 10) return hex.slice(0, 10).toLowerCase();
+      const m = String(err?.message || "").match(/0x[0-9a-fA-F]{8}/);
+      return m ? m[0].toLowerCase() : null;
+    };
+
+    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
+    const sendAdd = async () => {
+      const deadline = Math.floor(Date.now() / 1000) + 1200;
+      const gas = await getGasParams(); const nonce = await getPendingNonce();
+      const t = await router.addLiquidity(tokenIn.address, tokenOut.address, amtA, amtB, aMin, bMin, userAddress, deadline, { ...gas, nonce });
+      await t.wait();
+      return t;
+    };
 
     btn.textContent = "Adding liquidity…";
     DebugHub.logCheckpoint("Liquidity Add Requested", "pass");
-    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
-    const deadline = Math.floor(Date.now() / 1000) + 1200;
-    const gas = await getGasParams(); const nonce = await getPendingNonce();
-    const tx = await router.addLiquidity(tokenIn.address, tokenOut.address, amtA, amtB, aMin, bMin, userAddress, deadline, { ...gas, nonce });
-    await tx.wait();
+    let tx;
+    try {
+      tx = await sendAdd();
+    } catch (addErr) {
+      const sel = revertSel(addErr);
+      if (sel) DebugHub.logError("handleAddLiquidity.revertSelector", new Error("selector " + sel));
+
+      if (sel === SEL_CREATE_PAUSED) {
+        alert("Pair creation is PAUSED on the TimbSwapFactory — call unpause() as the factory owner, then retry.");
+        throw addErr;
+      }
+      if (sel === SEL_PAIR_NOT_FOUND) {
+        // Pre-v6 router without create-on-add: create via the permissionless
+        // factory call, then retry the add once.
+        btn.textContent = `Creating ${tokenIn.symbol}/${tokenOut.symbol} pair…`;
+        DebugHub.logCheckpoint("Liquidity Pair Create Requested", "pass");
+        const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_ABI, signer);
+        const gasCp = await getGasParams(); const nonceCp = await getPendingNonce();
+        await (await factory.createPair(tokenIn.address, tokenOut.address, { ...gasCp, nonce: nonceCp })).wait();
+        DebugHub.logCheckpoint("Liquidity Pair Created", "pass");
+        btn.textContent = "Adding liquidity…";
+        tx = await sendAdd();
+      } else {
+        throw addErr;
+      }
+    }
     DebugHub.logCheckpoint("Liquidity Add Confirmed", "pass");
 
     document.getElementById("lq-amount-a").value = "";
