@@ -321,9 +321,30 @@ in exports instead of silent.
 Compile-verified on solc 0.8.24. **Deploy via §10's checklist** (TimbPrize
 redeploy; the keeper keeps running unchanged as a liveness backstop).
 
-## 10. THE KEEPER-INDEPENDENCE ROUND — TimbPrize v3 + Router v6 (DEPLOYED)
+## 10. THE KEEPER-INDEPENDENCE ROUND — TimbPrize v3 + Router v6
 
-**Status: live.** Deployed addresses:
+**⚠️ Status correction:** the TimbPrize deployed at `0xd2D2…Bd6A` turned out
+to be compiled from a PRE-§9 source (no `_settleDueSegment`, no
+permissionless/lazy settlement) — wiring is correct but the bytecode is
+v2-vintage, so settlement windows still hard-block until the keeper lands.
+**Redeploy TimbPrize from CURRENT main** (verify the source contains
+`_settleDueSegment` before compiling) and redo its wiring (steps 4–5, 7–9).
+Router v6 is fine as deployed.
+
+TimbPrize v3 now ALSO carries the confirmed game semantics:
+- **60-minute grid:** segments live on exact 60:00 marks. A settle landing
+  anywhere in the following slot anchors the next segment to the boundary
+  (`_nextSegmentStart`); only a full-slot stall falls back to wall clock.
+  Elapsed-time reads saturate at 0 for a grid-anchored future start.
+- **Intermission (59:45–60:00):** USER nudges deactivated (frontend disables
+  Advance: "Intermission — calculations in progress"); eligible-SWAP nudges
+  keep flowing and lazy-settle — the first one grabs the winning digit
+  (immutable from 59:45 by construction) and nudges into the next segment.
+- Settler alerts to Telegram when a segment blows past its 60:00 mark:
+  >60:03 ⚠️ slight delay, >60:10 🚨 major delay (fires when the next
+  settler run observes it — no run, no alert, which is itself the outage).
+
+Deployed addresses:
 - `TimbSwapRouter` v6: `0x6E53dc53Ea7B2fd8be171D74A381f009dA5F94bD`
 - `TimbPrize` v3: `0xd2D25b99Bd356019413139bf80D56aBaAedDBd6A`
 

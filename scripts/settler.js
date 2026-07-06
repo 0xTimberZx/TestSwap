@@ -47,9 +47,43 @@ const TIMBPRIZE_ABI = [
   "function timeRemainingInSegment() external view returns (uint256)",
   "function currentRound() external view returns (uint256)",
   "function currentSegment() external view returns (uint256)",
+  "function segmentStartTime() external view returns (uint256)",
   "function settleSegment() external",
   "function gameStarted() external view returns (bool)"
 ];
+
+// ─── Segment-delay alerting ──────────────────────────────────────────────────
+// A segment is 60:00 on the grid (59:45 interaction + 0:15 intermission).
+// If a rollover is still pending past these marks, tell Telegram how bad:
+//   > 60:03 (3s past the grid mark)  → ⚠️ slight delay
+//   > 60:10 (10s past the grid mark) → 🚨 major delay
+const SEGMENT_TOTAL_S   = 60 * 60; // 60:00 grid slot
+const DELAY_SLIGHT_S    = 3;
+const DELAY_MAJOR_S     = 10;
+
+/** Alert (tiered) if this overdue segment blew past the 60:00 grid mark. */
+async function alertIfDelayed(prize, round, segment) {
+  try {
+    const startTs  = await prize.segmentStartTime();
+    const lateness = Math.floor(Date.now() / 1000) - (Number(startTs) + SEGMENT_TOTAL_S);
+    if (lateness > DELAY_MAJOR_S) {
+      await notify(
+        `🚨 MAJOR segment delay\nRound #${round} | Segment ${segment}/6 ran ` +
+        `${lateness}s past its 60:00 mark before settling. The keeper (or any ` +
+        `interaction) didn't land in time — check GitHub cron health.`
+      );
+    } else if (lateness > DELAY_SLIGHT_S) {
+      await notify(
+        `⚠️ Slight segment delay\nRound #${round} | Segment ${segment}/6 ran ` +
+        `${lateness}s past its 60:00 mark before settling.`
+      );
+    }
+    return lateness;
+  } catch (e) {
+    console.warn(`[settler] delay check failed: ${e?.message || e}`);
+    return null;
+  }
+}
 
 // ─── Telegram ─────────────────────────────────────────────────────────────────
 
@@ -184,6 +218,9 @@ async function main() {
     }
 
     console.log(`[settler] Segment ready. Calling settleSegment()...`);
+    // Tiered Telegram alert if this segment blew past its 60:00 grid mark
+    // (>60:03 slight, >60:10 major) before we could settle it.
+    await alertIfDelayed(prize, round, segment);
     try {
       const wasRoundBoundary = await settleOnce(provider, wallet, prize, round, segment);
       settledCount++;

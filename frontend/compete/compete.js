@@ -228,7 +228,7 @@ async function pollRoundState() {
 
     const timerEl = document.getElementById("sub-timer");
     if (s.inSettlement) {
-      timerEl.textContent = "Settling segment…";
+      timerEl.textContent = "Intermission — calculating…";
     } else {
       const elapsed    = Math.floor(Date.now() / 1000) - s.segmentStart.toNumber();
       const remaining  = Math.max(0, (59 * 60 + 45) - elapsed);
@@ -711,11 +711,11 @@ function renderAdvancePreview() {
 
   const submitBtn = document.getElementById("advance-submit-btn");
   if (submitBtn) {
-    // TimbPrize v3 settles lazily: a nudge during the settlement window
-    // rolls the segment first, then applies to the fresh digit — so the
-    // button stays usable and just says what the first push will do.
+    // Game semantics: the 59:45–60:00 intermission belongs to calculations.
+    // USER nudges are deactivated during it (swap-driven nudges keep
+    // flowing at the contract level and settle the segment lazily).
     submitBtn.textContent = advanceInSettlement
-      ? `Advance ×${advanceCount} — rolls the segment`
+      ? "Intermission — calculations in progress"
       : `Advance ×${advanceCount}`;
   }
 
@@ -741,8 +741,10 @@ function updateAdvancePanel(inSettlement) {
   const panel = document.getElementById("advance-panel");
   if (!panel) return;
   panel.classList.toggle("hidden", !userAddress);
-  // Stays enabled during the settlement window — TimbPrize v3 settles the
-  // due segment lazily on the first nudge instead of reverting.
+  // User nudges are deactivated during the intermission (design intent);
+  // eligible-swap nudges keep flowing and lazy-settle at the contract level.
+  const submitBtn = document.getElementById("advance-submit-btn");
+  if (submitBtn) submitBtn.disabled = advanceInSettlement;
   renderAdvancePreview();
 }
 
