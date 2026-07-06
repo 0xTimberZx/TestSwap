@@ -39,7 +39,7 @@ const RPC_URL       = process.env.ARB_SEPOLIA_RPC;
 const PRIVATE_KEY   = process.env.SETTLER_PRIVATE_KEY;
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;
-const TIMBPRIZE_ADDR = "0xc8292043Dfb14d740aA45391a67d5F795a22c7CC"; // TimbPrize v3.1 (permissionless + lazy + 60-min grid)
+const TIMBPRIZE_ADDR = "0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40"; // TimbPrize v3.2 (continuous meter — counters never reset)
 
 // ─── ABI (minimal) ───────────────────────────────────────────────────────────
 

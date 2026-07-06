@@ -344,7 +344,7 @@ TimbPrize v3 now ALSO carries the confirmed game semantics:
 
 Deployed addresses:
 - `TimbSwapRouter` v6: `0x6E53dc53Ea7B2fd8be171D74A381f009dA5F94bD`
-- `TimbPrize` v3.1: `0xc8292043Dfb14d740aA45391a67d5F795a22c7CC`
+- `TimbPrize` v3.1: `0xc8292043Dfb14d740aA45391a67d5F795a22c7CC` — retired, superseded by v3.2 (§11: `0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40`)
 
 `ADDRESSES` updated in both `config.js` files; `scripts/settler.js`
 repointed. Settlement is now permissionless + lazy; addLiquidity
@@ -388,7 +388,7 @@ solc 0.8.24 (router needs viaIR in Remix, per its header).
     pre-create needed anymore), one Advance during a settlement window
     (should roll the segment, not revert), one ETH↔TIMBS swap.
 
-## 11. THE CONTINUOUS METER — TimbPrize v3.2 (CODE WRITTEN, needs redeploy)
+## 11. THE CONTINUOUS METER — TimbPrize v3.2 (LIVE at `0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40`)
 
 ### The meter never clears
 - Want: the six digit counters are a CONTINUOUS scroll. Round 1 ending
