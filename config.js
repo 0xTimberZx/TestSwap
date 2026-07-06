@@ -65,6 +65,23 @@ let provider = null;
 let signer   = null;
 let userAddress = null;
 
+// ─── Injected Provider Selection (Brave-safe) ─────────────────────────────────
+// When multiple wallet extensions inject, window.ethereum.providers is an
+// array and window.ethereum itself is whichever extension won the injection
+// race — requests could go to one wallet while events come from another.
+// Prefer Brave Wallet, then MetaMask, then the first injected provider, so
+// every request/listener in this file consistently targets the same wallet.
+function injectedProvider() {
+  const eth = window.ethereum;
+  if (!eth) return null;
+  if (eth.providers && eth.providers.length) {
+    return eth.providers.find((p) => p.isBraveWallet)
+        || eth.providers.find((p) => p.isMetaMask)
+        || eth.providers[0];
+  }
+  return eth;
+}
+
 // ─── Session Persistence ──────────────────────────────────────────────────────
 // Keeps wallet connected across page navigations without re-prompting.
 // sessionStorage clears when the browser tab is closed — no stale state.
@@ -84,7 +101,7 @@ function _getSavedAddress() {
 }
 
 async function _initProvider() {
-  provider    = new ethers.providers.Web3Provider(window.ethereum);
+  provider    = new ethers.providers.Web3Provider(injectedProvider());
   signer      = provider.getSigner();
   userAddress = await signer.getAddress();
 }
@@ -93,13 +110,13 @@ async function _ensureChain() {
   const network = await provider.getNetwork();
   if (network.chainId === CHAIN_ID) return;
   try {
-    await window.ethereum.request({
+    await injectedProvider().request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: CHAIN_CONFIG.chainId }]
     });
   } catch (switchErr) {
     if (switchErr.code === 4902) {
-      await window.ethereum.request({
+      await injectedProvider().request({
         method: "wallet_addEthereumChain",
         params: [CHAIN_CONFIG]
       });
@@ -119,7 +136,7 @@ async function connectWallet() {
     // Request account authorization FIRST. _initProvider() calls signer.getAddress(),
     // which throws "unknown account #0" in ethers v5 before any account is authorized —
     // silently failing the whole connect even though the wallet popup succeeded.
-    await window.ethereum.request({ method: "eth_requestAccounts" });
+    await injectedProvider().request({ method: "eth_requestAccounts" });
     await _initProvider();
     await _ensureChain();
     _saveSession(userAddress);
@@ -144,7 +161,7 @@ async function autoReconnect() {
 
   try {
     // Check wallet still has the account active (no popup)
-    const accounts = await window.ethereum.request({ method: "eth_accounts" });
+    const accounts = await injectedProvider().request({ method: "eth_accounts" });
     if (!accounts || accounts.length === 0) { _clearSession(); return null; }
     if (accounts[0].toLowerCase() !== saved.toLowerCase()) {
       _clearSession(); return null;
@@ -224,16 +241,22 @@ function fmtBytes6(bytes6) {
 // explicit reconnect risks running the old page state (approvals, pending
 // tx context) against the wrong account, so we always require a fresh
 // Connect Wallet click afterward.
+let _walletListenersBound = false;
+
 function listenForAccountChanges(onChangeCallback) {
-  if (!window.ethereum) return;
-  window.ethereum.on("accountsChanged", async () => {
+  const eth = injectedProvider();
+  // Bind once — a second call (re-connect, re-init) would stack a duplicate
+  // accountsChanged handler and fire session teardown twice per event.
+  if (!eth || _walletListenersBound) return;
+  _walletListenersBound = true;
+  eth.on("accountsChanged", async () => {
     provider    = null;
     signer      = null;
     userAddress = null;
     _clearSession();
     if (onChangeCallback) onChangeCallback(null);
   });
-  window.ethereum.on("chainChanged", () => window.location.reload());
+  eth.on("chainChanged", () => window.location.reload());
 }
 
 // Prompts the wallet's own account picker. MetaMask pops one straight
@@ -246,10 +269,11 @@ function listenForAccountChanges(onChangeCallback) {
 // by design, attempting a switch always ends the session and requires a
 // fresh Connect Wallet, even if the picker is then cancelled.
 async function handleSwitchAccount() {
-  if (!window.ethereum) return;
+  const eth = injectedProvider();
+  if (!eth) return;
   try {
     try {
-      await window.ethereum.request({
+      await eth.request({
         method: "wallet_revokePermissions",
         params: [{ eth_accounts: {} }]
       });
@@ -258,7 +282,7 @@ async function handleSwitchAccount() {
       // below still pops a picker on MetaMask-style wallets.
       console.warn("wallet_revokePermissions unavailable:", revokeErr?.message);
     }
-    await window.ethereum.request({
+    await eth.request({
       method: "wallet_requestPermissions",
       params: [{ eth_accounts: {} }]
     });
