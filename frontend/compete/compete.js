@@ -138,7 +138,11 @@ function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
       cell.classList.add("active");
       if (inSettlement) cell.classList.add("settling");
     } else {
-      charEl.textContent = "·";
+      // The meter is continuous — future segments already hold the value
+      // carried over from the previous round (round 1 ending ABCJLA leaves
+      // J, L, … sitting in their segments). Show it dimmed instead of a
+      // blank dot; nudging resumes from here when the segment activates.
+      charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
       charEl.style.opacity = "";
       cell.classList.add("future");
     }

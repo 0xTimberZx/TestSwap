@@ -412,12 +412,13 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         }
 
         if (currentSegment < SEGMENTS_PER_ROUND) {
-            // Lock current segment digit and advance on the 60-minute grid
+            // Lock current segment digit and advance on the 60-minute grid.
+            // The incoming segment's counter is NOT reset: the meter is
+            // continuous — each digit carries its value across segments and
+            // rounds, and nudging resumes from wherever it last sat.
             segmentDigitLocked[currentSegment] = true;
             currentSegment++;
             segmentStartTime = _nextSegmentStart();
-            // Reset new segment's counter
-            segmentDigitCounter[currentSegment] = 0;
             emit SegmentAdvanced(currentRound, currentSegment, block.timestamp);
         } else {
             // Final segment — lock and settle round
@@ -460,16 +461,17 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             block.timestamp
         );
 
-        // Auto-queue next round — reset all digit counters. The new round's
-        // first segment starts on the 60-minute grid, same as a plain
-        // segment advance.
+        // Auto-queue next round. The meter NEVER clears: every digit counter
+        // carries its end-of-round value into the new round (round 1 ending
+        // ABCJLA means round 2's segments resume from A,B,C,J,L,A) — only
+        // the locks release. The new round's first segment starts on the
+        // 60-minute grid, same as a plain segment advance.
         uint256 nextStart = _nextSegmentStart();
         currentRound++;
         currentSegment   = 1;
         segmentStartTime = nextStart;
         for (uint256 i = 1; i <= SEGMENTS_PER_ROUND; i++) {
-            segmentDigitCounter[i] = 0;
-            segmentDigitLocked[i]  = false;
+            segmentDigitLocked[i] = false;
         }
 
         IGameRegistry(gameRegistry).setCurrentRound(currentRound);
