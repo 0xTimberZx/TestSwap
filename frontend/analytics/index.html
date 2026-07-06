@@ -133,6 +133,11 @@
         <div class="metric-val" id="m-locks">—</div>
         <div class="metric-sub">across all tokens</div>
       </div>
+      <div class="metric-card">
+        <div class="metric-label">Vault Yield</div>
+        <div class="metric-val metric-green" id="m-yield">—</div>
+        <div class="metric-sub" id="m-yield-sub">accruing for the pot</div>
+      </div>
     </div>
 
     <!-- ─── Round History ──────────────────────────────────────────────── -->
@@ -158,6 +163,80 @@
             <tr><td colspan="6" class="table-empty">Loading…</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ─── Yield Vault ────────────────────────────────────────────────── -->
+    <div class="section-label">YIELD VAULT</div>
+    <div class="data-card">
+      <div class="data-card-header">
+        <span class="data-card-title">Ticket Capital → Pot Yield</span>
+        <span class="data-refresh" id="vault-status">Loading…</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>Amount</th>
+              <th>Counterparty</th>
+              <th>Block</th>
+            </tr>
+          </thead>
+          <tbody id="vault-tbody">
+            <tr><td colspan="4" class="table-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Everything below is wallet-gated: internals beyond the dashboard
+           top-line (weights, rate, per-ticket registrations). -->
+      <div id="vault-gated-note" class="table-empty" style="padding: 16px 0 6px; text-align: center;">
+        Connect your wallet to view vault internals — total weight, yield rate, and per-ticket registrations.
+      </div>
+      <div id="vault-detail" class="hidden">
+        <div class="data-card-header" style="margin-top: 18px;">
+          <span class="data-card-title">Vault Internals</span>
+          <span class="data-refresh" id="vault-detail-status"></span>
+        </div>
+        <div class="metrics-grid" style="margin-bottom: 14px;">
+          <div class="metric-card">
+            <div class="metric-label">Total Weight</div>
+            <div class="metric-val" id="v-weight">—</div>
+            <div class="metric-sub">active ticket capital (ETH-equivalent)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Yield Rate</div>
+            <div class="metric-val" id="v-rate">—</div>
+            <div class="metric-sub">per day at current weight</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Reserve</div>
+            <div class="metric-val" id="v-reserve">—</div>
+            <div class="metric-sub">funds yield until dry</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Last Accrual</div>
+            <div class="metric-val" id="v-accrual">—</div>
+            <div class="metric-sub" id="v-accrual-sub">on-chain touch</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Ticket</th>
+                <th>Change</th>
+                <th>Weight</th>
+                <th>New Total</th>
+                <th>Block</th>
+              </tr>
+            </thead>
+            <tbody id="vault-weights-tbody">
+              <tr><td colspan="5" class="table-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 

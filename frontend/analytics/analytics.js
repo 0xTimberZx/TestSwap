@@ -22,6 +22,19 @@ const STAKING_ABI = ["function totalStaked() external view returns (uint256)"];
 const FARM_ABI    = ["function totalStaked() external view returns (uint256)"];
 const VAULT_ABI   = ["function totalLocks() external view returns (uint256)"];
 
+// TimbYieldVault — ticket capital earns yield for the prize pot.
+const YV_ABI = [
+  "function previewAccrued() external view returns (uint256)",
+  "function reserve() external view returns (uint256)",
+  "function totalWeight() external view returns (uint256)",
+  "function ratePerSecond1e18() external view returns (uint256)",
+  "function lastAccrual() external view returns (uint256)",
+  "event Funded(address indexed from, uint256 amount)",
+  "event Harvested(uint256 amount, address indexed to)",
+  "event WeightRegistered(uint256 indexed ticketId, uint256 weight, uint256 totalWeight)",
+  "event WeightRemoved(uint256 indexed ticketId, uint256 weight, uint256 totalWeight)"
+];
+
 const BLOCK_RANGE = 50000; // ~7 days on Arb Sepolia
 
 // Read-only queries always go to the canonical Arbitrum Sepolia RPC —
@@ -256,6 +269,138 @@ async function loadClaims() {
   }
 }
 
+// ─── Yield Vault ──────────────────────────────────────────────────────────────
+// Public: yield accrued for the pot (metric card) + the money-flow events
+// (Funded in, Harvested out to TimbPrize). Wallet-gated: the internals that
+// aren't on the dashboard — total weight, yield rate, reserve, last accrual,
+// and per-ticket weight registrations.
+
+async function loadVault() {
+  const prov  = readProv();
+  const vault = new ethers.Contract(ADDRESSES.TimbYieldVault, YV_ABI, prov);
+  const set   = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  // ── Public top-line + activity table ──
+  try {
+    const [accrued, reserve] = await Promise.all([
+      vault.previewAccrued(),
+      vault.reserve()
+    ]);
+    set("m-yield", fmt(accrued, 18, 6) + " ETH");
+    set("m-yield-sub", `reserve ${fmt(reserve, 18, 4)} ETH`);
+  } catch (e) {
+    console.warn("loadVault metrics:", e.message);
+  }
+
+  const tbody    = document.getElementById("vault-tbody");
+  const statusEl = document.getElementById("vault-status");
+  try {
+    const currentBlock = await prov.getBlockNumber();
+    const fromBlock    = Math.max(0, currentBlock - BLOCK_RANGE);
+    const [funded, harvested] = await Promise.all([
+      vault.queryFilter(vault.filters.Funded(),    fromBlock, currentBlock),
+      vault.queryFilter(vault.filters.Harvested(), fromBlock, currentBlock)
+    ]);
+    const rows = [
+      ...funded.map(ev => ({
+        block: ev.blockNumber, type: "Funded", cls: "td-in",
+        amount: ev.args.amount, who: ev.args.from
+      })),
+      ...harvested.map(ev => ({
+        block: ev.blockNumber, type: "Harvested → Pot", cls: "td-out",
+        amount: ev.args.amount, who: ev.args.to
+      }))
+    ].sort((a, b) => b.block - a.block).slice(0, 30);
+
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No vault activity in the last 50,000 blocks</td></tr>';
+      statusEl.textContent = "0 events";
+    } else {
+      tbody.innerHTML = "";
+      for (const r of rows) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="${r.cls}">${r.type}</td>
+          <td>${fmt(r.amount, 18, 6)} ETH</td>
+          <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.who}','_blank')">${fmtAddr(r.who)}</td>
+          <td>${r.block}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+      statusEl.textContent = `${rows.length} events`;
+    }
+    DebugHub.logCheckpoint("Analytics:Vault Loaded", "pass");
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Could not load vault activity</td></tr>';
+    statusEl.textContent = "Error";
+    DebugHub.logError("loadVault", e);
+  }
+
+  // ── Wallet-gated internals ──
+  const note   = document.getElementById("vault-gated-note");
+  const detail = document.getElementById("vault-detail");
+  if (!userAddress) {
+    note?.classList.remove("hidden");
+    detail?.classList.add("hidden");
+    return;
+  }
+  note?.classList.add("hidden");
+  detail?.classList.remove("hidden");
+
+  try {
+    const currentBlock = await prov.getBlockNumber();
+    const fromBlock    = Math.max(0, currentBlock - BLOCK_RANGE);
+    const [weight, rate, reserve, lastTs, regs, rems] = await Promise.all([
+      vault.totalWeight(),
+      vault.ratePerSecond1e18(),
+      vault.reserve(),
+      vault.lastAccrual(),
+      vault.queryFilter(vault.filters.WeightRegistered(), fromBlock, currentBlock),
+      vault.queryFilter(vault.filters.WeightRemoved(),    fromBlock, currentBlock)
+    ]);
+
+    // Daily yield at the current weight: totalWeight × rate/sec × 86400
+    const perDay = weight.mul(rate).div(ethers.constants.WeiPerEther).mul(86400);
+    set("v-weight",  fmt(weight, 18, 6) + " ETH-eq");
+    set("v-rate",    fmt(perDay, 18, 8) + " ETH");
+    set("v-reserve", fmt(reserve, 18, 4) + " ETH");
+    const ts = lastTs.toNumber();
+    set("v-accrual", ts ? new Date(ts * 1000).toLocaleTimeString() : "—");
+    set("v-accrual-sub", ts ? new Date(ts * 1000).toLocaleDateString() : "on-chain touch");
+
+    const wTbody = document.getElementById("vault-weights-tbody");
+    const wRows = [
+      ...regs.map(ev => ({ block: ev.blockNumber, dir: "+ Registered", cls: "td-in",
+                           id: ev.args.ticketId, w: ev.args.weight, total: ev.args.totalWeight })),
+      ...rems.map(ev => ({ block: ev.blockNumber, dir: "− Removed", cls: "td-out",
+                           id: ev.args.ticketId, w: ev.args.weight, total: ev.args.totalWeight }))
+    ].sort((a, b) => b.block - a.block).slice(0, 30);
+
+    if (wRows.length === 0) {
+      wTbody.innerHTML = '<tr><td colspan="5" class="table-empty">No ticket weight changes in the last 50,000 blocks</td></tr>';
+      set("vault-detail-status", "0 changes");
+    } else {
+      wTbody.innerHTML = "";
+      for (const r of wRows) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>#${r.id}</td>
+          <td class="${r.cls}">${r.dir}</td>
+          <td>${fmt(r.w, 18, 6)}</td>
+          <td>${fmt(r.total, 18, 6)}</td>
+          <td>${r.block}</td>
+        `;
+        wTbody.appendChild(tr);
+      }
+      set("vault-detail-status", `${wRows.length} changes`);
+    }
+  } catch (e) {
+    console.warn("loadVault internals:", e.message);
+    set("vault-detail-status", "Error");
+    DebugHub.logError("loadVault.internals", e);
+  }
+}
+
 // ─── Wallet Connect (minimal — analytics is mostly read-only) ─────────────────
 
 async function handleConnect() {
@@ -270,6 +415,7 @@ async function handleConnect() {
     if (!newAddr) { handleDisconnect(); return; }
     document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
   });
+  loadVault(); // unlock the gated internals
 }
 
 function handleDisconnect() {
@@ -278,6 +424,7 @@ function handleDisconnect() {
   document.getElementById("connect-btn").classList.remove("hidden");
   document.getElementById("wallet-info").classList.add("hidden");
   document.getElementById("network-badge").classList.add("hidden");
+  loadVault(); // re-gate the internals
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -298,7 +445,8 @@ function handleDisconnect() {
     loadLiveMetrics(),
     loadRoundHistory(),
     loadRecentSwaps(),
-    loadClaims()
+    loadClaims(),
+    loadVault()
   ]);
 
   // Refresh live metrics every 15s, events every 60s
@@ -306,5 +454,6 @@ function handleDisconnect() {
   setInterval(() => {
     loadRecentSwaps();
     loadClaims();
+    loadVault();
   }, 60000);
 })();
