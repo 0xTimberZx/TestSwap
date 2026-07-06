@@ -236,13 +236,28 @@ function listenForAccountChanges(onChangeCallback) {
   window.ethereum.on("chainChanged", () => window.location.reload());
 }
 
-// Prompts the wallet's own account picker (MetaMask/Brave support
-// wallet_requestPermissions for this). Whatever the user picks, the
-// accountsChanged listener above ends the session — this just opens
-// the picker so "switch" is reachable from the wallet menu.
+// Prompts the wallet's own account picker. MetaMask pops one straight
+// from wallet_requestPermissions, but Brave Wallet resolves that call
+// silently when the site already holds the eth_accounts permission — no
+// popup, so "Switch Account" looked dead in Brave. Revoking the permission
+// first (wallet_revokePermissions, EIP-2255) forces the wallet to show its
+// connect/account picker on the next request. The revoke also fires
+// accountsChanged, so the listener above ends the session immediately —
+// by design, attempting a switch always ends the session and requires a
+// fresh Connect Wallet, even if the picker is then cancelled.
 async function handleSwitchAccount() {
   if (!window.ethereum) return;
   try {
+    try {
+      await window.ethereum.request({
+        method: "wallet_revokePermissions",
+        params: [{ eth_accounts: {} }]
+      });
+    } catch (revokeErr) {
+      // Wallet predates wallet_revokePermissions — requestPermissions
+      // below still pops a picker on MetaMask-style wallets.
+      console.warn("wallet_revokePermissions unavailable:", revokeErr?.message);
+    }
     await window.ethereum.request({
       method: "wallet_requestPermissions",
       params: [{ eth_accounts: {} }]

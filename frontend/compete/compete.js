@@ -268,9 +268,39 @@ async function pollRoundState() {
     updateAdvancePanel(!!s.inSettlement);
 
   } catch (e) {
+    // Public-RPC hiccups (a dropped eth_call response) surface as
+    // CALL_EXCEPTION "missing revert data" with an inner SERVER_ERROR —
+    // nothing reverted on-chain. Skip the tick quietly; the next poll is
+    // 4 seconds away. Only report to DebugHub once several polls in a row
+    // fail, which means the endpoint is actually down rather than flaky.
+    if (isTransientRpcError(e)) {
+      pollFailStreak++;
+      console.warn(`pollRoundState: transient RPC error (${pollFailStreak} in a row) — ${e.message}`);
+      if (pollFailStreak === POLL_FAIL_ALERT_AT) {
+        DebugHub.logError("pollRoundState.rpcDown",
+          new Error(`${POLL_FAIL_ALERT_AT} consecutive RPC failures — endpoint may be down`));
+      }
+      return;
+    }
     console.warn("pollRoundState:", e.message);
     DebugHub.logError("pollRoundState", e);
+    return;
   }
+  pollFailStreak = 0;
+}
+
+// ─── Transient RPC detection ─────────────────────────────────────────────────
+
+let pollFailStreak = 0;
+const POLL_FAIL_ALERT_AT = 3;
+
+function isTransientRpcError(e) {
+  if (!e) return false;
+  if (e.code === "SERVER_ERROR" || e.code === "TIMEOUT" || e.code === "NETWORK_ERROR") return true;
+  const inner = e.error || {};
+  const text  = `${e.message || ""} ${inner.message || ""} ${inner.reason || ""} ${inner.code || ""}`;
+  return e.code === "CALL_EXCEPTION" &&
+         /missing response|missing revert data|SERVER_ERROR|bad response|timeout/i.test(text);
 }
 
 // ─── Entry Costs ─────────────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ const FACTORY_ABI = [
 ];
 const ERC20_ABI     = [
   "function balanceOf(address account) external view returns (uint256)",
+  "function totalSupply() external view returns (uint256)",
   "function allowance(address owner, address spender) external view returns (uint256)",
   "function approve(address spender, uint256 amount) external returns (bool)",
   "function decimals() external view returns (uint8)",
@@ -622,6 +623,7 @@ async function refreshLiquidity() {
   const ratioEl = document.getElementById("lq-ratio");
   const lpEl = document.getElementById("lq-lp-bal");
   const lpRemoveEl = document.getElementById("lq-remove-bal");
+  const wdEl = document.getElementById("lq-withdrawable");
   const read = readProviderForEligibility();
 
   // Balances
@@ -638,15 +640,17 @@ async function refreshLiquidity() {
   if (isNative(tokenIn) || isNative(tokenOut)) {
     ratioEl.textContent = "Use WETH (wrap ETH on the Swap tab)";
     lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —";
+    if (wdEl) wdEl.textContent = "—";
     updateLqButtons();
     return;
   }
 
   if (tokenIn && tokenOut) {
-    // Pool ratio
+    // Pool ratio — keep the reserves around for the withdrawable preview below.
+    let rA = null, rB = null;
     try {
       const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, read);
-      const [rA, rB] = await router.getReserves(tokenIn.address, tokenOut.address);
+      [rA, rB] = await router.getReserves(tokenIn.address, tokenOut.address);
       if (rA.gt(0) && rB.gt(0)) {
         const ratio = parseFloat(ethers.utils.formatUnits(rB, tokenOut.decimals)) /
                       parseFloat(ethers.utils.formatUnits(rA, tokenIn.decimals));
@@ -656,20 +660,42 @@ async function refreshLiquidity() {
       }
     } catch { ratioEl.textContent = "—"; }
 
-    // LP pair + balance
+    // LP pair + balance + withdrawable preview. A position is withdrawable
+    // whenever the wallet holds LP tokens for this pair — show exactly what
+    // removeLiquidity(100%) would return right now: lpBal × reserve ÷ supply,
+    // the pair contract's own redemption math.
     try {
       const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_ABI, read);
       lpPairAddress = await factory.getPairAddress(tokenIn.address, tokenOut.address);
-      if (lpPairAddress && lpPairAddress !== ethers.constants.AddressZero && userAddress) {
+      const pairExists = lpPairAddress && lpPairAddress !== ethers.constants.AddressZero;
+      if (pairExists && userAddress) {
         const lp = new ethers.Contract(lpPairAddress, ERC20_ABI, read);
         lpBalanceWei = await lp.balanceOf(userAddress);
         const s = fmt(lpBalanceWei, 18, 6);
         lpEl.textContent = s;
         lpRemoveEl.textContent = "LP: " + s;
+        if (wdEl) {
+          if (lpBalanceWei.isZero()) {
+            wdEl.textContent = "No position";
+          } else if (rA && rB && rA.gt(0) && rB.gt(0)) {
+            const supply = await lp.totalSupply();
+            const outA = lpBalanceWei.mul(rA).div(supply);
+            const outB = lpBalanceWei.mul(rB).div(supply);
+            wdEl.textContent =
+              `✓ ≈ ${fmt(outA, tokenIn.decimals, 4)} ${tokenIn.symbol} + ` +
+              `${fmt(outB, tokenOut.decimals, 4)} ${tokenOut.symbol}`;
+          } else {
+            wdEl.textContent = "✓ Yes";
+          }
+        }
       } else {
         lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —";
+        if (wdEl) wdEl.textContent = !pairExists ? "No pool yet" : "Connect wallet";
       }
-    } catch { lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —"; }
+    } catch {
+      lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —";
+      if (wdEl) wdEl.textContent = "—";
+    }
   }
   updateLqButtons();
 }
