@@ -292,6 +292,33 @@ async function handleSwitchAccount() {
   }
 }
 
+// ─── Theme (dark default, light optional) ─────────────────────────────────────
+// The palette lives in CSS variables; data-theme="light" on <html> swaps it.
+// An inline snippet in each page's <head> applies the saved theme before
+// first paint (no dark flash); this section owns the toggle + button label.
+
+const THEME_KEY = "timbswap_theme";
+
+function _currentTheme() {
+  try { return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark"; }
+  catch { return "dark"; }
+}
+
+function _applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const btn = document.getElementById("theme-toggle");
+  if (btn) btn.textContent = theme === "light" ? "Dark Mode" : "Light Mode";
+}
+
+function toggleTheme() {
+  const next = _currentTheme() === "light" ? "dark" : "light";
+  try { localStorage.setItem(THEME_KEY, next); } catch {}
+  _applyTheme(next);
+}
+
+// Sync the attribute + button label on load (config.js runs after the DOM).
+_applyTheme(_currentTheme());
+
 // ─── DebugHub Stub ────────────────────────────────────────────────────────────
 // Loaded by SDK script tag in each page. Fallback stub defined here
 // so DebugHub never breaks TimbSwap if the SDK fails to load.
