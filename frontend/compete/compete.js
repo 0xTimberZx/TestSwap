@@ -26,7 +26,8 @@ const GAME_REGISTRY_ABI = [
   "function submitEntry(bytes6 string6, bool useETH, uint256 extraRounds) external payable",
   "function replaceEntry(bytes6 newString6, uint256 extraRounds) external",
   "function claimRefund(uint256 ticketId) external",
-  "function cancelEntry() external"
+  "function cancelEntry() external",
+  "function getRoundEntrants(uint256 round) external view returns (address[])"
 ];
 
 const YIELD_VAULT_ABI = [
@@ -235,6 +236,14 @@ async function pollRoundState() {
       }
     }
     document.getElementById("sub-pot").textContent = potTxt;
+
+    // Entries playing THIS round — was a dead "— entries" placeholder.
+    try {
+      const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, readProv());
+      const entrants = await registry.getRoundEntrants(currentRoundNum);
+      document.getElementById("sub-entries").textContent =
+        `${entrants.length} ${entrants.length === 1 ? "entry" : "entries"}`;
+    } catch {}
 
     const timerEl = document.getElementById("sub-timer");
     if (s.inSettlement) {

@@ -21,6 +21,7 @@ const TIMBS_ABI  = ["function totalSupply() external view returns (uint256)"];
 const STAKING_ABI = ["function totalStaked() external view returns (uint256)"];
 const FARM_ABI    = ["function totalStaked() external view returns (uint256)"];
 const VAULT_ABI   = ["function totalLocks() external view returns (uint256)"];
+const REGISTRY_ABI = ["function getRoundEntrants(uint256 round) external view returns (address[])"];
 
 // TimbYieldVault — ticket capital earns yield for the prize pot.
 const YV_ABI = [
@@ -60,6 +61,9 @@ async function loadLiveMetrics() {
     const vault   = new ethers.Contract(ADDRESSES.TimbLockVault, VAULT_ABI, prov);
     const prize   = new ethers.Contract(ADDRESSES.TimbPrize, PRIZE_ABI, prov);
 
+    const registry = new ethers.Contract(ADDRESSES.GameRegistry, REGISTRY_ABI, prov);
+    const yvault   = new ethers.Contract(ADDRESSES.TimbYieldVault, YV_ABI, prov);
+
     const [
       reserves, token0,
       supply, staked, lpStaked, locks,
@@ -75,6 +79,15 @@ async function loadLiveMetrics() {
       prize.currentSegment(),
       prize.currentAccumulatedRewards(),
       prize.positionCounter()
+    ]);
+
+    // Active entries vs earning capital — deliberately two numbers. A
+    // replaced ticket's escrow keeps its vault weight through its last
+    // eligible round while the pending replacement isn't counted until
+    // activation, so tickets and ETH-equivalent weight can diverge.
+    const [entrants, earningWeight] = await Promise.all([
+      registry.getRoundEntrants(round).catch(() => []),
+      yvault.totalWeight().catch(() => null)
     ]);
 
     // Sort reserves by token direction
@@ -100,6 +113,8 @@ async function loadLiveMetrics() {
     set("m-lp-staked",    fmt(lpStaked, 18, 4) + " LP");
     set("m-supply",       fmt(supply, 18, 0) + " TIMBS");
     set("m-locks",        locks.toString());
+    set("m-entries",      `${entrants.length} ticket${entrants.length === 1 ? "" : "s"}`);
+    if (earningWeight) set("m-entries-sub", `${fmt(earningWeight, 18, 4)} ETH-eq earning yield`);
 
     DebugHub.logCheckpoint("Analytics:Metrics Loaded", "pass");
   } catch (e) {
