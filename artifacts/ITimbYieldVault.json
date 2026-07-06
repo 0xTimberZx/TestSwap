@@ -37,20 +37,44 @@
 		},
 		"gasEstimates": null,
 		"methodIdentifiers": {
-			"harvest()": "4641257d"
+			"register(uint256,address,uint256)": "fca247ac",
+			"remove(uint256)": "4cc82215"
 		}
 	},
 	"abi": [
 		{
-			"inputs": [],
-			"name": "harvest",
-			"outputs": [
+			"inputs": [
 				{
 					"internalType": "uint256",
-					"name": "",
+					"name": "ticketId",
+					"type": "uint256"
+				},
+				{
+					"internalType": "address",
+					"name": "token",
+					"type": "address"
+				},
+				{
+					"internalType": "uint256",
+					"name": "amount",
 					"type": "uint256"
 				}
 			],
+			"name": "register",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "ticketId",
+					"type": "uint256"
+				}
+			],
+			"name": "remove",
+			"outputs": [],
 			"stateMutability": "nonpayable",
 			"type": "function"
 		}

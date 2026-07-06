@@ -6,15 +6,38 @@
 	"output": {
 		"abi": [
 			{
-				"inputs": [],
-				"name": "harvest",
-				"outputs": [
+				"inputs": [
 					{
 						"internalType": "uint256",
-						"name": "",
+						"name": "ticketId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address",
+						"name": "token",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amount",
 						"type": "uint256"
 					}
 				],
+				"name": "register",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "ticketId",
+						"type": "uint256"
+					}
+				],
+				"name": "remove",
+				"outputs": [],
 				"stateMutability": "nonpayable",
 				"type": "function"
 			}
@@ -32,15 +55,15 @@
 	},
 	"settings": {
 		"compilationTarget": {
-			"contracts/TimbPrize.sol": "ITimbYieldVault"
+			"contracts/GameRegistry.sol": "ITimbYieldVault"
 		},
-		"evmVersion": "shanghai",
+		"evmVersion": "london",
 		"libraries": {},
 		"metadata": {
 			"bytecodeHash": "ipfs"
 		},
 		"optimizer": {
-			"enabled": false,
+			"enabled": true,
 			"runs": 200
 		},
 		"remappings": []
@@ -126,12 +149,12 @@
 				"dweb:/ipfs/QmadRjHbkicwqwwh61raUEapaVEtaLMcYbQZWs9gUkgj3u"
 			]
 		},
-		"contracts/TimbPrize.sol": {
-			"keccak256": "0x66f8d6bb08a3520d74c7d4a4fb0ac55b249380c5a6f2e0e297b2e5091c141f24",
+		"contracts/GameRegistry.sol": {
+			"keccak256": "0x4997290fafcb913c82638b90e09b70c946f63ee2d6372976d9505450f9adfb96",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://ae80c381d9213a0a916b70f7b6aa1209b6cf20ca7c467887217426c71e4ccd01",
-				"dweb:/ipfs/QmULzJxGaiuupLCwPRF77CJG8zpv2C2teLBcGJ9rzNkr11"
+				"bzz-raw://9c715b4ad51157e5d9e311358d2e42ec885613dd13d3b1ac02689d423811380a",
+				"dweb:/ipfs/QmVUfqUePxQi3uH9oNJRE3QB8C28JLdDqUo82x3BBeCaMs"
 			]
 		}
 	},

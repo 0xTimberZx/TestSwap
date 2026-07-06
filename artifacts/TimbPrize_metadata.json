@@ -1421,13 +1421,16 @@
 					"details": "Returns 0x00 if segment hasn't been settled yet."
 				},
 				"nudgeScroll()": {
-					"details": "Only affects the current segment's digit counter.      Global positionCounter also increments (for entropy + analytics).      Blocked during settlement window."
+					"details": "Only affects the current segment's digit counter.      Global positionCounter also increments (for entropy + analytics).      LAZY SETTLEMENT: if the segment's interaction window has already      elapsed, the nudge settles it first (locking the digit exactly as      the keeper would — no nudges landed since the boundary) and then      applies to the fresh segment. The game can never sit stuck in a      settlement window while someone is playing it; nudges only stay      blocked if settlement itself is paused by the owner."
 				},
 				"owner()": {
 					"details": "Returns the address of the current owner."
 				},
 				"renounceOwnership()": {
 					"details": "Leaves the contract without owner. It will not be possible to call `onlyOwner` functions. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby disabling any functionality that is only available to the owner."
+				},
+				"settleSegment()": {
+					"details": "PERMISSIONLESS — the timing guard is what protects the game, not      the caller: nothing about the outcome depends on who lands this      transaction, so any wallet may unstick the game. The settler      keeper keeps running as a liveness backstop, and nudgeScroll      settles lazily too (see below), so the game can never stall in      its settlement window while it is being used."
 				},
 				"transferOwnership(address)": {
 					"details": "Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner."
@@ -1541,6 +1544,9 @@
 				"setYieldVault(address)": {
 					"notice": "Set the yield vault (address(0) disables the yield source)."
 				},
+				"settleSegment()": {
+					"notice": "Settle the current segment once its interaction window elapsed."
+				},
 				"settler()": {
 					"notice": "Settler address — authorised to call settleSegment()."
 				},
@@ -1554,7 +1560,7 @@
 					"notice": "TimbYieldVault — active-escrow yield harvested into the pot         at each round settlement (address(0) = yield disabled)."
 				}
 			},
-			"notice": "Prize game round logic, scroll mechanic, settlement, and payouts. Architecture:   - Perpetual self-continuing rounds (6 hours each).   - 6 segments per round: 59:45 interaction + 0:15 settlement.   - positionCounter increments +1 per eligible swap (via nudgeScroll).   - Winning string = 6-char window in 36-char alphabet at freeze point.   - Freeze: keccak256(blockhash(block.number-1) + counter + roundNumber).   - Winners: exact 6-char match, equal split, remainder (r) snowballs.   - Prize ETH held in PrizeEscrow, paid on winner claim.   - Dual-layer verification at settlement via GameRegistry. Prize pool accounting (balance sheet):   currentAccumulatedRewards — live building pot   gameUnclaimed_winningsPool — documented winners pending claim   Entry escrow in GameRegistry — completely separate, never touched here Security:   - ReentrancyGuard on claimWinnings(), nudgeScroll(), settleSegment().   - Settler address (owner initially) is the only caller for settlement.   - Settlement reverts if called before segment timer expires.   - nudgeScroll() blocked during 0:15 settlement window.   - Winner claim verified via dual-layer GameRegistry check.   - ETH never held here — all prize ETH in PrizeEscrow.   - Per-function pause (entries, settlement pausable independently). Deployment:   1. Deploy PrizeEscrow → Deploy TimbPrize(escrow, registry, router)   2. registry.setTimbPrize(address(this))   3. router.setTimbPrize(address(this))   4. setEligibleRegistry(address)   5. Fund PrizeEscrow with initial ETH   6. startGame() — begins round #1",
+			"notice": "Prize game round logic, scroll mechanic, settlement, and payouts. Architecture:   - Perpetual self-continuing rounds (6 hours each).   - 6 segments per round: 59:45 interaction + 0:15 settlement.   - positionCounter increments +1 per eligible swap (via nudgeScroll).   - Winning string = 6-char window in 36-char alphabet at freeze point.   - Freeze: keccak256(blockhash(block.number-1) + counter + roundNumber).   - Winners: exact 6-char match, equal split, remainder (r) snowballs.   - Prize ETH held in PrizeEscrow, paid on winner claim.   - Dual-layer verification at settlement via GameRegistry. Prize pool accounting (balance sheet):   currentAccumulatedRewards — live building pot   gameUnclaimed_winningsPool — documented winners pending claim   Entry escrow in GameRegistry — completely separate, never touched here Security:   - ReentrancyGuard on claimWinnings(), nudgeScroll(), settleSegment().   - settleSegment() is PERMISSIONLESS — the timing guard (reverts before     the interaction window elapses) is what protects the game, not the     caller. The settler keeper remains as a liveness backstop.   - nudgeScroll() settles a due segment lazily instead of reverting, so     the game cannot stall in its settlement window while in use.   - Winner claim verified via dual-layer GameRegistry check.   - ETH never held here — all prize ETH in PrizeEscrow.   - Per-function pause (entries, settlement pausable independently). Deployment:   1. Deploy PrizeEscrow → Deploy TimbPrize(escrow, registry, router)   2. registry.setTimbPrize(address(this))   3. router.setTimbPrize(address(this))   4. setEligibleRegistry(address)   5. Fund PrizeEscrow with initial ETH   6. startGame() — begins round #1",
 			"version": 1
 		}
 	},
@@ -1655,11 +1661,11 @@
 			]
 		},
 		"contracts/TimbPrize.sol": {
-			"keccak256": "0x66f8d6bb08a3520d74c7d4a4fb0ac55b249380c5a6f2e0e297b2e5091c141f24",
+			"keccak256": "0xe60329da30a39c95eb9e997d59fd5b8e8a1e4b8774bdae672de91fe8d5eeadf7",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://ae80c381d9213a0a916b70f7b6aa1209b6cf20ca7c467887217426c71e4ccd01",
-				"dweb:/ipfs/QmULzJxGaiuupLCwPRF77CJG8zpv2C2teLBcGJ9rzNkr11"
+				"bzz-raw://62d65bf7399a01228013ed7f7133aa7cbff126909c3ca639bfeae7d8a9953e12",
+				"dweb:/ipfs/Qme8Bx6nh7NGbEqP2pGLUjJhoi4eLH8VhFudAiNtzzf2Vk"
 			]
 		}
 	},

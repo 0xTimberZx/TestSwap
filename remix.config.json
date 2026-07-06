@@ -170,5 +170,8 @@
         }
       }
     }
+  },
+  "scenarios": {
+    "lastSavedScenario": "Deploypatternjson"
   }
 }
