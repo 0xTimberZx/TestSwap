@@ -323,13 +323,11 @@ redeploy; the keeper keeps running unchanged as a liveness backstop).
 
 ## 10. THE KEEPER-INDEPENDENCE ROUND — TimbPrize v3 + Router v6
 
-**⚠️ Status correction:** the TimbPrize deployed at `0xd2D2…Bd6A` turned out
-to be compiled from a PRE-§9 source (no `_settleDueSegment`, no
-permissionless/lazy settlement) — wiring is correct but the bytecode is
-v2-vintage, so settlement windows still hard-block until the keeper lands.
-**Redeploy TimbPrize from CURRENT main** (verify the source contains
-`_settleDueSegment` before compiling) and redo its wiring (steps 4–5, 7–9).
-Router v6 is fine as deployed.
+**Status: LIVE (v3.1).** TimbPrize redeployed from post-§10 main at
+`0xc8292043Dfb14d740aA45391a67d5F795a22c7CC` — permissionless + lazy
+settlement, 60-minute grid anchoring, intermission semantics. Configs and
+settler repointed. (History: the first "v3" deploy at `0xd2D2…Bd6A` was
+compiled from a pre-§9 source and is retired; Router v6 was always fine.)
 
 TimbPrize v3 now ALSO carries the confirmed game semantics:
 - **60-minute grid:** segments live on exact 60:00 marks. A settle landing
@@ -346,7 +344,7 @@ TimbPrize v3 now ALSO carries the confirmed game semantics:
 
 Deployed addresses:
 - `TimbSwapRouter` v6: `0x6E53dc53Ea7B2fd8be171D74A381f009dA5F94bD`
-- `TimbPrize` v3: `0xd2D25b99Bd356019413139bf80D56aBaAedDBd6A`
+- `TimbPrize` v3.1: `0xc8292043Dfb14d740aA45391a67d5F795a22c7CC`
 
 `ADDRESSES` updated in both `config.js` files; `scripts/settler.js`
 repointed. Settlement is now permissionless + lazy; addLiquidity
