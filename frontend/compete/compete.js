@@ -746,6 +746,25 @@ function updateAdvancePanel(inSettlement) {
   renderAdvancePreview();
 }
 
+// Wallets often mask estimation reverts as opaque -32603 errors. Decode the
+// custom-error selector so a mis-wired deployment names its own fix.
+const ADVANCE_REVERTS = {
+  "0x38a1d6d8": "Router doesn't know the prize contract — call setTimbPrize(<TimbPrize>) on TimbSwapRouter (owner).",   // PrizeNotSet()
+  "0x91655201": "TimbPrize doesn't recognize this router — call setRouter(<TimbSwapRouter>) on TimbPrize (owner).",     // NotRouter()
+  "0x3a5f7b57": "The game hasn't been started — call startGame() on TimbPrize (owner).",                                // GameNotStarted()
+  "0x717824fb": "Settlement is paused — nudges stay blocked until unpauseSettlement().",                                // InSettlementWindow()
+};
+
+function advanceRevertSelector(err) {
+  const d = err?.data?.originalError?.data ?? err?.error?.data?.data ??
+            err?.error?.data ?? err?.data;
+  const hex = typeof d === "string" ? d
+    : (typeof d?.data === "string" ? d.data : null);
+  if (hex && hex.startsWith("0x") && hex.length >= 10) return hex.slice(0, 10).toLowerCase();
+  const m = String(err?.message || "").match(/0x[0-9a-fA-F]{8}/);
+  return m ? m[0].toLowerCase() : null;
+}
+
 async function handleAdvance() {
   if (!userAddress) return;
   const btn = document.getElementById("advance-submit-btn");
@@ -762,8 +781,11 @@ async function handleAdvance() {
     await pollRoundState();
     setTimeout(() => { if (btn) { btn.disabled = false; renderAdvancePreview(); } }, 1500);
   } catch (err) {
+    const sel = advanceRevertSelector(err);
+    if (sel) DebugHub.logError("handleAdvance.revertSelector", new Error("selector " + sel));
     DebugHub.logError("handleAdvance", err);
     DebugHub.logCheckpoint("Prize:Advance Failed", "fail");
+    if (sel && ADVANCE_REVERTS[sel]) alert(ADVANCE_REVERTS[sel]);
     if (btn) { btn.textContent = "Failed — try again"; setTimeout(() => { btn.disabled = false; renderAdvancePreview(); }, 2000); }
   }
 }
