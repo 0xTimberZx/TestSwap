@@ -67,7 +67,7 @@ async function loadPool(pool) {
       document.getElementById(pool + "-mine").textContent = fmt(mine, 18, 4);
       document.getElementById(pool + "-earned").textContent = fmtTIMBS(earned, 4);
       document.getElementById(pool + "-wallet").textContent =
-        fmt(inWallet, 18, 4) + (pool === "staking" ? " TIMBS" : " LP");
+        "Balance: " + fmt(inWallet, 18, 4) + (pool === "staking" ? " TIMBS" : " LP");
 
       document.getElementById(pool + "-stake-btn").disabled = false;
       document.getElementById(pool + "-stake-btn").textContent = "Stake";
@@ -76,7 +76,7 @@ async function loadPool(pool) {
     } else {
       document.getElementById(pool + "-mine").textContent = "—";
       document.getElementById(pool + "-earned").textContent = "—";
-      document.getElementById(pool + "-wallet").textContent = "—";
+      document.getElementById(pool + "-wallet").textContent = "Balance: —";
     }
   } catch (e) {
     console.warn(`loadPool(${pool}):`, e.message);

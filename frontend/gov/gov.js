@@ -62,15 +62,22 @@ async function loadStats() {
     document.getElementById("g-quorum").textContent      = (qBps.toNumber() / 100).toFixed(1) + "%";
 
     if (userAddress) {
-      const mine = await gov.votingPowerDeposited(userAddress);
+      const timbs = new ethers.Contract(ADDRESSES.TIMBSToken, TIMBS_ABI, readProv());
+      const [mine, walletBal] = await Promise.all([
+        gov.votingPowerDeposited(userAddress),
+        timbs.balanceOf(userAddress)
+      ]);
       myVotingPower = mine;
       document.getElementById("g-my-power").textContent  = fmtTIMBS(mine, 0);
       document.getElementById("vp-amount").textContent   = fmtTIMBS(mine, 2);
+      document.getElementById("vp-wallet").textContent   = "Balance: " + fmt(walletBal, 18, 4) + " TIMBS";
       document.getElementById("vp-deposit-btn").disabled = false;
       document.getElementById("vp-deposit-btn").textContent = "Deposit";
       document.getElementById("vp-withdraw-btn").disabled   = mine.eq(0);
     } else {
       document.getElementById("g-my-power").textContent = "—";
+      document.getElementById("vp-amount").textContent  = "—";
+      document.getElementById("vp-wallet").textContent  = "Balance: —";
     }
   } catch (e) {
     console.warn("loadStats:", e.message);
@@ -83,7 +90,7 @@ async function loadStats() {
 async function setVPMax() {
   if (!userAddress) return;
   try {
-    const timbs = new ethers.Contract(ADDRESSES.TIMBSToken, TIMBS_ABI, provider);
+    const timbs = new ethers.Contract(ADDRESSES.TIMBSToken, TIMBS_ABI, readProv());
     const bal   = await timbs.balanceOf(userAddress);
     document.getElementById("vp-input").value = ethers.utils.formatUnits(bal, 18);
   } catch (e) { console.warn("setVPMax:", e.message); }

@@ -111,10 +111,6 @@
             <span class="pool-stat-val" id="staking-total">—</span>
           </div>
           <div class="pool-stat">
-            <span class="pool-stat-label">In Wallet</span>
-            <span class="pool-stat-val" id="staking-wallet">—</span>
-          </div>
-          <div class="pool-stat">
             <span class="pool-stat-label">Your Stake</span>
             <span class="pool-stat-val" id="staking-mine">—</span>
           </div>
@@ -124,6 +120,7 @@
           </div>
         </div>
 
+        <div class="pool-bal" id="staking-wallet" onclick="setAmount('staking', 100)" title="Use full balance">Balance: —</div>
         <div class="pool-input-row">
           <input id="staking-amount" class="pool-input" type="number" placeholder="0.0 TIMBS" />
           <button class="pool-max-btn" onclick="setAmount('staking', 100)">MAX</button>
@@ -162,10 +159,6 @@
             <span class="pool-stat-val" id="farm-total">—</span>
           </div>
           <div class="pool-stat">
-            <span class="pool-stat-label">In Wallet</span>
-            <span class="pool-stat-val" id="farm-wallet">—</span>
-          </div>
-          <div class="pool-stat">
             <span class="pool-stat-label">Your Stake</span>
             <span class="pool-stat-val" id="farm-mine">—</span>
           </div>
@@ -175,6 +168,7 @@
           </div>
         </div>
 
+        <div class="pool-bal" id="farm-wallet" onclick="setAmount('farm', 100)" title="Use full balance">Balance: —</div>
         <div class="pool-input-row">
           <input id="farm-amount" class="pool-input" type="number" placeholder="0.0 LP" />
           <button class="pool-max-btn" onclick="setAmount('farm', 100)">MAX</button>

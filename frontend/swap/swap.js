@@ -939,6 +939,7 @@ function handleDisconnect() {
   document.getElementById("network-badge").classList.add("hidden");
   updateSwapButton("Connect wallet to swap");
   refreshBalances();
+  refreshLiquidity();  // LP balance, withdrawable row → gated "—" states
   checkEligibility(); // hide the prize panel / influence row again
 }
 

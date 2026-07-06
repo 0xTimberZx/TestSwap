@@ -414,6 +414,7 @@ function handleDisconnect() {
   document.getElementById("wallet-info").classList.add("hidden");
   document.getElementById("network-badge").classList.add("hidden");
   updateLockButton();
+  refreshLockBalance(); // back to "Balance: —"
   loadMyLocks();
   loadRegistry(); // now hides the public registry card
 }
