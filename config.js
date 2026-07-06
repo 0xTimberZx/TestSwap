@@ -125,6 +125,14 @@ async function _ensureChain() {
     }
   }
   await _initProvider();
+  // Some mobile in-app wallets resolve wallet_switchEthereumChain without
+  // actually switching. Verify, and fail the connect loudly instead of
+  // letting the session run against the wrong network.
+  const net = await provider.getNetwork();
+  if (net.chainId !== CHAIN_ID) {
+    DebugHub.logSecurity?.("Chain Check", "fail");
+    throw new Error(`Wallet stayed on chain ${net.chainId} — switch to ${CHAIN_NAME} (${CHAIN_ID}) and reconnect.`);
+  }
 }
 
 async function connectWallet() {

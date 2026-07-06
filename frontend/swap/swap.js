@@ -93,8 +93,9 @@ function isWrapPair() {
 }
 
 async function tokenBalance(t) {
-  if (isNative(t)) return provider.getBalance(userAddress);
-  return new ethers.Contract(t.address, ERC20_ABI, provider).balanceOf(userAddress);
+  const read = readProviderForEligibility();
+  if (isNative(t)) return read.getBalance(userAddress);
+  return new ethers.Contract(t.address, ERC20_ABI, read).balanceOf(userAddress);
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -306,8 +307,14 @@ async function checkEligibility() {
   }
 }
 
+// Read-only queries always go to the canonical Arbitrum Sepolia RPC —
+// never the wallet's in-app provider. Mobile wallets sometimes serve
+// eth_call/eth_getBalance from a different network than they display,
+// which reads as zero balances (or stale state) for perfectly funded
+// accounts. The wallet provider is only used for signing transactions.
+let _publicProv = null;
 function readProviderForEligibility() {
-  return provider || new ethers.providers.JsonRpcProvider(RPC_URL);
+  return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
 }
 
 // ─── Balances ─────────────────────────────────────────────────────────────────
