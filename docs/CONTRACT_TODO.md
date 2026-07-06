@@ -424,7 +424,43 @@ Same shape as §10 steps 2–10, prize-only (router v6 is unaffected):
    game starts; after the first round settles, verify the counters carry
    into round 2 unchanged with locks released.
 
-## 12. (add future contract-level items here)
+## 12. STABLES — USDC live, TestUSDT written, USD pricing derived
+
+### What's in place
+- **USDC**: Circle's canonical Arbitrum Sepolia deploy
+  `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` (6 decimals) — added to
+  `ADDRESSES` (both configs) and the swap page token list. Faucet:
+  faucet.circle.com.
+- **TestUSDT** (`contracts/TestUSDT.sol`): Tether has no official testnet
+  token, so the ecosystem ships its own — 6 decimals like the real thing,
+  1M minted to deployer, owner `mint()`, public `faucet()` (100/day per
+  address). Deploy via Remix (no viaIR needed), then add its address to
+  `EXTRA_TOKENS` in swap.js.
+- **USD pricing**: the USDC/WETH pool is the USD anchor. Analytics derives
+  `usdPerEth` from its reserves and prices native pairs through it
+  (TIMBS → ETH → USD): TIMBS Price and Prize Pot cards show `≈ $` values
+  once the pool exists. No pool → USD readouts simply don't render.
+
+### Pool creation (no contract work needed)
+Router v6 `_getOrCreatePair()` creates pairs on first Add Liquidity:
+- **USDC/WETH** — create FIRST; it's the USD anchor everything derives from.
+- **USDC/TIMBS** — direct fiat-denominated TIMBS market.
+- USDT pools after TestUSDT deploys.
+
+### Eligibility decision (recorded 2026-07-06)
+**TIMBS/USDC: whitelist. USDC/USDT: do NOT whitelist.**
+
+Rationale — the intermission privilege: swap-driven nudges keep flowing
+during the 15-second settlement window (user nudges don't), meaning
+eligible swaps can influence the digit right as it locks. That privilege
+should require economically meaningful volume. A stable↔stable swap has
+zero price exposure and zero slippage risk — whitelisting USDC/USDT would
+make intermission digit-sniping essentially free. TIMBS/USDC swaps carry
+real TIMBS exposure and deepen fiat-side demand for the ecosystem token,
+so they've earned the nudge. USDC/USDT can still exist as a plain
+fee-earning pool — it just gets no game influence.
+
+## 13. (add future contract-level items here)
 
 <!--
 Template:
