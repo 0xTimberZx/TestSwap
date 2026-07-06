@@ -5,7 +5,7 @@
 }
 
 .page-h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
-.page-sub { color: var(--text-2); font-size: 15px; margin-bottom: 36px; max-width: 480px; }
+.page-sub { color: var(--text-2); font-size: 15px; margin-bottom: 36px; max-width: 640px; }
 
 .lock-grid {
   display: grid;
