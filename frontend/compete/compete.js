@@ -742,13 +742,20 @@ function renderAdvancePreview() {
   const submitBtn = document.getElementById("advance-submit-btn");
   if (submitBtn) {
     // Game semantics: the 59:45–60:00 intermission belongs to calculations.
-    // USER nudges are deactivated during it, but settleSegment() is
-    // permissionless — so the button repurposes into a direct settle
-    // action. Any player can push a stalled intermission into the next
-    // segment instead of waiting on the keeper cron.
-    submitBtn.textContent = advanceInSettlement
-      ? "Settle & start next segment"
-      : `Advance ×${advanceCount}`;
+    // USER nudges are deactivated during it. The button holds disabled for
+    // the first 5 seconds ("calculating") to give the keeper/lazy settle
+    // its moment, then re-arms as a direct permissionless settleSegment()
+    // push — any player can start the next segment instead of waiting on
+    // the keeper cron.
+    if (advanceInSettlement) {
+      const holding = Date.now() - settlementSeenAt < SETTLE_BTN_HOLD_MS;
+      submitBtn.textContent = holding
+        ? "Intermission — calculating…"
+        : "Settle & start next segment";
+      submitBtn.disabled = holding;
+    } else {
+      submitBtn.textContent = `Advance ×${advanceCount}`;
+    }
   }
 
   const previewEl = document.getElementById("advance-preview");
@@ -768,17 +775,26 @@ function renderAdvancePreview() {
   toEl.textContent   = ALPHABET[to];
 }
 
+// The settle push holds back for the intermission's first 5 seconds —
+// the calculation moment — then the button re-enables itself to push
+// into the next segment (see renderAdvancePreview).
+let settlementSeenAt = 0;
+const SETTLE_BTN_HOLD_MS = 5000;
+
 function updateAdvancePanel(inSettlement) {
+  const wasInSettlement = advanceInSettlement;
   advanceInSettlement = !!inSettlement;
+  if (advanceInSettlement && !wasInSettlement) {
+    settlementSeenAt = Date.now();
+    // Re-render right at the 5s mark so the button re-arms itself
+    // without waiting for the next 4s poll tick.
+    setTimeout(renderAdvancePreview, SETTLE_BTN_HOLD_MS + 100);
+  }
   const panel = document.getElementById("advance-panel");
   if (!panel) return;
   panel.classList.toggle("hidden", !userAddress);
-  // User nudges are deactivated during the intermission (design intent),
-  // but the button stays ENABLED: it becomes a permissionless
-  // settleSegment() call (see handleAdvance), so any player can unstick
-  // a stalled settlement window without waiting for the keeper.
   const submitBtn = document.getElementById("advance-submit-btn");
-  if (submitBtn) submitBtn.disabled = false;
+  if (submitBtn && !advanceInSettlement) submitBtn.disabled = false;
   renderAdvancePreview();
 }
 
