@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("timbswap_theme")==="light"?"light":"dark"}catch(e){}</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Compete — TimbSwap</title>
@@ -62,7 +63,7 @@
         <div class="wallet-dropdown">
           <button class="wallet-menu-item" onclick="handleSwitchAccount()">Switch Account</button>
           <button class="wallet-menu-item danger" onclick="handleDisconnect()">Disconnect</button>
-          <button class="wallet-menu-item" disabled>Light Mode <span class="badge-soon">Soon</span></button>
+          <button class="wallet-menu-item" id="theme-toggle" onclick="toggleTheme()">Light Mode</button>
         </div>
       </div>
       <button class="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu">
