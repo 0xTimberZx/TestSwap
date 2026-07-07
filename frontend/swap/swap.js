@@ -494,7 +494,10 @@ function revertSel(err) {
   const hex = typeof d === "string" ? d
     : (typeof d?.data === "string" ? d.data : null);
   if (hex && hex.startsWith("0x") && hex.length >= 10) return hex.slice(0, 10).toLowerCase();
-  const m = String(err?.message || "").match(/0x[0-9a-fA-F]{8}/);
+  // Message fallback: a selector is EXACTLY 8 hex digits — reject matches
+  // that are prefixes of longer hex strings (addresses, hashes). Observed
+  // live: /0x[0-9a-fA-F]{8}/ happily matched the wallet address.
+  const m = String(err?.message || "").match(/0x[0-9a-fA-F]{8}(?![0-9a-fA-F])/);
   return m ? m[0].toLowerCase() : null;
 }
 
@@ -502,12 +505,55 @@ function revertSel(err) {
 // strip custom-error data entirely (observed: data "0x"), so the empty-data
 // case gets a price-moved fallback in the catch below.
 const SWAP_REVERTS = {
-  "0xd28d3eb5": "Price moved: the pool can no longer deliver your minimum output. Quote refreshed — try again.", // InsufficientOutputAmount
+  // Router
+  "0xd28d3eb5": "Price moved: the pool can no longer deliver your minimum output. Quote refreshed — try again.", // InsufficientOutputAmount(uint256,uint256)
   "0x3eb9e86a": "Sent ETH doesn't cover amount + 0.05% protocol fee. Refresh and try again.",                    // InsufficientETHSent
   "0x1f2a2005": "Swap amount is zero.",                                                                          // ZeroAmount
   "0x0dc08fa2": "Router misconfigured (WETH unset) — owner action needed.",                                      // WethNotSet
   "0x4db171d4": "This pair has no pool yet — create it via Add Liquidity.",                                      // PairNotFound
+  "0xf80dbaea": "This quote's deadline passed — refresh and try again.",                                         // Expired
+  "0xf562b5a0": "The router is paused — owner action needed.",                                                   // RouterPaused
+  "0xbb55fd27": "The pool has no liquidity for this pair.",                                                      // InsufficientLiquidity
+  "0xf0c49d44": "ETH refund to your wallet failed — is your wallet a contract?",                                 // RefundFailed
+  "0xb12d13eb": "ETH transfer to your wallet failed.",                                                           // ETHTransferFailed
+  // Pair
+  "0x42301c23": "Pool rejected the output amount (pair-level).",                                                 // InsufficientOutputAmount()
+  "0x098fb561": "Pool rejected the input amount (pair-level).",                                                  // InsufficientInputAmount
+  "0x5327d568": "Pool invariant check failed — reserves moved mid-swap; try again.",                             // KInvariantViolated
+  "0x659a0b22": "Invalid swap recipient.",                                                                       // InvalidTo
 };
+
+// ── Uncensored revert diagnosis ───────────────────────────────────────────────
+// Some in-app wallets strip custom-error revert data to "0x", leaving
+// estimation failures unexplainable. ethers embeds the exact transaction it
+// tried to estimate on the error — replay it as a raw eth_call through the
+// PUBLIC RPC, which returns the revert data uncensored, and decode it.
+async function diagnoseRevert(err) {
+  const tx = err?.transaction;
+  if (!tx || !tx.to || !tx.data) return null;
+  try {
+    await readProviderForEligibility().call({
+      from: tx.from, to: tx.to, data: tx.data, value: tx.value || undefined
+    });
+    return null; // call succeeded on the public node — transient wallet issue
+  } catch (callErr) {
+    const d = callErr?.error?.data ?? callErr?.data ?? null;
+    const hex = typeof d === "string" ? d : (typeof d?.data === "string" ? d.data : null);
+    if (!hex || hex === "0x") return null;
+    DebugHub.logError("handleSwap.revertData", new Error("revert data " + hex.slice(0, 138)));
+    if (hex.startsWith("0x08c379a0")) {
+      // Standard Error(string): offset(32) + length(32) + bytes
+      try {
+        const len = parseInt(hex.slice(10 + 64, 10 + 128), 16);
+        const strHex = hex.slice(10 + 128, 10 + 128 + len * 2);
+        let out = "";
+        for (let i = 0; i < strHex.length; i += 2) out += String.fromCharCode(parseInt(strHex.slice(i, i + 2), 16));
+        return out;
+      } catch { return null; }
+    }
+    return SWAP_REVERTS[hex.slice(0, 10).toLowerCase()] || ("Contract reverted: " + hex.slice(0, 10));
+  }
+}
 
 async function handleSwap() {
   if (!userAddress || !tokenIn || !tokenOut) return;
@@ -644,11 +690,15 @@ async function handleSwap() {
     DebugHub.logCheckpoint("Swap Failed", "fail");
     if (SWAP_REVERTS[sel]) {
       alert(SWAP_REVERTS[sel]);
-    } else if (/UNPREDICTABLE_GAS_LIMIT/.test(err?.code || "") && /"data":"0x"/.test(err?.message || "")) {
-      // Some in-app wallets strip custom-error data to 0x. Most likely
-      // cause on this path is a moved price — refresh the quote so the
-      // next attempt is priced from live reserves.
-      alert("The pool price moved since this quote. The quote has been refreshed — review and try again.");
+    } else if (/UNPREDICTABLE_GAS_LIMIT/.test(err?.code || "")) {
+      // The wallet gave us nothing useful — replay the exact call through
+      // the public RPC to recover the real revert reason.
+      const diagnosed = await diagnoseRevert(err);
+      if (diagnosed) {
+        alert(diagnosed);
+      } else {
+        alert("The pool price moved since this quote. The quote has been refreshed — review and try again.");
+      }
       onAmountInChange();
     }
     btn.textContent = "Swap failed — try again";
