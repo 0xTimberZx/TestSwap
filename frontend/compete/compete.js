@@ -426,8 +426,12 @@ document.addEventListener("click", (e) => {
 
 // ─── Extra Rounds ─────────────────────────────────────────────────────────────
 
+// Contract caps extra rounds at MAX_EXTRA_ROUNDS (GameRegistry). The
+// stepper must respect it — an out-of-range value reverts every entry
+// with TooManyExtraRounds (observed live: user reached 15, cap is 12).
+const MAX_EXTRA_ROUNDS = 12;
 function adjustExtraRounds(delta) {
-  extraRounds = Math.max(0, extraRounds + delta);
+  extraRounds = Math.min(MAX_EXTRA_ROUNDS, Math.max(0, extraRounds + delta));
   document.getElementById("extra-rounds-val").textContent = extraRounds;
   updateCostDisplay();
 }
@@ -594,8 +598,11 @@ async function handleSubmitEntry() {
 
   } catch (err) {
     console.error("Entry failed:", err.message);
+    const sel = advanceRevertSelector(err);
+    if (sel) DebugHub.logError("handleSubmitEntry.revertSelector", new Error("selector " + sel));
     DebugHub.logError("handleSubmitEntry", err);
     DebugHub.logCheckpoint("Prize:Entry Failed", "fail");
+    if (ENTRY_REVERTS[sel]) alert(ENTRY_REVERTS[sel]);
     btn.textContent = "Failed — try again";
     setTimeout(() => { btn.textContent = resetLabel; btn.disabled = false; }, 2500);
   }
@@ -819,6 +826,13 @@ function updateAdvancePanel(inSettlement) {
 
 // Wallets often mask estimation reverts as opaque -32603 errors. Decode the
 // custom-error selector so a mis-wired deployment names its own fix.
+// GameRegistry submitEntry/replaceEntry custom errors → human messages.
+const ENTRY_REVERTS = {
+  "0x4cbc5815": "Too many extra rounds — the maximum is 12. Lower the extra-rounds count and try again.", // TooManyExtraRounds(uint256,uint256)
+  "0xe450d38c": "Not enough TIMBS for this entry (extra rounds cost TIMBS). Reduce extra rounds or top up TIMBS.", // ERC20InsufficientBalance
+  "0xfb8f41b2": "TIMBS spending isn't approved for the full amount — approve, then retry.",                 // ERC20InsufficientAllowance
+};
+
 const ADVANCE_REVERTS = {
   "0x38a1d6d8": "Router doesn't know the prize contract — call setTimbPrize(<TimbPrize>) on TimbSwapRouter (owner).",   // PrizeNotSet()
   "0x91655201": "TimbPrize doesn't recognize this router — call setRouter(<TimbSwapRouter>) on TimbPrize (owner).",     // NotRouter()

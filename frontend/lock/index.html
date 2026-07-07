@@ -15,8 +15,8 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="../style.css?v=20260707a" />
-  <link rel="stylesheet" href="lock.css?v=20260707a" />
+  <link rel="stylesheet" href="../style.css?v=20260708a" />
+  <link rel="stylesheet" href="lock.css?v=20260708a" />
 </head>
 <body>
 
@@ -111,7 +111,7 @@
             <input id="lock-amount" class="lock-input" type="number" placeholder="0.0" />
             <button class="lock-max-btn" onclick="setLockMax()">MAX</button>
           </div>
-          <div class="lock-balance" id="lock-balance">Balance: —</div>
+          <div class="lock-balance" id="lock-balance" onclick="setLockMax()" title="Use full balance" style="cursor:pointer;">Balance: —</div>
         </div>
 
         <div class="lock-field">
@@ -183,8 +183,8 @@
     </div>
   </footer>
 
-  <script src="../config.js?v=20260707a"></script>
-  <script src="lock.js?v=20260707a"></script>
+  <script src="../config.js?v=20260708a"></script>
+  <script src="lock.js?v=20260708a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");

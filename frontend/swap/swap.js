@@ -102,6 +102,20 @@ async function tokenBalance(t) {
   return new ethers.Contract(t.address, ERC20_ABI, read).balanceOf(userAddress);
 }
 
+// Tapping the "You pay" balance fills the input with the full balance and
+// re-quotes. (Native ETH fills to the whole balance; the pre-flight check
+// and requote in handleSwap handle the gas headroom conversation.)
+async function fillMaxIn() {
+  if (!userAddress || !tokenIn) return;
+  try {
+    const bal = await tokenBalance(tokenIn);
+    document.getElementById("amount-in").value =
+      trimAmount(ethers.utils.formatUnits(bal, tokenIn.decimals));
+    lastEditedSide = "in";
+    onAmountInChange();
+  } catch (e) { console.warn("fillMaxIn:", e.message); }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 function renderTokenList() {
