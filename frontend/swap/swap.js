@@ -562,6 +562,7 @@ async function handleSwap() {
 
   const btn = document.getElementById("swap-btn");
   const originalText = btn.textContent;
+  let simulatedOk = false; // set once the public-RPC gas estimate passes
 
   try {
     const amountInWei = ethers.utils.parseUnits(amtIn, tokenIn.decimals);
@@ -664,6 +665,9 @@ async function handleSwap() {
     const estReq = await target.populateTransaction[method](...args, value ? { value } : {});
     estReq.from = userAddress;
     const gasLimit = (await readProviderForEligibility().estimateGas(estReq)).mul(150).div(100);
+    // The public RPC simulated this exact transaction successfully — from
+    // here on, any failure is the WALLET (broadcast/signing), not the tx.
+    simulatedOk = true;
 
     const overrides = { ...gas, nonce, gasLimit };
     if (value) overrides.value = value;
@@ -697,11 +701,28 @@ async function handleSwap() {
     if (sel) DebugHub.logError("handleSwap.revertSelector", new Error("selector " + sel));
     DebugHub.logError("handleSwap", err);
     DebugHub.logCheckpoint("Swap Failed", "fail");
-    if (SWAP_REVERTS[sel]) {
+    const code = err?.code;
+    const userRejected = code === 4001 || code === "ACTION_REJECTED";
+    if (userRejected) {
+      // Not an error — the user declined in their wallet.
+    } else if (simulatedOk) {
+      // The public RPC already simulated this exact transaction OK, so the
+      // failure is inside the wallet (broadcast/signing), not the trade.
+      // Observed live: a wallet returning -32603 here while the identical
+      // swap confirmed instantly in a different wallet. See DebugHub §9.
+      DebugHub.logError("handleSwap.walletBroadcast", new Error("code " + code + " after successful public simulation"));
+      alert(
+        "Your wallet couldn't broadcast this swap, but it simulates fine " +
+        "on-chain — so this is a wallet-side issue, not the trade. Try: " +
+        "switch the wallet's network away and back, update or reinstall the " +
+        "wallet app, or use a different wallet. (The same swap succeeds in " +
+        "other wallets.)"
+      );
+    } else if (SWAP_REVERTS[sel]) {
       alert(SWAP_REVERTS[sel]);
-    } else if (/UNPREDICTABLE_GAS_LIMIT/.test(err?.code || "")) {
-      // The wallet gave us nothing useful — replay the exact call through
-      // the public RPC to recover the real revert reason.
+    } else if (/UNPREDICTABLE_GAS_LIMIT/.test(code || "") || code === -32603) {
+      // Failed before our own simulation — recover the real revert reason
+      // by replaying the exact call through the public RPC.
       const diagnosed = await diagnoseRevert(err);
       if (diagnosed) {
         alert(diagnosed);
@@ -710,7 +731,7 @@ async function handleSwap() {
       }
       onAmountInChange();
     }
-    btn.textContent = "Swap failed — try again";
+    btn.textContent = userRejected ? "Swap cancelled" : "Swap failed — try again";
     btn.style.background = "rgba(239,68,68,0.15)";
     btn.style.color = "#ef4444";
     btn.style.borderColor = "#ef4444";
