@@ -486,6 +486,29 @@ document.getElementById("slip-custom")?.addEventListener("input", (e) => {
 
 // ─── Swap Execution ───────────────────────────────────────────────────────────
 
+// Walk a wallet-wrapped error for a 4-byte revert selector (shared by
+// handleSwap and handleAddLiquidity — wallets nest the data differently).
+function revertSel(err) {
+  const d = err?.data?.originalError?.data ?? err?.error?.data?.data ??
+            err?.error?.data ?? err?.data;
+  const hex = typeof d === "string" ? d
+    : (typeof d?.data === "string" ? d.data : null);
+  if (hex && hex.startsWith("0x") && hex.length >= 10) return hex.slice(0, 10).toLowerCase();
+  const m = String(err?.message || "").match(/0x[0-9a-fA-F]{8}/);
+  return m ? m[0].toLowerCase() : null;
+}
+
+// Router swap-path custom errors → human messages. Some in-app wallets
+// strip custom-error data entirely (observed: data "0x"), so the empty-data
+// case gets a price-moved fallback in the catch below.
+const SWAP_REVERTS = {
+  "0xd28d3eb5": "Price moved: the pool can no longer deliver your minimum output. Quote refreshed — try again.", // InsufficientOutputAmount
+  "0x3eb9e86a": "Sent ETH doesn't cover amount + 0.05% protocol fee. Refresh and try again.",                    // InsufficientETHSent
+  "0x1f2a2005": "Swap amount is zero.",                                                                          // ZeroAmount
+  "0x0dc08fa2": "Router misconfigured (WETH unset) — owner action needed.",                                      // WethNotSet
+  "0x4db171d4": "This pair has no pool yet — create it via Add Liquidity.",                                      // PairNotFound
+};
+
 async function handleSwap() {
   if (!userAddress || !tokenIn || !tokenOut) return;
 
@@ -497,6 +520,25 @@ async function handleSwap() {
 
   try {
     const amountInWei = ethers.utils.parseUnits(amtIn, tokenIn.decimals);
+
+    // ── Pre-flight balance check ──────────────────────────────────────────
+    // Wallets mask balance reverts as opaque -32603 / empty-data estimation
+    // failures (observed live: 'swap 2000 ETH' and an ERC20-WETH swap with
+    // zero WETH). Check here and say it in a sentence instead.
+    const needIn = isNative(tokenIn) && !isWrapPair()
+      ? amountInWei.add(amountInWei.mul(5).div(10000)) // + 0.05% protocol fee
+      : amountInWei;
+    const balIn = await tokenBalance(tokenIn);
+    if (balIn.lt(needIn)) {
+      alert(
+        `Insufficient ${tokenIn.symbol}: you have ` +
+        `${fmt(balIn, tokenIn.decimals, 6)}, this swap needs ` +
+        `${fmt(needIn, tokenIn.decimals, 6)}` +
+        (isNative(tokenIn) ? " plus gas." : ".")
+      );
+      updateSwapButton(originalText);
+      return;
+    }
 
     // Native ETH never needs an ERC20 approval; wrap pairs skip it too since
     // WETH.deposit/withdraw act on the caller's own balance.
@@ -523,8 +565,21 @@ async function handleSwap() {
     DebugHub.logCheckpoint("Swap Requested", "pass");
 
     const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
-    const amountOutWei = ethers.utils.parseUnits(document.getElementById("amount-out").value, tokenOut.decimals);
-    const minOut = amountOutWei.mul(Math.floor((100 - slippagePct) * 100)).div(10000);
+
+    // Re-quote from LIVE reserves at submit time. The on-screen quote can be
+    // minutes stale, and a minOut derived from it reverts with
+    // InsufficientOutputAmount on every retry (observed live: a stale quote
+    // demanded 1980 TIMBS when the pool could only deliver ~1892). The
+    // display is updated to match what we actually ask the router for.
+    let minOut = ethers.constants.Zero;
+    if (!isWrapPair()) {
+      const reader = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, readProviderForEligibility());
+      const [rIn, rOut] = await reader.getReserves(effAddr(tokenIn), effAddr(tokenOut));
+      const freshOut = await reader.getAmountOut(amountInWei, rIn, rOut);
+      minOut = freshOut.mul(Math.floor((100 - slippagePct) * 100)).div(10000);
+      document.getElementById("amount-out").value =
+        trimAmount(ethers.utils.formatUnits(freshOut, tokenOut.decimals));
+    }
     const deadline = Math.floor(Date.now() / 1000) + 1200; // 20 min
     const influencePrize = isEligiblePair && document.getElementById("influence-toggle").checked;
 
@@ -583,8 +638,19 @@ async function handleSwap() {
   } catch (err) {
     const msg = err?.reason || err?.message || String(err);
     console.error("Swap failed:", msg);
+    const sel = revertSel(err);
+    if (sel) DebugHub.logError("handleSwap.revertSelector", new Error("selector " + sel));
     DebugHub.logError("handleSwap", err);
     DebugHub.logCheckpoint("Swap Failed", "fail");
+    if (SWAP_REVERTS[sel]) {
+      alert(SWAP_REVERTS[sel]);
+    } else if (/UNPREDICTABLE_GAS_LIMIT/.test(err?.code || "") && /"data":"0x"/.test(err?.message || "")) {
+      // Some in-app wallets strip custom-error data to 0x. Most likely
+      // cause on this path is a moved price — refresh the quote so the
+      // next attempt is priced from live reserves.
+      alert("The pool price moved since this quote. The quote has been refreshed — review and try again.");
+      onAmountInChange();
+    }
     btn.textContent = "Swap failed — try again";
     btn.style.background = "rgba(239,68,68,0.15)";
     btn.style.color = "#ef4444";
@@ -795,15 +861,6 @@ async function handleAddLiquidity() {
     const SEL_PAIR_NOT_FOUND = "0x4db171d4"; // PairNotFound(addr,addr) — pre-v6 router
     const SEL_CREATE_PAUSED  = "0xaaed1932"; // PairCreationPaused() — factory paused
 
-    const revertSel = (err) => {
-      const d = err?.data?.originalError?.data ?? err?.error?.data?.data ??
-                err?.error?.data ?? err?.data;
-      const hex = typeof d === "string" ? d
-        : (typeof d?.data === "string" ? d.data : null);
-      if (hex && hex.startsWith("0x") && hex.length >= 10) return hex.slice(0, 10).toLowerCase();
-      const m = String(err?.message || "").match(/0x[0-9a-fA-F]{8}/);
-      return m ? m[0].toLowerCase() : null;
-    };
 
     const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
     const sendAdd = async () => {
