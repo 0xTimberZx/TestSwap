@@ -713,10 +713,12 @@ async function handleSwap() {
       DebugHub.logError("handleSwap.walletBroadcast", new Error("code " + code + " after successful public simulation"));
       alert(
         "Your wallet couldn't broadcast this swap, but it simulates fine " +
-        "on-chain — so this is a wallet-side issue, not the trade. Try: " +
-        "switch the wallet's network away and back, update or reinstall the " +
-        "wallet app, or use a different wallet. (The same swap succeeds in " +
-        "other wallets.)"
+        "on-chain — so this is a wallet-side issue, not the trade. Fastest " +
+        "fix (confirmed to work): open your wallet's site-permissions for " +
+        "this site, disconnect this account, then reconnect it — that clears " +
+        "the stuck wallet state. Failing that, switch the wallet's network " +
+        "away and back, or use a different account/wallet. (The same swap " +
+        "succeeds in other accounts.)"
       );
     } else if (SWAP_REVERTS[sel]) {
       alert(SWAP_REVERTS[sel]);
