@@ -15,8 +15,8 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="../style.css?v=20260707a" />
-  <link rel="stylesheet" href="swap.css?v=20260707a" />
+  <link rel="stylesheet" href="../style.css?v=20260708a" />
+  <link rel="stylesheet" href="swap.css?v=20260708a" />
 </head>
 <body>
 
@@ -118,7 +118,7 @@
         <div class="token-box">
           <div class="token-box-top">
             <span class="token-box-label">You pay</span>
-            <span class="token-box-bal" id="bal-in">Balance: —</span>
+            <span class="token-box-bal" id="bal-in" onclick="fillMaxIn()" title="Use full balance">Balance: —</span>
           </div>
           <div class="token-box-row">
             <input id="amount-in" class="amount-input" type="number" placeholder="0.0" oninput="onAmountInChange()" />
@@ -283,11 +283,11 @@
     </div>
   </footer>
 
-  <script src="../config.js?v=20260707a"></script> 
-  <script src="swap.js?v=20260707a"></script>
+  <script src="../config.js?v=20260708a"></script> 
+  <script src="swap.js?v=20260708a"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="influence.js?v=20260707a"></script>
+  <script src="influence.js?v=20260708a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
