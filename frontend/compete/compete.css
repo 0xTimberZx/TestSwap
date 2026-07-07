@@ -723,3 +723,14 @@
 
 /* ─── Light-mode card spacing (+20%) ──────────────────────────────────────── */
 :root[data-theme="light"] .compete-grid { gap: 19px; margin-bottom: 48px; }
+
+/* Discrete balance of the selected eligible entry token (+ TIMBS when
+   extra rounds are chosen). Muted, right-aligned, mono — informational. */
+.entry-token-bal {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: right;
+  margin: 4px 0 0;
+  min-height: 14px;
+}
