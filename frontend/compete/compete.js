@@ -44,6 +44,7 @@ const ELIGIBLE_REGISTRY_ABI = [
 ];
 
 const ERC20_SYMBOL_ABI = ["function symbol() external view returns (string)"];
+const ERC20_BAL_ABI    = ["function balanceOf(address account) external view returns (uint256)"];
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 // Ticket lifecycle (GameRegistry v2): Cancelled reads as Closed once its
@@ -405,6 +406,28 @@ function selectEntryToken(token) {
   document.getElementById("token-dropdown").classList.add("hidden");
   renderTokenDropdown();
   updateCostDisplay();
+  refreshEntryBalance();
+}
+
+// Discrete balance of the currently-selected eligible entry token. Entry
+// tokens are ETH/TIMBS (18 decimals); the read is wallet-gated and silent
+// when disconnected. Extra rounds always cost TIMBS regardless of the base
+// token, so when extra rounds are selected we also surface the TIMBS balance.
+async function refreshEntryBalance() {
+  const el = document.getElementById("entry-token-bal");
+  if (!el) return;
+  if (!userAddress) { el.textContent = ""; return; }
+  try {
+    const bal = selectedToken.isNative
+      ? await readProv().getBalance(userAddress)
+      : await new ethers.Contract(selectedToken.address, ERC20_BAL_ABI, readProv()).balanceOf(userAddress);
+    let txt = `Balance: ${fmt(bal, 18, 4)} ${selectedToken.symbol}`;
+    if (extraRounds > 0 && selectedToken.isNative) {
+      const timbs = await new ethers.Contract(ADDRESSES.TIMBSToken, ERC20_BAL_ABI, readProv()).balanceOf(userAddress);
+      txt += ` · ${fmt(timbs, 18, 2)} TIMBS`;
+    }
+    el.textContent = txt;
+  } catch { el.textContent = ""; }
 }
 
 function toggleTokenDropdown() {
@@ -433,6 +456,7 @@ const MAX_EXTRA_ROUNDS = 12;
 function adjustExtraRounds(delta) {
   extraRounds = Math.min(MAX_EXTRA_ROUNDS, Math.max(0, extraRounds + delta));
   document.getElementById("extra-rounds-val").textContent = extraRounds;
+  refreshEntryBalance();
   updateCostDisplay();
 }
 
@@ -558,6 +582,27 @@ async function handleSubmitEntry() {
     if (extraRounds > 0) {
       const extra = await registry.additionalRoundCost(extraRounds);
       timbsNeeded = timbsNeeded.add(extra);
+    }
+
+    // Pre-flight: state the shortfall instead of an opaque revert. Extra
+    // rounds cost entryCostTIMBS each; this is what caps "how many rounds
+    // can I afford" (observed: 4 rounds succeeded, 5+ reverted with the
+    // reason stripped by the wallet — it was insufficient TIMBS).
+    if (timbsNeeded.gt(0)) {
+      const balNow = await new ethers.Contract(ADDRESSES.TIMBSToken, ERC20_BAL_ABI, readProv()).balanceOf(userAddress);
+      if (balNow.lt(timbsNeeded)) {
+        const roundsAffordable = entryCostTIMBS_wei && !entryCostTIMBS_wei.isZero()
+          ? balNow.div(entryCostTIMBS_wei).toString() : "?";
+        alert(
+          `Not enough TIMBS for this entry.\nNeeds ${fmtTIMBS(timbsNeeded)} ` +
+          `(${extraRounds} extra round${extraRounds === 1 ? "" : "s"}` +
+          `${!replacing && !useETH ? " + entry" : ""}), you have ${fmtTIMBS(balNow)}. ` +
+          `At the current cost you can afford about ${roundsAffordable} extra round(s). ` +
+          `Lower the extra-rounds count or top up TIMBS.`
+        );
+        btn.disabled = false; btn.textContent = resetLabel;
+        return;
+      }
     }
 
     if (timbsNeeded.gt(0)) {
