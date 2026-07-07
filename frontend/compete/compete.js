@@ -832,8 +832,9 @@ function advanceRevertSelector(err) {
   const hex = typeof d === "string" ? d
     : (typeof d?.data === "string" ? d.data : null);
   if (hex && hex.startsWith("0x") && hex.length >= 10) return hex.slice(0, 10).toLowerCase();
-  const m = String(err?.message || "").match(/0x[0-9a-fA-F]{8}(?![0-9a-fA-F])/);
-  return m ? m[0].toLowerCase() : null;
+  // Structured fields only — message-text matching false-positived on
+  // addresses and fee values in production.
+  return null;
 }
 
 // During the settlement window the Advance button routes here instead:

@@ -494,11 +494,10 @@ function revertSel(err) {
   const hex = typeof d === "string" ? d
     : (typeof d?.data === "string" ? d.data : null);
   if (hex && hex.startsWith("0x") && hex.length >= 10) return hex.slice(0, 10).toLowerCase();
-  // Message fallback: a selector is EXACTLY 8 hex digits — reject matches
-  // that are prefixes of longer hex strings (addresses, hashes). Observed
-  // live: /0x[0-9a-fA-F]{8}/ happily matched the wallet address.
-  const m = String(err?.message || "").match(/0x[0-9a-fA-F]{8}(?![0-9a-fA-F])/);
-  return m ? m[0].toLowerCase() : null;
+  // No message-text fallback: it false-positived twice in production (the
+  // wallet address, then the 8-hex maxPriorityFeePerGas). Structured data
+  // fields only; diagnoseRevert() recovers anything the wallet strips.
+  return null;
 }
 
 // Router swap-path custom errors → human messages. Some in-app wallets
@@ -632,33 +631,43 @@ async function handleSwap() {
     const gas = await getGasParams();
     const nonce = await getPendingNonce();
 
-    let tx;
+    // Gas is estimated on the PUBLIC RPC and passed as an explicit gasLimit,
+    // so the wallet's own estimator is never consulted. Observed live: an
+    // in-app wallet whose internal node rejected estimation for a
+    // transaction that replays cleanly on the canonical chain — with a
+    // provided gasLimit the wallet just signs. If the PUBLIC estimate
+    // reverts, that's a real revert with uncensored data → named alert.
+    let method, args, value;
     if (isWrapPair()) {
-      // 1:1 wrap/unwrap directly on the WETH contract — no pool, no fee.
-      const wethC = new ethers.Contract(ADDRESSES.WETH, WETH_ABI, signer);
-      btn.textContent = isNative(tokenIn) ? "Wrapping…" : "Unwrapping…";
-      tx = isNative(tokenIn)
-        ? await wethC.deposit({ ...gas, nonce, value: amountInWei })
-        : await wethC.withdraw(amountInWei, { ...gas, nonce });
+      method = isNative(tokenIn) ? "deposit" : "withdraw";
+      args   = isNative(tokenIn) ? [] : [amountInWei];
+      value  = isNative(tokenIn) ? amountInWei : undefined;
     } else if (isNative(tokenIn)) {
       // ETH → token: msg.value must cover amountIn plus the 0.05% protocol fee.
       const fee = amountInWei.mul(5).div(10000);
-      tx = await router.swapExactETHForTokens(
-        amountInWei, minOut, tokenOut.address, userAddress, deadline, influencePrize,
-        { ...gas, nonce, value: amountInWei.add(fee) }
-      );
+      method = "swapExactETHForTokens";
+      args   = [amountInWei, minOut, tokenOut.address, userAddress, deadline, influencePrize];
+      value  = amountInWei.add(fee);
     } else if (isNative(tokenOut)) {
-      // token → ETH: router swaps to WETH, unwraps, and sends native ETH.
-      tx = await router.swapExactTokensForETH(
-        amountInWei, minOut, tokenIn.address, userAddress, deadline, influencePrize,
-        { ...gas, nonce }
-      );
+      method = "swapExactTokensForETH";
+      args   = [amountInWei, minOut, tokenIn.address, userAddress, deadline, influencePrize];
     } else {
-      tx = await router.swapExactTokensForTokens(
-        amountInWei, minOut, tokenIn.address, tokenOut.address, userAddress, deadline, influencePrize,
-        { ...gas, nonce }
-      );
+      method = "swapExactTokensForTokens";
+      args   = [amountInWei, minOut, tokenIn.address, tokenOut.address, userAddress, deadline, influencePrize];
     }
+
+    const target = isWrapPair()
+      ? new ethers.Contract(ADDRESSES.WETH, WETH_ABI, signer)
+      : router;
+    if (isWrapPair()) btn.textContent = isNative(tokenIn) ? "Wrapping…" : "Unwrapping…";
+
+    const estReq = await target.populateTransaction[method](...args, value ? { value } : {});
+    estReq.from = userAddress;
+    const gasLimit = (await readProviderForEligibility().estimateGas(estReq)).mul(150).div(100);
+
+    const overrides = { ...gas, nonce, gasLimit };
+    if (value) overrides.value = value;
+    const tx = await target[method](...args, overrides);
 
     DebugHub.logCheckpoint("Swap Submitted", "pass");
     await tx.wait();
