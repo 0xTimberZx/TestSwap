@@ -32,6 +32,8 @@ interface IEligibleTokenRegistry {
 interface ITimbPrize {
     function nudgeScroll() external;
     function isSettlementWindow() external view returns (bool);
+    function currentRound() external view returns (uint256);
+    function currentSegment() external view returns (uint256);
 }
 
 interface IWETH {
@@ -61,6 +63,23 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     bool    public paused;
     address public weth;
 
+    // ─── Prize-meter tuning (see docs/PRIZE_GAME_BALANCE_SPEC.md) ──────────────
+
+    /// @notice #2 — meter units an eligible swap is worth. A swap moves the
+    ///         scroll by this many nudges (each a separate nudgeScroll call),
+    ///         so the meter race routes through the AMM and feeds the fee/burn
+    ///         loop. Owner-set, 1..MAX_SWAP_NUDGE_WEIGHT.
+    uint256 public swapNudgeWeight = 3;
+
+    /// @notice #1 — max gas-only (advanceScroll) nudges one address may make
+    ///         per segment. Paid swap-nudges are NOT capped (they cost fees
+    ///         per wallet, so sybil doesn't help). 0 = free path disabled.
+    uint256 public freeNudgeCapPerSeg = 10;
+
+    /// @notice Free-nudge usage, keyed by keccak256(round, segment, user) so
+    ///         the cap auto-resets every segment with no cleanup.
+    mapping(bytes32 => uint256) public freeNudgesUsed;
+
     // ─── Constants ───────────────────────────────────────────────────────────
 
     uint256 public constant PROTOCOL_FEE_BPS = 5;
@@ -68,6 +87,9 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
 
     /// @notice Gas-bounded cap for batched user nudges per transaction.
     uint256 public constant MAX_BATCH_NUDGE = 20;
+
+    /// @notice Sanity ceiling for swapNudgeWeight.
+    uint256 public constant MAX_SWAP_NUDGE_WEIGHT = 10;
 
     // ─── Events ──────────────────────────────────────────────────────────────
 
@@ -81,6 +103,8 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     event TimbPrizeSet(address indexed timbPrize);
     event Paused(address indexed by);
     event Unpaused(address indexed by);
+    event SwapNudgeWeightSet(uint256 weight);
+    event FreeNudgeCapSet(uint256 capPerSegment);
 
     // ─── Errors ──────────────────────────────────────────────────────────────
 
@@ -100,6 +124,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     error ETHTransferFailed();
     error InvalidNudgeCount(uint256 count, uint256 max);
     error PrizeNotSet();
+    error FreeNudgeCapReached(uint256 round, uint256 segment);
 
     // ─── Modifiers ───────────────────────────────────────────────────────────
 
@@ -233,9 +258,16 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
             returns (bool ok) { if (!ok) return; } catch { return; }
         try ITimbPrize(timbPrize).isSettlementWindow()
             returns (bool win) { if (win) return; } catch { return; }
-        try ITimbPrize(timbPrize).nudgeScroll() {
-            emit ScrollNudged(msg.sender, tokenIn);
-        } catch {}
+        // #2 — an eligible swap is worth swapNudgeWeight meter units. Each is
+        // a separate nudgeScroll() call; if the settlement window opens mid-loop
+        // the call reverts and we stop cleanly. Swap-nudges are NOT counted
+        // against the free-nudge cap — they're paid, hence self-limiting.
+        uint256 w = swapNudgeWeight;
+        uint256 done;
+        for (uint256 i = 0; i < w; i++) {
+            try ITimbPrize(timbPrize).nudgeScroll() { done++; } catch { break; }
+        }
+        if (done > 0) emit ScrollNudged(msg.sender, tokenIn);
     }
 
     // ─── Internal: Swap Direction ─────────────────────────────────────────────
@@ -462,8 +494,14 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
      *         keeps concurrent batch requests cleanly sequenced on-chain.
      * @dev The router is the address TimbPrize authorizes for nudgeScroll(),
      *      so no TimbPrize change is needed. Each iteration inherits
-     *      TimbPrize's own guards (whenGameStarted, settlement-window block) —
-     *      the whole batch reverts if the settlement window opens mid-batch.
+     *      TimbPrize's own guards (whenGameStarted, settlement-window block).
+     *
+     *      #1 — this free (gas-only) path is capped per address per segment so
+     *      one wallet can't dominate the meter for free. The request is
+     *      CLAMPED to the remaining allowance rather than reverted, so a batch
+     *      that overshoots still applies what it can; it only reverts when the
+     *      caller has no allowance left this segment. Paid swap-nudges are not
+     *      capped (see _maybeNudge).
      */
     function advanceScroll(uint256 count)
         external
@@ -474,10 +512,47 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         if (count == 0 || count > MAX_BATCH_NUDGE) {
             revert InvalidNudgeCount(count, MAX_BATCH_NUDGE);
         }
-        for (uint256 i = 0; i < count; i++) {
+
+        uint256 round = ITimbPrize(timbPrize).currentRound();
+        uint256 seg   = ITimbPrize(timbPrize).currentSegment();
+        bytes32 key   = keccak256(abi.encode(round, seg, msg.sender));
+        uint256 used  = freeNudgesUsed[key];
+        uint256 room  = freeNudgeCapPerSeg > used ? freeNudgeCapPerSeg - used : 0;
+        uint256 n     = count < room ? count : room;
+        if (n == 0) revert FreeNudgeCapReached(round, seg);
+
+        freeNudgesUsed[key] = used + n;
+        for (uint256 i = 0; i < n; i++) {
             ITimbPrize(timbPrize).nudgeScroll();
         }
         emit ScrollNudged(msg.sender, address(0)); // address(0) = direct nudge
+    }
+
+    /// @notice Remaining free (gas-only) nudges the caller may make this
+    ///         segment. Frontend reads this to size the Advance batch so a
+    ///         request never overshoots the cap. Resets each segment.
+    function freeNudgesRemaining(address user) external view returns (uint256) {
+        if (timbPrize == address(0)) return 0;
+        uint256 round = ITimbPrize(timbPrize).currentRound();
+        uint256 seg   = ITimbPrize(timbPrize).currentSegment();
+        uint256 used  = freeNudgesUsed[keccak256(abi.encode(round, seg, user))];
+        return freeNudgeCapPerSeg > used ? freeNudgeCapPerSeg - used : 0;
+    }
+
+    /// @notice Owner: set how many meter units an eligible swap is worth (#2).
+    function setSwapNudgeWeight(uint256 weight) external onlyOwner {
+        if (weight == 0 || weight > MAX_SWAP_NUDGE_WEIGHT) {
+            revert InvalidNudgeCount(weight, MAX_SWAP_NUDGE_WEIGHT);
+        }
+        swapNudgeWeight = weight;
+        emit SwapNudgeWeightSet(weight);
+    }
+
+    /// @notice Owner: set the per-address free-nudge cap per segment (#1).
+    ///         0 disables the free path entirely (swaps still nudge).
+    function setFreeNudgeCapPerSeg(uint256 capPerSegment) external onlyOwner {
+        freeNudgeCapPerSeg = capPerSegment;
+        emit FreeNudgeCapSet(capPerSegment);
     }
 
     // ─── Internal: Liquidity Helpers ─────────────────────────────────────────

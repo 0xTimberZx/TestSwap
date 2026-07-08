@@ -1,7 +1,8 @@
 # Prize Game Balance Spec — #1 (anti-dominance) + #2 (feed fee/burn), and Scenario C (TIMBS hub)
 
-Status: **DRAFT for approval** — no code written yet.
-Target contracts: `contracts/TimbSwapRouter.sol` (primary), `contracts/TimbPrize.sol` (read-only unless the optional jitter is chosen).
+Status: **IMPLEMENTED (Router)** — awaiting redeploy + rewire. Confirmed params:
+`swapNudgeWeight = 3`, `freeNudgeCapPerSeg = 10`, jitter (§1b) **deferred**, Scenario C **after #2**.
+Target contracts: `contracts/TimbSwapRouter.sol` (changed), `contracts/TimbPrize.sol` (untouched).
 
 ---
 
@@ -170,8 +171,22 @@ enforcement so the double-fee UX cost is measured before it's mandatory.
 
 ---
 
-## Decisions needed from you
-1. `swapNudgeWeight` default — proposed **3**. (Higher = swaps dominate the meter more.)
-2. `freeNudgeCapPerSeg` default — proposed **10** free nudges/address/segment.
-3. Jitter (§1b) — **defer** (my rec) or include now (accepts meter-UX change)?
-4. Scenario C — pursue now / after seeing #2 / not at all; and Factory-hard vs Router-soft.
+## Decisions — CONFIRMED
+1. `swapNudgeWeight` = **3**.
+2. `freeNudgeCapPerSeg` = **10** free nudges/address/segment.
+3. Jitter (§1b) — **deferred** (keep meter = winning-string UX; revisit via VRF later).
+4. Scenario C — revisit **after seeing #2's effect**; if pursued, start **Router-soft**.
+
+## Noted for later
+- **Scenario C** (TIMBS hub routing) — its own spec when we act on it. #2 is forward-compatible.
+- **Jitter / provable fairness** — VRF or commit-reveal redesign, not the blockhash patch.
+- **`SPECS.md:118` divergence** — that line describes a freeze offset
+  `keccak256(blockhash(n-1)+counter+round) % 3` that deployed TimbPrize v3.2 does **not**
+  implement (`_buildWinningString` is a plain `counter % 36`). Reconcile SPECS to match the live
+  contract (or implement it deliberately as part of the fairness work).
+
+## Redeploy status
+Router-only redeploy. See "Redeploy & rewire checklist" above. TimbPrize/Factory unchanged.
+Frontend: `advanceScroll` panel now reads `freeNudgesRemaining(user)` each poll, clamps the batch
+to the remaining free allowance, warns at ≤5 left, and disables the free button at 0 (directing
+users to swap). The new Router address must replace `ADDRESSES.TimbSwapRouter` at deploy time.

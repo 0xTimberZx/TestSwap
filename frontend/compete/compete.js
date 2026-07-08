@@ -285,6 +285,20 @@ async function pollRoundState() {
     // the active segment's current digit.
     activeSegIndex   = s.segment.toNumber() - 1;
     activeSegCounter = s.digitCounters[activeSegIndex];
+
+    // Remaining free (gas-only) nudges for this wallet this segment. Silent
+    // on failure (old router without the view, or RPC hiccup) → treat as
+    // unknown so the panel falls back to the plain per-tx cap.
+    if (userAddress && ADDRESSES.TimbSwapRouter) {
+      try {
+        const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_NUDGE_ABI, readProv());
+        freeNudgesLeft = (await router.freeNudgesRemaining(userAddress)).toNumber();
+        if (advanceCount > advanceCeiling()) setAdvanceCount(advanceCeiling());
+      } catch { freeNudgesLeft = null; }
+    } else {
+      freeNudgesLeft = null;
+    }
+
     updateAdvancePanel(!!s.inSettlement);
 
   } catch (e) {
@@ -803,11 +817,25 @@ async function handleClaimRefund(ticketId) {
 // MAX_BATCH_NUDGE (20 on-chain) applies that many nudges in one transaction,
 // one at a time, in order. The panel's chips/stepper just choose `count`.
 
-const ROUTER_NUDGE_ABI = ["function advanceScroll(uint256 count) external"];
+const ROUTER_NUDGE_ABI = [
+  "function advanceScroll(uint256 count) external",
+  "function freeNudgesRemaining(address user) external view returns (uint256)"
+];
 const ADVANCE_MAX = 20; // mirrors TimbSwapRouter.MAX_BATCH_NUDGE
 
+// Free (gas-only) advanceScroll nudges left for this wallet THIS segment.
+// null = not yet known; the router caps the free path per address per segment
+// (paid swap-nudges are uncapped). Refreshed each poll and after an advance.
+let freeNudgesLeft = null;
+
+function advanceCeiling() {
+  // Chosen batch can't exceed the on-chain per-tx cap nor the wallet's
+  // remaining free allowance this segment.
+  return freeNudgesLeft === null ? ADVANCE_MAX : Math.min(ADVANCE_MAX, freeNudgesLeft);
+}
+
 function setAdvanceCount(n) {
-  advanceCount = Math.max(1, Math.min(ADVANCE_MAX, n));
+  advanceCount = Math.max(1, Math.min(advanceCeiling(), n));
   renderAdvancePreview();
 }
 function adjustAdvanceCount(delta) {
@@ -838,8 +866,16 @@ function renderAdvancePreview() {
         ? "Intermission — calculating…"
         : "Settle & start next segment";
       submitBtn.disabled = holding;
+    } else if (freeNudgesLeft === 0) {
+      // Free (gas-only) allowance spent this segment — the paid path (a swap)
+      // still moves the meter, and it's worth more per action.
+      submitBtn.textContent = "Free nudges used — swap to move the meter";
+      submitBtn.disabled = true;
     } else {
-      submitBtn.textContent = `Advance ×${advanceCount}`;
+      submitBtn.textContent = (freeNudgesLeft !== null && freeNudgesLeft <= 5)
+        ? `Advance ×${advanceCount} · ${freeNudgesLeft} free left`
+        : `Advance ×${advanceCount}`;
+      submitBtn.disabled = false;
     }
   }
 
@@ -897,6 +933,8 @@ const ADVANCE_REVERTS = {
   "0x91655201": "TimbPrize doesn't recognize this router — call setRouter(<TimbSwapRouter>) on TimbPrize (owner).",     // NotRouter()
   "0x3a5f7b57": "The game hasn't been started — call startGame() on TimbPrize (owner).",                                // GameNotStarted()
   "0x717824fb": "Settlement is paused — nudges stay blocked until unpauseSettlement().",                                // InSettlementWindow()
+  "0x57b4f0b1": "You've used all your free nudges for this segment. Swap an eligible token to keep moving the meter, or wait for the next segment.", // FreeNudgeCapReached(uint256,uint256)
+  "0xf451af97": "Nudge count out of range — pick a smaller batch (max 20 per transaction).",                            // InvalidNudgeCount(uint256,uint256)
 };
 
 function advanceRevertSelector(err) {
