@@ -759,11 +759,33 @@ async function handleSwap() {
     DebugHub.logCheckpoint("Swap Failed", "fail");
     const code = err?.code;
     const userRejected = code === 4001 || code === "ACTION_REJECTED";
+    // Did the tx actually reach the chain? A receipt / tx hash means it was
+    // broadcast and MINED, then reverted — an on-chain failure (slippage on a
+    // moving pool), NOT a wallet broadcast defect. Only a failure with no hash
+    // is wallet-side.
+    const minedHash    = err?.transactionHash || err?.receipt?.transactionHash || err?.transaction?.hash;
+    const minedReverted = !!minedHash || !!err?.receipt;
     if (userRejected) {
       // Not an error — the user declined in their wallet.
+    } else if (SWAP_REVERTS[sel]) {
+      // A decoded protocol revert is authoritative regardless of mining state.
+      alert(SWAP_REVERTS[sel]);
+      onAmountInChange();
+    } else if (minedReverted) {
+      // Broadcast + mined, then reverted. The trade executed and failed —
+      // almost always slippage: the pool moved between the quote and mining
+      // (thin/fast pool, high price impact). Do NOT blame the wallet.
+      DebugHub.logError("handleSwap.onchainRevert", new Error("mined & reverted: " + code + " tx " + minedHash));
+      const diagnosed = await diagnoseRevert(err);
+      alert(diagnosed ||
+        "The swap reached the chain but reverted — the pool price moved between " +
+        "the quote and execution (slippage on a thin, fast-moving pool). Raise " +
+        "the slippage tolerance or reduce the size, then try again. Quote refreshed."
+      );
+      onAmountInChange();
     } else if (simulatedOk) {
-      // The public RPC already simulated this exact transaction OK, so the
-      // failure is inside the wallet (broadcast/signing), not the trade.
+      // Simulated OK on the public RPC and never reached the chain (no hash) →
+      // the failure is inside the wallet (broadcast/signing), not the trade.
       // Observed live: a wallet returning -32603 here while the identical
       // swap confirmed instantly in a different wallet. See DebugHub §9.
       DebugHub.logError("handleSwap.walletBroadcast", new Error("code " + code + " after successful public simulation"));
@@ -776,8 +798,6 @@ async function handleSwap() {
         "away and back, or use a different account/wallet. (The same swap " +
         "succeeds in other accounts.)"
       );
-    } else if (SWAP_REVERTS[sel]) {
-      alert(SWAP_REVERTS[sel]);
     } else if (/UNPREDICTABLE_GAS_LIMIT/.test(code || "") || code === -32603) {
       // Failed before our own simulation — recover the real revert reason
       // by replaying the exact call through the public RPC.
