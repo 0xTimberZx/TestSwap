@@ -574,3 +574,46 @@
 /* ─── Light-mode card spacing (+20%) ────────────────────────────────────────
    Light borders carry less visual weight, so cards get more breathing room. */
 :root[data-theme="light"] .swap-page { gap: 29px; }
+
+/* ─── Remove-liquidity slider (0–100%) ────────────────────────────────────── */
+.lq-remove-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 8px;
+}
+.lq-remove-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+.lq-remove-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid var(--bg);
+  cursor: pointer;
+}
+.lq-remove-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--green);
+  cursor: pointer;
+}
+.lq-remove-pct {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  min-width: 42px;
+  text-align: right;
+}

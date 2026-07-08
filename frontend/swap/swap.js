@@ -116,6 +116,25 @@ async function fillMaxIn() {
   } catch (e) { console.warn("fillMaxIn:", e.message); }
 }
 
+// Tapping a Liquidity balance fills that side with the full wallet balance,
+// then mirrors the counterpart from the live pool ratio (no-op for a new pool).
+async function fillMaxLqA() {
+  if (!userAddress || !tokenIn) return;
+  try {
+    const bal = await tokenBalance(tokenIn);
+    document.getElementById("lq-amount-a").value = trimAmount(ethers.utils.formatUnits(bal, tokenIn.decimals));
+    onLqAmountA();
+  } catch (e) { console.warn("fillMaxLqA:", e.message); }
+}
+async function fillMaxLqB() {
+  if (!userAddress || !tokenOut) return;
+  try {
+    const bal = await tokenBalance(tokenOut);
+    document.getElementById("lq-amount-b").value = trimAmount(ethers.utils.formatUnits(bal, tokenOut.decimals));
+    onLqAmountB();
+  } catch (e) { console.warn("fillMaxLqB:", e.message); }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 function renderTokenList() {
@@ -910,9 +929,14 @@ function updateLqButtons() {
 }
 
 function setRemovePct(pct) {
-  removePct = pct;
-  document.querySelectorAll(".lq-pct-row .slip-btn").forEach(b => b.classList.remove("slip-active"));
-  if (typeof event !== "undefined" && event?.target) event.target.classList.add("slip-active");
+  removePct = Math.max(0, Math.min(100, Math.round(pct)));
+  const slider = document.getElementById("lq-remove-slider");
+  if (slider && Number(slider.value) !== removePct) slider.value = removePct;
+  const lbl = document.getElementById("lq-remove-pct");
+  if (lbl) lbl.textContent = removePct + "%";
+  // Highlight a quick-button only when it matches the slider exactly.
+  document.querySelectorAll(".lq-pct-row .slip-btn").forEach(b =>
+    b.classList.toggle("slip-active", Number(b.dataset.pct) === removePct));
   updateLqButtons();
 }
 

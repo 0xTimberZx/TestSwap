@@ -16,7 +16,7 @@
     }
   </script>
   <link rel="stylesheet" href="../style.css?v=20260708a" />
-  <link rel="stylesheet" href="swap.css?v=20260708a" />
+  <link rel="stylesheet" href="swap.css?v=20260715a" />
 </head>
 <body>
 
@@ -189,7 +189,7 @@
           <div class="token-box">
             <div class="token-box-top">
               <span class="token-box-label">Deposit</span>
-              <span class="token-box-bal" id="lq-bal-a">Balance: —</span>
+              <span class="token-box-bal" id="lq-bal-a" onclick="fillMaxLqA()" title="Use full balance">Balance: —</span>
             </div>
             <div class="token-box-row">
               <input id="lq-amount-a" class="amount-input" type="number" placeholder="0.0" oninput="onLqAmountA()" />
@@ -204,7 +204,7 @@
           <div class="token-box">
             <div class="token-box-top">
               <span class="token-box-label">Deposit</span>
-              <span class="token-box-bal" id="lq-bal-b">Balance: —</span>
+              <span class="token-box-bal" id="lq-bal-b" onclick="fillMaxLqB()" title="Use full balance">Balance: —</span>
             </div>
             <div class="token-box-row">
               <input id="lq-amount-b" class="amount-input" type="number" placeholder="0.0" oninput="onLqAmountB()" />
@@ -238,10 +238,14 @@
               <span class="lq-remove-title">Remove liquidity</span>
               <span class="token-box-bal" id="lq-remove-bal">LP: —</span>
             </div>
+            <div class="lq-remove-slider-row">
+              <input id="lq-remove-slider" class="lq-remove-slider" type="range" min="0" max="100" step="1" value="0" oninput="setRemovePct(Number(this.value))" aria-label="Remove percentage" />
+              <span class="lq-remove-pct" id="lq-remove-pct">0%</span>
+            </div>
             <div class="lq-pct-row">
-              <button class="slip-btn" onclick="setRemovePct(25)">25%</button>
-              <button class="slip-btn" onclick="setRemovePct(50)">50%</button>
-              <button class="slip-btn" onclick="setRemovePct(100)">Max</button>
+              <button class="slip-btn" data-pct="25" onclick="setRemovePct(25)">25%</button>
+              <button class="slip-btn" data-pct="50" onclick="setRemovePct(50)">50%</button>
+              <button class="slip-btn" data-pct="100" onclick="setRemovePct(100)">Max</button>
             </div>
             <button id="lq-remove-btn" class="btn-remove-liq" onclick="handleRemoveLiquidity()" disabled>
               Remove liquidity
@@ -284,7 +288,7 @@
   </footer>
 
   <script src="../config.js?v=20260714a"></script> 
-  <script src="swap.js?v=20260714a"></script>
+  <script src="swap.js?v=20260715a"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="influence.js?v=20260708a"></script>
