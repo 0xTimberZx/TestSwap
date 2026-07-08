@@ -460,8 +460,29 @@ function setMetricFilter(cat) {
 function updateMetricFilterGate() {
   const bar = document.getElementById("metric-filter");
   if (!bar) return;
-  bar.classList.toggle("hidden", !userAddress);
-  if (!userAddress) setMetricFilter("all");
+  const connected = !!userAddress;
+  bar.classList.toggle("hidden", !connected);
+  // Restore the full grid before re-gating so the filter and the connect
+  // gate never fight over a card's hidden state.
+  const active = document.querySelector("#metric-filter .mf-active")?.dataset.cat || "all";
+  setMetricFilter(connected ? active : "all");
+  applyDisconnectGate();
+}
+
+// Disconnected visitors keep only the market top-line (price, pool reserves,
+// circulating supply — cards marked data-public). Everything else — the
+// protocol internals cards and the round/vault/swaps sections — unlocks on
+// connect, replaced by a single connect prompt while disconnected.
+function applyDisconnectGate() {
+  const connected = !!userAddress;
+  if (!connected) {
+    document.querySelectorAll("#live-metrics-grid .metric-card").forEach(card => {
+      if (card.dataset.public !== "1") card.classList.add("hidden");
+    });
+  }
+  document.querySelectorAll("[data-gated]").forEach(el =>
+    el.classList.toggle("hidden", !connected));
+  document.getElementById("analytics-gate")?.classList.toggle("hidden", connected);
 }
 
 // ─── Wallet Connect (minimal — analytics is mostly read-only) ─────────────────
@@ -506,6 +527,10 @@ function handleDisconnect() {
     DebugHub.startSession();
     updateMetricFilterGate();
   }
+
+  // Apply the connect gate for the current state (reconnect branch already
+  // ran it; this covers the plain disconnected load).
+  updateMetricFilterGate();
 
   await Promise.all([
     loadLiveMetrics(),

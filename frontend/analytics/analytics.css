@@ -177,3 +177,30 @@
   border-color: var(--green);
   background: rgba(20,241,149,0.08);
 }
+
+/* ─── Disconnected connect gate ───────────────────────────────────────────── */
+/* Shown in place of the protocol-internals sections when no wallet is
+   connected — market top-line stays public above it. */
+.analytics-gate {
+  border: var(--bw) solid var(--border);
+  border-radius: 14px;
+  background: var(--surface, rgba(255,255,255,0.02));
+  padding: 32px 24px;
+  margin: 8px 0 24px;
+  text-align: center;
+}
+.analytics-gate-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.analytics-gate-sub {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+  max-width: 520px;
+  margin: 0 auto 18px;
+}
+.analytics-gate .btn-connect { display: inline-block; }
