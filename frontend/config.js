@@ -359,3 +359,72 @@ if (!window.DebugHub) {
     logSecurity:   () => {}
   };
 }
+
+// ─── Ecosystem log export (ungated) ────────────────────────────────────────────
+// Grab every DebugHub event this browser holds for the 0xTimberZx ecosystem and
+// download it as one sorted file — no wallet, no debugger dashboard. Every app
+// lives on the same origin (0xtimberzx.github.io), so they share one
+// localStorage; this reads whatever the SDK persisted there (plus any in-memory
+// buffer the live SDK exposes), independent of the exact storage key.
+
+function _dhLooksLikeEvent(o) {
+  return o && typeof o === "object" && !Array.isArray(o) &&
+    "timestamp" in o && ("type" in o || "app" in o || "sessionId" in o);
+}
+
+function _dhCollectEvents() {
+  const out = [];
+  const push = (arr) => { if (Array.isArray(arr)) for (const e of arr) if (_dhLooksLikeEvent(e)) out.push(e); };
+  // 1) Anything the live SDK exposes in memory (method or buffer).
+  try {
+    const dh = window.DebugHub || {};
+    ["getEvents", "getLogs", "export", "dump"].forEach(k => {
+      if (typeof dh[k] === "function") { try { push(dh[k]()); } catch {} }
+    });
+    ["events", "_events", "buffer", "_buffer", "log", "_log"].forEach(k => push(dh[k]));
+  } catch {}
+  // 2) Everything persisted in localStorage on this origin (survives reloads,
+  //    spans every ecosystem app). Also unwraps { events:[…] } / { sessions:{…} }.
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      let val;
+      try { val = JSON.parse(localStorage.getItem(localStorage.key(i))); } catch { continue; }
+      if (Array.isArray(val)) push(val);
+      else if (val && typeof val === "object") Object.values(val).forEach(v => push(v));
+    }
+  } catch {}
+  // Dedupe on a stable signature, then sort chronologically.
+  const seen = new Set(), uniq = [];
+  for (const e of out) {
+    const sig = [e.timestamp, e.type, e.sessionId, e.name, e.label, e.function, e.message].join("|");
+    if (seen.has(sig)) continue;
+    seen.add(sig); uniq.push(e);
+  }
+  uniq.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  return uniq;
+}
+
+function exportEcosystemDebugLogs() {
+  const events = _dhCollectEvents();
+  if (!events.length) {
+    alert("No DebugHub logs found in this browser for the ecosystem. Use the apps first so the SDK records events, then export.");
+    return;
+  }
+  const byApp = {};
+  for (const e of events) (byApp[e.app || "unknown"] ||= []).push(e); // already time-sorted
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    origin: location.origin,
+    totalEvents: events.length,
+    appCounts: Object.fromEntries(Object.entries(byApp).map(([a, ev]) => [a, ev.length])),
+    byApp,
+    all: events
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = `debughub-ecosystem-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
