@@ -531,9 +531,11 @@ function setSlippage(pct) {
   recalcQuote();
 }
 
+const MAX_SLIPPAGE_PCT = 2.5; // hard ceiling — protects against fat-finger slippage on thin pools
 document.getElementById("slip-custom")?.addEventListener("input", (e) => {
-  const val = parseFloat(e.target.value);
-  if (val > 0 && val <= 50) {
+  let val = parseFloat(e.target.value);
+  if (val > 0) {
+    if (val > MAX_SLIPPAGE_PCT) { val = MAX_SLIPPAGE_PCT; e.target.value = String(MAX_SLIPPAGE_PCT); }
     slippagePct = val;
     document.querySelectorAll(".slip-btn").forEach(b => b.classList.remove("slip-active"));
     recalcQuote();
@@ -780,7 +782,7 @@ async function handleSwap() {
       alert(diagnosed ||
         "The swap reached the chain but reverted — the pool price moved between " +
         "the quote and execution (slippage on a thin, fast-moving pool). Raise " +
-        "the slippage tolerance or reduce the size, then try again. Quote refreshed."
+        "the slippage tolerance (max 2.5%) or reduce the size, then try again. Quote refreshed."
       );
       onAmountInChange();
     } else if (simulatedOk) {
