@@ -66,13 +66,10 @@ const NATIVE_ETH = {
 // Known extra tokens on Arbitrum Sepolia beyond the shared DEFAULT_TOKENS.
 // LINK address is Chainlink's documented Arbitrum Sepolia token — the picker
 // shows live on-chain symbol/balance, so a wrong address is immediately visible.
-const EXTRA_TOKENS = [
-  { symbol: "LINK", name: "Chainlink", address: "0xb1D4538B4571d411F07960EF2838Ce337FE1E80E", decimals: 18, logoChar: "L" },
-  // Circle's canonical Arbitrum Sepolia USDC — 6 decimals, all math in this
-  // file is per-token-decimals so no special casing needed.
-  { symbol: "USDC", name: "USD Coin", address: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", decimals: 6, logoChar: "$" }
-  // TestUSDT joins here once deployed (contracts/TestUSDT.sol) — 6 decimals.
-];
+// USDC + LINK now live in the shared DEFAULT_TOKENS (config.js), so they're
+// no longer duplicated here. Keep this array for swap-page-only extras.
+// TestUSDT joins here once deployed (contracts/TestUSDT.sol) — 6 decimals.
+const EXTRA_TOKENS = [];
 
 // Custom tokens the user imported by pasting an address (persisted per-browser).
 const CUSTOM_TOKENS_KEY = "timbswap_custom_tokens";
@@ -84,7 +81,18 @@ function saveCustomTokens() {
 }
 let customTokens = loadCustomTokens();
 
-function allTokens() { return [NATIVE_ETH, ...DEFAULT_TOKENS, ...EXTRA_TOKENS, ...customTokens]; }
+// Dedupe by address (case-insensitive) so a token that's both canonical and
+// user-imported shows once. First occurrence wins, so canonical metadata
+// (DEFAULT_TOKENS) beats a hand-imported copy of the same address.
+function allTokens() {
+  const seen = new Set();
+  return [NATIVE_ETH, ...DEFAULT_TOKENS, ...EXTRA_TOKENS, ...customTokens].filter(t => {
+    const k = (t.address || "").toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
 
 function isNative(t)  { return !!(t && t.isNative); }
 // Address used for pool math/eligibility — native ETH trades as WETH.
