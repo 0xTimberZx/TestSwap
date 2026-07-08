@@ -933,7 +933,22 @@ async function handleAddLiquidity() {
   try {
     btn.disabled = true;
     const amtA = ethers.utils.parseUnits(aStr, tokenIn.decimals);
-    const amtB = ethers.utils.parseUnits(bStr, tokenOut.decimals);
+    let   amtB = ethers.utils.parseUnits(bStr, tokenOut.decimals);
+    // Re-quote amtB from LIVE reserves at submit so the deposit matches the
+    // current pool ratio. A stale auto-fill (pool moved after the field was
+    // filled, or the user edited one side) otherwise trips the router's
+    // slippage guard — InsufficientBAmount (0x51959667) / InsufficientAAmount.
+    // A brand-new pool (no reserves) keeps the typed amounts: the first add
+    // sets the price, so any ratio is valid.
+    try {
+      const reader = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, readProviderForEligibility());
+      const [rA, rB] = await reader.getReserves(tokenIn.address, tokenOut.address);
+      if (rA.gt(0) && rB.gt(0)) {
+        amtB = amtA.mul(rB).div(rA);
+        const bField = document.getElementById("lq-amount-b");
+        if (bField) bField.value = trimAmount(ethers.utils.formatUnits(amtB, tokenOut.decimals));
+      }
+    } catch {}
     const slip = Math.floor((100 - slippagePct) * 100);
     const aMin = amtA.mul(slip).div(10000);
     const bMin = amtB.mul(slip).div(10000);
@@ -956,6 +971,8 @@ async function handleAddLiquidity() {
     // selector to self-diagnose instead of surfacing wallet noise.
     const SEL_PAIR_NOT_FOUND = "0x4db171d4"; // PairNotFound(addr,addr) — pre-v6 router
     const SEL_CREATE_PAUSED  = "0xaaed1932"; // PairCreationPaused() — factory paused
+    const SEL_INSUFF_A       = "0x47c5f09e"; // InsufficientAAmount — ratio/slippage
+    const SEL_INSUFF_B       = "0x51959667"; // InsufficientBAmount — ratio/slippage
 
 
     const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
@@ -978,6 +995,10 @@ async function handleAddLiquidity() {
 
       if (sel === SEL_CREATE_PAUSED) {
         alert("Pair creation is PAUSED on the TimbSwapFactory — call unpause() as the factory owner, then retry.");
+        throw addErr;
+      }
+      if (sel === SEL_INSUFF_A || sel === SEL_INSUFF_B) {
+        alert("The pool ratio moved since these amounts were set. Amounts are re-quoted from live reserves at submit — refresh the panel (re-enter the first amount) and add again, or widen slippage.");
         throw addErr;
       }
       if (sel === SEL_PAIR_NOT_FOUND) {
