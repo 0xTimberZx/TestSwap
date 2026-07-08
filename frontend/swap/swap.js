@@ -66,13 +66,10 @@ const NATIVE_ETH = {
 // Known extra tokens on Arbitrum Sepolia beyond the shared DEFAULT_TOKENS.
 // LINK address is Chainlink's documented Arbitrum Sepolia token — the picker
 // shows live on-chain symbol/balance, so a wrong address is immediately visible.
-const EXTRA_TOKENS = [
-  { symbol: "LINK", name: "Chainlink", address: "0xb1D4538B4571d411F07960EF2838Ce337FE1E80E", decimals: 18, logoChar: "L" },
-  // Circle's canonical Arbitrum Sepolia USDC — 6 decimals, all math in this
-  // file is per-token-decimals so no special casing needed.
-  { symbol: "USDC", name: "USD Coin", address: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", decimals: 6, logoChar: "$" }
-  // TestUSDT joins here once deployed (contracts/TestUSDT.sol) — 6 decimals.
-];
+// USDC + LINK now live in the shared DEFAULT_TOKENS (config.js), so they're
+// no longer duplicated here. Keep this array for swap-page-only extras.
+// TestUSDT joins here once deployed (contracts/TestUSDT.sol) — 6 decimals.
+const EXTRA_TOKENS = [];
 
 // Custom tokens the user imported by pasting an address (persisted per-browser).
 const CUSTOM_TOKENS_KEY = "timbswap_custom_tokens";
@@ -84,7 +81,18 @@ function saveCustomTokens() {
 }
 let customTokens = loadCustomTokens();
 
-function allTokens() { return [NATIVE_ETH, ...DEFAULT_TOKENS, ...EXTRA_TOKENS, ...customTokens]; }
+// Dedupe by address (case-insensitive) so a token that's both canonical and
+// user-imported shows once. First occurrence wins, so canonical metadata
+// (DEFAULT_TOKENS) beats a hand-imported copy of the same address.
+function allTokens() {
+  const seen = new Set();
+  return [NATIVE_ETH, ...DEFAULT_TOKENS, ...EXTRA_TOKENS, ...customTokens].filter(t => {
+    const k = (t.address || "").toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
 
 function isNative(t)  { return !!(t && t.isNative); }
 // Address used for pool math/eligibility — native ETH trades as WETH.
@@ -114,6 +122,25 @@ async function fillMaxIn() {
     lastEditedSide = "in";
     onAmountInChange();
   } catch (e) { console.warn("fillMaxIn:", e.message); }
+}
+
+// Tapping a Liquidity balance fills that side with the full wallet balance,
+// then mirrors the counterpart from the live pool ratio (no-op for a new pool).
+async function fillMaxLqA() {
+  if (!userAddress || !tokenIn) return;
+  try {
+    const bal = await tokenBalance(tokenIn);
+    document.getElementById("lq-amount-a").value = trimAmount(ethers.utils.formatUnits(bal, tokenIn.decimals));
+    onLqAmountA();
+  } catch (e) { console.warn("fillMaxLqA:", e.message); }
+}
+async function fillMaxLqB() {
+  if (!userAddress || !tokenOut) return;
+  try {
+    const bal = await tokenBalance(tokenOut);
+    document.getElementById("lq-amount-b").value = trimAmount(ethers.utils.formatUnits(bal, tokenOut.decimals));
+    onLqAmountB();
+  } catch (e) { console.warn("fillMaxLqB:", e.message); }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -256,12 +283,22 @@ async function refreshPickerBalances() {
 }
 
 async function selectToken(token) {
+  // You can't swap/LP a token against itself. If the picked token is already
+  // on the OTHER side, flip the pair instead of filling both fields the same.
+  const sameAddr = (a, b) => a && b &&
+    (a.address || "").toLowerCase() === (b.address || "").toLowerCase();
+  const setSym = (id, t) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t ? t.symbol : "Select";
+  };
   if (pickerTarget === "in") {
+    if (sameAddr(token, tokenOut)) { tokenOut = tokenIn; setSym("token-out-symbol", tokenOut); }
     tokenIn = token;
-    document.getElementById("token-in-symbol").textContent = token.symbol;
+    setSym("token-in-symbol", tokenIn);
   } else {
+    if (sameAddr(token, tokenIn)) { tokenIn = tokenOut; setSym("token-in-symbol", tokenIn); }
     tokenOut = token;
-    document.getElementById("token-out-symbol").textContent = token.symbol;
+    setSym("token-out-symbol", tokenOut);
   }
   closeTokenPickerDirect();
   syncLiquidityLabels();
@@ -910,9 +947,14 @@ function updateLqButtons() {
 }
 
 function setRemovePct(pct) {
-  removePct = pct;
-  document.querySelectorAll(".lq-pct-row .slip-btn").forEach(b => b.classList.remove("slip-active"));
-  if (typeof event !== "undefined" && event?.target) event.target.classList.add("slip-active");
+  removePct = Math.max(0, Math.min(100, Math.round(pct)));
+  const slider = document.getElementById("lq-remove-slider");
+  if (slider && Number(slider.value) !== removePct) slider.value = removePct;
+  const lbl = document.getElementById("lq-remove-pct");
+  if (lbl) lbl.textContent = removePct + "%";
+  // Highlight a quick-button only when it matches the slider exactly.
+  document.querySelectorAll(".lq-pct-row .slip-btn").forEach(b =>
+    b.classList.toggle("slip-active", Number(b.dataset.pct) === removePct));
   updateLqButtons();
 }
 
