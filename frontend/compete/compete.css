@@ -598,6 +598,11 @@
   border-color: var(--blue);
   color: var(--blue);
 }
+.adv-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.adv-chip:disabled:hover { border-color: var(--border); color: var(--text-3); }
 
 .advance-stepper {
   display: flex;
