@@ -7,7 +7,7 @@
 **Live:** 0xtimberzx.github.io/TimbSwap/  
 **DebugHub:** 0xtimberzx.github.io/MyDapp/debughub/  
 **Pragma:** `pragma solidity 0.8.24` — exact, never `^`  
-**Compiler:** viaIR enabled, optimizer 200 runs, EVM london  
+**Compiler:** viaIR enabled, optimizer 200 runs, EVM paris  
 **Verification:** Sourcify preferred  
 **Last updated:** July 2026
 
@@ -32,6 +32,7 @@
 | TimbGovernance | 0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061 | Sourcify ✅ |
 | TIMBS/ETH Pair | 0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95 | via Factory ✅ |
 | WETH (Arb Sepolia) | 0x980B62Da83eFf3D4576C647993b0c1D7faf17c73 | — |
+| USDC (Circle canonical, 6 dec) | 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d | — |
 | DAPP Token | 0x3d0cB8929c22F93A9dd33921E6f43C1621FCfC04 | — |
 
 ### Router Version History
@@ -180,7 +181,10 @@ Both `style.css` and `config.js` exist at repo root AND `frontend/` — root cop
 |-----------|-------|
 | Hard cap | 100,000,000 TIMBS |
 | Effective supply | ~99,500,000 TIMBS |
-| Entry cost | 100 TIMBS (governance-adjustable) |
+| Entry cost | ETH (`entryCostETH`) or TIMBS (`entryCostTIMBS`), both governance-adjustable |
+| Extra rounds | `entryCostTIMBS` each, max 12/ticket, non-refundable |
+| Segment timing | 60 min = 59 min 45 s open + 15 s permissionless settlement; 6 segments/round |
+| Claim/refund window | 2 rounds after a ticket's last eligible round |
 | Buyback burn ratio | 50% (adjustable via TimbTreasury) |
 | Emissions | Governance-unlockable, off by default |
 | Protocol fee | 0.05% of swap volume |

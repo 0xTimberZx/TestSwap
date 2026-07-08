@@ -27,8 +27,29 @@ A full-stack DeFi protocol on Arbitrum Sepolia — AMM DEX, prize game, LP farmi
 | TimbTreasury | `0x486Fa4D8351EF81136E83340eA1e3aa2272c9955` |
 | TimbGovernance | `0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061` |
 | TIMBS/ETH Pair | `0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95` |
+| WETH (Arb Sepolia) | `0x980B62Da83eFf3D4576C647993b0c1D7faf17c73` |
+| USDC (Circle canonical, 6 dec) | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` |
 
-All contracts verified on [Sourcify](https://repo.sourcify.dev/421614/).
+All TimbSwap contracts verified on [Sourcify](https://repo.sourcify.dev/421614/). WETH and USDC are the canonical Arbitrum Sepolia testnet tokens.
+
+---
+
+## Testnet Faucets
+
+Everything runs on **Arbitrum Sepolia (Chain ID 421614)**. Grab gas and stables before you swap, farm, or play.
+
+**Gas — Arbitrum Sepolia ETH** *(pick up to 3; each has its own daily limit)*
+
+- [Alchemy Faucet](https://www.alchemy.com/faucets/arbitrum-sepolia) — drips directly on Arbitrum Sepolia
+- [QuickNode Faucet](https://faucet.quicknode.com/arbitrum/sepolia) — Arbitrum Sepolia ETH
+- [Chainlink Faucet](https://faucets.chain.link/arbitrum-sepolia) — Arbitrum Sepolia (also bridges from Sepolia)
+
+**Stablecoins** *(up to 2)*
+
+- [Circle USDC Faucet](https://faucet.circle.com/) — select **Arbitrum Sepolia**; mints the exact canonical USDC (`0x75faf114…46AA4d`) TimbSwap trades
+- [Aave Testnet Faucet](https://app.aave.com/faucet/) — switch to **Arbitrum Sepolia** for test USDC / DAI / USDT balances to experiment with
+
+> Tip: if a faucet is dry, get Sepolia ETH first (e.g. the Chainlink or Alchemy Sepolia faucet) and bridge to Arbitrum Sepolia via the [Arbitrum Bridge](https://bridge.arbitrum.io/).
 
 ---
 
@@ -36,7 +57,7 @@ All contracts verified on [Sourcify](https://repo.sourcify.dev/421614/).
 
 **AMM Swap** — Uniswap v2-style. 0.3% fee split 0.25% to LPs / 0.05% to treasury. Supports `addLiquidity`, `addLiquidityETH`, `removeLiquidity`, `removeLiquidityETH`.
 
-**Prize Game** — Perpetual 6-round game. Each round = 6 × 60 min segments. Players set a 6-character string. Every eligible swap nudges the scroll +1. Exact match at freeze wins the pot. Entry principal is always refundable.
+**Prize Game** — Perpetual round-based game. Each round = 6 segments of 60 min (59 min 45 s open + 15 s settlement). Players hold a **ticket** — a 6-character string (A–Z, 0–9, no repeats) that plays the next round. Every eligible swap nudges the active segment's digit upward on a continuous meter; when a segment closes its digit locks and the next becomes active. After all 6 lock, an exact match wins the pot. Segments settle **permissionlessly** once the open window elapses (anyone can call `settleSegment`). Entry can be paid in ETH or TIMBS; **extra rounds** cost `entryCostTIMBS` each (up to 12, non-refundable). Ticket principal stays refundable within a 2-round claim window and, while active, earns yield via the **TimbYieldVault** that grows the pot.
 
 **LP Farming** — Stake TIMBS/ETH LP tokens to earn TIMBS emissions.
 
@@ -123,7 +144,8 @@ forge script scripts/Deploy.s.sol \
 
 - **Hard cap:** 100,000,000 TIMBS
 - **Effective supply:** ~99,500,000 TIMBS *(500k at unreachable phantom pair address — permanent burn)*
-- **Entry cost:** 100 TIMBS (governance-adjustable)
+- **Entry cost:** paid in ETH (`entryCostETH`) or TIMBS (`entryCostTIMBS`), both governance-adjustable
+- **Extra rounds:** `entryCostTIMBS` each, up to 12 per ticket, non-refundable
 - **Buyback:** 50% burned, 50% to stakers
 - **Protocol fee:** 0.05% of swap volume → TimbTreasury
 
