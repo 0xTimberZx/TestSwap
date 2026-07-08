@@ -15,8 +15,8 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="../style.css?v=20260708a" />
-  <link rel="stylesheet" href="analytics.css?v=20260708a" />
+  <link rel="stylesheet" href="../style.css?v=20260710a" />
+  <link rel="stylesheet" href="analytics.css?v=20260710a" />
 </head>
 <body>
 
@@ -102,12 +102,12 @@
     </div>
 
     <div class="metrics-grid" id="live-metrics-grid">
-      <div class="metric-card" data-cat="token">
+      <div class="metric-card" data-cat="token" data-public="1">
         <div class="metric-label">TIMBS Price</div>
         <div class="metric-val" id="m-price">—</div>
         <div class="metric-sub" id="m-price-sub">per ETH</div>
       </div>
-      <div class="metric-card" data-cat="platform">
+      <div class="metric-card" data-cat="platform" data-public="1">
         <div class="metric-label">Pool Reserves</div>
         <div class="metric-val" id="m-timbs-reserve">—</div>
         <div class="metric-sub" id="m-weth-reserve">— WETH</div>
@@ -132,7 +132,7 @@
         <div class="metric-val" id="m-lp-staked">—</div>
         <div class="metric-sub">TIMBS/ETH LP tokens</div>
       </div>
-      <div class="metric-card" data-cat="token">
+      <div class="metric-card" data-cat="token" data-public="1">
         <div class="metric-label">Circulating Supply</div>
         <div class="metric-val" id="m-supply">—</div>
         <div class="metric-sub">of 100M hard cap</div>
@@ -154,9 +154,18 @@
       </div>
     </div>
 
+    <!-- Disconnected visitors see market top-line only; the protocol internals
+         below (pot, scroll, staking, vault, entries, rounds, swaps) unlock on
+         connect. -->
+    <div id="analytics-gate" class="analytics-gate hidden">
+      <div class="analytics-gate-title">Connect your wallet to view protocol internals</div>
+      <div class="analytics-gate-sub">Prize pot, scroll position, staking, vault yield, active entries, settled rounds, and recent swaps are visible to connected wallets.</div>
+      <button class="btn-connect" onclick="handleConnect()">Connect Wallet</button>
+    </div>
+
     <!-- ─── Round History ──────────────────────────────────────────────── -->
-    <div class="section-label">ROUND HISTORY</div>
-    <div class="data-card">
+    <div class="section-label" data-gated>ROUND HISTORY</div>
+    <div class="data-card" data-gated>
       <div class="data-card-header">
         <span class="data-card-title">Settled Rounds</span>
         <span class="data-refresh" id="rounds-status">Loading…</span>
@@ -181,8 +190,8 @@
     </div>
 
     <!-- ─── Yield Vault ────────────────────────────────────────────────── -->
-    <div class="section-label">YIELD VAULT</div>
-    <div class="data-card">
+    <div class="section-label" data-gated>YIELD VAULT</div>
+    <div class="data-card" data-gated>
       <div class="data-card-header">
         <span class="data-card-title">Ticket Capital → Pot Yield</span>
         <span class="data-refresh" id="vault-status">Loading…</span>
@@ -255,8 +264,8 @@
     </div>
 
     <!-- ─── Recent Swaps ───────────────────────────────────────────────── -->
-    <div class="section-label">RECENT SWAPS</div>
-    <div class="data-card">
+    <div class="section-label" data-gated>RECENT SWAPS</div>
+    <div class="data-card" data-gated>
       <div class="data-card-header">
         <span class="data-card-title">Last 50 Swaps</span>
         <span class="data-refresh" id="swaps-status">Loading…</span>
@@ -315,8 +324,8 @@
     </div>
   </footer>
 
-  <script src="../config.js?v=20260708a"></script>
-  <script src="analytics.js?v=20260708a"></script>
+  <script src="../config.js?v=20260710a"></script>
+  <script src="analytics.js?v=20260710a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");

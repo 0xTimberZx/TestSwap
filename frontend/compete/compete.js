@@ -741,10 +741,24 @@ async function loadMyEntries() {
       (t.status === 1 && currentRoundNum !== null && currentRoundNum <= t.lastEligibleRound.toNumber())
     );
 
+    // Hide history clutter: once a ticket is more than the refund window
+    // (2 rounds) past its last eligible round it can't be played or refunded,
+    // so drop those heads. Live/pending and still-refundable tickets stay.
+    const withinRelevance = (t) => {
+      if (currentRoundNum === null) return true;
+      return currentRoundNum <= t.lastEligibleRound.toNumber() + 2;
+    };
+
     const heads = ticketList
-      .filter(t => t.supersededBy.isZero())
+      .filter(t => t.supersededBy.isZero() && withinRelevance(t))
       .sort((a, b) => b.id.toNumber() - a.id.toNumber())
       .slice(0, 8);
+
+    if (!heads.length) {
+      list.innerHTML = '<div class="empty-state">No active tickets</div>';
+      updateEntryButton();
+      return;
+    }
 
     list.innerHTML = "";
     for (const head of heads) {
