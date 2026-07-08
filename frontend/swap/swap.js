@@ -41,6 +41,11 @@ let mode          = "swap"; // "swap" | "liquidity"
 let removePct     = 0;      // selected % for remove-liquidity
 let lpPairAddress = null;   // cached LP pair address for the current pair
 let lpBalanceWei  = null;   // cached LP balance for the connected wallet
+// Cached pool state for the remove-liquidity preview so dragging the slider
+// recomputes the payout instantly, with no per-move network call.
+let lpReserveA    = null;
+let lpReserveB    = null;
+let lpTotalSupply = null;
 
 // Trim a formatUnits string for display: keep the whole part, cap the fraction
 // at 8 places, drop trailing zeros. Avoids the ~20-decimal quote readouts.
@@ -887,8 +892,10 @@ async function refreshLiquidity() {
         if (wdEl) {
           if (lpBalanceWei.isZero()) {
             wdEl.textContent = "No position";
+            lpReserveA = lpReserveB = lpTotalSupply = null;
           } else if (rA && rB && rA.gt(0) && rB.gt(0)) {
             const supply = await lp.totalSupply();
+            lpReserveA = rA; lpReserveB = rB; lpTotalSupply = supply; // for the slider preview
             const outA = lpBalanceWei.mul(rA).div(supply);
             const outB = lpBalanceWei.mul(rB).div(supply);
             wdEl.textContent =
@@ -896,17 +903,21 @@ async function refreshLiquidity() {
               `${fmt(outB, tokenOut.decimals, 4)} ${tokenOut.symbol}`;
           } else {
             wdEl.textContent = "✓ Yes";
+            lpReserveA = lpReserveB = lpTotalSupply = null;
           }
         }
       } else {
         lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —";
+        lpReserveA = lpReserveB = lpTotalSupply = null;
         if (wdEl) wdEl.textContent = !pairExists ? "No pool yet" : "Connect wallet";
       }
     } catch {
       lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —";
+      lpReserveA = lpReserveB = lpTotalSupply = null;
       if (wdEl) wdEl.textContent = "—";
     }
   }
+  renderRemovePreview(); // reflect the new pool state at the current slider %
   updateLqButtons();
 }
 
@@ -955,7 +966,30 @@ function setRemovePct(pct) {
   // Highlight a quick-button only when it matches the slider exactly.
   document.querySelectorAll(".lq-pct-row .slip-btn").forEach(b =>
     b.classList.toggle("slip-active", Number(b.dataset.pct) === removePct));
+  renderRemovePreview();
   updateLqButtons();
+}
+
+// Live payout for the current slider %: burns removePct of the LP position and
+// shows the pro-rata token amounts (lpBal × pct/100 × reserve ÷ supply — the
+// pair's own redemption math). Uses cached pool state, so it's instant on drag.
+function renderRemovePreview() {
+  const el = document.getElementById("lq-remove-preview");
+  const lpEl = document.getElementById("lq-remove-bal");
+  if (!el) return;
+  if (!lpBalanceWei || lpBalanceWei.isZero() || !lpReserveA || !lpTotalSupply || lpTotalSupply.isZero() || removePct <= 0 || !tokenIn || !tokenOut) {
+    el.textContent = "";
+    if (lpEl) lpEl.textContent = "LP: " + (lpBalanceWei ? fmt(lpBalanceWei, 18, 6) : "—");
+    return;
+  }
+  const liq  = lpBalanceWei.mul(removePct).div(100);
+  const outA = liq.mul(lpReserveA).div(lpTotalSupply);
+  const outB = liq.mul(lpReserveB).div(lpTotalSupply);
+  el.textContent =
+    `You receive ≈ ${fmt(outA, tokenIn.decimals, 4)} ${tokenIn.symbol} + ` +
+    `${fmt(outB, tokenOut.decimals, 4)} ${tokenOut.symbol}`;
+  // Also show the LP amount being burned next to the "LP:" label.
+  if (lpEl) lpEl.textContent = `Burn ${fmt(liq, 18, 6)} of ${fmt(lpBalanceWei, 18, 6)} LP`;
 }
 
 function showLqTx(hash) {
