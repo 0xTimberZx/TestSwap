@@ -122,6 +122,29 @@ These three buckets must never mingle.
 - **Claim window:** 2 rounds after lastEligibleRound
 - **Verification:** dual-layer — verifyEntryExisted() + verifyEntryValid()
 
+### Yield Vault rate (TimbYieldVault)
+
+The vault mints pot yield from active ticket escrow. `ratePerSecond1e18` = **pot wei
+per 1e18 of weight per second** (weight is ETH-equivalent: 1 ETH escrow = 1e18 weight;
+TIMBS escrow converts via `timbsWeight1e18`). Accrual is
+`totalWeight × ratePerSecond1e18 / 1e18 × elapsed`, **capped by the vault's reserve**
+(`balance − accruedForPot`) so it can never pay out ETH it doesn't hold.
+
+**APR ⇄ rate conversion** (365-day year = 31,536,000 s):
+
+```
+ratePerSecond1e18 = aprBps × 1e18 / 10_000 / 365 days      // setYieldAPRBps(aprBps)
+APR%              = ratePerSecond1e18 × 31_536_000 / 1e18 × 100
+```
+
+Decode examples:
+- `3_170_979_198`  → 10% APR  (`setYieldAPRBps(1000)`)
+- `95_129_375_951` → **300% APR** (`setYieldAPRBps(30000)`) ← current
+
+APR is a rate on *active weight* — 300% of a tiny active escrow is still tiny. Grow the
+pot by raising active weight (more/larger tickets) or seeding directly via
+`TimbPrize.fundPot()`.
+
 ---
 
 ## Frontend
