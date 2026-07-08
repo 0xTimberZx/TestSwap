@@ -818,9 +818,17 @@ function setMode(m) {
     // The influence / prize panel is swap-only.
     const prize = document.getElementById("prize-panel");
     if (prize) prize.style.display = "none";
-    refreshLiquidity();
+    refreshLiquidity(); // re-syncs lq-symbol-a/b from the shared pair
   } else {
+    // Swap and Liquidity SHARE tokenIn/tokenOut. The other tab may have
+    // changed the pair while we were away, so re-sync the swap labels to the
+    // shared truth (otherwise the buttons show a stale pair while the quote,
+    // fee, and balances run on the real one) and re-quote.
+    document.getElementById("token-in-symbol").textContent  = tokenIn  ? tokenIn.symbol  : "Select";
+    document.getElementById("token-out-symbol").textContent = tokenOut ? tokenOut.symbol : "Select";
     checkEligibility();
+    refreshBalances();
+    recalcQuote();
   }
 }
 
