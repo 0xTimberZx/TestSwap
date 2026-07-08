@@ -236,6 +236,14 @@ async function pollRoundState() {
         }
       }
     }
+    // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
+    // a direct seed not registered via fundPot(). Silent on read failure.
+    if (ADDRESSES.PrizeEscrow) {
+      try {
+        const escrowBal = await readProv().getBalance(ADDRESSES.PrizeEscrow);
+        if (escrowBal.gt(s.pot)) potTxt += ` · backed by ${fmt(escrowBal)} ETH`;
+      } catch {}
+    }
     document.getElementById("sub-pot").textContent = potTxt;
 
     // Entries playing THIS round — was a dead "— entries" placeholder.

@@ -68,7 +68,7 @@ async function loadLiveMetrics() {
     const [
       reserves, token0,
       supply, staked, lpStaked, locks,
-      round, segment, pot, counter
+      round, segment, pot, counter, escrowBal
     ] = await Promise.all([
       pair.getReserves(),
       pair.token0(),
@@ -79,7 +79,11 @@ async function loadLiveMetrics() {
       prize.currentRound(),
       prize.currentSegment(),
       prize.currentAccumulatedRewards(),
-      prize.positionCounter()
+      prize.positionCounter(),
+      // Physical ETH held by PrizeEscrow — the pot's backing. Only the
+      // accounted pot (currentAccumulatedRewards) is winnable; the escrow
+      // can hold more (e.g. a direct seed), so we surface it for context.
+      prov.getBalance(ADDRESSES.PrizeEscrow).catch(() => null)
     ]);
 
     // Active entries vs earning capital — deliberately two numbers. A
@@ -136,7 +140,12 @@ async function loadLiveMetrics() {
     set("m-weth-reserve",  fmt(wethReserve, 18, 4)  + " WETH");
     set("m-pot",          fmt(pot, 18, 4) + " ETH");
     const potUsd = usd(parseFloat(ethers.utils.formatUnits(pot, 18)));
-    set("m-pot-sub",      `Round ${round} · Seg ${segment}/6` + (potUsd ? ` · ≈ $${potUsd}` : ""));
+    // Show escrow backing only when it exceeds the accounted (winnable) pot —
+    // e.g. a direct seed that hasn't been registered via fundPot().
+    const backing = (escrowBal && escrowBal.gt(pot))
+      ? ` · backed by ${fmt(escrowBal, 18, 4)} ETH in escrow`
+      : "";
+    set("m-pot-sub",      `Round ${round} · Seg ${segment}/6` + (potUsd ? ` · ≈ $${potUsd}` : "") + backing);
     set("m-scroll",       counter.toString());
     set("m-staked",       fmt(staked, 18, 0) + " TIMBS");
     set("m-lp-staked",    fmt(lpStaked, 18, 4) + " LP");
