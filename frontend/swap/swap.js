@@ -283,12 +283,22 @@ async function refreshPickerBalances() {
 }
 
 async function selectToken(token) {
+  // You can't swap/LP a token against itself. If the picked token is already
+  // on the OTHER side, flip the pair instead of filling both fields the same.
+  const sameAddr = (a, b) => a && b &&
+    (a.address || "").toLowerCase() === (b.address || "").toLowerCase();
+  const setSym = (id, t) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t ? t.symbol : "Select";
+  };
   if (pickerTarget === "in") {
+    if (sameAddr(token, tokenOut)) { tokenOut = tokenIn; setSym("token-out-symbol", tokenOut); }
     tokenIn = token;
-    document.getElementById("token-in-symbol").textContent = token.symbol;
+    setSym("token-in-symbol", tokenIn);
   } else {
+    if (sameAddr(token, tokenIn)) { tokenIn = tokenOut; setSym("token-in-symbol", tokenIn); }
     tokenOut = token;
-    document.getElementById("token-out-symbol").textContent = token.symbol;
+    setSym("token-out-symbol", tokenOut);
   }
   closeTokenPickerDirect();
   syncLiquidityLabels();
