@@ -460,7 +460,28 @@ real TIMBS exposure and deepen fiat-side demand for the ecosystem token,
 so they've earned the nudge. USDC/USDT can still exist as a plain
 fee-earning pool — it just gets no game influence.
 
-## 13. (add future contract-level items here)
+## 13. Router redeploy — prize-meter balance (#1 + #2)  ⟶ PENDING REDEPLOY
+
+Full design: `docs/PRIZE_GAME_BALANCE_SPEC.md`. Router code is done + compiles; TimbPrize
+untouched.
+
+- **Want:** casual players can win (curb single-actor final-nudge dominance) AND the meter race
+  feeds the fee/burn loop.
+- **Change (Router only):** an eligible swap = `swapNudgeWeight` (3) nudges; gas-only
+  `advanceScroll` capped at `freeNudgeCapPerSeg` (10) per address per segment (keyed by
+  round+segment, auto-resets); paid swap-nudges uncapped. New views/setters:
+  `freeNudgesRemaining`, `setSwapNudgeWeight`, `setFreeNudgeCapPerSeg`.
+- **Redeploy / rewire:**
+  1. Deploy new `TimbSwapRouter`.
+  2. `TimbPrize.setRouter(newRouter)`.
+  3. New Router pointers: factory, eligibleRegistry (`setEligibleRegistry`), timbPrize
+     (`setTimbPrize`), treasury, WETH — mirror the current Router.
+  4. `config.js` / root `config.js`: set `ADDRESSES.TimbSwapRouter` = newRouter.
+  5. Frontend already wired (`freeNudgesRemaining` read in compete Advance panel); bump cache.
+  6. Do the switch in one sitting — the old Router keeps swapping but no longer nudges.
+- **Deferred (noted):** blockhash jitter / provable fairness (VRF); Scenario C (TIMBS hub).
+
+## 14. (add future contract-level items here)
 
 <!--
 Template:
