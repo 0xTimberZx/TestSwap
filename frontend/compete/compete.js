@@ -221,13 +221,26 @@ async function pollRoundState() {
     document.getElementById("hdr-round").textContent      = "#" + s.round.toString();
     document.getElementById("hdr-segment-num").textContent = s.segment.toString();
 
-    // Pot + live yield accruing from active-ticket escrow (4th pot source).
-    let potTxt = "Pot: " + fmt(s.pot) + " ETH";
+    // Pot substats as ordered segments: Pot · backed by · yield accruing.
+    // "backed by" (escrow reserve) sits right after the pot; yield accruing
+    // is its own segment (no longer parenthetical).
+    const potSegs = ["Pot: " + fmt(s.pot) + " ETH"];
+
+    // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
+    // a direct seed not registered via fundPot(). Silent on read failure.
+    if (ADDRESSES.PrizeEscrow) {
+      try {
+        const escrowBal = await readProv().getBalance(ADDRESSES.PrizeEscrow);
+        if (escrowBal.gt(s.pot)) potSegs.push(`backed by ${fmt(escrowBal)} ETH`);
+      } catch {}
+    }
+
+    // Live yield accruing from active-ticket escrow (4th pot source).
     if (ADDRESSES.TimbYieldVault && !/^0x0{40}$/.test(ADDRESSES.TimbYieldVault.replace("0x",""))) {
       try {
         const vault = new ethers.Contract(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI, readProv());
         const accrued = await vault.previewAccrued();
-        if (!accrued.isZero()) potTxt += ` (+${fmt(accrued)} yield accruing)`;
+        if (!accrued.isZero()) potSegs.push(`yield accruing ${fmt(accrued)} ETH`);
       } catch (yieldErr) {
         // Once per session — this runs on a 4s poll and would spam DebugHub.
         if (!window.__yieldReadErrorLogged) {
@@ -236,15 +249,7 @@ async function pollRoundState() {
         }
       }
     }
-    // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
-    // a direct seed not registered via fundPot(). Silent on read failure.
-    if (ADDRESSES.PrizeEscrow) {
-      try {
-        const escrowBal = await readProv().getBalance(ADDRESSES.PrizeEscrow);
-        if (escrowBal.gt(s.pot)) potTxt += ` · backed by ${fmt(escrowBal)} ETH`;
-      } catch {}
-    }
-    document.getElementById("sub-pot").textContent = potTxt;
+    document.getElementById("sub-pot").textContent = potSegs.join(" · ");
 
     // Entries playing THIS round — was a dead "— entries" placeholder.
     try {
