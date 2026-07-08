@@ -20,7 +20,7 @@
 | PrizeEscrow | 0x865C50d933e63BbE388EEAFa017AE634B0A6fB6D | Sourcify ✅ |
 | TIMBSToken (TIMBS) | 0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa | Sourcify ✅ |
 | TimbSwapFactory | 0xCCd6d3f0A86042d2B7056eDd381d367126628AF5 | Sourcify ✅ |
-| TimbSwapRouter v6 | 0x6E53dc53Ea7B2fd8be171D74A381f009dA5F94bD | Sourcify ✅ |
+| TimbSwapRouter v7 | 0xF554063223ECE3acC4f9664227Ba1E7a88c54e09 | Sourcify ✅ |
 | EligibleTokenRegistry | 0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04 | Sourcify ✅ |
 | GameRegistry v2 | 0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774 | Sourcify ✅ |
 | TimbPrize v3.2 | 0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40 | Sourcify ✅ |
@@ -43,7 +43,8 @@
 | v2 | 0xf69ca9Ac2E39aD5f86A8410b10D290A49984e6AB | Retired |
 | v3 | 0x781833D60800b93C3a9EFf234b15934F9AE0C5E7 | Retired |
 | v5 | 0xbD183E52806D6fddA680cFe3e7929E869Abf6F67 | Retired |
-| v6 | 0x6E53dc53Ea7B2fd8be171D74A381f009dA5F94bD | **Current** — create-on-add liquidity, native ETH, advanceScroll |
+| v6 | 0x6E53dc53Ea7B2fd8be171D74A381f009dA5F94bD | Retired |
+| v7 | 0xF554063223ECE3acC4f9664227Ba1E7a88c54e09 | **Current** — swap-weighted nudges (swapNudgeWeight) + per-address free-nudge cap (freeNudgeCapPerSeg) |
 
 ### Deprecated / Dead Addresses
 

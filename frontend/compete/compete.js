@@ -236,6 +236,14 @@ async function pollRoundState() {
         }
       }
     }
+    // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
+    // a direct seed not registered via fundPot(). Silent on read failure.
+    if (ADDRESSES.PrizeEscrow) {
+      try {
+        const escrowBal = await readProv().getBalance(ADDRESSES.PrizeEscrow);
+        if (escrowBal.gt(s.pot)) potTxt += ` · backed by ${fmt(escrowBal)} ETH`;
+      } catch {}
+    }
     document.getElementById("sub-pot").textContent = potTxt;
 
     // Entries playing THIS round — was a dead "— entries" placeholder.
@@ -838,6 +846,14 @@ function setAdvanceCount(n) {
   advanceCount = Math.max(1, Math.min(advanceCeiling(), n));
   renderAdvancePreview();
 }
+
+// "Max" chip — advance by exactly the remaining free allowance this segment
+// (or the per-tx cap when that's unknown). Keeps the label honest as the cap
+// is spent or retuned, instead of a fixed "+20" that the 10/segment cap
+// silently clamped.
+function setAdvanceMax() {
+  setAdvanceCount(advanceCeiling());
+}
 function adjustAdvanceCount(delta) {
   setAdvanceCount(advanceCount + delta);
 }
@@ -845,8 +861,19 @@ function adjustAdvanceCount(delta) {
 function renderAdvancePreview() {
   const chipsWrap = document.getElementById("advance-chips");
   if (chipsWrap) {
+    const ceil = advanceCeiling();
     chipsWrap.querySelectorAll(".adv-chip").forEach(c => {
-      c.classList.toggle("active", Number(c.dataset.n) === advanceCount);
+      if (c.id === "adv-chip-max") {
+        // Show the live cap once we know it; plain "Max" when unknown.
+        c.textContent = (freeNudgesLeft !== null) ? `Max (${ceil})` : "Max";
+        c.classList.toggle("active", ceil > 0 && advanceCount === ceil);
+        c.disabled = ceil === 0;
+      } else {
+        const n = Number(c.dataset.n);
+        c.classList.toggle("active", n === advanceCount);
+        // Grey out fixed amounts you can't afford within the free cap.
+        c.disabled = (freeNudgesLeft !== null && n > ceil);
+      }
     });
   }
   const countEl = document.getElementById("advance-count-val");
