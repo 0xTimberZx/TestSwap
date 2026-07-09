@@ -50,6 +50,7 @@ jobs:
           SETTLER_PRIVATE_KEY:  ${{ secrets.SETTLER_PRIVATE_KEY }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHAT_ID_PUBLIC: ${{ secrets.TELEGRAM_CHAT_ID_PUBLIC }}
         run: |
           if [ "${{ github.event.inputs.mode }}" = "health" ] || \
              [ "${{ github.event.schedule }}" = "0 12 * * *" ]; then
