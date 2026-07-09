@@ -555,11 +555,13 @@ function handleDisconnect() {
     loadVault()
   ]);
 
-  // Refresh live metrics every 15s, events every 60s
-  setInterval(loadLiveMetrics, 15000);
-  setInterval(() => {
-    loadRecentSwaps();
-    loadClaims();
-    loadVault();
-  }, 60000);
+  // Refresh live metrics every 15s, events every 60s — but only while the tab
+  // is visible; catch up on return so a backgrounded dashboard costs nothing.
+  const whenVisible = (fn) => () => { if (!document.hidden) fn(); };
+  const loadEvents = () => { loadRecentSwaps(); loadClaims(); loadVault(); };
+  setInterval(whenVisible(loadLiveMetrics), 15000);
+  setInterval(whenVisible(loadEvents), 60000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { loadLiveMetrics(); loadEvents(); }
+  });
 })();
