@@ -46,6 +46,11 @@ let lpBalanceWei  = null;   // cached LP balance for the connected wallet
 let lpReserveA    = null;
 let lpReserveB    = null;
 let lpTotalSupply = null;
+// Cached wallet balances (wei) for the two liquidity inputs, refreshed by
+// refreshLiquidity(). Drive the "Insufficient balance" button state without
+// re-reading the chain on every keystroke. null = unknown (don't block).
+let lqBalAWei     = null;
+let lqBalBWei     = null;
 
 // Trim a formatUnits string for display: keep the whole part, cap the fraction
 // at 8 places, drop trailing zeros. Avoids the ~20-decimal quote readouts.
@@ -871,15 +876,17 @@ async function refreshLiquidity() {
   const wdEl = document.getElementById("lq-withdrawable");
   const read = readProviderForEligibility();
 
-  // Balances
+  // Balances — cache the raw wei so the button can flag "Insufficient balance"
+  // instantly on input, and clear the cache on disconnect / read failure so a
+  // stale value never blocks a valid add.
   if (userAddress && tokenIn) {
-    try { balA.textContent = `Balance: ${fmt(await tokenBalance(tokenIn), tokenIn.decimals, 4)}`; }
-    catch { balA.textContent = "Balance: —"; }
-  } else balA.textContent = "Balance: —";
+    try { lqBalAWei = await tokenBalance(tokenIn); balA.textContent = `Balance: ${fmt(lqBalAWei, tokenIn.decimals, 4)}`; }
+    catch { lqBalAWei = null; balA.textContent = "Balance: —"; }
+  } else { lqBalAWei = null; balA.textContent = "Balance: —"; }
   if (userAddress && tokenOut) {
-    try { balB.textContent = `Balance: ${fmt(await tokenBalance(tokenOut), tokenOut.decimals, 4)}`; }
-    catch { balB.textContent = "Balance: —"; }
-  } else balB.textContent = "Balance: —";
+    try { lqBalBWei = await tokenBalance(tokenOut); balB.textContent = `Balance: ${fmt(lqBalBWei, tokenOut.decimals, 4)}`; }
+    catch { lqBalBWei = null; balB.textContent = "Balance: —"; }
+  } else { lqBalBWei = null; balB.textContent = "Balance: —"; }
 
   // Liquidity pools hold WETH, not native ETH — pick WETH for LP positions.
   if (isNative(tokenIn) || isNative(tokenOut)) {
@@ -969,17 +976,38 @@ async function _mirrorLq(fromId, toId, fromTok, toTok, invert) {
 function onLqAmountA() { return _mirrorLq("lq-amount-a", "lq-amount-b", tokenIn, tokenOut, false); }
 function onLqAmountB() { return _mirrorLq("lq-amount-b", "lq-amount-a", tokenOut, tokenIn, true); }
 
+// True when `amountStr` parses to more than the wallet holds. Returns false
+// on anything unknown (null balance, empty/partial input, over-precise
+// decimals) so it never blocks a genuinely valid amount.
+function overBalance(amountStr, token, balWei) {
+  if (!token || !balWei) return false;
+  if (!amountStr || parseFloat(amountStr) <= 0) return false;
+  try {
+    return ethers.utils.parseUnits(amountStr, token.decimals).gt(balWei);
+  } catch { return false; }
+}
+
 function updateLqButtons() {
   const addBtn = document.getElementById("lq-add-btn");
   const remBtn = document.getElementById("lq-remove-btn");
   if (!addBtn || !remBtn) return;
 
-  const a = parseFloat(document.getElementById("lq-amount-a").value);
-  const b = parseFloat(document.getElementById("lq-amount-b").value);
+  const aStr = document.getElementById("lq-amount-a").value;
+  const bStr = document.getElementById("lq-amount-b").value;
+  const a = parseFloat(aStr);
+  const b = parseFloat(bStr);
+  // Over-balance check: parse each input to wei against the cached balance.
+  // A null cache (unknown / read failed / disconnected) never blocks. This
+  // re-runs on every keystroke and after refreshLiquidity, so the state
+  // clears itself when the amount is lowered or the balance later lands.
+  const over = overBalance(aStr, tokenIn, lqBalAWei) ? tokenIn
+             : overBalance(bStr, tokenOut, lqBalBWei) ? tokenOut
+             : null;
   if (!userAddress)               { addBtn.textContent = "Connect wallet to add liquidity"; addBtn.disabled = true; }
   else if (!tokenIn || !tokenOut) { addBtn.textContent = "Select tokens"; addBtn.disabled = true; }
   else if (isNative(tokenIn) || isNative(tokenOut)) { addBtn.textContent = "Use WETH for liquidity"; addBtn.disabled = true; }
   else if (!a || a <= 0 || !b || b <= 0) { addBtn.textContent = "Enter amounts"; addBtn.disabled = true; }
+  else if (over) { addBtn.textContent = `Insufficient ${over.symbol} balance`; addBtn.disabled = true; }
   else { addBtn.textContent = `Add ${tokenIn.symbol} + ${tokenOut.symbol}`; addBtn.disabled = false; }
 
   const hasLp = lpBalanceWei && !lpBalanceWei.isZero();
@@ -1027,6 +1055,27 @@ function showLqTx(hash) {
   if (link) { link.href = `https://sepolia.arbiscan.io/tx/${hash}`; link.classList.remove("hidden"); }
 }
 
+// Confirm a submitted tx by polling the canonical public RPC for its receipt,
+// rather than awaiting the wallet's own tx.wait(). Mobile in-app wallets often
+// never push the receipt back to the page, which leaves a button stuck on
+// "Adding liquidity…" long after the tx has actually mined. The public RPC is
+// authoritative, so this returns as soon as the receipt lands (or throws on a
+// reverted / timed-out tx). ~3 min ceiling.
+async function confirmTx(tx) {
+  const prov = readProviderForEligibility();
+  for (let i = 0; i < 90; i++) {
+    try {
+      const r = await prov.getTransactionReceipt(tx.hash);
+      if (r && r.blockNumber) {
+        if (r.status === 0) throw Object.assign(new Error("transaction reverted"), { receipt: r });
+        return r;
+      }
+    } catch (e) { if (e && e.receipt) throw e; /* transient RPC read — keep polling */ }
+    await new Promise(res => setTimeout(res, 2000));
+  }
+  throw new Error("confirmation timeout — check the explorer");
+}
+
 async function handleAddLiquidity() {
   if (!userAddress || !tokenIn || !tokenOut) return;
   if (isNative(tokenIn) || isNative(tokenOut)) return; // LP positions use WETH
@@ -1067,7 +1116,7 @@ async function handleAddLiquidity() {
         btn.textContent = `Approving ${tok.symbol}…`;
         DebugHub.logCheckpoint("Liquidity Approve Requested", "pass");
         const gas = await getGasParams(); const nonce = await getPendingNonce();
-        await (await c.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce })).wait();
+        await confirmTx(await c.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce }));
       }
     }
 
@@ -1086,7 +1135,7 @@ async function handleAddLiquidity() {
       const deadline = Math.floor(Date.now() / 1000) + 1200;
       const gas = await getGasParams(); const nonce = await getPendingNonce();
       const t = await router.addLiquidity(tokenIn.address, tokenOut.address, amtA, amtB, aMin, bMin, userAddress, deadline, { ...gas, nonce });
-      await t.wait();
+      await confirmTx(t);
       return t;
     };
 
@@ -1114,7 +1163,7 @@ async function handleAddLiquidity() {
         DebugHub.logCheckpoint("Liquidity Pair Create Requested", "pass");
         const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_ABI, signer);
         const gasCp = await getGasParams(); const nonceCp = await getPendingNonce();
-        await (await factory.createPair(tokenIn.address, tokenOut.address, { ...gasCp, nonce: nonceCp })).wait();
+        await confirmTx(await factory.createPair(tokenIn.address, tokenOut.address, { ...gasCp, nonce: nonceCp }));
         DebugHub.logCheckpoint("Liquidity Pair Created", "pass");
         btn.textContent = "Adding liquidity…";
         tx = await sendAdd();
@@ -1158,7 +1207,7 @@ async function handleRemoveLiquidity() {
       btn.textContent = "Approving LP…";
       DebugHub.logCheckpoint("Liquidity Remove Approve", "pass");
       const gas = await getGasParams(); const nonce = await getPendingNonce();
-      await (await lp.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce })).wait();
+      await confirmTx(await lp.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce }));
     }
 
     btn.textContent = "Removing…";
@@ -1168,7 +1217,7 @@ async function handleRemoveLiquidity() {
     const gas = await getGasParams(); const nonce = await getPendingNonce();
     // amountAMin/amountBMin 0 — acceptable on testnet; the burn returns the pro-rata share.
     const tx = await router.removeLiquidity(tokenIn.address, tokenOut.address, liquidity, 0, 0, userAddress, deadline, { ...gas, nonce });
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Liquidity Remove Confirmed", "pass");
 
     btn.textContent = "Removed ✓";
