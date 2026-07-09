@@ -457,7 +457,11 @@ async function refreshEntryBalance() {
       txt += ` · ${fmt(timbs, 18, 2)} TIMBS`;
     }
     el.textContent = txt;
-  } catch { el.textContent = ""; }
+  } catch {
+    // Transient RPC read failure — keep whatever balance was last shown rather
+    // than blanking the line, so the readout is consistently present. It'll
+    // self-correct on the next refresh (poll, token switch, stepper).
+  }
 }
 
 function toggleTokenDropdown() {
@@ -1158,12 +1162,14 @@ async function handleConnect() {
 
   updateEntryButton();
   await Promise.all([loadMyEntries(), loadPastRounds(), pollRoundState()]);
+  refreshEntryBalance();
 
   listenForAccountChanges(async (newAddr) => {
     if (!newAddr) { handleDisconnect(); return; }
     document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
     updateEntryButton();
     await Promise.all([loadMyEntries(), loadPastRounds(), pollRoundState()]);
+    refreshEntryBalance();
   });
 }
 
@@ -1176,6 +1182,7 @@ function handleDisconnect() {
   updateEntryButton();
   loadMyEntries();
   pollRoundState(); // re-render to hide active digit
+  refreshEntryBalance(); // clears the balance line while disconnected
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -1195,12 +1202,14 @@ function handleDisconnect() {
     // Reflect the connected state on the entry button immediately; without this
     // it keeps reading "Connect wallet to enter" until the user types.
     updateEntryButton();
+    refreshEntryBalance();
     listenForAccountChanges(async (newAddr) => {
       if (!newAddr) { handleDisconnect(); return; }
       const _addrEl = document.getElementById("wallet-addr");
       if (_addrEl) _addrEl.textContent = fmtAddr(newAddr);
       updateEntryButton();
       await Promise.all([loadMyEntries(), loadPastRounds(), pollRoundState()]);
+      refreshEntryBalance();
     });
   } else {
     // Not connected — run the CONNECT WALLET marquee right away so no real
@@ -1213,6 +1222,7 @@ function handleDisconnect() {
   await pollRoundState();
   await loadMyEntries();
   await loadPastRounds();
+  refreshEntryBalance(); // show the entry-token balance on load, not just after a tap
 
   // Timer tick every second, full state every 4s
   setInterval(async () => {
@@ -1233,4 +1243,7 @@ function handleDisconnect() {
 
   setInterval(pollRoundState, 4000);
   setInterval(loadPastRounds, 30000);
+  // Keep the entry-token balance current (drops after an entry, rises after a
+  // faucet/transfer) without the user having to touch the selector.
+  setInterval(refreshEntryBalance, 12000);
 })();

@@ -237,3 +237,19 @@
   transition: color 0.15s;
 }
 .pool-bal:hover { color: var(--text-2); }
+
+/* "Add TIMBS to wallet" chip under the staking balance. */
+.add-wallet-chip {
+  display: inline-block;
+  margin: 8px 0 4px;
+  padding: 5px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  background: none;
+  border: var(--bw, 1px) solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.add-wallet-chip:hover { color: var(--green); border-color: var(--green); }
