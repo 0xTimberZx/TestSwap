@@ -73,25 +73,27 @@ Everything runs on **Arbitrum Sepolia (Chain ID 421614)**. Grab gas and stables 
 ## Repo Structure
 
 ```
-TimbSwap/
+TimbSwap/                ← served at the site root (GitHub Pages, custom domain)
 ├── contracts/           ← 13 Solidity contracts (0.8.24, viaIR)
-├── frontend/
-│   ├── style.css        ← global design system
-│   ├── config.js        ← addresses + ethers helpers + autoReconnect
-│   ├── swap/            ← Swap + Add/Remove Liquidity
-│   ├── compete/         ← Prize entry + claimWinnings
-│   ├── farm/            ← LP farm + TIMBS staking
-│   ├── lock/            ← Lock vault + public registry
-│   ├── gov/             ← Governance proposals + voting
-│   └── analytics/       ← Live metrics + event history
+├── index.html           ← Landing page (site root: timbswap.xyz/)
+├── style.css            ← global design system (all pages)
+├── config.js            ← addresses + ethers helpers + autoReconnect (all pages)
+├── landing.js           ← landing-page script
+├── swap/                ← Swap + Add/Remove Liquidity      → /swap/
+├── compete/             ← Prize entry + claimWinnings       → /compete/
+├── farm/                ← LP farm + TIMBS staking           → /farm/
+├── lock/                ← Lock vault + public registry      → /lock/
+├── gov/                 ← Governance proposals + voting     → /gov/
+├── analytics/           ← Live metrics + event history      → /analytics/
+├── explore/             ← V2 Pools explorer                 → /explore/
+├── docs/                ← User-facing documentation page    → /docs/
+├── CNAME                ← Custom domain (timbswap.xyz) for GitHub Pages
+├── dev-docs/            ← Internal design specs (not the /docs/ web page)
 ├── scripts/
 │   ├── settler.js       ← Automated segment settler
 │   └── package.json
 ├── .github/workflows/
 │   └── settler.yml      ← GitHub Actions cron (10 min + daily health)
-├── index.html           ← Landing page (GitHub Pages root)
-├── style.css            ← Root copy for landing page
-├── config.js            ← Root copy for landing page
 ├── SPECS.md             ← Full technical specs + addresses
 ├── CLAUDE.md            ← Agent rules for Claude Code
 └── foundry.toml

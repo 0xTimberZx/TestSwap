@@ -154,19 +154,25 @@ pot by raising active weight (more/larger tickets) or seeding directly via
 
 | Page | URL | Status |
 |------|-----|--------|
-| Landing | /TimbSwap/ | ✅ Live |
-| Swap | /TimbSwap/frontend/swap/ | ✅ Live |
-| Compete | /TimbSwap/frontend/compete/ | ✅ Live |
-| Farm | /TimbSwap/frontend/farm/ | ✅ Live |
-| Lock Vault | /TimbSwap/frontend/lock/ | ✅ Live |
-| Governance | /TimbSwap/frontend/gov/ | ✅ Live |
-| Analytics | /TimbSwap/frontend/analytics/ | ✅ Live |
+| Landing | / | ✅ Live |
+| Swap | /swap/ | ✅ Live |
+| Compete | /compete/ | ✅ Live |
+| Farm | /farm/ | ✅ Live |
+| Lock Vault | /lock/ | ✅ Live |
+| Governance | /gov/ | ✅ Live |
+| Analytics | /analytics/ | ✅ Live |
+| V2 Pools | /explore/ | ✅ Live |
+| Docs | /docs/ | ✅ Live |
 
 ### Path Rule
 
-Inner pages at `frontend/*/index.html` use `../style.css` and `../config.js`.  
-Root `index.html` uses `frontend/style.css` and `frontend/config.js`.  
-Both `style.css` and `config.js` exist at repo root AND `frontend/` — root copies serve the landing page only.
+The app is served from the **repo root** (GitHub Pages, `path: "."`), so page URLs
+are clean: `/swap/`, `/compete/`, etc. — no `frontend/` segment.
+
+Inner pages at `<page>/index.html` use `../style.css` and `../config.js`, which
+resolve to the single root `style.css` / `config.js` (one copy each, shared by
+every page including the landing). Absolute in-app links are root-relative (`/…`)
+so they work on any host/custom domain.
 
 ### Key Frontend Rules
 

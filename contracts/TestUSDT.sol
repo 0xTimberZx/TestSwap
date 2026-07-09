@@ -15,7 +15,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  *         NOT for the EligibleTokenRegistry — stable↔stable swaps carry no
  *         price exposure and would make intermission-window nudge sniping
  *         (a privilege reserved for economically meaningful volume) free.
- *         See docs/CONTRACT_TODO.md §12.
+ *         See dev-docs/CONTRACT_TODO.md §12.
  */
 contract TestUSDT is ERC20, Ownable {
     /// @notice 100 USDT per faucet call (6 decimals).

@@ -63,7 +63,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     bool    public paused;
     address public weth;
 
-    // ─── Prize-meter tuning (see docs/PRIZE_GAME_BALANCE_SPEC.md) ──────────────
+    // ─── Prize-meter tuning (see dev-docs/PRIZE_GAME_BALANCE_SPEC.md) ──────────────
 
     /// @notice #2 — meter units an eligible swap is worth. A swap moves the
     ///         scroll by this many nudges (each a separate nudgeScroll call),

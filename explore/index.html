@@ -4,7 +4,7 @@
   <script>try{document.documentElement.dataset.theme=localStorage.getItem("timbswap_theme")==="light"?"light":"dark"}catch(e){}</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lock Vault — TimbSwap</title>
+  <title>V2 Pools — TimbSwap</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
@@ -15,13 +15,13 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="../style.css?v=20260708a" />
-  <link rel="stylesheet" href="lock.css?v=20260726a" />
+  <link rel="stylesheet" href="../style.css?v=20260710a" />
+  <link rel="stylesheet" href="explore.css?v=20260729a" />
 </head>
 <body>
 
   <nav class="nav">
-    <a href="https://0xtimberzx.github.io/TimbSwap/" class="nav-logo">
+    <a href="/" class="nav-logo">
       <span class="nav-logo-mark">⬡</span>
       <span class="nav-logo-text">TimbSwap</span>
     </a>
@@ -39,15 +39,15 @@
         <div class="nav-dropdown">
           <a href="../farm/">Farm</a>
           <a href="../compete/">Compete</a>
-          <a href="https://0xtimberzx.github.io/TimbSwap/">Airdrop <span class="badge-soon">Soon</span></a>
+          <a href="/">Airdrop <span class="badge-soon">Soon</span></a>
         </div>
       </div>
       <div class="nav-group">
         <button class="nav-group-btn">Tools <span class="nav-caret">▾</span></button>
         <div class="nav-dropdown">
-          <a href="../lock/" class="nav-active">Lock Vault</a>
-          <a href="../explore/">V2 Pools</a>
-          <a href="https://docs.timbswap.xyz" target="_blank">Docs ↗</a>
+          <a href="../lock/">Lock Vault</a>
+          <a href="../explore/" class="nav-active">V2 Pools</a>
+          <a href="../docs/">Docs</a>
           <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">Debugger ↗</a>
         </div>
       </div>
@@ -80,98 +80,123 @@
     <div class="nav-mobile-section">EARN TIMBS</div>
     <a href="../farm/">Farm</a>
     <a href="../compete/">Compete</a>
-    <a href="https://0xtimberzx.github.io/TimbSwap/">Airdrop</a>
+    <a href="/">Airdrop</a>
     <div class="nav-mobile-section">TOOLS</div>
     <a href="../lock/">Lock Vault</a>
     <a href="../explore/">V2 Pools</a>
-    <a href="https://docs.timbswap.xyz" target="_blank">Docs ↗</a>
+    <a href="../docs/">Docs</a>
     <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">Debugger ↗</a>
   </div>
 
-  <div class="lock-page">
-    <h1 class="page-h1">Lock Vault</h1>
-    <p class="page-sub">Lock any whitelisted token for 24–320 hours. Public registry — no early exit.</p>
+  <div class="explore-page">
 
-    <div class="lock-grid">
-
-      <!-- ─── Create Lock Card ──────────────────────────────────────────── -->
-      <div class="lock-card">
-        <h2 class="card-title">Create a Lock</h2>
-
-        <div class="lock-field">
-          <label class="lock-label">Token</label>
-          <select id="lock-token-select" class="lock-select" onchange="onTokenSelectChange()">
-            <option value="">Select token…</option>
-          </select>
-        </div>
-
-        <div class="lock-field">
-          <label class="lock-label">Amount</label>
-          <div class="lock-input-row">
-            <input id="lock-amount" class="lock-input" type="number" placeholder="0.0" />
-            <button class="lock-max-btn" onclick="setLockMax()">MAX</button>
-          </div>
-          <div class="lock-balance" id="lock-balance" onclick="setLockMax()" title="Use full balance" style="cursor:pointer;">Balance: —</div>
-          <button id="lock-add-wallet" class="add-wallet-chip hidden" title="Add this token to your wallet"
-                  onclick="if (selectedToken) addTokenToWallet(selectedToken)">＋ Add to wallet</button>
-        </div>
-
-        <div class="lock-field">
-          <label class="lock-label">
-            Duration: <span id="duration-display" class="duration-display">72 hours</span>
-          </label>
-          <input
-            id="duration-slider"
-            class="duration-slider"
-            type="range"
-            min="24"
-            max="320"
-            value="72"
-            step="1"
-            oninput="onDurationChange()"
-          />
-          <div class="duration-marks">
-            <span>24h</span>
-            <span>320h</span>
-          </div>
-        </div>
-
-        <button id="lock-btn" class="btn-lock" onclick="handleCreateLock()" disabled>
-          Connect wallet to lock
-        </button>
-      </div>
-
-      <!-- ─── My Locks Card ─────────────────────────────────────────────── -->
-      <div class="lock-card">
-        <h2 class="card-title">My Locks</h2>
-        <div id="my-locks-list" class="my-locks-list">
-          <div class="empty-state">Connect wallet to view your locks</div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ─── Public Registry (wallet-gated) ───────────────────────────────── -->
-    <div class="registry-section hidden" id="registry-section">
-      <div class="registry-header">
-        <h2 class="section-title">Public Lock Registry</h2>
-        <span class="registry-count" id="registry-count">— total locks</span>
-      </div>
-      <div id="registry-list" class="registry-list">
-        <div class="empty-state">Loading registry…</div>
+    <div class="explore-head">
+      <div>
+        <h1 class="page-h1">V2 Pools</h1>
+        <p class="page-sub">Exchange info — pools, liquidity, and trade activity across TimbSwap. Read live from chain; no wallet needed.</p>
       </div>
     </div>
 
-  </div>
-
-  <div id="lock-detail-modal" class="ld-modal hidden" onclick="closeLockDetail(event)">
-    <div class="ld-card">
-      <div class="ld-header">
-        <span class="ld-title">Lock Detail</span>
-        <button class="ld-close" onclick="closeLockDetailDirect()">✕</button>
+    <!-- ─── Overview ────────────────────────────────────────────────────── -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Total Liquidity</div>
+        <div class="metric-val metric-green" id="ov-tvl">—</div>
+        <div class="metric-sub">across all pools (priced sides)</div>
       </div>
-      <div id="lock-detail-body" class="ld-body"></div>
+      <div class="metric-card">
+        <div class="metric-label">Pools</div>
+        <div class="metric-val" id="ov-pools">—</div>
+        <div class="metric-sub">pairs on the factory</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Trades</div>
+        <div class="metric-val" id="ov-trades">—</div>
+        <div class="metric-sub">last 50,000 blocks (~7d)</div>
+      </div>
     </div>
+
+    <!-- ─── Pool search ─────────────────────────────────────────────────── -->
+    <div class="explore-search">
+      <input id="pool-search" class="explore-search-input" type="text"
+             placeholder="Search a token or pair (e.g. TIMBS, USDC/WETH, or an address)…"
+             oninput="onPoolSearch()" />
+    </div>
+
+    <!-- ─── Pools ───────────────────────────────────────────────────────── -->
+    <div class="section-label">POOLS</div>
+    <div class="data-card">
+      <div class="data-card-header">
+        <span class="data-card-title">Liquidity Pools</span>
+        <span class="data-refresh" id="pools-status">Loading…</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Pair</th>
+              <th>Reserves</th>
+              <th>TVL</th>
+              <th>24h Volume</th>
+              <th>Pair Address</th>
+            </tr>
+          </thead>
+          <tbody id="pools-tbody">
+            <tr><td colspan="5" class="table-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ─── Recent Trades ───────────────────────────────────────────────── -->
+    <div class="section-label">RECENT TRADES</div>
+    <div class="data-card">
+      <div class="data-card-header">
+        <span class="data-card-title">Swaps</span>
+        <span class="data-refresh" id="trades-status">Loading…</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Block</th>
+              <th>Pair</th>
+              <th>Trade</th>
+              <th>Trader</th>
+            </tr>
+          </thead>
+          <tbody id="trades-tbody">
+            <tr><td colspan="4" class="table-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ─── Recent Liquidity ────────────────────────────────────────────── -->
+    <div class="section-label">RECENT LIQUIDITY</div>
+    <div class="data-card">
+      <div class="data-card-header">
+        <span class="data-card-title">Adds &amp; Removes</span>
+        <span class="data-refresh" id="liq-status">Loading…</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Block</th>
+              <th>Action</th>
+              <th>Pair</th>
+              <th>Amounts</th>
+              <th>Provider</th>
+            </tr>
+          </thead>
+          <tbody id="liq-tbody">
+            <tr><td colspan="5" class="table-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
   <footer class="footer">
@@ -186,7 +211,7 @@
   </footer>
 
   <script src="../config.js?v=20260727a"></script>
-  <script src="lock.js?v=20260730a"></script>
+  <script src="explore.js?v=20260736a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
