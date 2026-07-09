@@ -119,7 +119,12 @@ async function handleStake(pool) {
     const amountWei = ethers.utils.parseUnits(amountStr, 18);
     const tokenContract = new ethers.Contract(cfg.token, ERC20_ABI, signer);
 
-    const allowance = await tokenContract.allowance(userAddress, cfg.address);
+    // Read the allowance from the canonical public RPC, never the wallet's
+    // in-app provider — mobile wallets sometimes answer eth_call from a node
+    // that's mid-sync and returns "header not found" (-32000), which would
+    // otherwise abort the whole stake before we even sign anything.
+    const tokenRead = new ethers.Contract(cfg.token, ERC20_ABI, readProv());
+    const allowance = await tokenRead.allowance(userAddress, cfg.address);
     if (allowance.lt(amountWei)) {
       btn.disabled = true;
       btn.textContent = "Approving…";
