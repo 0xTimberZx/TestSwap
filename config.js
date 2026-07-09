@@ -220,6 +220,37 @@ async function getPendingNonce() {
   return provider.getTransactionCount(userAddress, "pending");
 }
 
+// ─── Transaction Confirmation (ecosystem pattern) ────────────────────────────
+
+// Dedicated read-only provider on the canonical Arbitrum Sepolia RPC. Used to
+// confirm transactions independently of the wallet's in-app provider.
+let _confirmProv = null;
+function _confirmProvider() {
+  return _confirmProv || (_confirmProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+}
+
+// Confirm a submitted tx by polling the canonical public RPC for its receipt,
+// instead of awaiting the wallet's own tx.wait(). Mobile in-app wallets often
+// never push the receipt back to the page, which leaves a button stuck in its
+// loading state ("Adding liquidity…", "Staking…", "Voting…") long after the tx
+// has actually mined. The public RPC is authoritative: this resolves the
+// moment the receipt lands, and throws on a reverted tx (status 0) or after a
+// ~3-minute ceiling. `tx` is an ethers TransactionResponse (needs `.hash`).
+async function confirmTx(tx, { tries = 90, intervalMs = 2000 } = {}) {
+  const prov = _confirmProvider();
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await prov.getTransactionReceipt(tx.hash);
+      if (r && r.blockNumber) {
+        if (r.status === 0) throw Object.assign(new Error("transaction reverted"), { receipt: r });
+        return r;
+      }
+    } catch (e) { if (e && e.receipt) throw e; /* transient RPC read — keep polling */ }
+    await new Promise(res => setTimeout(res, intervalMs));
+  }
+  throw new Error("confirmation timeout — check the explorer");
+}
+
 // ─── Formatting Helpers ───────────────────────────────────────────────────────
 
 function fmt(wei, decimals = 18, dp = 4) {

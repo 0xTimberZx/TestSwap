@@ -116,7 +116,7 @@ async function handleDeposit() {
       const nonce = await getPendingNonce();
       const tx    = await timbs.approve(ADDRESSES.TimbGovernance, ethers.constants.MaxUint256, { ...gas, nonce });
       DebugHub.logCheckpoint("Gov:Deposit Approve Submitted", "pass");
-      await tx.wait();
+      await confirmTx(tx);
       DebugHub.logCheckpoint("Gov:Deposit Approve Confirmed", "pass");
     }
 
@@ -127,7 +127,7 @@ async function handleDeposit() {
     const nonce = await getPendingNonce();
     const tx    = await gov.depositVotingPower(amt, { ...gas, nonce });
     DebugHub.logCheckpoint("Gov:Deposit Submitted", "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Gov:Deposit Confirmed", "pass");
 
     document.getElementById("vp-input").value = "";
@@ -159,7 +159,7 @@ async function handleWithdraw() {
     const nonce = await getPendingNonce();
     const tx    = await gov.withdrawVotingPower(myVotingPower, { ...gas, nonce });
     DebugHub.logCheckpoint("Gov:Withdraw Submitted", "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Gov:Withdraw Confirmed", "pass");
 
     btn.textContent = "Withdrawn ✓";
@@ -301,7 +301,7 @@ async function handleVote(proposalId, support) {
     const nonce = await getPendingNonce();
     const tx    = await gov.castVote(proposalId, support, { ...gas, nonce });
     DebugHub.logCheckpoint(`Gov:Vote ${label} Submitted`, "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint(`Gov:Vote ${label} Confirmed`, "pass");
     await loadProposals();
   } catch (err) {
@@ -322,7 +322,7 @@ async function handleResolve(proposalId) {
     const nonce = await getPendingNonce();
     const tx    = await gov.resolveProposal(proposalId, { ...gas, nonce });
     DebugHub.logCheckpoint("Gov:Resolve Submitted", "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Gov:Resolve Confirmed", "pass");
     await loadProposals();
   } catch (err) {

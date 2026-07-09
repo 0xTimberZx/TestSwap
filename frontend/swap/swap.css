@@ -218,9 +218,14 @@
   gap: 8px;
 }
 
-.info-row { display: flex; justify-content: space-between; align-items: center; }
-.info-label { font-size: 12px; color: var(--text-3); font-family: var(--mono); }
-.info-val   { font-size: 12px; color: var(--text-2); font-family: var(--mono); font-weight: 600; }
+/* Label pins left; value takes the rest of the row and wraps on its own,
+   right-aligned. Without min-width:0 + a flex value column a long readout
+   (e.g. "Withdrawable ✓ ≈ 10.9138 LINK + 0.0400 WETH") overflows and wraps
+   back under the label, which reads as jumbled text on a phone. */
+.info-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.info-label { flex: 0 0 auto; font-size: 12px; color: var(--text-3); font-family: var(--mono); }
+.info-val   { flex: 1 1 auto; min-width: 0; text-align: right; overflow-wrap: anywhere;
+              font-size: 12px; color: var(--text-2); font-family: var(--mono); font-weight: 600; }
 .info-val.warn   { color: #f59e0b; }
 .info-val.danger { color: #ef4444; }
 

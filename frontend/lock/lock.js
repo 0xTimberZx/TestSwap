@@ -152,7 +152,7 @@ async function handleCreateLock() {
       const nonce = await getPendingNonce();
       const approveTx = await erc.approve(ADDRESSES.TimbLockVault, ethers.constants.MaxUint256, { ...gas, nonce });
       DebugHub.logCheckpoint("Lock:Approve Submitted", "pass");
-      await approveTx.wait();
+      await confirmTx(approveTx);
       DebugHub.logCheckpoint("Lock:Approve Confirmed", "pass");
     }
 
@@ -163,7 +163,7 @@ async function handleCreateLock() {
     const nonce = await getPendingNonce();
     const tx = await vault.lock(selectedToken.address, amountWei, durationSecs, { ...gas, nonce });
     DebugHub.logCheckpoint("Lock:Lock Submitted", "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Lock:Lock Confirmed", "pass");
 
     document.getElementById("lock-amount").value = "";
@@ -190,7 +190,7 @@ async function handleWithdraw(lockId) {
     const nonce = await getPendingNonce();
     const tx = await vault.withdraw(lockId, { ...gas, nonce });
     DebugHub.logCheckpoint("Lock:Withdraw Submitted", "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Lock:Withdraw Confirmed", "pass");
     await Promise.all([loadMyLocks(), loadRegistry()]);
   } catch (err) {
