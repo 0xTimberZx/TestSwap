@@ -224,14 +224,17 @@ async function pollRoundState() {
     // Pot substats as ordered segments: Pot · backed by · yield accruing.
     // "backed by" (escrow reserve) sits right after the pot; yield accruing
     // is its own segment (no longer parenthetical).
-    const potSegs = ["Pot: " + fmt(s.pot) + " ETH"];
+    // Each segment glues its own words with non-breaking spaces ( ) so it
+    // never breaks mid-value; segments join with regular spaces around " · "
+    // so the line wraps only *between* stats on a narrow (mobile) viewport.
+    const potSegs = ["Pot: " + fmt(s.pot) + " ETH"];
 
     // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
     // a direct seed not registered via fundPot(). Silent on read failure.
     if (ADDRESSES.PrizeEscrow) {
       try {
         const escrowBal = await readProv().getBalance(ADDRESSES.PrizeEscrow);
-        if (escrowBal.gt(s.pot)) potSegs.push(`backed by ${fmt(escrowBal)} ETH`);
+        if (escrowBal.gt(s.pot)) potSegs.push(`backed by ${fmt(escrowBal)} ETH`);
       } catch {}
     }
 
@@ -240,7 +243,7 @@ async function pollRoundState() {
       try {
         const vault = new ethers.Contract(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI, readProv());
         const accrued = await vault.previewAccrued();
-        if (!accrued.isZero()) potSegs.push(`yield accruing ${fmt(accrued)} ETH`);
+        if (!accrued.isZero()) potSegs.push(`yield accruing ${fmt(accrued)} ETH`);
       } catch (yieldErr) {
         // Once per session — this runs on a 4s poll and would spam DebugHub.
         if (!window.__yieldReadErrorLogged) {

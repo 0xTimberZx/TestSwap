@@ -153,6 +153,10 @@
 }
 /* keep each stat ("35:07 left in segment", "Pot: … ETH") intact on its own line */
 .round-substats > span { white-space: nowrap; }
+/* the pot span now carries several segments (Pot · backed by · yield accruing);
+   let it wrap at the "·" boundaries so it can't overflow a narrow phone. Each
+   segment glues its number to its unit with NBSP, so wraps only between stats. */
+#sub-pot { white-space: normal; overflow-wrap: anywhere; }
 .dot-sep { color: var(--text-3); }
 
 .gated-notice {
