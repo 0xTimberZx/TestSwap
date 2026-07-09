@@ -391,5 +391,7 @@ function handleDisconnect() {
   }
 
   await Promise.all([loadStats(), loadProposals()]); // independent reads — load together
-  setInterval(loadStats, 20000);
+  // Only poll stats while the tab is visible; catch up on return.
+  setInterval(() => { if (!document.hidden) loadStats(); }, 20000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) loadStats(); });
 })();

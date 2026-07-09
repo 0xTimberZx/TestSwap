@@ -79,6 +79,21 @@ function readProv() {
   return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
 }
 
+// Read-only contracts are immutable once bound to the (stable) public provider,
+// so cache them by address instead of re-instantiating on every 4s/12s poll.
+const _roContracts = {};
+function contractRO(address, abi) {
+  return _roContracts[address] || (_roContracts[address] = new ethers.Contract(address, abi, readProv()));
+}
+
+// The yield read runs on the 4s poll; log a read failure only once per session
+// so a persistent RPC hiccup doesn't spam DebugHub every tick.
+function _logYieldErrOnce(err) {
+  if (window.__yieldReadErrorLogged) return;
+  window.__yieldReadErrorLogged = true;
+  DebugHub.logError("pollRoundState.previewAccrued", err);
+}
+
 // ─── Digit Track Display ──────────────────────────────────────────────────────
 
 // When the wallet is disconnected the whole track is gated: instead of the real
@@ -198,7 +213,7 @@ function _trackRoundTransitions(s) {
 
 async function pollRoundState() {
   try {
-    const prize   = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_ABI, readProv());
+    const prize   = contractRO(ADDRESSES.TimbPrize, TIMBPRIZE_ABI);
     const started = await prize.gameStarted();
 
     if (!started) {
@@ -229,38 +244,28 @@ async function pollRoundState() {
     // so the line wraps only *between* stats on a narrow (mobile) viewport.
     const potSegs = ["Pot: " + fmt(s.pot) + " ETH"];
 
-    // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
-    // a direct seed not registered via fundPot(). Silent on read failure.
-    if (ADDRESSES.PrizeEscrow) {
-      try {
-        const escrowBal = await readProv().getBalance(ADDRESSES.PrizeEscrow);
-        if (escrowBal.gt(s.pot)) potSegs.push(`backed by ${fmt(escrowBal)} ETH`);
-      } catch {}
-    }
+    // The three secondary reads (escrow backing, accruing yield, round
+    // entrants) are independent — fire them together instead of three serial
+    // round-trips on every 4s poll. Each resolves to null on read failure.
+    const hasVault = ADDRESSES.TimbYieldVault && !/^0x0{40}$/.test(ADDRESSES.TimbYieldVault.replace("0x",""));
+    const [escrowBal, accrued, entrants] = await Promise.all([
+      ADDRESSES.PrizeEscrow ? readProv().getBalance(ADDRESSES.PrizeEscrow).catch(() => null) : null,
+      hasVault ? contractRO(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI).previewAccrued().catch(e => { _logYieldErrOnce(e); return null; }) : null,
+      contractRO(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI).getRoundEntrants(currentRoundNum).catch(() => null),
+    ]);
 
+    // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
+    // a direct seed not registered via fundPot().
+    if (escrowBal && escrowBal.gt(s.pot)) potSegs.push(`backed by ${fmt(escrowBal)} ETH`);
     // Live yield accruing from active-ticket escrow (4th pot source).
-    if (ADDRESSES.TimbYieldVault && !/^0x0{40}$/.test(ADDRESSES.TimbYieldVault.replace("0x",""))) {
-      try {
-        const vault = new ethers.Contract(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI, readProv());
-        const accrued = await vault.previewAccrued();
-        if (!accrued.isZero()) potSegs.push(`yield accruing ${fmt(accrued)} ETH`);
-      } catch (yieldErr) {
-        // Once per session — this runs on a 4s poll and would spam DebugHub.
-        if (!window.__yieldReadErrorLogged) {
-          window.__yieldReadErrorLogged = true;
-          DebugHub.logError("pollRoundState.previewAccrued", yieldErr);
-        }
-      }
-    }
+    if (accrued && !accrued.isZero()) potSegs.push(`yield accruing ${fmt(accrued)} ETH`);
     document.getElementById("sub-pot").textContent = potSegs.join(" · ");
 
     // Entries playing THIS round — was a dead "— entries" placeholder.
-    try {
-      const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, readProv());
-      const entrants = await registry.getRoundEntrants(currentRoundNum);
+    if (entrants) {
       document.getElementById("sub-entries").textContent =
         `${entrants.length} ${entrants.length === 1 ? "entry" : "entries"}`;
-    } catch {}
+    }
 
     const timerEl = document.getElementById("sub-timer");
     if (s.inSettlement) {
@@ -1250,9 +1255,16 @@ function handleDisconnect() {
     }
   }, 1000);
 
-  setInterval(pollRoundState, 4000);
-  setInterval(loadPastRounds, 30000);
+  // Skip the RPC polls while the tab is hidden — no point (and no battery/
+  // data cost) refreshing state nobody is looking at. On return to the tab,
+  // catch up immediately instead of waiting for the next interval.
+  const whenVisible = (fn) => () => { if (!document.hidden) fn(); };
+  setInterval(whenVisible(pollRoundState), 4000);
+  setInterval(whenVisible(loadPastRounds), 30000);
   // Keep the entry-token balance current (drops after an entry, rises after a
   // faucet/transfer) without the user having to touch the selector.
-  setInterval(refreshEntryBalance, 12000);
+  setInterval(whenVisible(refreshEntryBalance), 12000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { pollRoundState(); refreshEntryBalance(); }
+  });
 })();
