@@ -16,7 +16,7 @@
     }
   </script>
   <link rel="stylesheet" href="../style.css?v=20260710a" />
-  <link rel="stylesheet" href="analytics.css?v=20260724a" />
+  <link rel="stylesheet" href="analytics.css?v=20260734a" />
 </head>
 <body>
 
@@ -187,6 +187,11 @@
           </tbody>
         </table>
       </div>
+      <div id="rounds-pager" class="table-pager hidden">
+        <button id="rounds-prev" class="pager-btn" onclick="roundsPrevPage()">‹ Prev</button>
+        <span id="rounds-page-label" class="pager-label">Page 1 / 1</span>
+        <button id="rounds-next" class="pager-btn" onclick="roundsNextPage()">Next ›</button>
+      </div>
     </div>
 
     <!-- ─── Yield Vault ────────────────────────────────────────────────── -->
@@ -325,7 +330,7 @@
   </footer>
 
   <script src="../config.js?v=20260727a"></script>
-  <script src="analytics.js?v=20260729a"></script>
+  <script src="analytics.js?v=20260734a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");

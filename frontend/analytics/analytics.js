@@ -174,6 +174,12 @@ function bytes6ToStr(b6) {
   return s;
 }
 
+// Round history is paginated: max 12 rows per page, extras behind Prev/Next.
+const ROUNDS_PER_PAGE = 12;
+const ROUNDS_LOOKBACK = 60; // how far back to pull (5 pages) — bounds RPC load
+let _allRounds = [];        // settled rounds, newest first: [{ r, res }]
+let _roundPage = 0;
+
 async function loadRoundHistory() {
   const tbody    = document.getElementById("rounds-tbody");
   const statusEl = document.getElementById("rounds-status");
@@ -182,49 +188,80 @@ async function loadRoundHistory() {
   try {
     const currentRound = (await prize.currentRound()).toNumber();
     if (currentRound <= 1) {
+      _allRounds = [];
       tbody.innerHTML = '<tr><td colspan="6" class="table-empty">No completed rounds yet</td></tr>';
       statusEl.textContent = "No rounds settled";
+      renderRoundsPager();
       return;
     }
 
-    tbody.innerHTML = "";
-    const start = Math.max(1, currentRound - 20);
-
-    // Fetch every round's result concurrently (was one blocking round-trip per
-    // round, up to 20 serial RPC calls); then render newest-first in order.
-    const rounds = [];
-    for (let r = currentRound - 1; r >= start; r--) rounds.push(r);
-    const results = await Promise.all(rounds.map(r =>
+    // Fetch the lookback window concurrently; keep only settled rounds.
+    const ids = [];
+    for (let r = currentRound - 1; r >= Math.max(1, currentRound - ROUNDS_LOOKBACK); r--) ids.push(r);
+    const results = await Promise.all(ids.map(r =>
       prize.getRoundResult(r).then(res => ({ r, res })).catch(() => null)
     ));
+    const settled = results.filter(x => x && x.res.winningString !== "0x000000000000");
 
-    let count = 0;
-    for (const item of results) {
-      if (!item) continue;
-      const { r, res: result } = item;
-      if (result.winningString === "0x000000000000") continue;
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>#${r}</td>
-        <td class="td-string">${bytes6ToStr(result.winningString)}</td>
-        <td>${fmt(result.potAmount, 18, 4)} ETH</td>
-        <td>${result.winners.length}</td>
-        <td>${fmt(result.remainder, 18, 4)} ETH</td>
-        <td>—</td>
-      `;
-      tbody.appendChild(tr);
-      count++;
+    // Non-destructive: if a refresh came back empty but we already have rows,
+    // keep the last good page rather than blanking the table.
+    if (settled.length === 0) {
+      if (_allRounds.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="table-empty">No completed rounds yet</td></tr>';
+        statusEl.textContent = "No rounds settled";
+      }
+      return;
     }
 
-    if (count === 0) tbody.innerHTML = '<tr><td colspan="6" class="table-empty">No completed rounds yet</td></tr>';
-    statusEl.textContent = `${count} rounds`;
+    _allRounds = settled;
+    renderRoundsPage();
     DebugHub.logCheckpoint("Analytics:Rounds Loaded", "pass");
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Could not load round history</td></tr>';
-    statusEl.textContent = "Error";
+    if (_allRounds.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Could not load round history</td></tr>';
+      statusEl.textContent = "Error";
+    }
     DebugHub.logError("loadRoundHistory", e);
   }
 }
+
+function renderRoundsPage() {
+  const tbody    = document.getElementById("rounds-tbody");
+  const statusEl = document.getElementById("rounds-status");
+  const total    = _allRounds.length;
+  const pages    = Math.max(1, Math.ceil(total / ROUNDS_PER_PAGE));
+  _roundPage     = Math.min(Math.max(0, _roundPage), pages - 1);
+
+  const rows = _allRounds.slice(_roundPage * ROUNDS_PER_PAGE, (_roundPage + 1) * ROUNDS_PER_PAGE);
+  tbody.innerHTML = rows.map(({ r, res }) => `
+    <tr>
+      <td>#${r}</td>
+      <td class="td-string">${bytes6ToStr(res.winningString)}</td>
+      <td>${fmt(res.potAmount, 18, 4)} ETH</td>
+      <td>${res.winners.length}</td>
+      <td>${fmt(res.remainder, 18, 4)} ETH</td>
+      <td>—</td>
+    </tr>`).join("");
+
+  if (statusEl) statusEl.textContent = `${total} round${total === 1 ? "" : "s"}`;
+  renderRoundsPager();
+}
+
+function renderRoundsPager() {
+  const pager = document.getElementById("rounds-pager");
+  if (!pager) return;
+  const pages = Math.max(1, Math.ceil(_allRounds.length / ROUNDS_PER_PAGE));
+  pager.classList.toggle("hidden", pages <= 1);
+  const label = document.getElementById("rounds-page-label");
+  const prev  = document.getElementById("rounds-prev");
+  const next  = document.getElementById("rounds-next");
+  if (label) label.textContent = `Page ${_roundPage + 1} / ${pages}`;
+  if (prev)  prev.disabled = _roundPage === 0;
+  if (next)  next.disabled = _roundPage >= pages - 1;
+}
+
+function roundsPrevPage() { if (_roundPage > 0) { _roundPage--; renderRoundsPage(); } }
+function roundsNextPage() { _roundPage++; renderRoundsPage(); } // renderRoundsPage clamps
 
 // ─── Recent Swaps ─────────────────────────────────────────────────────────────
 
