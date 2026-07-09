@@ -25,6 +25,7 @@ const ERC20_META_ABI = [
 ];
 
 const BLOCK_RANGE = 50000; // ~7 days on Arb Sepolia — matches the analytics window
+const BLOCKS_24H  = Math.round(BLOCK_RANGE / 7); // ~1 day slice of the same window
 const ZERO = "0x0000000000000000000000000000000000000000";
 
 // Read-only queries always go to the canonical Arbitrum Sepolia RPC — never a
@@ -125,6 +126,7 @@ function fmtNum(x, dp = 4) {
 let _pools = [];      // [{ address, t0, t1, sym0, sym1, dec0, dec1, r0, r1, tvl }]
 let _lastTrades = []; // cached rows so the search box can re-filter without refetching
 let _lastLiq = [];
+const _vol24h = {};   // pair address (lowercased) -> USD swap volume in the last ~24h
 let _poolsLoaded = false;    // true once we've rendered pools at least once
 let _activityLoaded = false; // true once we've rendered activity at least once
 // token0/token1 (and their metadata) never change for a pair — read once and
@@ -139,7 +141,7 @@ async function loadPools() {
 
     if (n === 0) {
       document.getElementById("pools-tbody").innerHTML =
-        '<tr><td colspan="4" class="table-empty">No pools yet — create one on the Swap → Liquidity tab</td></tr>';
+        '<tr><td colspan="5" class="table-empty">No pools yet — create one on the Swap → Liquidity tab</td></tr>';
       if (statusEl) statusEl.textContent = "0 pools";
       setOverview(0, 0, null);
       return;
@@ -207,7 +209,7 @@ async function loadPools() {
     // already showing good data because one refresh cycle hiccupped.
     if (!_poolsLoaded) {
       document.getElementById("pools-tbody").innerHTML =
-        '<tr><td colspan="4" class="table-empty">Could not load pools</td></tr>';
+        '<tr><td colspan="5" class="table-empty">Could not load pools</td></tr>';
       if (statusEl) statusEl.textContent = "Error";
     } else if (statusEl) {
       statusEl.textContent = `${_pools.length} pools`;
@@ -222,7 +224,7 @@ function renderPools() {
   const rows = _pools.filter(p => !q || matchesPool(p, q));
 
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" class="table-empty">${q ? "No pools match “" + q + "”" : "No pools"}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="table-empty">${q ? "No pools match “" + q + "”" : "No pools"}</td></tr>`;
     return;
   }
   tbody.innerHTML = "";
@@ -232,10 +234,18 @@ function renderPools() {
       <td class="td-pair">${p.sym0}/${p.sym1}</td>
       <td>${fmtNum(p.r0, 4)} ${p.sym0} · ${fmtNum(p.r1, 4)} ${p.sym1}</td>
       <td>${fmtUsd(p.tvl)}</td>
+      <td>${vol24hOf(p)}</td>
       <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${p.address}','_blank')">${fmtAddr(p.address)}</td>
     `;
     tbody.appendChild(tr);
   }
+}
+
+// 24h volume comes from the activity scan (loadActivity), which runs after the
+// pools first render — show "—" until it lands, then the USD figure (incl. $0).
+function vol24hOf(p) {
+  const v = _vol24h[p.address.toLowerCase()];
+  return v === undefined ? "—" : fmtUsd(v);
 }
 
 function matchesPool(p, q) {
@@ -278,8 +288,10 @@ async function loadActivity() {
     }));
 
     // ── Recent trades ──
+    const vol24hFrom = currentBlock - BLOCKS_24H;
     const trades = [];
     for (const { p, swaps } of perPool) {
+      let vol = 0; // USD swap volume for this pool over the last ~24h
       for (const ev of swaps) {
         const { amount0In, amount1In, amount0Out, amount1Out, sender } = ev.args;
         const zeroToOne = amount0In.gt(0); // token0 in → token1 out
@@ -291,8 +303,20 @@ async function loadActivity() {
           block: ev.blockNumber, pair: `${p.sym0}/${p.sym1}`, sender,
           detail: `${fmtNum(parseFloat(inAmt), 4)} ${inSym} → ${fmtNum(parseFloat(outAmt), 4)} ${outSym}`
         });
+        // Value each recent swap by whichever side we can price (in first, then
+        // out) — a constant-product trade is worth ~the same on both legs.
+        if (ev.blockNumber >= vol24hFrom) {
+          const inAddr  = zeroToOne ? p.t0 : p.t1;
+          const outAddr = zeroToOne ? p.t1 : p.t0;
+          let usd = usdOf(inAddr.toLowerCase(), parseFloat(inAmt));
+          if (usd === null) usd = usdOf(outAddr.toLowerCase(), parseFloat(outAmt));
+          if (usd !== null) vol += usd;
+        }
       }
+      _vol24h[p.address.toLowerCase()] = vol;
     }
+    // Volume lives on the pools table — refresh it now that we have fresh numbers.
+    if (_poolsLoaded) renderPools();
     trades.sort((a, b) => b.block - a.block);
     _lastTrades = trades.slice(0, 50);
     renderTrades(_lastTrades);
