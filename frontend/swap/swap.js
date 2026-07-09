@@ -304,6 +304,22 @@ async function refreshPickerBalances() {
   }
 }
 
+// Receive-side "Add to wallet" chip: visible only when the output token is a
+// real (non-native) ERC-20 that EIP-747 wallet_watchAsset can track.
+function updateAddOutWalletChip() {
+  const btn = document.getElementById("add-out-wallet");
+  if (!btn) return;
+  if (tokenOut && !isNative(tokenOut)) {
+    btn.textContent = `＋ Add ${tokenOut.symbol} to wallet`;
+    btn.classList.remove("hidden");
+  } else {
+    btn.classList.add("hidden");
+  }
+}
+function addOutTokenToWallet() {
+  if (tokenOut && !isNative(tokenOut)) addTokenToWallet(tokenOut);
+}
+
 async function selectToken(token) {
   // You can't swap/LP a token against itself. If the picked token is already
   // on the OTHER side, flip the pair instead of filling both fields the same.
@@ -323,6 +339,7 @@ async function selectToken(token) {
     setSym("token-out-symbol", tokenOut);
   }
   closeTokenPickerDirect();
+  updateAddOutWalletChip();
   syncLiquidityLabels();
   if (mode === "liquidity") {
     await refreshLiquidity();
@@ -337,6 +354,7 @@ function flipTokens() {
   [tokenIn, tokenOut] = [tokenOut, tokenIn];
   document.getElementById("token-in-symbol").textContent  = tokenIn  ? tokenIn.symbol  : "Select";
   document.getElementById("token-out-symbol").textContent = tokenOut ? tokenOut.symbol : "Select";
+  updateAddOutWalletChip();
   const inputIn  = document.getElementById("amount-in");
   const inputOut = document.getElementById("amount-out");
   [inputIn.value, inputOut.value] = [inputOut.value, inputIn.value];
@@ -867,6 +885,7 @@ function setMode(m) {
     // fee, and balances run on the real one) and re-quote.
     document.getElementById("token-in-symbol").textContent  = tokenIn  ? tokenIn.symbol  : "Select";
     document.getElementById("token-out-symbol").textContent = tokenOut ? tokenOut.symbol : "Select";
+    updateAddOutWalletChip();
     checkEligibility();
     refreshBalances();
     recalcQuote();
@@ -1281,6 +1300,7 @@ function handleDisconnect() {
   tokenOut = DEFAULT_TOKENS.find(t => t.symbol === "WETH");
   document.getElementById("token-in-symbol").textContent  = tokenIn.symbol;
   document.getElementById("token-out-symbol").textContent = tokenOut.symbol;
+  updateAddOutWalletChip();
   checkEligibility();
   recalcQuote();
 

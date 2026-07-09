@@ -79,8 +79,21 @@ async function loadWhitelistedTokens() {
 async function onTokenSelectChange() {
   const addr = document.getElementById("lock-token-select").value;
   selectedToken = whitelistedTokens.find(t => t.address === addr) || null;
+  updateLockAddWallet();
   await refreshLockBalance();
   updateLockButton();
+}
+
+// Show the "Add to wallet" chip only once a token is picked, labelled with it.
+function updateLockAddWallet() {
+  const btn = document.getElementById("lock-add-wallet");
+  if (!btn) return;
+  if (selectedToken) {
+    btn.textContent = `＋ Add ${selectedToken.symbol} to wallet`;
+    btn.classList.remove("hidden");
+  } else {
+    btn.classList.add("hidden");
+  }
 }
 
 async function refreshLockBalance() {

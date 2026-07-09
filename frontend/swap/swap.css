@@ -604,6 +604,23 @@
 }
 .token-add-wallet:hover { color: var(--green); border-color: var(--green); }
 
+/* Receive-side "Add to wallet" chip under the "You receive" box. */
+.token-add-wallet-row {
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 5px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  background: none;
+  border: var(--bw) solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.token-add-wallet-row:hover { color: var(--green); border-color: var(--green); }
+.token-add-wallet-row.hidden { display: none; }
+
 /* ─── Light-mode card spacing (+20%) ────────────────────────────────────────
    Light borders carry less visual weight, so cards get more breathing room. */
 :root[data-theme="light"] .swap-page { gap: 29px; }
