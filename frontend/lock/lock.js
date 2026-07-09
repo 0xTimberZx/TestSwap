@@ -5,6 +5,7 @@ const LOCKVAULT_ABI = [
   "function withdraw(uint256 lockId) external",
   "function getLock(uint256 lockId) external view returns (tuple(uint256 lockId, address locker, address token, uint256 amount, uint256 lockedAt, uint256 unlockAt, uint8 status, bool isTimbs))",
   "function getLockerHistory(address locker) external view returns (uint256[])",
+  "function getActiveLock(address locker, address token) external view returns (tuple(uint256 lockId, address locker, address token, uint256 amount, uint256 lockedAt, uint256 unlockAt, uint8 status, bool isTimbs))",
   "function getWhitelistedTokens() external view returns (address[])",
   "function timeUntilUnlock(uint256 lockId) external view returns (uint256)",
   "function totalLocks() external view returns (uint256)",
@@ -126,9 +127,23 @@ async function handleCreateLock() {
   const durationSecs = durationHours * 3600;
 
   try {
-    // Approve if needed
+    // Pre-flight: the vault allows only ONE active lock per wallet per token
+    // (activeLockId[wallet][token]). A second lock reverts with
+    // ActiveLockExists(id), which the wallet surfaces as an opaque
+    // UNPREDICTABLE_GAS_LIMIT. Catch it here and tell the user plainly.
+    const vaultRead = new ethers.Contract(ADDRESSES.TimbLockVault, LOCKVAULT_ABI, readProv());
+    const existing = await vaultRead.getActiveLock(userAddress, selectedToken.address);
+    if (!existing.lockId.isZero() && Number(existing.status) === 0 /* Active */) {
+      btn.textContent = `Active ${selectedToken.symbol} lock #${existing.lockId.toString()} — withdraw first`;
+      setTimeout(() => { btn.textContent = `Lock ${selectedToken.symbol}`; btn.disabled = false; }, 3400);
+      return;
+    }
+
+    // Approve if needed. Read the allowance from the public RPC (not the
+    // wallet's in-app provider, which can return "header not found" mid-sync).
+    const ercRead = new ethers.Contract(selectedToken.address, ERC20_ABI, readProv());
     const erc = new ethers.Contract(selectedToken.address, ERC20_ABI, signer);
-    const allowance = await erc.allowance(userAddress, ADDRESSES.TimbLockVault);
+    const allowance = await ercRead.allowance(userAddress, ADDRESSES.TimbLockVault);
     if (allowance.lt(amountWei)) {
       btn.disabled = true;
       btn.textContent = "Approving…";
