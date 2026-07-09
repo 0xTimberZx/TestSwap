@@ -251,6 +251,34 @@ async function confirmTx(tx, { tries = 90, intervalMs = 2000 } = {}) {
   throw new Error("confirmation timeout — check the explorer");
 }
 
+// ─── Add Token to Wallet (EIP-747 wallet_watchAsset) ─────────────────────────
+
+// Prompt the connected wallet to track an ERC-20 (MetaMask/Brave "Add token").
+// `token` needs { address, symbol, decimals }. Symbol is capped at 11 chars
+// (MetaMask rejects longer). Returns true if the wallet reports it was added.
+// Safe to call from an onclick — it swallows the user-rejected case quietly.
+async function addTokenToWallet(token) {
+  if (!window.ethereum) { alert("No wallet detected. Open in a wallet browser or install MetaMask/Brave Wallet."); return false; }
+  if (!token || !token.address || token.address === "native") return false;
+  try {
+    const wasAdded = await injectedProvider().request({
+      method: "wallet_watchAsset",
+      params: {
+        type: "ERC20",
+        options: {
+          address:  token.address,
+          symbol:   (token.symbol || "TOKEN").slice(0, 11),
+          decimals: Number(token.decimals ?? 18)
+        }
+      }
+    });
+    return !!wasAdded;
+  } catch (e) {
+    console.warn("addTokenToWallet:", e && e.message);
+    return false;
+  }
+}
+
 // ─── Formatting Helpers ───────────────────────────────────────────────────────
 
 function fmt(wei, decimals = 18, dp = 4) {

@@ -165,12 +165,16 @@ function renderTokenList() {
     const removeHtml = t.isCustom
       ? `<button class="token-remove" title="Remove from list" onclick="event.stopPropagation(); removeCustomToken('${t.address}')">✕</button>`
       : "";
+    // Native ETH can't be "watched" as an ERC-20 — only offer it for real tokens.
+    const addHtml = t.isNative ? "" :
+      `<button class="token-add-wallet" title="Add ${t.symbol} to your wallet" onclick="event.stopPropagation(); addTokenToWalletByAddr('${t.address}')">＋ wallet</button>`;
     row.innerHTML = `
       <div class="token-logo">${t.logoChar}</div>
       <div class="token-info">
         <div class="token-symbol">${t.symbol}</div>
         <div class="token-name">${t.name}</div>
       </div>
+      ${addHtml}
       <div class="token-bal-right" data-addr="${t.address}">—</div>
       ${removeHtml}
     `;
@@ -251,6 +255,14 @@ async function offerImport(addr) {
 
 function removeImportRow() {
   document.getElementById("token-import-row")?.remove();
+}
+
+// Look a token up by address in the current list and hand it to the shared
+// wallet_watchAsset helper — keeps the row markup free of interpolated symbol
+// strings (which could contain quotes on a hostile token).
+function addTokenToWalletByAddr(addr) {
+  const t = allTokens().find(x => x.address.toLowerCase() === addr.toLowerCase());
+  if (t) addTokenToWallet(t);
 }
 
 function importCustomToken(t) {

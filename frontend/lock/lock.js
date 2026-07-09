@@ -50,6 +50,9 @@ async function loadWhitelistedTokens() {
     select.innerHTML = '<option value="">Select token…</option>';
 
     for (const addr of addresses) {
+      // WETH is whitelisted on-chain but intentionally hidden from the lock
+      // picker — locking wrapped ETH here is a footgun vs. just holding it.
+      if (addr.toLowerCase() === ADDRESSES.WETH.toLowerCase()) continue;
       try {
         const erc = new ethers.Contract(addr, ERC20_ABI, readProv());
         const [symbol, decimals] = await Promise.all([
