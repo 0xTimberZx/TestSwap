@@ -162,12 +162,15 @@ function renderTokenList() {
     const row = document.createElement("div");
     row.className = "token-row";
     row.onclick = () => selectToken(t);
+    // Fixed-width control slots keep every row's balance column aligned:
+    // an "add to wallet" icon (or an equal-width spacer for native ETH, which
+    // can't be watched) and a remove ✕ (or spacer for non-imported tokens).
+    const addHtml = t.isNative
+      ? `<span class="token-ctl-slot"></span>`
+      : `<button class="token-ctl-slot token-add-wallet" title="Add ${t.symbol} to your wallet" onclick="event.stopPropagation(); addTokenToWalletByAddr('${t.address}')">＋</button>`;
     const removeHtml = t.isCustom
-      ? `<button class="token-remove" title="Remove from list" onclick="event.stopPropagation(); removeCustomToken('${t.address}')">✕</button>`
-      : "";
-    // Native ETH can't be "watched" as an ERC-20 — only offer it for real tokens.
-    const addHtml = t.isNative ? "" :
-      `<button class="token-add-wallet" title="Add ${t.symbol} to your wallet" onclick="event.stopPropagation(); addTokenToWalletByAddr('${t.address}')">＋ wallet</button>`;
+      ? `<button class="token-ctl-slot token-remove" title="Remove from list" onclick="event.stopPropagation(); removeCustomToken('${t.address}')">✕</button>`
+      : `<span class="token-ctl-slot"></span>`;
     row.innerHTML = `
       <div class="token-logo">${t.logoChar}</div>
       <div class="token-info">

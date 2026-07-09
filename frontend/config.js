@@ -36,6 +36,7 @@ const ADDRESSES = {
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
   USDC:                 "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Circle canonical (6 decimals)
   LINK:                 "0xb1D4538B4571d411F07960EF2838Ce337FE1E80E", // Chainlink canonical (18 decimals)
+  USDT:                 "0xbEEa6bc48adb31831bFCe5e91E48E08B3a836163", // TestUSDT — 6 decimals, 1M supply
   DAPP:                 "0x3d0cB8929c22F93A9dd33921E6f43C1621FCfC04",
 };
 
@@ -62,6 +63,13 @@ const DEFAULT_TOKENS = [
     address: ADDRESSES.USDC,
     decimals: 6,
     logoChar: "$"
+  },
+  {
+    symbol:  "USDT",
+    name:    "Tether USD (Test)",
+    address: ADDRESSES.USDT,
+    decimals: 6,
+    logoChar: "₮"
   },
   {
     symbol:  "LINK",
