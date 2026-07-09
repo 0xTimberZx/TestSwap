@@ -1136,6 +1136,15 @@ async function loadPastRounds() {
       return ws && ws !== "——";
     });
 
+    // Entries at the end of each round — getRoundEntrants(r).length is exactly
+    // what the contract snapshots as RoundSettled.totalEntries (and it isn't
+    // pruned after settlement), so it's the canonical per-round entry count.
+    const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, readProv());
+    const entries = {};
+    await Promise.all(settled.map(async ({ r }) => {
+      entries[r] = (await registry.getRoundEntrants(r).catch(() => [])).length;
+    }));
+
     // Claim state for rounds THIS wallet won (parallel).
     const claimed = {};
     if (userAddress) {
@@ -1172,7 +1181,7 @@ async function loadPastRounds() {
             <span class="past-round-string">${ws}</span>
           </div>
           <div class="past-round-right">
-            <span class="past-round-meta">${res.winners.length} winner${res.winners.length !== 1 ? "s" : ""} · ${fmt(res.potAmount)} ETH</span>
+            <span class="past-round-meta">${entries[r] ?? 0} entr${(entries[r] ?? 0) === 1 ? "y" : "ies"} · ${res.winners.length} winner${res.winners.length !== 1 ? "s" : ""} · ${fmt(res.potAmount)} ETH</span>
             ${claimHtml}
           </div>
         </div>`;

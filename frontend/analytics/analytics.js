@@ -203,6 +203,13 @@ async function loadRoundHistory() {
     ));
     const settled = results.filter(x => x && x.res.winningString !== "0x000000000000");
 
+    // Entries at end of round = getRoundEntrants(r).length (== the contract's
+    // RoundSettled.totalEntries; the array isn't pruned after settlement).
+    const registry = new ethers.Contract(ADDRESSES.GameRegistry, REGISTRY_ABI, readProv());
+    await Promise.all(settled.map(async (x) => {
+      x.entries = (await registry.getRoundEntrants(x.r).catch(() => [])).length;
+    }));
+
     // Non-destructive: if a refresh came back empty but we already have rows,
     // keep the last good page rather than blanking the table.
     if (settled.length === 0) {
@@ -233,14 +240,14 @@ function renderRoundsPage() {
   _roundPage     = Math.min(Math.max(0, _roundPage), pages - 1);
 
   const rows = _allRounds.slice(_roundPage * ROUNDS_PER_PAGE, (_roundPage + 1) * ROUNDS_PER_PAGE);
-  tbody.innerHTML = rows.map(({ r, res }) => `
+  tbody.innerHTML = rows.map(({ r, res, entries }) => `
     <tr>
       <td>#${r}</td>
       <td class="td-string">${bytes6ToStr(res.winningString)}</td>
       <td>${fmt(res.potAmount, 18, 4)} ETH</td>
       <td>${res.winners.length}</td>
       <td>${fmt(res.remainder, 18, 4)} ETH</td>
-      <td>—</td>
+      <td>${entries ?? "—"}</td>
     </tr>`).join("");
 
   if (statusEl) statusEl.textContent = `${total} round${total === 1 ? "" : "s"}`;
