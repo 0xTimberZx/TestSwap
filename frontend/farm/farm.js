@@ -133,7 +133,7 @@ async function handleStake(pool) {
       const nonce = await getPendingNonce();
       const approveTx = await tokenContract.approve(cfg.address, ethers.constants.MaxUint256, { ...gas, nonce });
       DebugHub.logCheckpoint("Approve Submitted", "pass");
-      await approveTx.wait();
+      await confirmTx(approveTx);
       DebugHub.logCheckpoint("Approve Confirmed", "pass");
     }
 
@@ -144,7 +144,7 @@ async function handleStake(pool) {
     const nonce = await getPendingNonce();
     const tx = await poolContract.stake(amountWei, { ...gas, nonce });
     DebugHub.logCheckpoint("Stake Submitted", "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Stake Confirmed", "pass");
 
     document.getElementById(pool + "-amount").value = "";
@@ -188,7 +188,7 @@ async function handleUnstake(pool) {
     const nonce = await getPendingNonce();
     const tx = await poolContract.unstake(amountWei, { ...gas, nonce });
     DebugHub.logCheckpoint("Unstake Submitted", "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Unstake Confirmed", "pass");
 
     document.getElementById(pool + "-amount").value = "";
@@ -221,7 +221,7 @@ async function handleClaim(pool) {
     const nonce = await getPendingNonce();
     const tx = await poolContract.claimRewards({ ...gas, nonce });
     DebugHub.logCheckpoint("Claim Submitted", "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Claim Confirmed", "pass");
 
     btn.textContent = "Claimed ✓";

@@ -642,7 +642,7 @@ async function handleSubmitEntry() {
         btn.textContent = "Approving TIMBS…";
         DebugHub.logCheckpoint("Prize:Approve Requested", "pass");
         const gas = await getGasParams(); const nonce = await getPendingNonce();
-        await (await timbs.approve(ADDRESSES.GameRegistry, ethers.constants.MaxUint256, { ...gas, nonce })).wait();
+        await confirmTx(await timbs.approve(ADDRESSES.GameRegistry, ethers.constants.MaxUint256, { ...gas, nonce }));
         DebugHub.logCheckpoint("Prize:Approve Confirmed", "pass");
       }
     }
@@ -661,7 +661,7 @@ async function handleSubmitEntry() {
       tx = await registry.submitEntry(string6, useETH, extraRounds, { ...gas, nonce, value });
     }
     DebugHub.logCheckpoint("Prize:Entry Submitted", "pass");
-    await tx.wait();
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Prize:Entry Confirmed", "pass");
 
     btn.textContent = replacing ? "Entry updated ✓" : "Entry submitted ✓";
@@ -818,7 +818,7 @@ async function handleClaimRefund(ticketId) {
     DebugHub.logCheckpoint("Prize:Refund Requested", "pass");
     const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await (await registry.claimRefund(ticketId, { ...gas, nonce })).wait();
+    await confirmTx(await registry.claimRefund(ticketId, { ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Refund Confirmed", "pass");
     await loadMyEntries();
   } catch (err) {
@@ -997,7 +997,7 @@ async function handleSettleNow() {
     DebugHub.logCheckpoint("Prize:Settle Requested", "pass");
     const prize = new ethers.Contract(ADDRESSES.TimbPrize, PRIZE_SETTLE_ABI, signer);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await (await prize.settleSegment({ ...gas, nonce })).wait();
+    await confirmTx(await prize.settleSegment({ ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Settle Confirmed", "pass");
     if (btn) btn.textContent = "Settled ✓ — next segment live";
     await pollRoundState();
@@ -1029,7 +1029,7 @@ async function handleAdvance() {
     DebugHub.logCheckpoint("Prize:Advance Requested", "pass");
     const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_NUDGE_ABI, signer);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await (await router.advanceScroll(count, { ...gas, nonce })).wait();
+    await confirmTx(await router.advanceScroll(count, { ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Advance Confirmed", "pass");
     if (btn) btn.textContent = "Advanced ✓";
     await pollRoundState();
@@ -1052,7 +1052,7 @@ async function handleCancelEntry() {
     const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
     // v2: cancels the wallet's live Pending ticket (pre-round) — no args.
-    await (await registry.cancelEntry({ ...gas, nonce })).wait();
+    await confirmTx(await registry.cancelEntry({ ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Cancel Confirmed", "pass");
     await loadMyEntries(); // also refreshes hasPlayEntry / the entry button
   } catch (err) {
@@ -1071,7 +1071,7 @@ async function handleClaimWinnings(round) {
     DebugHub.logCheckpoint("Prize:Claim Requested", "pass");
     const prize = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_ABI, signer);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await (await prize.claimWinnings(round, { ...gas, nonce })).wait();
+    await confirmTx(await prize.claimWinnings(round, { ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Claim Confirmed", "pass");
     if (btn) btn.textContent = "Claimed ✓";
     await loadPastRounds();

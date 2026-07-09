@@ -664,7 +664,7 @@ async function handleSwap() {
         const approveTx = await tokenContract.approve(ADDRESSES.TimbSwapRouter, ethers.constants.MaxUint256, { ...gas, nonce });
 
         DebugHub.logCheckpoint("Approve Submitted", "pass");
-        await approveTx.wait();
+        await confirmTx(approveTx);
         DebugHub.logCheckpoint("Approve Confirmed", "pass");
       }
     }
@@ -737,7 +737,9 @@ async function handleSwap() {
     const tx = await target[method](...args, overrides);
 
     DebugHub.logCheckpoint("Swap Submitted", "pass");
-    await tx.wait();
+    // Confirm via public RPC (confirmTx sets err.receipt on an on-chain
+    // revert, so the catch below still classifies slippage reverts correctly).
+    await confirmTx(tx);
     DebugHub.logCheckpoint("Swap Confirmed", "pass");
 
     document.getElementById("amount-in").value = "";
@@ -1055,26 +1057,9 @@ function showLqTx(hash) {
   if (link) { link.href = `https://sepolia.arbiscan.io/tx/${hash}`; link.classList.remove("hidden"); }
 }
 
-// Confirm a submitted tx by polling the canonical public RPC for its receipt,
-// rather than awaiting the wallet's own tx.wait(). Mobile in-app wallets often
-// never push the receipt back to the page, which leaves a button stuck on
-// "Adding liquidity…" long after the tx has actually mined. The public RPC is
-// authoritative, so this returns as soon as the receipt lands (or throws on a
-// reverted / timed-out tx). ~3 min ceiling.
-async function confirmTx(tx) {
-  const prov = readProviderForEligibility();
-  for (let i = 0; i < 90; i++) {
-    try {
-      const r = await prov.getTransactionReceipt(tx.hash);
-      if (r && r.blockNumber) {
-        if (r.status === 0) throw Object.assign(new Error("transaction reverted"), { receipt: r });
-        return r;
-      }
-    } catch (e) { if (e && e.receipt) throw e; /* transient RPC read — keep polling */ }
-    await new Promise(res => setTimeout(res, 2000));
-  }
-  throw new Error("confirmation timeout — check the explorer");
-}
+// confirmTx() is a shared helper in config.js — it polls the public RPC for
+// the receipt so a flaky in-app wallet provider can't leave a button stuck in
+// its loading state.
 
 async function handleAddLiquidity() {
   if (!userAddress || !tokenIn || !tokenOut) return;
