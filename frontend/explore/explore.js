@@ -1,0 +1,402 @@
+// explore.js — TimbSwap exchange info: pools, TVL, trade & liquidity activity.
+// Zero-infra: everything is read client-side from the canonical public RPC
+// (factory pair enumeration + pair reserves + Swap/Mint/Burn event scanning
+// over a bounded block window). No wallet needed — this page has no game state.
+
+const FACTORY_ABI = [
+  "function allPairsLength() external view returns (uint256)",
+  "function allPairs(uint256) external view returns (address)",
+  "function getPairAddress(address tokenA, address tokenB) external view returns (address)"
+];
+
+const PAIR_ABI = [
+  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+  "function token0() external view returns (address)",
+  "function token1() external view returns (address)",
+  "function totalSupply() external view returns (uint256)",
+  "event Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)",
+  "event Mint(address indexed sender, uint256 amount0, uint256 amount1)",
+  "event Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)"
+];
+
+const ERC20_META_ABI = [
+  "function symbol() external view returns (string)",
+  "function decimals() external view returns (uint8)"
+];
+
+const BLOCK_RANGE = 50000; // ~7 days on Arb Sepolia — matches the analytics window
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+// Read-only queries always go to the canonical Arbitrum Sepolia RPC — never a
+// wallet's in-app provider (this page never needs one).
+let _publicProv = null;
+function readProv() {
+  return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+}
+
+// Read-only contracts bound to the stable provider — cache by address.
+const _roContracts = {};
+function contractRO(address, abi) {
+  return _roContracts[address] || (_roContracts[address] = new ethers.Contract(address, abi, readProv()));
+}
+
+// ─── Token metadata (symbol + decimals), cached ────────────────────────────────
+
+const _tokenMeta = {}; // lowercased address -> { symbol, decimals }
+for (const t of (typeof DEFAULT_TOKENS !== "undefined" ? DEFAULT_TOKENS : [])) {
+  _tokenMeta[t.address.toLowerCase()] = { symbol: t.symbol, decimals: t.decimals };
+}
+async function tokenMeta(addr) {
+  const lc = addr.toLowerCase();
+  if (_tokenMeta[lc]) return _tokenMeta[lc];
+  try {
+    const c = contractRO(addr, ERC20_META_ABI);
+    const [symbol, decimals] = await Promise.all([
+      c.symbol().catch(() => addr.slice(0, 6)),
+      c.decimals().catch(() => 18)
+    ]);
+    return (_tokenMeta[lc] = { symbol, decimals: Number(decimals) });
+  } catch {
+    return (_tokenMeta[lc] = { symbol: addr.slice(0, 6) + "…", decimals: 18 });
+  }
+}
+
+// ─── USD pricing (best-effort) ─────────────────────────────────────────────────
+// We can price the known quote assets: WETH (via USDC/WETH), stables ($1), and
+// TIMBS (via TIMBS/WETH). A constant-product pool holds equal value on both
+// sides, so if we can price EITHER side we can value the whole pool. Pairs of
+// two unknown tokens simply show no USD (reserves still render).
+
+let _usdPerEth   = null;
+let _usdPerTimbs = null;
+
+async function refreshPrices() {
+  const factory = contractRO(ADDRESSES.TimbSwapFactory, FACTORY_ABI);
+
+  // USDC/WETH → USD per ETH
+  try {
+    const p = await factory.getPairAddress(ADDRESSES.USDC, ADDRESSES.WETH);
+    if (p && p !== ZERO) {
+      const pair = contractRO(p, PAIR_ABI);
+      const [r, t0] = await Promise.all([pair.getReserves(), pair.token0()]);
+      const usdcIs0 = t0.toLowerCase() === ADDRESSES.USDC.toLowerCase();
+      const usdc = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve0 : r.reserve1, 6));
+      const weth = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve1 : r.reserve0, 18));
+      if (usdc > 0 && weth > 0) _usdPerEth = usdc / weth;
+    }
+  } catch {}
+
+  // TIMBS/WETH → ETH per TIMBS → USD per TIMBS
+  try {
+    const p = await factory.getPairAddress(ADDRESSES.TIMBSToken, ADDRESSES.WETH);
+    if (p && p !== ZERO && _usdPerEth !== null) {
+      const pair = contractRO(p, PAIR_ABI);
+      const [r, t0] = await Promise.all([pair.getReserves(), pair.token0()]);
+      const timbsIs0 = t0.toLowerCase() === ADDRESSES.TIMBSToken.toLowerCase();
+      const timbs = parseFloat(ethers.utils.formatUnits(timbsIs0 ? r.reserve0 : r.reserve1, 18));
+      const weth  = parseFloat(ethers.utils.formatUnits(timbsIs0 ? r.reserve1 : r.reserve0, 18));
+      if (timbs > 0 && weth > 0) _usdPerTimbs = (weth / timbs) * _usdPerEth;
+    }
+  } catch {}
+}
+
+// USD value of `amtFloat` of a token, or null if we can't price it.
+function usdOf(addrLc, amtFloat) {
+  if (addrLc === ADDRESSES.WETH.toLowerCase())  return _usdPerEth  !== null ? amtFloat * _usdPerEth  : null;
+  if (addrLc === ADDRESSES.USDC.toLowerCase())  return amtFloat;                       // $1
+  if (ADDRESSES.USDT && addrLc === ADDRESSES.USDT.toLowerCase()) return amtFloat;      // $1
+  if (addrLc === ADDRESSES.TIMBSToken.toLowerCase()) return _usdPerTimbs !== null ? amtFloat * _usdPerTimbs : null;
+  return null;
+}
+
+function fmtUsd(v) {
+  if (v === null || v === undefined) return "—";
+  if (v === 0) return "$0";
+  if (v < 0.01) return "$" + v.toPrecision(2);
+  return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+function fmtNum(x, dp = 4) {
+  if (!isFinite(x)) return "0";
+  return x.toLocaleString("en-US", { maximumFractionDigits: dp });
+}
+
+// ─── Pool discovery + overview ─────────────────────────────────────────────────
+
+let _pools = [];      // [{ address, t0, t1, sym0, sym1, dec0, dec1, r0, r1, tvl }]
+let _lastTrades = []; // cached rows so the search box can re-filter without refetching
+let _lastLiq = [];
+
+async function loadPools() {
+  const statusEl = document.getElementById("pools-status");
+  try {
+    const factory = contractRO(ADDRESSES.TimbSwapFactory, FACTORY_ABI);
+    const n = (await factory.allPairsLength()).toNumber();
+
+    if (n === 0) {
+      document.getElementById("pools-tbody").innerHTML =
+        '<tr><td colspan="4" class="table-empty">No pools yet — create one on the Swap → Liquidity tab</td></tr>';
+      if (statusEl) statusEl.textContent = "0 pools";
+      setOverview(0, 0, null);
+      return;
+    }
+
+    // Enumerate all pair addresses concurrently.
+    const addrs = await Promise.all(
+      Array.from({ length: n }, (_, i) => factory.allPairs(i).catch(() => null))
+    );
+
+    await refreshPrices();
+
+    // Load each pool's tokens + reserves + metadata concurrently.
+    const pools = await Promise.all(addrs.filter(Boolean).map(async (addr) => {
+      try {
+        const pair = contractRO(addr, PAIR_ABI);
+        const [t0, t1, r] = await Promise.all([pair.token0(), pair.token1(), pair.getReserves()]);
+        const [m0, m1] = await Promise.all([tokenMeta(t0), tokenMeta(t1)]);
+        const r0 = parseFloat(ethers.utils.formatUnits(r.reserve0, m0.decimals));
+        const r1 = parseFloat(ethers.utils.formatUnits(r.reserve1, m1.decimals));
+        // Value either side; a balanced pool's TVL is twice the priced side.
+        const v0 = usdOf(t0.toLowerCase(), r0);
+        const v1 = usdOf(t1.toLowerCase(), r1);
+        let tvl = null;
+        if (v0 !== null && v1 !== null) tvl = v0 + v1;
+        else if (v0 !== null) tvl = v0 * 2;
+        else if (v1 !== null) tvl = v1 * 2;
+        return {
+          address: addr, t0, t1,
+          sym0: m0.symbol, sym1: m1.symbol, dec0: m0.decimals, dec1: m1.decimals,
+          r0, r1, tvl
+        };
+      } catch { return null; }
+    }));
+
+    _pools = pools.filter(Boolean).sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
+    renderPools();
+
+    const totalTvl = _pools.reduce((s, p) => s + (p.tvl || 0), 0);
+    setOverview(_pools.length, null, totalTvl);
+    if (statusEl) statusEl.textContent = `${_pools.length} pool${_pools.length === 1 ? "" : "s"}`;
+    DebugHub.logCheckpoint("Explore:Pools Loaded", "pass");
+  } catch (e) {
+    document.getElementById("pools-tbody").innerHTML =
+      '<tr><td colspan="4" class="table-empty">Could not load pools</td></tr>';
+    if (statusEl) statusEl.textContent = "Error";
+    DebugHub.logError("loadPools", e);
+  }
+}
+
+function renderPools() {
+  const tbody = document.getElementById("pools-tbody");
+  const q = (document.getElementById("pool-search")?.value || "").trim().toLowerCase();
+  const rows = _pools.filter(p => !q || matchesPool(p, q));
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" class="table-empty">${q ? "No pools match “" + q + "”" : "No pools"}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = "";
+  for (const p of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="td-pair">${p.sym0}/${p.sym1}</td>
+      <td>${fmtNum(p.r0, 4)} ${p.sym0} · ${fmtNum(p.r1, 4)} ${p.sym1}</td>
+      <td>${fmtUsd(p.tvl)}</td>
+      <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${p.address}','_blank')">${fmtAddr(p.address)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function matchesPool(p, q) {
+  return p.sym0.toLowerCase().includes(q) || p.sym1.toLowerCase().includes(q) ||
+         `${p.sym0}/${p.sym1}`.toLowerCase().includes(q) ||
+         p.address.toLowerCase() === q || p.t0.toLowerCase() === q || p.t1.toLowerCase() === q;
+}
+
+function setOverview(pools, tradesWindow, totalTvl) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v !== null && v !== undefined) el.textContent = v; };
+  set("ov-tvl", fmtUsd(totalTvl));
+  if (pools !== null) set("ov-pools", String(pools));
+  if (tradesWindow !== null) set("ov-trades", String(tradesWindow));
+}
+
+// ─── Activity: recent trades (Swap) and liquidity (Mint/Burn) ───────────────────
+
+async function loadActivity() {
+  const swapStatus = document.getElementById("trades-status");
+  const liqStatus  = document.getElementById("liq-status");
+  try {
+    const prov = readProv();
+    const currentBlock = await prov.getBlockNumber();
+    const fromBlock = Math.max(0, currentBlock - BLOCK_RANGE);
+
+    // Make sure we know the pools (and their token metadata) first.
+    if (_pools.length === 0) await loadPools();
+
+    // Scan Swap/Mint/Burn on every pool concurrently.
+    const perPool = await Promise.all(_pools.map(async (p) => {
+      const pair = contractRO(p.address, PAIR_ABI);
+      const [swaps, mints, burns] = await Promise.all([
+        pair.queryFilter(pair.filters.Swap(), fromBlock, currentBlock).catch(() => []),
+        pair.queryFilter(pair.filters.Mint(), fromBlock, currentBlock).catch(() => []),
+        pair.queryFilter(pair.filters.Burn(), fromBlock, currentBlock).catch(() => [])
+      ]);
+      return { p, swaps, mints, burns };
+    }));
+
+    // ── Recent trades ──
+    const trades = [];
+    for (const { p, swaps } of perPool) {
+      for (const ev of swaps) {
+        const { amount0In, amount1In, amount0Out, amount1Out, sender } = ev.args;
+        const zeroToOne = amount0In.gt(0); // token0 in → token1 out
+        const inSym  = zeroToOne ? p.sym0 : p.sym1;
+        const outSym = zeroToOne ? p.sym1 : p.sym0;
+        const inAmt  = zeroToOne ? ethers.utils.formatUnits(amount0In,  p.dec0) : ethers.utils.formatUnits(amount1In,  p.dec1);
+        const outAmt = zeroToOne ? ethers.utils.formatUnits(amount1Out, p.dec1) : ethers.utils.formatUnits(amount0Out, p.dec0);
+        trades.push({
+          block: ev.blockNumber, pair: `${p.sym0}/${p.sym1}`, sender,
+          detail: `${fmtNum(parseFloat(inAmt), 4)} ${inSym} → ${fmtNum(parseFloat(outAmt), 4)} ${outSym}`
+        });
+      }
+    }
+    trades.sort((a, b) => b.block - a.block);
+    _lastTrades = trades.slice(0, 50);
+    renderTrades(_lastTrades);
+    if (swapStatus) swapStatus.textContent = `${trades.length} trade${trades.length === 1 ? "" : "s"}`;
+    setOverview(null, trades.length, null);
+
+    // ── Recent liquidity ──
+    const liq = [];
+    for (const { p, mints, burns } of perPool) {
+      for (const ev of mints) {
+        liq.push({
+          block: ev.blockNumber, type: "Add", pair: `${p.sym0}/${p.sym1}`, who: ev.args.sender,
+          detail: `${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount0, p.dec0)), 4)} ${p.sym0} + ${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount1, p.dec1)), 4)} ${p.sym1}`
+        });
+      }
+      for (const ev of burns) {
+        liq.push({
+          block: ev.blockNumber, type: "Remove", pair: `${p.sym0}/${p.sym1}`, who: ev.args.to,
+          detail: `${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount0, p.dec0)), 4)} ${p.sym0} + ${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount1, p.dec1)), 4)} ${p.sym1}`
+        });
+      }
+    }
+    liq.sort((a, b) => b.block - a.block);
+    _lastLiq = liq.slice(0, 50);
+    renderLiquidity(_lastLiq);
+    if (liqStatus) liqStatus.textContent = `${liq.length} event${liq.length === 1 ? "" : "s"}`;
+
+    DebugHub.logCheckpoint("Explore:Activity Loaded", "pass");
+  } catch (e) {
+    if (swapStatus) swapStatus.textContent = "Error";
+    if (liqStatus) liqStatus.textContent = "Error";
+    DebugHub.logError("loadActivity", e);
+  }
+}
+
+function renderTrades(rows) {
+  const tbody = document.getElementById("trades-tbody");
+  const q = (document.getElementById("pool-search")?.value || "").trim().toLowerCase();
+  const filtered = rows.filter(r => !q || r.pair.toLowerCase().includes(q));
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No trades in the last 50,000 blocks</td></tr>';
+    return;
+  }
+  tbody.innerHTML = "";
+  for (const r of filtered) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.block}</td>
+      <td class="td-pair">${r.pair}</td>
+      <td>${r.detail}</td>
+      <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.sender}','_blank')">${fmtAddr(r.sender)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function renderLiquidity(rows) {
+  const tbody = document.getElementById("liq-tbody");
+  const q = (document.getElementById("pool-search")?.value || "").trim().toLowerCase();
+  const filtered = rows.filter(r => !q || r.pair.toLowerCase().includes(q));
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No liquidity changes in the last 50,000 blocks</td></tr>';
+    return;
+  }
+  tbody.innerHTML = "";
+  for (const r of filtered) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.block}</td>
+      <td class="${r.type === "Add" ? "td-in" : "td-out"}">${r.type}</td>
+      <td class="td-pair">${r.pair}</td>
+      <td>${r.detail}</td>
+      <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.who}','_blank')">${fmtAddr(r.who)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+// Re-filter every already-loaded table as the user types — pure client-side,
+// no re-fetch (rows are cached in _pools / _lastTrades / _lastLiq).
+function onPoolSearch() {
+  renderPools();
+  renderTrades(_lastTrades);
+  renderLiquidity(_lastLiq);
+}
+
+// ─── Wallet (optional — nav parity only; the page has no gated content) ─────────
+
+async function handleConnect() {
+  const ok = await connectWallet();
+  if (!ok) return;
+  DebugHub.startSession();
+  document.getElementById("connect-btn").classList.add("hidden");
+  document.getElementById("wallet-info").classList.remove("hidden");
+  document.getElementById("network-badge").classList.remove("hidden");
+  document.getElementById("wallet-addr").textContent = fmtAddr(userAddress);
+  listenForAccountChanges((newAddr) => {
+    if (!newAddr) { handleDisconnect(); return; }
+    document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
+  });
+}
+
+function handleDisconnect() {
+  DebugHub.endSession();
+  provider = null; signer = null; userAddress = null;
+  document.getElementById("connect-btn").classList.remove("hidden");
+  document.getElementById("wallet-info").classList.add("hidden");
+  document.getElementById("network-badge").classList.add("hidden");
+}
+
+// ─── Init ───────────────────────────────────────────────────────────────────────
+
+(async () => {
+  DebugHub.logCheckpoint("Explore:Page Loaded", "pass");
+
+  // Wallet is optional here — reflect a saved connection if present, but the
+  // whole page works disconnected (no game state on this surface).
+  try {
+    const addr = await autoReconnect();
+    if (addr) {
+      document.getElementById("connect-btn")?.classList.add("hidden");
+      document.getElementById("wallet-info")?.classList.remove("hidden");
+      document.getElementById("network-badge")?.classList.remove("hidden");
+      const el = document.getElementById("wallet-addr");
+      if (el) el.textContent = fmtAddr(addr);
+      DebugHub.startSession();
+    }
+  } catch {}
+
+  await loadPools();
+  await loadActivity();
+
+  // Refresh only while the tab is visible; catch up on return.
+  const whenVisible = (fn) => () => { if (!document.hidden) fn(); };
+  setInterval(whenVisible(loadPools), 30000);
+  setInterval(whenVisible(loadActivity), 45000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { loadPools(); loadActivity(); }
+  });
+})();
