@@ -1,7 +1,8 @@
-# Explore page
+# V2 Pools page (formerly "Explore")
 
-**Status: built (first cut).** Lives at `frontend/explore/` (index.html +
-explore.js + explore.css). The nav "Explore" link (desktop `.nav-links` +
+**Status: built (first cut).** Named **"V2 Pools"** in the UI (nav label, page
+title + H1); the URL/folder stays `frontend/explore/` → `../explore/`. Files:
+index.html + explore.js + explore.css. The nav link (desktop `.nav-links` +
 mobile `#mobile-nav`) is repointed to `../explore/` on all six pages.
 
 ## Shipped in the first cut
