@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("timbswap_theme")==="light"?"light":"dark"}catch(e){}</script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docs — TimbSwap</title>
+  <meta name="description" content="TimbSwap documentation — how to swap, provide liquidity, farm, lock, compete, and vote on the Arbitrum Sepolia testnet DEX. Includes verified contract addresses." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script>window.DEBUGHUB_CONFIG = { appName: "TimbSwap" };</script>
+  <script src="https://0xtimberzx.github.io/MyDapp/debughub/sdk/debugger.js"></script>
+  <script>
+    if (!window.DebugHub) {
+      window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
+    }
+  </script>
+  <link rel="stylesheet" href="../style.css?v=20260710a" />
+  <link rel="stylesheet" href="docs.css?v=20260736a" />
+</head>
+<body>
+
+  <nav class="nav">
+    <a href="https://0xtimberzx.github.io/TimbSwap/" class="nav-logo">
+      <span class="nav-logo-mark">⬡</span>
+      <span class="nav-logo-text">TimbSwap</span>
+    </a>
+    <div class="nav-links">
+      <div class="nav-group">
+        <button class="nav-group-btn">Dashboard <span class="nav-caret">▾</span></button>
+        <div class="nav-dropdown">
+          <a href="../swap/">Swap</a>
+          <a href="../analytics/">Analytics</a>
+          <a href="../gov/">Governance</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <button class="nav-group-btn">Earn TIMBS <span class="nav-caret">▾</span></button>
+        <div class="nav-dropdown">
+          <a href="../farm/">Farm</a>
+          <a href="../compete/">Compete</a>
+          <a href="https://0xtimberzx.github.io/TimbSwap/">Airdrop <span class="badge-soon">Soon</span></a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <button class="nav-group-btn">Tools <span class="nav-caret">▾</span></button>
+        <div class="nav-dropdown">
+          <a href="../lock/">Lock Vault</a>
+          <a href="../explore/">V2 Pools</a>
+          <a href="../docs/" class="nav-active">Docs</a>
+          <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">Debugger ↗</a>
+        </div>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <div id="network-badge" class="network-badge hidden">Arb Sepolia</div>
+      <button id="connect-btn" class="btn-connect" onclick="handleConnect()">Connect Wallet</button>
+      <div id="wallet-info" class="wallet-info hidden">
+        <button class="wallet-menu-btn" onclick="toggleWalletMenu(event)" aria-haspopup="true">
+          <span id="wallet-addr" class="wallet-addr"></span>
+          <span class="wallet-caret">▾</span>
+        </button>
+        <div class="wallet-dropdown">
+          <button class="wallet-menu-item" onclick="handleSwitchAccount()">Switch Account</button>
+          <button class="wallet-menu-item danger" onclick="handleDisconnect()">Disconnect</button>
+          <button class="wallet-menu-item" id="theme-toggle" onclick="toggleTheme()">Light Mode</button>
+        </div>
+      </div>
+      <button class="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="nav-mobile-overlay" id="mobile-nav">
+    <div class="nav-mobile-section">DASHBOARD</div>
+    <a href="../swap/">Swap</a>
+    <a href="../analytics/">Analytics</a>
+    <a href="../gov/">Governance</a>
+    <div class="nav-mobile-section">EARN TIMBS</div>
+    <a href="../farm/">Farm</a>
+    <a href="../compete/">Compete</a>
+    <a href="https://0xtimberzx.github.io/TimbSwap/">Airdrop</a>
+    <div class="nav-mobile-section">TOOLS</div>
+    <a href="../lock/">Lock Vault</a>
+    <a href="../explore/">V2 Pools</a>
+    <a href="../docs/">Docs</a>
+    <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">Debugger ↗</a>
+  </div>
+
+  <div class="docs-page">
+
+    <!-- ─── Sidebar TOC ─────────────────────────────────────────────────── -->
+    <aside class="docs-toc" id="docs-toc">
+      <div class="docs-toc-label">DOCUMENTATION</div>
+      <nav>
+        <a href="#overview" class="toc-link">Overview</a>
+        <a href="#start" class="toc-link">Getting started</a>
+        <a href="#swap" class="toc-link">Swapping</a>
+        <a href="#liquidity" class="toc-link">Liquidity &amp; V2 Pools</a>
+        <a href="#farm" class="toc-link">Farm (staking)</a>
+        <a href="#lock" class="toc-link">Lock Vault</a>
+        <a href="#compete" class="toc-link">Compete — Prize Scroll</a>
+        <a href="#gov" class="toc-link">Governance</a>
+        <a href="#analytics" class="toc-link">Analytics</a>
+        <a href="#timbs" class="toc-link">TIMBS token</a>
+        <a href="#authenticity" class="toc-link">Verify authenticity</a>
+        <a href="#privacy" class="toc-link">Privacy &amp; data</a>
+        <a href="#disclaimer" class="toc-link">Disclaimer</a>
+      </nav>
+    </aside>
+
+    <!-- ─── Content ─────────────────────────────────────────────────────── -->
+    <main class="docs-body">
+
+      <div class="docs-hero">
+        <h1 class="page-h1">TimbSwap Documentation</h1>
+        <p class="page-sub">A community DeFi DEX and on-chain game on the Arbitrum Sepolia testnet — swap, pool, farm, lock, and compete for the prize scroll.</p>
+      </div>
+
+      <div class="docs-callout docs-callout-warn">
+        <strong>Testnet only.</strong> TimbSwap runs entirely on the <strong>Arbitrum Sepolia</strong> test network (chain ID <code>421614</code>). Every token here — including TIMBS — is a <strong>test asset with no monetary value</strong>. Nothing on this site is an investment, a security, or financial advice. Do not send real funds or mainnet assets to any address listed here.
+      </div>
+
+      <!-- Overview -->
+      <section id="overview" class="docs-section">
+        <h2>Overview</h2>
+        <p>TimbSwap is a constant-product (Uniswap-V2-style) automated market maker paired with a set of on-chain incentive games. All state is read live from the chain — the frontend is static and hosts no backend. You interact by connecting an EVM wallet (MetaMask, Rabby, or a mobile in-app wallet) set to Arbitrum Sepolia.</p>
+        <p>The core surfaces are:</p>
+        <ul>
+          <li><strong>Swap</strong> — trade tokens against AMM pools.</li>
+          <li><strong>V2 Pools</strong> — a read-only explorer of every pool, its reserves, TVL, and 24h volume.</li>
+          <li><strong>Farm</strong> — stake LP or TIMBS to earn TIMBS emissions.</li>
+          <li><strong>Lock Vault</strong> — time-lock any token and appear in the public registry.</li>
+          <li><strong>Compete</strong> — the Prize Scroll game, where swaps and nudges push a shared meter toward a payout.</li>
+          <li><strong>Governance</strong> — deposit TIMBS for voting power on proposals.</li>
+          <li><strong>Analytics</strong> — protocol metrics and settled round history.</li>
+        </ul>
+      </section>
+
+      <!-- Getting started -->
+      <section id="start" class="docs-section">
+        <h2>Getting started</h2>
+        <ol>
+          <li><strong>Add the network.</strong> Arbitrum Sepolia — chain ID <code>421614</code>, RPC <code>https://sepolia-rollup.arbitrum.io/rpc</code>, explorer <code>sepolia.arbiscan.io</code>. Connecting your wallet on any TimbSwap page will offer to add/switch to it automatically.</li>
+          <li><strong>Get testnet ETH.</strong> Use a public Arbitrum Sepolia faucet to fund gas. You need a small amount of Sepolia ETH for every transaction.</li>
+          <li><strong>Connect.</strong> Click <em>Connect Wallet</em> in the top bar. Reads (quotes, balances, tables) always come from the public RPC; your wallet is only asked to <em>sign</em> transactions.</li>
+          <li><strong>Get test tokens.</strong> Swap a little ETH for TIMBS or another listed token to start using the farm, lock, and compete surfaces.</li>
+        </ol>
+      </section>
+
+      <!-- Swap -->
+      <section id="swap" class="docs-section">
+        <h2>Swapping</h2>
+        <p>The <a href="../swap/">Swap</a> page trades an exact input for an estimated output (or the reverse). Prices come straight from a pool's reserves using the constant-product formula, minus a <strong>0.3% pool fee</strong> that accrues to liquidity providers and a small protocol fee.</p>
+        <ul>
+          <li><strong>ETH is wrapped automatically.</strong> ETH↔WETH is a 1:1 wrap/unwrap with no pool, fee, or slippage; ETH→token routes through the WETH pool.</li>
+          <li><strong>Slippage &amp; min-out.</strong> Your minimum received is computed from the live quote and a slippage tolerance; if the pool moves against you past that, the swap reverts rather than filling at a bad price.</li>
+          <li><strong>Direct pairs only (today).</strong> A swap needs a direct pool between the two tokens. If none exists you'll see “No liquidity for this pair” — route through WETH as two swaps, or see the multi-hop routing plan on GitHub.</li>
+          <li><strong>Add to wallet.</strong> Where shown, a “＋” lets you register the output token in your wallet — always confirm the address first (see <a href="#authenticity">Verify authenticity</a>).</li>
+        </ul>
+      </section>
+
+      <!-- Liquidity -->
+      <section id="liquidity" class="docs-section">
+        <h2>Liquidity &amp; V2 Pools</h2>
+        <p>Add liquidity from the <a href="../swap/">Swap</a> page's Liquidity tab. You deposit both sides of a pair in the current ratio and receive LP tokens representing your share; you earn the 0.3% fee pro-rata and can withdraw anytime by burning LP.</p>
+        <p>The <a href="../explore/">V2 Pools</a> page is a wallet-free explorer showing every pool's reserves, USD TVL (for pools with a priceable side), <strong>24h volume</strong>, recent trades, and recent liquidity events — all read live from chain.</p>
+      </section>
+
+      <!-- Farm -->
+      <section id="farm" class="docs-section">
+        <h2>Farm (staking)</h2>
+        <p>The <a href="../farm/">Farm</a> lets you stake eligible tokens to earn TIMBS emissions. Rewards stream at a per-second rate and are claimable at any time; claiming does not reset your stake.</p>
+        <p><strong>Reading APR.</strong> APR is derived from the reward rate and the total staked, so it swings when either changes. On a small testnet pool a tiny stake can produce an astronomical headline APR — the UI caps the displayed figure, and you should treat testnet APR as illustrative, not a yield promise.</p>
+      </section>
+
+      <!-- Lock -->
+      <section id="lock" class="docs-section">
+        <h2>Lock Vault</h2>
+        <p>The <a href="../lock/">Lock Vault</a> time-locks any ERC-20 for a duration you choose. Locked tokens are held by the vault until the unlock time, then withdrawable by you. Active locks appear in the <strong>Public Lock Registry</strong> with a masked owner, a unique lock ID, and the amount.</p>
+        <p>A green <span class="inline-badge">TIMBS</span> badge marks a lock holding the <em>canonical</em> TIMBS contract — it is an <strong>exact address match</strong>, not a symbol match, so it can't be spoofed by a look-alike token. Token symbols and decimals for other locks are read on-chain; always verify a token before trusting its label.</p>
+      </section>
+
+      <!-- Compete -->
+      <section id="compete" class="docs-section">
+        <h2>Compete — the Prize Scroll</h2>
+        <p>The <a href="../compete/">Compete</a> page is an on-chain game. A shared meter (the “scroll”) advances as players <strong>nudge</strong> it; when a round settles, entrants split the pot.</p>
+        <ul>
+          <li><strong>Nudging by swapping.</strong> An eligible swap advances the scroll by a set weight. Eligibility is checked on the <em>input</em> token — trading an eligible token forward feeds the meter and the fee/burn loop.</li>
+          <li><strong>Free nudges.</strong> You can also advance the scroll directly (gas only), capped per wallet per segment so no one can dominate the meter for free. Paid swap-nudges aren't capped because they cost fees.</li>
+          <li><strong>Entries &amp; settlement.</strong> Each round records its entrants; when it settles, the entry count is snapshotted and winners are drawn. Past rounds on the Compete and Analytics pages show the entries recorded at the end of each round.</li>
+          <li><strong>One ticket per wallet</strong> per round, with a lineage so you can see and replace a pending entry.</li>
+        </ul>
+        <p>The exact tuning (nudge weights, segment caps, emission balance) is documented in the repository's game-balance spec.</p>
+      </section>
+
+      <!-- Governance -->
+      <section id="gov" class="docs-section">
+        <h2>Governance</h2>
+        <p><a href="../gov/">Governance</a> lets you deposit TIMBS for voting power and vote on proposals. Your deposited TIMBS are locked while you hold active votes and are withdrawable afterward. A quorum is required for a proposal to pass.</p>
+      </section>
+
+      <!-- Analytics -->
+      <section id="analytics" class="docs-section">
+        <h2>Analytics</h2>
+        <p><a href="../analytics/">Analytics</a> surfaces protocol-wide metrics and a paginated round-history table (with per-round entries, winners, and pot). Market top-line data is public; some protocol internals reveal once a wallet is connected.</p>
+      </section>
+
+      <!-- TIMBS -->
+      <section id="timbs" class="docs-section">
+        <h2>TIMBS token</h2>
+        <p>TIMBS is the protocol's native test token. New supply is minted only as <strong>emissions</strong> to the staking and farm pools (and by the owner), and is bounded by a hard cap. Emissions fund farm rewards; the reward rate is set by governance/owner actions, which is what moves farm APR over time.</p>
+      </section>
+
+      <!-- Authenticity -->
+      <section id="authenticity" class="docs-section">
+        <h2>Verify authenticity</h2>
+        <div class="docs-callout">
+          <strong>Always verify contract addresses before you trust a token or approve it.</strong> Anyone can deploy an ERC-20 that <em>calls itself</em> “TIMBS” or copies another symbol. A symbol is not proof of authenticity — only the address is. The list below is rendered from the same config the live app uses; cross-check it against the repository and the block explorer, and be suspicious of any address that doesn't match.
+        </div>
+        <div class="table-wrap">
+          <table class="docs-table" id="addr-table">
+            <thead>
+              <tr><th>Contract</th><th>Address</th></tr>
+            </thead>
+            <tbody id="addr-tbody">
+              <tr><td colspan="2" class="docs-td-muted">Loading addresses…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="docs-note">Network: Arbitrum Sepolia (chain ID <code>421614</code>). Tap any address to open it on Arbiscan.</p>
+      </section>
+
+      <!-- Privacy -->
+      <section id="privacy" class="docs-section">
+        <h2>Privacy &amp; data</h2>
+        <p>TimbSwap's frontend is static and stores no accounts. What it touches:</p>
+        <ul>
+          <li><strong>Your wallet.</strong> Connecting shares your public address with the site (standard for any dApp). The app reads balances and signs transactions you approve; it never has custody of your keys or funds.</li>
+          <li><strong>Public RPC.</strong> Reads go to a public Arbitrum Sepolia RPC endpoint, which sees the requests your browser makes (a normal property of using any public node).</li>
+          <li><strong>Local storage.</strong> Your theme choice and last-connected state are kept in your browser only.</li>
+          <li><strong>Diagnostics (DebugHub).</strong> The app can emit anonymous diagnostic checkpoints and error events to help debugging. This telemetry is about app behavior, not your identity, and no private keys or seed phrases are ever collected. If you export a debug log to share, review it before sending.</li>
+        </ul>
+      </section>
+
+      <!-- Disclaimer -->
+      <section id="disclaimer" class="docs-section">
+        <h2>Disclaimer</h2>
+        <p>TimbSwap is an experimental, unaudited testnet project provided “as is,” without warranties of any kind. Testnet assets have no monetary value and testnets can be reset or halted at any time. Interact at your own risk, verify every address, and never treat anything here as financial advice.</p>
+      </section>
+
+      <div class="docs-foot-links">
+        <a href="https://github.com/0xTimberZx/TimbSwap" target="_blank">GitHub ↗</a>
+        <a href="https://sepolia.arbiscan.io/" target="_blank">Arbiscan ↗</a>
+        <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">DebugHub ↗</a>
+      </div>
+
+    </main>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-left">
+      <span class="nav-logo-mark">⬡</span> TimbSwap — Arbitrum Sepolia Testnet
+    </div>
+    <div class="footer-links">
+      <a href="https://sepolia.arbiscan.io/address/0xCCd6d3f0A86042d2B7056eDd381d367126628AF5" target="_blank">Factory ↗</a>
+      <a href="https://github.com/0xTimberZx/TimbSwap" target="_blank">GitHub ↗</a>
+      <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">DebugHub ↗</a>
+    </div>
+  </footer>
+
+  <script src="../config.js?v=20260727a"></script>
+  <script src="docs.js?v=20260736a"></script>
+</body>
+</html>
