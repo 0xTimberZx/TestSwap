@@ -132,8 +132,7 @@ async function handleDeposit() {
 
     document.getElementById("vp-input").value = "";
     btn.textContent = "Deposited ✓";
-    await loadStats();
-    await loadProposals();
+    await Promise.all([loadStats(), loadProposals()]); // independent reads — load together
     setTimeout(() => { btn.textContent = "Deposit"; btn.disabled = false; }, 2000);
 
   } catch (err) {
@@ -163,8 +162,7 @@ async function handleWithdraw() {
     DebugHub.logCheckpoint("Gov:Withdraw Confirmed", "pass");
 
     btn.textContent = "Withdrawn ✓";
-    await loadStats();
-    await loadProposals();
+    await Promise.all([loadStats(), loadProposals()]); // independent reads — load together
     setTimeout(() => { btn.textContent = "Withdraw"; btn.disabled = false; }, 2000);
 
   } catch (err) {
@@ -349,14 +347,12 @@ async function handleConnect() {
   document.getElementById("network-badge").classList.remove("hidden");
   document.getElementById("wallet-addr").textContent = fmtAddr(userAddress);
 
-  await loadStats();
-  await loadProposals();
+  await Promise.all([loadStats(), loadProposals()]); // independent reads — load together
 
   listenForAccountChanges(async (newAddr) => {
     if (!newAddr) { handleDisconnect(); return; }
     document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
-    await loadStats();
-    await loadProposals();
+    await Promise.all([loadStats(), loadProposals()]); // independent reads — load together
   });
 }
 
@@ -390,12 +386,10 @@ function handleDisconnect() {
       if (!newAddr) { handleDisconnect(); return; }
       const _el = document.getElementById("wallet-addr");
       if (_el) _el.textContent = fmtAddr(newAddr);
-      await loadStats();
-      await loadProposals();
+      await Promise.all([loadStats(), loadProposals()]); // independent reads — load together
     });
   }
 
-  await loadStats();
-  await loadProposals();
+  await Promise.all([loadStats(), loadProposals()]); // independent reads — load together
   setInterval(loadStats, 20000);
 })();

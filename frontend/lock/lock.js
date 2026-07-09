@@ -49,10 +49,12 @@ async function loadWhitelistedTokens() {
     const select = document.getElementById("lock-token-select");
     select.innerHTML = '<option value="">Select token…</option>';
 
-    for (const addr of addresses) {
-      // WETH is whitelisted on-chain but intentionally hidden from the lock
-      // picker — locking wrapped ETH here is a footgun vs. just holding it.
-      if (addr.toLowerCase() === ADDRESSES.WETH.toLowerCase()) continue;
+    // WETH is whitelisted on-chain but intentionally hidden from the lock
+    // picker — locking wrapped ETH here is a footgun vs. just holding it.
+    const wanted = addresses.filter(a => a.toLowerCase() !== ADDRESSES.WETH.toLowerCase());
+    // Read each token's symbol+decimals concurrently instead of blocking the
+    // dropdown on one round-trip per token; keep on-chain order.
+    const tokens = await Promise.all(wanted.map(async addr => {
       try {
         const erc = new ethers.Contract(addr, ERC20_ABI, readProv());
         const [symbol, decimals] = await Promise.all([
@@ -60,16 +62,17 @@ async function loadWhitelistedTokens() {
           erc.decimals().catch(() => 18)
         ]);
         const isTimbs = addr.toLowerCase() === ADDRESSES.TIMBSToken.toLowerCase();
-        const logoChar = isTimbs ? "T" : symbol.charAt(0);
+        return { address: addr, symbol, decimals, logoChar: isTimbs ? "T" : symbol.charAt(0), isTimbs };
+      } catch { return null; }
+    }));
 
-        const token = { address: addr, symbol, decimals, logoChar, isTimbs };
-        whitelistedTokens.push(token);
-
-        const opt = document.createElement("option");
-        opt.value = addr;
-        opt.textContent = symbol + (isTimbs ? " ★" : "");
-        select.appendChild(opt);
-      } catch {}
+    for (const token of tokens) {
+      if (!token) continue;
+      whitelistedTokens.push(token);
+      const opt = document.createElement("option");
+      opt.value = token.address;
+      opt.textContent = token.symbol + (token.isTimbs ? " ★" : "");
+      select.appendChild(opt);
     }
   } catch (e) {
     console.warn("loadWhitelistedTokens:", e.message);
@@ -477,8 +480,8 @@ document.getElementById("lock-amount")?.addEventListener("input", updateLockButt
     });
   }
 
-  await loadWhitelistedTokens();
-  await loadRegistry();
+  // Independent reads — load the token whitelist and the public registry at once.
+  await Promise.all([loadWhitelistedTokens(), loadRegistry()]);
 
   // The token list and user data weren't ready during the reconnect above, so
   // refresh the lock button, balance, and "My Locks" now that they've loaded —

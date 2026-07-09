@@ -189,25 +189,31 @@ async function loadRoundHistory() {
 
     tbody.innerHTML = "";
     const start = Math.max(1, currentRound - 20);
+
+    // Fetch every round's result concurrently (was one blocking round-trip per
+    // round, up to 20 serial RPC calls); then render newest-first in order.
+    const rounds = [];
+    for (let r = currentRound - 1; r >= start; r--) rounds.push(r);
+    const results = await Promise.all(rounds.map(r =>
+      prize.getRoundResult(r).then(res => ({ r, res })).catch(() => null)
+    ));
+
     let count = 0;
-
-    for (let r = currentRound - 1; r >= start; r--) {
-      try {
-        const result = await prize.getRoundResult(r);
-        if (result.winningString === "0x000000000000") continue;
-
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>#${r}</td>
-          <td class="td-string">${bytes6ToStr(result.winningString)}</td>
-          <td>${fmt(result.potAmount, 18, 4)} ETH</td>
-          <td>${result.winners.length}</td>
-          <td>${fmt(result.remainder, 18, 4)} ETH</td>
-          <td>—</td>
-        `;
-        tbody.appendChild(tr);
-        count++;
-      } catch {}
+    for (const item of results) {
+      if (!item) continue;
+      const { r, res: result } = item;
+      if (result.winningString === "0x000000000000") continue;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>#${r}</td>
+        <td class="td-string">${bytes6ToStr(result.winningString)}</td>
+        <td>${fmt(result.potAmount, 18, 4)} ETH</td>
+        <td>${result.winners.length}</td>
+        <td>${fmt(result.remainder, 18, 4)} ETH</td>
+        <td>—</td>
+      `;
+      tbody.appendChild(tr);
+      count++;
     }
 
     if (count === 0) tbody.innerHTML = '<tr><td colspan="6" class="table-empty">No completed rounds yet</td></tr>';
