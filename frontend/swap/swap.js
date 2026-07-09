@@ -496,8 +496,19 @@ async function recalcQuote() {
         return;
       }
       const amountInWei = ethers.utils.parseUnits(amtIn, tokenIn.decimals);
-      const amountOutWei = await router.getAmountOut(amountInWei, reserveIn, reserveOut);
+      // getAmountOut reverts if the pool can't source the trade (amount ≥
+      // reserve). Surface that as insufficient liquidity, not a silent catch.
+      let amountOutWei;
+      try { amountOutWei = await router.getAmountOut(amountInWei, reserveIn, reserveOut); }
+      catch { inputOut.value = ""; infoBox.classList.add("hidden"); updateSwapButton("Insufficient liquidity"); return; }
       inputOut.value = trimAmount(ethers.utils.formatUnits(amountOutWei, tokenOut.decimals));
+      // A quote that rounds below display precision (extreme pool ratio) isn't
+      // a usable trade — don't leave an enabled Swap sitting on a "0" field.
+      if (!inputOut.value || parseFloat(inputOut.value) === 0) {
+        infoBox.classList.add("hidden");
+        updateSwapButton("Amount too small for this pool");
+        return;
+      }
       renderSwapInfo(amountInWei, amountOutWei, reserveIn, reserveOut);
     } else {
       const amtOut = inputOut.value;
@@ -508,8 +519,17 @@ async function recalcQuote() {
         return;
       }
       const amountOutWei = ethers.utils.parseUnits(amtOut, tokenOut.decimals);
-      const amountInWei  = await router.getAmountIn(amountOutWei, reserveIn, reserveOut);
+      // getAmountIn reverts when the requested output ≥ the pool's reserve —
+      // i.e. the pool simply doesn't hold that much of the receive token.
+      let amountInWei;
+      try { amountInWei = await router.getAmountIn(amountOutWei, reserveIn, reserveOut); }
+      catch { inputIn.value = ""; infoBox.classList.add("hidden"); updateSwapButton("Insufficient liquidity"); return; }
       inputIn.value = trimAmount(ethers.utils.formatUnits(amountInWei, tokenIn.decimals));
+      if (!inputIn.value || parseFloat(inputIn.value) === 0) {
+        infoBox.classList.add("hidden");
+        updateSwapButton("Amount too small for this pool");
+        return;
+      }
       renderSwapInfo(amountInWei, amountOutWei, reserveIn, reserveOut);
     }
 
@@ -552,7 +572,8 @@ function updateSwapButton(text) {
   const btn = document.getElementById("swap-btn");
   btn.textContent = text;
   btn.disabled = !userAddress || !tokenIn || !tokenOut ||
-                 text === "Enter an amount" || text === "No liquidity for this pair";
+                 text === "Enter an amount" || text === "No liquidity for this pair" ||
+                 text === "Insufficient liquidity" || text === "Amount too small for this pool";
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
