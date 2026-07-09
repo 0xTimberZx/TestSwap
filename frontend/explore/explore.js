@@ -125,6 +125,11 @@ function fmtNum(x, dp = 4) {
 let _pools = [];      // [{ address, t0, t1, sym0, sym1, dec0, dec1, r0, r1, tvl }]
 let _lastTrades = []; // cached rows so the search box can re-filter without refetching
 let _lastLiq = [];
+let _poolsLoaded = false;    // true once we've rendered pools at least once
+let _activityLoaded = false; // true once we've rendered activity at least once
+// token0/token1 (and their metadata) never change for a pair — read once and
+// reuse across refreshes so each poll only re-reads reserves, not identities.
+const _pairTokens = {};      // pair address -> { t0, t1, m0, m1 }
 
 async function loadPools() {
   const statusEl = document.getElementById("pools-status");
@@ -147,40 +152,66 @@ async function loadPools() {
 
     await refreshPrices();
 
-    // Load each pool's tokens + reserves + metadata concurrently.
+    // Pool count is reliable straight from the factory — set it even if some
+    // per-pair reads below fail this cycle.
+    setOverview(n, null, null);
+
+    // Load each pool's reserves concurrently. token0/token1 + metadata are
+    // immutable, so read them once per pair and cache; only reserves refresh.
     const pools = await Promise.all(addrs.filter(Boolean).map(async (addr) => {
       try {
         const pair = contractRO(addr, PAIR_ABI);
-        const [t0, t1, r] = await Promise.all([pair.token0(), pair.token1(), pair.getReserves()]);
-        const [m0, m1] = await Promise.all([tokenMeta(t0), tokenMeta(t1)]);
-        const r0 = parseFloat(ethers.utils.formatUnits(r.reserve0, m0.decimals));
-        const r1 = parseFloat(ethers.utils.formatUnits(r.reserve1, m1.decimals));
+        let pt = _pairTokens[addr];
+        if (!pt) {
+          const [t0, t1] = await Promise.all([pair.token0(), pair.token1()]);
+          const [m0, m1] = await Promise.all([tokenMeta(t0), tokenMeta(t1)]);
+          pt = _pairTokens[addr] = { t0, t1, m0, m1 };
+        }
+        const r = await pair.getReserves();
+        const r0 = parseFloat(ethers.utils.formatUnits(r.reserve0, pt.m0.decimals));
+        const r1 = parseFloat(ethers.utils.formatUnits(r.reserve1, pt.m1.decimals));
         // Value either side; a balanced pool's TVL is twice the priced side.
-        const v0 = usdOf(t0.toLowerCase(), r0);
-        const v1 = usdOf(t1.toLowerCase(), r1);
+        const v0 = usdOf(pt.t0.toLowerCase(), r0);
+        const v1 = usdOf(pt.t1.toLowerCase(), r1);
         let tvl = null;
         if (v0 !== null && v1 !== null) tvl = v0 + v1;
         else if (v0 !== null) tvl = v0 * 2;
         else if (v1 !== null) tvl = v1 * 2;
         return {
-          address: addr, t0, t1,
-          sym0: m0.symbol, sym1: m1.symbol, dec0: m0.decimals, dec1: m1.decimals,
+          address: addr, t0: pt.t0, t1: pt.t1,
+          sym0: pt.m0.symbol, sym1: pt.m1.symbol, dec0: pt.m0.decimals, dec1: pt.m1.decimals,
           r0, r1, tvl
         };
       } catch { return null; }
     }));
 
-    _pools = pools.filter(Boolean).sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
-    renderPools();
+    const fresh = pools.filter(Boolean).sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
 
+    // Non-destructive: if this cycle came back empty (transient RPC failure on
+    // every pair) but there ARE pairs and we already have data, keep showing
+    // the last good snapshot instead of blanking the table.
+    if (fresh.length === 0 && n > 0 && _pools.length > 0) {
+      if (statusEl) statusEl.textContent = `${_pools.length} pools`;
+      return;
+    }
+
+    _pools = fresh;
+    renderPools();
+    _poolsLoaded = true;
     const totalTvl = _pools.reduce((s, p) => s + (p.tvl || 0), 0);
-    setOverview(_pools.length, null, totalTvl);
+    setOverview(n, null, totalTvl);
     if (statusEl) statusEl.textContent = `${_pools.length} pool${_pools.length === 1 ? "" : "s"}`;
     DebugHub.logCheckpoint("Explore:Pools Loaded", "pass");
   } catch (e) {
-    document.getElementById("pools-tbody").innerHTML =
-      '<tr><td colspan="4" class="table-empty">Could not load pools</td></tr>';
-    if (statusEl) statusEl.textContent = "Error";
+    // Only surface an error on the very first load — never wipe a table that's
+    // already showing good data because one refresh cycle hiccupped.
+    if (!_poolsLoaded) {
+      document.getElementById("pools-tbody").innerHTML =
+        '<tr><td colspan="4" class="table-empty">Could not load pools</td></tr>';
+      if (statusEl) statusEl.textContent = "Error";
+    } else if (statusEl) {
+      statusEl.textContent = `${_pools.length} pools`;
+    }
     DebugHub.logError("loadPools", e);
   }
 }
@@ -213,11 +244,13 @@ function matchesPool(p, q) {
          p.address.toLowerCase() === q || p.t0.toLowerCase() === q || p.t1.toLowerCase() === q;
 }
 
+// Each metric updates only when its own value is provided this call — passing
+// null leaves the last shown number in place (never blanks it to "—").
 function setOverview(pools, tradesWindow, totalTvl) {
-  const set = (id, v) => { const el = document.getElementById(id); if (el && v !== null && v !== undefined) el.textContent = v; };
-  set("ov-tvl", fmtUsd(totalTvl));
-  if (pools !== null) set("ov-pools", String(pools));
-  if (tradesWindow !== null) set("ov-trades", String(tradesWindow));
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  if (totalTvl !== null && totalTvl !== undefined)     set("ov-tvl", fmtUsd(totalTvl));
+  if (pools !== null && pools !== undefined)           set("ov-pools", String(pools));
+  if (tradesWindow !== null && tradesWindow !== undefined) set("ov-trades", String(tradesWindow));
 }
 
 // ─── Activity: recent trades (Swap) and liquidity (Mint/Burn) ───────────────────
@@ -287,10 +320,15 @@ async function loadActivity() {
     renderLiquidity(_lastLiq);
     if (liqStatus) liqStatus.textContent = `${liq.length} event${liq.length === 1 ? "" : "s"}`;
 
+    _activityLoaded = true;
     DebugHub.logCheckpoint("Explore:Activity Loaded", "pass");
   } catch (e) {
-    if (swapStatus) swapStatus.textContent = "Error";
-    if (liqStatus) liqStatus.textContent = "Error";
+    // Keep the last good activity rather than blanking to "Error" on a
+    // transient RPC/rate-limit hiccup once we've loaded successfully.
+    if (!_activityLoaded) {
+      if (swapStatus) swapStatus.textContent = "Error";
+      if (liqStatus) liqStatus.textContent = "Error";
+    }
     DebugHub.logError("loadActivity", e);
   }
 }
