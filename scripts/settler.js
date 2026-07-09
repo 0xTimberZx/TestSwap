@@ -38,7 +38,8 @@ const { ethers } = require("ethers");
 const RPC_URL       = process.env.ARB_SEPOLIA_RPC;
 const PRIVATE_KEY   = process.env.SETTLER_PRIVATE_KEY;
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
-const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;
+const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;        // ops: every message, incl. failures
+const TG_CHAT_ID_PUBLIC = process.env.TELEGRAM_CHAT_ID_PUBLIC; // community group: round rollovers only
 const TIMBPRIZE_ADDR = "0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40"; // TimbPrize v3.2 (continuous meter — counters never reset)
 
 // ─── ABI (minimal) ───────────────────────────────────────────────────────────
@@ -87,26 +88,35 @@ async function alertIfDelayed(prize, round, segment) {
 
 // ─── Telegram ─────────────────────────────────────────────────────────────────
 
-async function notify(msg) {
-  if (!TG_TOKEN || !TG_CHAT_ID) {
-    console.log("[notify] No Telegram config:", msg);
-    return;
-  }
+async function sendTelegram(chatId, text) {
   try {
     const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
     const res  = await fetch(url, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: TG_CHAT_ID,
-        text:    `🔄 *TimbSwap Settler*\n${msg}`,
-        parse_mode: "Markdown"
-      })
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" })
     });
     if (!res.ok) console.error("[notify] Telegram error:", await res.text());
   } catch (e) {
     console.error("[notify] Failed to send Telegram message:", e.message);
   }
+}
+
+// Ops stream — every settle, delay alert, and failure goes here (private DM).
+async function notify(msg) {
+  if (!TG_TOKEN || !TG_CHAT_ID) {
+    console.log("[notify] No Telegram config:", msg);
+    return;
+  }
+  await sendTelegram(TG_CHAT_ID, `🔄 *TimbSwap Settler*\n${msg}`);
+}
+
+// Community stream — only clean, exciting beats (round rollovers), sent to
+// the public group AFTER the tx confirms. Optional: silently skipped when
+// TELEGRAM_CHAT_ID_PUBLIC isn't configured. Never carries ops/error detail.
+async function notifyPublic(msg) {
+  if (!TG_TOKEN || !TG_CHAT_ID_PUBLIC) return;
+  await sendTelegram(TG_CHAT_ID_PUBLIC, msg);
 }
 
 // Hard cap on settle calls per run — a ~340-min run covers up to 6 live
@@ -173,6 +183,17 @@ async function settleOnce(provider, wallet, prize, round, segment) {
 
   const receipt = await tx.wait();
   console.log(`[settler] Confirmed in block ${receipt.blockNumber}`);
+
+  // Community beat: announce the rollover in the public group only once the
+  // round is actually settled on-chain (~every 6h, not the hourly segments).
+  if (isRoundBoundary) {
+    await notifyPublic(
+      `📜 *Round #${round} has settled!*\n` +
+      `The winning string is locked and the pot has been paid out on-chain.\n\n` +
+      `🟢 Round #${round + 1n} is live — a fresh pot is building right now.\n` +
+      `Enter or nudge the scroll → timbswap.xyz/compete`
+    );
+  }
   return isRoundBoundary;
 }
 

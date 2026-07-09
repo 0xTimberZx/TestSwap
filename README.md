@@ -113,6 +113,7 @@ Segments settle automatically via GitHub Actions every 10 minutes. Health check 
 | `SETTLER_PRIVATE_KEY` | Deployer wallet private key |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `TELEGRAM_CHAT_ID` | Your Telegram chat ID |
+| `TELEGRAM_CHAT_ID_PUBLIC` | (Optional) Community group chat ID — receives only confirmed round-rollover announcements |
 
 Manual trigger: Actions → TimbSwap Settler → Run workflow → choose `settle` or `health`.
 
