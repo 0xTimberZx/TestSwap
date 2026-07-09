@@ -231,9 +231,41 @@ function timeRemaining(unlockAt) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+// Token metadata (symbol + decimals) for lock rows, resolved on-chain and
+// cached. The registry/My-Locks must NOT depend on the whitelist having loaded
+// (init runs them in parallel), and a locked token might not even be in the
+// current whitelist (e.g. de-whitelisted after locking) — so resolve directly.
+const _lockTokenMeta = {}; // lowercased address -> { symbol, decimals }
+
+async function ensureTokenMeta(addr) {
+  const lc = addr.toLowerCase();
+  if (_lockTokenMeta[lc]) return _lockTokenMeta[lc];
+  const w = whitelistedTokens.find(t => t.address.toLowerCase() === lc);
+  if (w) return (_lockTokenMeta[lc] = { symbol: w.symbol, decimals: w.decimals });
+  try {
+    const erc = new ethers.Contract(addr, ERC20_ABI, readProv());
+    const [symbol, decimals] = await Promise.all([
+      erc.symbol().catch(() => addr.slice(0, 6) + "…"),
+      erc.decimals().catch(() => 18)
+    ]);
+    return (_lockTokenMeta[lc] = { symbol, decimals: Number(decimals) });
+  } catch {
+    return (_lockTokenMeta[lc] = { symbol: addr.slice(0, 6) + "…", decimals: 18 });
+  }
+}
+
 function tokenSymbolForAddr(addr) {
+  const m = _lockTokenMeta[addr.toLowerCase()];
+  if (m) return m.symbol;
   const t = whitelistedTokens.find(t => t.address.toLowerCase() === addr.toLowerCase());
-  return t ? t.symbol : addr.slice(0, 8) + "…";
+  return t ? t.symbol : addr.slice(0, 6) + "…";
+}
+
+function tokenDecimalsForAddr(addr) {
+  const m = _lockTokenMeta[addr.toLowerCase()];
+  if (m) return m.decimals;
+  const t = whitelistedTokens.find(t => t.address.toLowerCase() === addr.toLowerCase());
+  return t ? t.decimals : 18;
 }
 
 // Deterministic short public id for a lock — the raw sequential lockId means
@@ -278,7 +310,7 @@ function renderLockRow(lock, showLocker = false) {
       <div class="lock-row-icon">${logo}</div>
       <div class="lock-row-main">
         <div class="lock-row-amount">
-          ${fmt(lock.amount, 18, 4)} ${sym}
+          ${fmt(lock.amount, tokenDecimalsForAddr(lock.token), 4)} ${sym}
           ${lock.isTimbs ? '<span class="timbs-badge">TIMBS</span>' : ""}
         </div>
         <div class="lock-row-meta">
@@ -365,14 +397,13 @@ async function loadMyLocks() {
 
     if (ids.length === 0) { list.innerHTML = '<div class="empty-state">No locks yet</div>'; return; }
 
-    list.innerHTML = "";
     const recent = [...ids].reverse().slice(0, 8);
-    for (const id of recent) {
-      try {
-        const lock = await vault.getLock(id);
-        list.innerHTML += renderLockRow(lock, false);
-      } catch {}
-    }
+    const locks = (await Promise.all(recent.map(id => vault.getLock(id).catch(() => null))))
+      .filter(Boolean);
+    await Promise.all(locks.map(l => ensureTokenMeta(l.token)));
+    list.innerHTML = locks.length
+      ? locks.map(l => renderLockRow(l, false)).join("")
+      : '<div class="empty-state">No locks yet</div>';
   } catch (e) {
     console.warn("loadMyLocks:", e.message);
     list.innerHTML = '<div class="empty-state">Could not load locks</div>';
@@ -398,16 +429,19 @@ async function loadRegistry() {
 
     if (total.eq(0)) { list.innerHTML = '<div class="empty-state">No locks yet</div>'; return; }
 
-    list.innerHTML = "";
-    // Show last 10 locks
+    // Fetch the last 10 locks concurrently, resolve their token metadata, then
+    // render — so symbols/decimals are ready and rows never fall back to a raw
+    // address (regardless of whether the whitelist has finished loading).
     const start = Math.max(1, total.toNumber() - 9);
-    for (let id = total.toNumber(); id >= start; id--) {
-      try {
-        const lock = await vault.getLock(id);
-        if (lock.locker === ethers.constants.AddressZero) continue;
-        list.innerHTML += renderLockRow(lock, true);
-      } catch {}
-    }
+    const ids = [];
+    for (let id = total.toNumber(); id >= start; id--) ids.push(id);
+    const locks = (await Promise.all(ids.map(id => vault.getLock(id).catch(() => null))))
+      .filter(l => l && l.locker !== ethers.constants.AddressZero);
+    await Promise.all(locks.map(l => ensureTokenMeta(l.token)));
+
+    list.innerHTML = locks.length
+      ? locks.map(l => renderLockRow(l, true)).join("")
+      : '<div class="empty-state">No locks yet</div>';
   } catch (e) {
     console.warn("loadRegistry:", e.message);
     list.innerHTML = '<div class="empty-state">Could not load registry</div>';

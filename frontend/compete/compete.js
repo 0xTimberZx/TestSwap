@@ -760,7 +760,16 @@ async function loadMyEntries() {
   }
   try {
     const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, readProv());
-    const res = await registry.getTicketsOf(userAddress);
+    // Anchor for the relevance filter. currentRoundNum is set by pollRoundState,
+    // but init/connect run these in parallel, so it can still be null here —
+    // fall back to the registry's own round so old closed tickets are hidden
+    // instead of the filter short-circuiting and showing everything.
+    let relRound = currentRoundNum;
+    const [res, roundFallback] = await Promise.all([
+      registry.getTicketsOf(userAddress),
+      relRound === null ? registry.currentRound().catch(() => null) : Promise.resolve(null)
+    ]);
+    if (relRound === null && roundFallback !== null) relRound = roundFallback.toNumber();
     const ticketList = res.list ?? res[0];
     const displays   = res.displayStatuses ?? res[1];
     DebugHub.logCheckpoint("Compete:Tickets Loaded", "pass");
@@ -781,15 +790,15 @@ async function loadMyEntries() {
     // One eligible live ticket per wallet — determines Submit vs Update.
     hasPlayEntry = ticketList.some(t =>
       t.status === 0 ||
-      (t.status === 1 && currentRoundNum !== null && currentRoundNum <= t.lastEligibleRound.toNumber())
+      (t.status === 1 && relRound !== null && relRound <= t.lastEligibleRound.toNumber())
     );
 
     // Hide history clutter: once a ticket is more than the refund window
     // (2 rounds) past its last eligible round it can't be played or refunded,
     // so drop those heads. Live/pending and still-refundable tickets stay.
     const withinRelevance = (t) => {
-      if (currentRoundNum === null) return true;
-      return currentRoundNum <= t.lastEligibleRound.toNumber() + 2;
+      if (relRound === null) return true;
+      return relRound <= t.lastEligibleRound.toNumber() + 2;
     };
 
     const heads = ticketList
