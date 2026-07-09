@@ -84,6 +84,16 @@ a { color: inherit; text-decoration: none; }
 }
 .nav-logo-mark { color: var(--green); font-size: 22px; }
 
+/* Brand wordmark: the S in TimbSwap is the angular blue monogram */
+.nav-logo-text { display: inline-flex; align-items: baseline; }
+.nav-logo-s {
+  height: 0.68em;
+  width: 0.62em;
+  margin: 0 1px 0 2px;
+  color: var(--blue);
+  filter: drop-shadow(0 0 4px rgba(40, 160, 240, 0.5));
+}
+
 .nav-links { display: flex; align-items: center; gap: 4px; }
 
 .nav-group { position: relative; }
