@@ -1106,59 +1106,79 @@ async function handleClaimWinnings(round) {
 
 // ─── Past Rounds ──────────────────────────────────────────────────────────────
 
+// Recent Rounds — the last 8 settled rounds, newest first. No pagination.
+const PAST_ROUNDS_MAX = 8;
 async function loadPastRounds() {
   const list = document.getElementById("past-rounds-list");
-  if (!currentRoundNum || currentRoundNum <= 1) {
-    list.innerHTML = '<div class="empty-state">No completed rounds yet</div>';
-    return;
-  }
+  const hasRows = () => !!list.querySelector(".past-round-row");
   try {
     const prize = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_ABI, readProv());
-    list.innerHTML = "";
-    const start = Math.max(1, currentRoundNum - 10);
-    let count   = 0;
 
-    for (let r = currentRoundNum - 1; r >= start; r--) {
-      try {
-        const result = await prize.getRoundResult(r);
-        const ws     = bytes6ToStr(result.winningString);
-        if (!ws || ws === "——") continue;
+    // Anchor round: currentRoundNum is set by pollRoundState, but init runs
+    // these in parallel so it can still be null here — read the on-chain round
+    // as a fallback so the section doesn't wrongly show "No completed rounds".
+    let round = currentRoundNum;
+    if (!round) { try { round = (await prize.getRoundState()).round.toNumber(); } catch {} }
+    if (!round || round <= 1) {
+      if (!hasRows()) list.innerHTML = '<div class="empty-state">No completed rounds yet</div>';
+      return;
+    }
 
-        let claimHtml = "";
-        if (userAddress && result.winners.length > 0) {
-          const isWinner = result.winners.map(w => w.toLowerCase()).includes(userAddress.toLowerCase());
-          if (isWinner) {
-            const claimed  = await prize.hasClaimed(r, userAddress).catch(() => true);
-            const inWindow = currentRoundNum <= r + 3;
-            if (!claimed && inWindow) {
-              claimHtml = `<button id="claim-btn-${r}" class="btn-claim-round" onclick="handleClaimWinnings(${r})">Claim ${fmt(result.perWinner)} ETH</button>`;
-            } else if (claimed) {
-              claimHtml = `<span class="claimed-badge">Claimed ✓</span>`;
-            } else {
-              claimHtml = `<span class="expired-badge">Window closed</span>`;
-            }
-          }
+    // Fetch up to the last 8 rounds concurrently (was serial per-round).
+    const ids = [];
+    for (let r = round - 1; r >= Math.max(1, round - PAST_ROUNDS_MAX); r--) ids.push(r);
+    const results = await Promise.all(ids.map(r =>
+      prize.getRoundResult(r).then(res => ({ r, res })).catch(() => null)
+    ));
+    const settled = results.filter(x => {
+      if (!x) return false;
+      const ws = bytes6ToStr(x.res.winningString);
+      return ws && ws !== "——";
+    });
+
+    // Claim state for rounds THIS wallet won (parallel).
+    const claimed = {};
+    if (userAddress) {
+      await Promise.all(settled.map(async ({ r, res }) => {
+        if (res.winners.map(w => w.toLowerCase()).includes(userAddress.toLowerCase())) {
+          claimed[r] = await prize.hasClaimed(r, userAddress).catch(() => true);
         }
+      }));
+    }
 
-        const row = document.createElement("div");
-        row.className = "past-round-row" + (claimHtml.includes("btn-claim") ? " past-round-winner" : "");
-        row.innerHTML = `
+    if (!settled.length) {
+      if (!hasRows()) list.innerHTML = '<div class="empty-state">No completed rounds yet</div>';
+      return;
+    }
+
+    list.innerHTML = settled.map(({ r, res }) => {
+      const ws = bytes6ToStr(res.winningString);
+      let claimHtml = "";
+      if (userAddress && res.winners.length > 0 &&
+          res.winners.map(w => w.toLowerCase()).includes(userAddress.toLowerCase())) {
+        const inWindow = round <= r + 3;
+        if (!claimed[r] && inWindow) {
+          claimHtml = `<button id="claim-btn-${r}" class="btn-claim-round" onclick="handleClaimWinnings(${r})">Claim ${fmt(res.perWinner)} ETH</button>`;
+        } else if (claimed[r]) {
+          claimHtml = `<span class="claimed-badge">Claimed ✓</span>`;
+        } else {
+          claimHtml = `<span class="expired-badge">Window closed</span>`;
+        }
+      }
+      const winnerCls = claimHtml.includes("btn-claim") ? " past-round-winner" : "";
+      return `<div class="past-round-row${winnerCls}">
           <div class="past-round-left">
             <span class="past-round-num">Round ${r}</span>
             <span class="past-round-string">${ws}</span>
           </div>
           <div class="past-round-right">
-            <span class="past-round-meta">${result.winners.length} winner${result.winners.length !== 1 ? "s" : ""} · ${fmt(result.potAmount)} ETH</span>
+            <span class="past-round-meta">${res.winners.length} winner${res.winners.length !== 1 ? "s" : ""} · ${fmt(res.potAmount)} ETH</span>
             ${claimHtml}
-          </div>`;
-        list.appendChild(row);
-        count++;
-      } catch {}
-    }
-
-    if (!count) list.innerHTML = '<div class="empty-state">No completed rounds yet</div>';
+          </div>
+        </div>`;
+    }).join("");
   } catch (e) {
-    DebugHub.logError("loadPastRounds", e);
+    DebugHub.logError("loadPastRounds", e); // keep whatever's shown on a transient failure
   }
 }
 
