@@ -398,15 +398,19 @@ async function buildTokenDropdown() {
 
     eligibleTokens = [{ address: "native", symbol: "ETH", isNative: true }];
 
-    for (const addr of addrs) {
-      if (addr.toLowerCase() === ADDRESSES.WETH.toLowerCase()) continue;
-      if (addr.toLowerCase() === ADDRESSES.DAPP.toLowerCase()) continue;
+    // Read every eligible token's symbol in parallel instead of blocking on
+    // each round-trip; preserve registry order and drop any that fail.
+    const wanted = addrs.filter(a => {
+      const lc = a.toLowerCase();
+      return lc !== ADDRESSES.WETH.toLowerCase() && lc !== ADDRESSES.DAPP.toLowerCase();
+    });
+    const resolved = await Promise.all(wanted.map(async addr => {
       try {
-        const erc    = new ethers.Contract(addr, ERC20_SYMBOL_ABI, readProv());
-        const symbol = await erc.symbol();
-        eligibleTokens.push({ address: addr, symbol, isNative: false });
-      } catch {}
-    }
+        const symbol = await new ethers.Contract(addr, ERC20_SYMBOL_ABI, readProv()).symbol();
+        return { address: addr, symbol, isNative: false };
+      } catch { return null; }
+    }));
+    for (const t of resolved) if (t) eligibleTokens.push(t);
     renderTokenDropdown();
   } catch {
     eligibleTokens = [
@@ -1217,11 +1221,16 @@ function handleDisconnect() {
     startGateMask();
   }
 
-  await loadEntryCosts();
-  await buildTokenDropdown();
-  await pollRoundState();
-  await loadMyEntries();
-  await loadPastRounds();
+  // These five loaders hit the RPC independently — fire them in parallel so
+  // the page paints on the slowest single round-trip instead of the sum of
+  // all five. (Order between them doesn't matter; each renders on resolve.)
+  await Promise.all([
+    loadEntryCosts(),
+    buildTokenDropdown(),
+    pollRoundState(),
+    loadMyEntries(),
+    loadPastRounds(),
+  ]);
   refreshEntryBalance(); // show the entry-token balance on load, not just after a tap
 
   // Timer tick every second, full state every 4s
