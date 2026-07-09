@@ -35,6 +35,18 @@ function readProv() {
   return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
 }
 
+// APR is emission-rate ÷ total-staked, so with a tiny testnet stake it prints
+// absurd figures (52,911% / 1,310,329%). Cap the DISPLAY so it reads sanely —
+// the on-chain number is unchanged; this is presentation only.
+const APR_DISPLAY_CAP_PCT = 10000; // show ">10,000%" above this
+function formatApr(aprBps) {
+  const pct = aprBps.toNumber() / 100;
+  if (pct >= APR_DISPLAY_CAP_PCT) {
+    return ">" + APR_DISPLAY_CAP_PCT.toLocaleString("en-US") + "% APR";
+  }
+  return pct.toLocaleString("en-US", { maximumFractionDigits: 1 }) + "% APR";
+}
+
 // pool = "staking" | "farm"
 function poolConfig(pool) {
   return pool === "staking"
@@ -55,7 +67,7 @@ async function loadPool(pool) {
     ]);
 
     document.getElementById(pool + "-total").textContent = fmt(total, 18, 2);
-    document.getElementById(pool + "-apr").textContent = (apr.toNumber() / 100).toFixed(1) + "% APR";
+    document.getElementById(pool + "-apr").textContent = formatApr(apr);
 
     if (userAddress) {
       const wallet = new ethers.Contract(cfg.token, ERC20_ABI, readProv());
