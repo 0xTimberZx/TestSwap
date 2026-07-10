@@ -24,8 +24,10 @@ const ERC20_META_ABI = [
   "function decimals() external view returns (uint8)"
 ];
 
-const BLOCK_RANGE = 50000; // ~7 days on Arb Sepolia — matches the analytics window
-const BLOCKS_24H  = Math.round(BLOCK_RANGE / 7); // ~1 day slice of the same window
+// Activity feed lookback. Converted to a block count at runtime via
+// blocksForDays (config.js) — Arb Sepolia block numbers advance ~270k/day, so
+// hard-coded block windows drift badly. 24h volume is a slice of this window.
+const WINDOW_DAYS = 7;
 const ZERO = "0x0000000000000000000000000000000000000000";
 
 // Read-only queries always go to the canonical Arbitrum Sepolia RPC — never a
@@ -271,36 +273,43 @@ async function loadActivity() {
   try {
     const prov = readProv();
     const currentBlock = await prov.getBlockNumber();
-    const fromBlock = Math.max(0, currentBlock - BLOCK_RANGE);
+    const blocks24h    = await blocksForDays(prov, 1);
+    const windowBlocks = blocks24h * WINDOW_DAYS;
 
     // Make sure we know the pools (and their token metadata) first.
     if (_pools.length === 0) await loadPools();
 
-    // Scan Swap/Mint/Burn on every pool concurrently.
+    // Scan Swap/Mint/Burn on every pool concurrently. queryFilterWindow steps
+    // the range down if the RPC balks at a full multi-day getLogs.
     const perPool = await Promise.all(_pools.map(async (p) => {
       const pair = contractRO(p.address, PAIR_ABI);
       const [swaps, mints, burns] = await Promise.all([
-        pair.queryFilter(pair.filters.Swap(), fromBlock, currentBlock).catch(() => []),
-        pair.queryFilter(pair.filters.Mint(), fromBlock, currentBlock).catch(() => []),
-        pair.queryFilter(pair.filters.Burn(), fromBlock, currentBlock).catch(() => [])
+        queryFilterWindow(pair, pair.filters.Swap(), currentBlock, windowBlocks).catch(() => []),
+        queryFilterWindow(pair, pair.filters.Mint(), currentBlock, windowBlocks).catch(() => []),
+        queryFilterWindow(pair, pair.filters.Burn(), currentBlock, windowBlocks).catch(() => [])
       ]);
       return { p, swaps, mints, burns };
     }));
 
     // ── Recent trades ──
-    const vol24hFrom = currentBlock - BLOCKS_24H;
+    const vol24hFrom = currentBlock - blocks24h;
+    // Router-initiated swaps emit sender = router; the human is the `to`
+    // recipient — unless `to` is another pool (the intermediate leg of a
+    // multi-hop swap pays straight into the next pair).
+    const poolAddrs = new Set(_pools.map(x => x.address.toLowerCase()));
     const trades = [];
     for (const { p, swaps } of perPool) {
       let vol = 0; // USD swap volume for this pool over the last ~24h
       for (const ev of swaps) {
-        const { amount0In, amount1In, amount0Out, amount1Out, sender } = ev.args;
+        const { amount0In, amount1In, amount0Out, amount1Out, sender, to } = ev.args;
         const zeroToOne = amount0In.gt(0); // token0 in → token1 out
         const inSym  = zeroToOne ? p.sym0 : p.sym1;
         const outSym = zeroToOne ? p.sym1 : p.sym0;
         const inAmt  = zeroToOne ? ethers.utils.formatUnits(amount0In,  p.dec0) : ethers.utils.formatUnits(amount1In,  p.dec1);
         const outAmt = zeroToOne ? ethers.utils.formatUnits(amount1Out, p.dec1) : ethers.utils.formatUnits(amount0Out, p.dec0);
         trades.push({
-          block: ev.blockNumber, pair: `${p.sym0}/${p.sym1}`, sender,
+          block: ev.blockNumber, pair: `${p.sym0}/${p.sym1}`,
+          trader: poolAddrs.has(to.toLowerCase()) ? sender : to,
           detail: `${fmtNum(parseFloat(inAmt), 4)} ${inSym} → ${fmtNum(parseFloat(outAmt), 4)} ${outSym}`
         });
         // Value each recent swap by whichever side we can price (in first, then
@@ -362,7 +371,7 @@ function renderTrades(rows) {
   const q = (document.getElementById("pool-search")?.value || "").trim().toLowerCase();
   const filtered = rows.filter(r => !q || r.pair.toLowerCase().includes(q));
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No trades in the last 50,000 blocks</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No trades in the last 7 days</td></tr>';
     return;
   }
   tbody.innerHTML = "";
@@ -372,7 +381,7 @@ function renderTrades(rows) {
       <td>${r.block}</td>
       <td class="td-pair">${r.pair}</td>
       <td>${r.detail}</td>
-      <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.sender}','_blank')">${fmtAddr(r.sender)}</td>
+      <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.trader}','_blank')">${fmtAddr(r.trader)}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -383,7 +392,7 @@ function renderLiquidity(rows) {
   const q = (document.getElementById("pool-search")?.value || "").trim().toLowerCase();
   const filtered = rows.filter(r => !q || r.pair.toLowerCase().includes(q));
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No liquidity changes in the last 50,000 blocks</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No liquidity changes in the last 7 days</td></tr>';
     return;
   }
   tbody.innerHTML = "";

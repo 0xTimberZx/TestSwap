@@ -37,7 +37,15 @@ const YV_ABI = [
   "event WeightRemoved(uint256 indexed ticketId, uint256 weight, uint256 totalWeight)"
 ];
 
-const BLOCK_RANGE = 50000; // ~7 days on Arb Sepolia
+// Event-scan lookback. Converted to blocks at runtime via blocksForDays
+// (config.js) — Arb Sepolia block numbers advance ~270k/day, so a hard-coded
+// block count drifts badly as a time window.
+const WINDOW_DAYS = 7;
+async function scanRange(prov) {
+  const currentBlock = await prov.getBlockNumber();
+  const windowBlocks = await blocksForDays(prov, WINDOW_DAYS);
+  return { currentBlock, windowBlocks };
+}
 
 // Read-only queries always go to the canonical Arbitrum Sepolia RPC —
 // never the wallet's in-app provider. Mobile wallets sometimes serve
@@ -282,15 +290,12 @@ async function loadRecentSwaps() {
     const token0Addr = await pair.token0();
     const timbsIs0   = token0Addr.toLowerCase() === ADDRESSES.TIMBSToken.toLowerCase();
 
-    const currentBlock = await prov.getBlockNumber();
-    const fromBlock    = Math.max(0, currentBlock - BLOCK_RANGE);
-
-    const filter = pair.filters.Swap();
-    const events = await pair.queryFilter(filter, fromBlock, currentBlock);
+    const { currentBlock, windowBlocks } = await scanRange(prov);
+    const events = await queryFilterWindow(pair, pair.filters.Swap(), currentBlock, windowBlocks);
     const recent  = events.slice(-50).reverse();
 
     if (recent.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No swaps in the last 50,000 blocks</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No swaps in the last 7 days</td></tr>';
       statusEl.textContent = "0 swaps";
       return;
     }
@@ -338,11 +343,8 @@ async function loadClaims() {
 
   try {
     const prize        = new ethers.Contract(ADDRESSES.TimbPrize, PRIZE_ABI, prov);
-    const currentBlock = await prov.getBlockNumber();
-    const fromBlock    = Math.max(0, currentBlock - BLOCK_RANGE);
-
-    const filter = prize.filters.WinningsClaimed();
-    const events  = await prize.queryFilter(filter, fromBlock, currentBlock);
+    const { currentBlock, windowBlocks } = await scanRange(prov);
+    const events = await queryFilterWindow(prize, prize.filters.WinningsClaimed(), currentBlock, windowBlocks);
     const recent  = events.slice(-30).reverse();
 
     if (recent.length === 0) {
@@ -398,11 +400,10 @@ async function loadVault() {
   const tbody    = document.getElementById("vault-tbody");
   const statusEl = document.getElementById("vault-status");
   try {
-    const currentBlock = await prov.getBlockNumber();
-    const fromBlock    = Math.max(0, currentBlock - BLOCK_RANGE);
+    const { currentBlock, windowBlocks } = await scanRange(prov);
     const [funded, harvested] = await Promise.all([
-      vault.queryFilter(vault.filters.Funded(),    fromBlock, currentBlock),
-      vault.queryFilter(vault.filters.Harvested(), fromBlock, currentBlock)
+      queryFilterWindow(vault, vault.filters.Funded(),    currentBlock, windowBlocks),
+      queryFilterWindow(vault, vault.filters.Harvested(), currentBlock, windowBlocks)
     ]);
     const rows = [
       ...funded.map(ev => ({
@@ -416,7 +417,7 @@ async function loadVault() {
     ].sort((a, b) => b.block - a.block).slice(0, 30);
 
     if (rows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No vault activity in the last 50,000 blocks</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No vault activity in the last 7 days</td></tr>';
       statusEl.textContent = "0 events";
     } else {
       tbody.innerHTML = "";
@@ -451,15 +452,14 @@ async function loadVault() {
   detail?.classList.remove("hidden");
 
   try {
-    const currentBlock = await prov.getBlockNumber();
-    const fromBlock    = Math.max(0, currentBlock - BLOCK_RANGE);
+    const { currentBlock, windowBlocks } = await scanRange(prov);
     const [weight, rate, reserve, lastTs, regs, rems] = await Promise.all([
       vault.totalWeight(),
       vault.ratePerSecond1e18(),
       vault.reserve(),
       vault.lastAccrual(),
-      vault.queryFilter(vault.filters.WeightRegistered(), fromBlock, currentBlock),
-      vault.queryFilter(vault.filters.WeightRemoved(),    fromBlock, currentBlock)
+      queryFilterWindow(vault, vault.filters.WeightRegistered(), currentBlock, windowBlocks),
+      queryFilterWindow(vault, vault.filters.WeightRemoved(),    currentBlock, windowBlocks)
     ]);
 
     // Daily yield at the current weight: totalWeight × rate/sec × 86400
@@ -480,7 +480,7 @@ async function loadVault() {
     ].sort((a, b) => b.block - a.block).slice(0, 30);
 
     if (wRows.length === 0) {
-      wTbody.innerHTML = '<tr><td colspan="5" class="table-empty">No ticket weight changes in the last 50,000 blocks</td></tr>';
+      wTbody.innerHTML = '<tr><td colspan="5" class="table-empty">No ticket weight changes in the last 7 days</td></tr>';
       set("vault-detail-status", "0 changes");
     } else {
       wTbody.innerHTML = "";

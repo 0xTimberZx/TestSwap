@@ -259,6 +259,45 @@ async function confirmTx(tx, { tries = 90, intervalMs = 2000 } = {}) {
   throw new Error("confirmation timeout — check the explorer");
 }
 
+// ─── Event-Scan Block Windows ────────────────────────────────────────────────
+
+// Arbitrum Sepolia mints blocks on demand — lately ~3/second (≈270k/day), so a
+// fixed block count is meaningless as a time window (50k blocks is ~4½ hours,
+// not days). Calibrate blocks-per-second from two real block timestamps once
+// per page load, then convert time windows into block counts from that.
+let _blocksPerSec = null;
+async function blocksPerSecond(prov) {
+  if (_blocksPerSec) return _blocksPerSec;
+  try {
+    const cur  = await prov.getBlockNumber();
+    const span = Math.min(Math.max(cur - 1, 0), 200000);
+    if (span > 0) {
+      const [a, b] = await Promise.all([prov.getBlock(cur), prov.getBlock(cur - span)]);
+      const dt = a.timestamp - b.timestamp;
+      if (dt > 0) _blocksPerSec = span / dt;
+    }
+  } catch {}
+  return _blocksPerSec || 3; // sane Arb Sepolia default if the probe fails
+}
+
+async function blocksForDays(prov, days) {
+  return Math.round((await blocksPerSecond(prov)) * 86400 * days);
+}
+
+// eth_getLogs over a multi-day window can exceed a public RPC's range/result
+// limits. Try the wanted window first, then shrink (¼, then 1/20) before
+// giving up, so a strict endpoint still yields the most recent slice of
+// activity instead of nothing.
+async function queryFilterWindow(contract, filter, currentBlock, windowBlocks) {
+  let lastErr = null;
+  for (const f of [1, 0.25, 0.05]) {
+    const from = Math.max(0, currentBlock - Math.round(windowBlocks * f));
+    try { return await contract.queryFilter(filter, from, currentBlock); }
+    catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
 // ─── Add Token to Wallet (EIP-747 wallet_watchAsset) ─────────────────────────
 
 // Prompt the connected wallet to track an ERC-20 (MetaMask/Brave "Add token").
