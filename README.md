@@ -24,7 +24,7 @@ A full-stack DeFi protocol on Arbitrum Sepolia — AMM DEX, prize game, LP farmi
 | TimbStaking | `0xe776c7b700B190ED8248741F9b518B08d8733C8F` |
 | TimbFarm | `0xE319E2206F71A5cD8dd2c411C6F29712935f9011` |
 | TimbLockVault | `0x0157086E7670D1eFb15DC6b5158eE78279927a41` |
-| TimbTreasury | `0x566395B9FAd004520e39FCacbA7E5e805ae97889` |
+| TimbTreasury v3 | `0x05D47F639F8E76BD12Cfc9647F6CcaCe21C10A33` |
 | TimbGovernance | `0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061` |
 | TIMBS/ETH Pair | `0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95` |
 | WETH (Arb Sepolia) | `0x980B62Da83eFf3D4576C647993b0c1D7faf17c73` |
@@ -114,8 +114,12 @@ Segments settle automatically via GitHub Actions every 10 minutes. Health check 
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `TELEGRAM_CHAT_ID` | Your Telegram chat ID |
 | `TELEGRAM_CHAT_ID_PUBLIC` | (Optional) Community group chat ID — receives only confirmed round-rollover announcements |
+| `X_API_KEY` / `X_API_SECRET` | (Optional) X app consumer keys — enables auto-posting settled rounds to @timbswap |
+| `X_ACCESS_TOKEN` / `X_ACCESS_TOKEN_SECRET` | (Optional) X account tokens (must be Read and Write) |
 
 Manual trigger: Actions → TimbSwap Settler → Run workflow → choose `settle` or `health`.
+
+X posting mode: repo **Variables** → `X_POST_MODE` = `all` (default), `winners` (only rounds that paid out), or `off`.
 
 ---
 

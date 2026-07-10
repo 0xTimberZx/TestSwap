@@ -30,7 +30,7 @@ const ADDRESSES = {
   TimbFarm:             "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
   TimbLockVault:        "0x0157086E7670D1eFb15DC6b5158eE78279927a41",
   TimbYieldVault:       "0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F",
-  TimbTreasury:         "0x566395B9FAd004520e39FCacbA7E5e805ae97889", // v2 — WETH-wrapped buyback
+  TimbTreasury:         "0x05D47F639F8E76BD12Cfc9647F6CcaCe21C10A33", // v3 — WETH-wrapped buyback + ERC20 fee exits
   TimbGovernance:       "0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061",
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",

@@ -40,7 +40,7 @@ jobs:
           node-version: "22"
 
       - name: Install dependencies
-        run: npm install ethers
+        run: npm install ethers @napi-rs/canvas
         working-directory: scripts
 
       - name: Run settler
@@ -51,6 +51,11 @@ jobs:
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_CHAT_ID_PUBLIC: ${{ secrets.TELEGRAM_CHAT_ID_PUBLIC }}
+          X_API_KEY:            ${{ secrets.X_API_KEY }}
+          X_API_SECRET:         ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN:       ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          X_POST_MODE:          ${{ vars.X_POST_MODE }}
         run: |
           if [ "${{ github.event.inputs.mode }}" = "health" ] || \
              [ "${{ github.event.schedule }}" = "0 12 * * *" ]; then

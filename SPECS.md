@@ -28,7 +28,7 @@
 | TimbStaking | 0xe776c7b700B190ED8248741F9b518B08d8733C8F | Sourcify ✅ |
 | TimbFarm | 0xE319E2206F71A5cD8dd2c411C6F29712935f9011 | Sourcify ✅ |
 | TimbLockVault | 0x0157086E7670D1eFb15DC6b5158eE78279927a41 | Sourcify ✅ |
-| TimbTreasury v2 | 0x566395B9FAd004520e39FCacbA7E5e805ae97889 | Sourcify ✅ |
+| TimbTreasury v3 | 0x05D47F639F8E76BD12Cfc9647F6CcaCe21C10A33 | Sourcify ✅ |
 | TimbGovernance | 0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061 | Sourcify ✅ |
 | TIMBS/ETH Pair | 0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95 | via Factory ✅ |
 | WETH (Arb Sepolia) | 0x980B62Da83eFf3D4576C647993b0c1D7faf17c73 | — |
@@ -55,6 +55,7 @@
 | 0x06aebE938113524D9E29C51BacE7d7A155051a60 | Old factory — no bytecode redeployed |
 | 0xefFea3C2D1aA32eE9D93Cc0E888647E6A168293f | Phantom pair — 500k TIMBS permanently locked (treated as burned) |
 | 0x486Fa4D8351EF81136E83340eA1e3aa2272c9955 | Treasury v1 — retired; ~6,532 TIMBS fee revenue permanently stranded (no working ERC20 exit in v1; treated as burned) |
+| 0x566395B9FAd004520e39FCacbA7E5e805ae97889 | Treasury v2 — retired same-day (held nothing); superseded by v3's ERC20 fee exits |
 
 ---
 
