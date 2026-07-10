@@ -47,6 +47,14 @@ async function scanRange(prov) {
   return { currentBlock, windowBlocks };
 }
 
+// Every activity table shows a fixed number of newest rows — no scrolling
+// walls. The status chip stays accurate: "6 of 19 events" when truncated,
+// plain "19 events" when everything fits.
+const TABLE_CAPS = { swaps: 20, vault: 6, weights: 12, claims: 12 };
+function shownOf(shown, total, noun) {
+  return shown < total ? `${shown} of ${total} ${noun}` : `${total} ${noun}`;
+}
+
 // Read-only queries always go to the canonical Arbitrum Sepolia RPC —
 // never the wallet's in-app provider. Mobile wallets sometimes serve
 // eth_call/eth_getBalance from a different network than they display,
@@ -292,7 +300,7 @@ async function loadRecentSwaps() {
 
     const { currentBlock, windowBlocks } = await scanRange(prov);
     const events = await queryFilterWindow(pair, pair.filters.Swap(), currentBlock, windowBlocks);
-    const recent  = events.slice(-50).reverse();
+    const recent  = events.slice(-TABLE_CAPS.swaps).reverse();
 
     if (recent.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No swaps in the last 7 days</td></tr>';
@@ -325,7 +333,7 @@ async function loadRecentSwaps() {
       tbody.appendChild(tr);
     }
 
-    statusEl.textContent = `${recent.length} swaps`;
+    statusEl.textContent = shownOf(recent.length, events.length, "swaps");
     DebugHub.logCheckpoint("Analytics:Swaps Loaded", "pass");
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Could not load swap history</td></tr>';
@@ -345,7 +353,7 @@ async function loadClaims() {
     const prize        = new ethers.Contract(ADDRESSES.TimbPrize, PRIZE_ABI, prov);
     const { currentBlock, windowBlocks } = await scanRange(prov);
     const events = await queryFilterWindow(prize, prize.filters.WinningsClaimed(), currentBlock, windowBlocks);
-    const recent  = events.slice(-30).reverse();
+    const recent  = events.slice(-TABLE_CAPS.claims).reverse();
 
     if (recent.length === 0) {
       tbody.innerHTML = '<tr><td colspan="3" class="table-empty">No claims yet</td></tr>';
@@ -365,7 +373,7 @@ async function loadClaims() {
       tbody.appendChild(tr);
     }
 
-    statusEl.textContent = `${recent.length} claims`;
+    statusEl.textContent = shownOf(recent.length, events.length, "claims");
     DebugHub.logCheckpoint("Analytics:Claims Loaded", "pass");
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="3" class="table-empty">Could not load claims</td></tr>';
@@ -405,7 +413,7 @@ async function loadVault() {
       queryFilterWindow(vault, vault.filters.Funded(),    currentBlock, windowBlocks),
       queryFilterWindow(vault, vault.filters.Harvested(), currentBlock, windowBlocks)
     ]);
-    const rows = [
+    const all = [
       ...funded.map(ev => ({
         block: ev.blockNumber, type: "Funded", cls: "td-in",
         amount: ev.args.amount, who: ev.args.from
@@ -414,7 +422,8 @@ async function loadVault() {
         block: ev.blockNumber, type: "Harvested → Pot", cls: "td-out",
         amount: ev.args.amount, who: ev.args.to
       }))
-    ].sort((a, b) => b.block - a.block).slice(0, 30);
+    ].sort((a, b) => b.block - a.block);
+    const rows = all.slice(0, TABLE_CAPS.vault);
 
     if (rows.length === 0) {
       tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No vault activity in the last 7 days</td></tr>';
@@ -431,7 +440,7 @@ async function loadVault() {
         `;
         tbody.appendChild(tr);
       }
-      statusEl.textContent = `${rows.length} events`;
+      statusEl.textContent = shownOf(rows.length, all.length, "events");
     }
     DebugHub.logCheckpoint("Analytics:Vault Loaded", "pass");
   } catch (e) {
@@ -472,12 +481,13 @@ async function loadVault() {
     set("v-accrual-sub", ts ? new Date(ts * 1000).toLocaleDateString() : "on-chain touch");
 
     const wTbody = document.getElementById("vault-weights-tbody");
-    const wRows = [
+    const wAll = [
       ...regs.map(ev => ({ block: ev.blockNumber, dir: "+ Registered", cls: "td-in",
                            id: ev.args.ticketId, w: ev.args.weight, total: ev.args.totalWeight })),
       ...rems.map(ev => ({ block: ev.blockNumber, dir: "− Removed", cls: "td-out",
                            id: ev.args.ticketId, w: ev.args.weight, total: ev.args.totalWeight }))
-    ].sort((a, b) => b.block - a.block).slice(0, 30);
+    ].sort((a, b) => b.block - a.block);
+    const wRows = wAll.slice(0, TABLE_CAPS.weights);
 
     if (wRows.length === 0) {
       wTbody.innerHTML = '<tr><td colspan="5" class="table-empty">No ticket weight changes in the last 7 days</td></tr>';
@@ -495,7 +505,7 @@ async function loadVault() {
         `;
         wTbody.appendChild(tr);
       }
-      set("vault-detail-status", `${wRows.length} changes`);
+      set("vault-detail-status", shownOf(wRows.length, wAll.length, "changes"));
     }
   } catch (e) {
     console.warn("loadVault internals:", e.message);
