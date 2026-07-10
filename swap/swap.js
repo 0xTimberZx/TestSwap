@@ -5,6 +5,9 @@ const ROUTER_ABI   = [
   "function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) external pure returns (uint256)",
   "function getAmountIn(uint256 amountOut, uint256 reserveIn, uint256 reserveOut) external pure returns (uint256)",
   "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address tokenIn, address tokenOut, address to, uint256 deadline, bool influencePrize) external returns (uint256 amountOut)",
+  "function getAmountsOutPath(uint256 amountIn, address[] path) external view returns (uint256[] amounts)",
+  "function getAmountsInPath(uint256 amountOut, address[] path) external view returns (uint256[] amounts)",
+  "function swapExactTokensForTokensPath(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline, bool influencePrize) external returns (uint256 amountOut)",
   "function swapExactETHForTokens(uint256 amountIn, uint256 amountOutMin, address tokenOut, address to, uint256 deadline, bool influencePrize) external payable returns (uint256 amountOut)",
   "function swapExactTokensForETH(uint256 amountIn, uint256 amountOutMin, address tokenIn, address to, uint256 deadline, bool influencePrize) external returns (uint256 amountOut)",
   "function addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256, uint256, uint256)",
@@ -452,9 +455,14 @@ async function onAmountOutChange() {
   await recalcQuote();
 }
 
+// Active multi-hop route (effective addresses, e.g. [USDT, WETH, TIMBS]) or
+// null when the trade is direct / a wrap. Set only by a successful path quote.
+let swapRoute = null;
+
 async function recalcQuote() {
   const infoBox = document.getElementById("swap-info");
   const swapBtn = document.getElementById("swap-btn");
+  swapRoute = null;
 
   if (!tokenIn || !tokenOut) {
     infoBox.classList.add("hidden");
@@ -482,6 +490,11 @@ async function recalcQuote() {
     const [reserveIn, reserveOut] = await router.getReserves(effAddr(tokenIn), effAddr(tokenOut));
 
     if (reserveIn.eq(0) || reserveOut.eq(0)) {
+      // No direct pool — try bridging through WETH ([in, WETH, out]). On the
+      // pre-path router the call reverts (function absent), a missing hop
+      // pair reverts PairNotFound — either way we land in the same
+      // "No liquidity" state this branch always showed.
+      if (await quoteViaWeth(router, inputIn, inputOut, infoBox)) return;
       infoBox.classList.add("hidden");
       updateSwapButton("No liquidity for this pair");
       return;
@@ -509,7 +522,7 @@ async function recalcQuote() {
         updateSwapButton("Amount too small for this pool");
         return;
       }
-      renderSwapInfo(amountInWei, amountOutWei, reserveIn, reserveOut);
+      renderSwapInfo(amountInWei, amountOutWei, spotOf(reserveIn, reserveOut));
     } else {
       const amtOut = inputOut.value;
       if (!amtOut || parseFloat(amtOut) <= 0) {
@@ -530,7 +543,7 @@ async function recalcQuote() {
         updateSwapButton("Amount too small for this pool");
         return;
       }
-      renderSwapInfo(amountInWei, amountOutWei, reserveIn, reserveOut);
+      renderSwapInfo(amountInWei, amountOutWei, spotOf(reserveIn, reserveOut));
     }
 
     updateSwapButton(userAddress ? "Swap" : "Connect wallet to swap");
@@ -542,18 +555,85 @@ async function recalcQuote() {
   }
 }
 
-function renderSwapInfo(amountInWei, amountOutWei, reserveIn, reserveOut) {
+// Spot price (tokenOut per tokenIn) of the direct pool's reserves.
+function spotOf(reserveIn, reserveOut) {
+  return parseFloat(ethers.utils.formatUnits(reserveOut, tokenOut.decimals)) /
+         parseFloat(ethers.utils.formatUnits(reserveIn, tokenIn.decimals));
+}
+
+// Combined spot across a 2-hop WETH bridge: (WETH per tokenIn) × (tokenOut per WETH).
+async function pathSpot(router, path) {
+  const [aIn, aOut] = await router.getReserves(path[0], path[1]);
+  const [bIn, bOut] = await router.getReserves(path[1], path[2]);
+  const hop1 = parseFloat(ethers.utils.formatUnits(aOut, 18)) /
+               parseFloat(ethers.utils.formatUnits(aIn, tokenIn.decimals));
+  const hop2 = parseFloat(ethers.utils.formatUnits(bOut, tokenOut.decimals)) /
+               parseFloat(ethers.utils.formatUnits(bIn, 18));
+  return hop1 * hop2;
+}
+
+// Quote [in, WETH, out] when no direct pool exists. Returns true if it OWNED
+// the quote (fields/button set — route usable or amount-stage message shown);
+// false means fall back to the plain "No liquidity for this pair" state.
+async function quoteViaWeth(router, inputIn, inputOut, infoBox) {
+  const effIn = effAddr(tokenIn), effOut = effAddr(tokenOut);
+  // A WETH leg means direct was the only possible route; native legs stay
+  // direct-only in v1 (the path functions are token-in/token-out).
+  if (effIn === ADDRESSES.WETH || effOut === ADDRESSES.WETH) return false;
+  if (isNative(tokenIn) || isNative(tokenOut)) return false;
+  const path = [effIn, ADDRESSES.WETH, effOut];
+  try {
+    let amountInWei, amountOutWei;
+    if (lastEditedSide === "in") {
+      const amtIn = inputIn.value;
+      if (!amtIn || parseFloat(amtIn) <= 0) {
+        inputOut.value = ""; infoBox.classList.add("hidden");
+        updateSwapButton("Enter an amount"); return true;
+      }
+      amountInWei = ethers.utils.parseUnits(amtIn, tokenIn.decimals);
+      const amounts = await router.getAmountsOutPath(amountInWei, path);
+      amountOutWei = amounts[amounts.length - 1];
+      inputOut.value = trimAmount(ethers.utils.formatUnits(amountOutWei, tokenOut.decimals));
+      if (!inputOut.value || parseFloat(inputOut.value) === 0) {
+        infoBox.classList.add("hidden");
+        updateSwapButton("Amount too small for this route"); return true;
+      }
+    } else {
+      const amtOut = inputOut.value;
+      if (!amtOut || parseFloat(amtOut) <= 0) {
+        inputIn.value = ""; infoBox.classList.add("hidden");
+        updateSwapButton("Enter an amount"); return true;
+      }
+      amountOutWei = ethers.utils.parseUnits(amtOut, tokenOut.decimals);
+      const amounts = await router.getAmountsInPath(amountOutWei, path);
+      amountInWei = amounts[0];
+      inputIn.value = trimAmount(ethers.utils.formatUnits(amountInWei, tokenIn.decimals));
+      if (!inputIn.value || parseFloat(inputIn.value) === 0) {
+        infoBox.classList.add("hidden");
+        updateSwapButton("Amount too small for this route"); return true;
+      }
+    }
+    renderSwapInfo(amountInWei, amountOutWei, await pathSpot(router, path), " · via WETH");
+    swapRoute = path;
+    updateSwapButton(userAddress ? "Swap via WETH" : "Connect wallet to swap");
+    return true;
+  } catch {
+    // Router predates path support, a hop pool is missing, or a hop can't
+    // source the trade — all read as "no route" here.
+    return false;
+  }
+}
+
+function renderSwapInfo(amountInWei, amountOutWei, spotPrice, viaLabel = "") {
   const infoBox = document.getElementById("swap-info");
   infoBox.classList.remove("hidden");
 
   const rate = parseFloat(ethers.utils.formatUnits(amountOutWei, tokenOut.decimals)) /
                parseFloat(ethers.utils.formatUnits(amountInWei, tokenIn.decimals));
   document.getElementById("info-rate").textContent =
-    `1 ${tokenIn.symbol} = ${rate.toFixed(6)} ${tokenOut.symbol}`;
+    `1 ${tokenIn.symbol} = ${rate.toFixed(6)} ${tokenOut.symbol}${viaLabel}`;
 
   // Price impact estimate: compare execution price to current spot price
-  const spotPrice = parseFloat(ethers.utils.formatUnits(reserveOut, tokenOut.decimals)) /
-                     parseFloat(ethers.utils.formatUnits(reserveIn, tokenIn.decimals));
   const impact = Math.abs((rate - spotPrice) / spotPrice) * 100;
   const impactEl = document.getElementById("info-impact");
   impactEl.textContent = impact.toFixed(2) + "%";
@@ -573,7 +653,8 @@ function updateSwapButton(text) {
   btn.textContent = text;
   btn.disabled = !userAddress || !tokenIn || !tokenOut ||
                  text === "Enter an amount" || text === "No liquidity for this pair" ||
-                 text === "Insufficient liquidity" || text === "Amount too small for this pool";
+                 text === "Insufficient liquidity" || text === "Amount too small for this pool" ||
+                 text === "Amount too small for this route";
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -637,6 +718,7 @@ const SWAP_REVERTS = {
   "0x098fb561": "Pool rejected the input amount (pair-level).",                                                  // InsufficientInputAmount
   "0x5327d568": "Pool invariant check failed — reserves moved mid-swap; try again.",                             // KInvariantViolated
   "0x659a0b22": "Invalid swap recipient.",                                                                       // InvalidTo
+  "0x20db8267": "No valid route between these tokens.",                                                          // InvalidPath
 };
 
 // ── Uncensored revert diagnosis ───────────────────────────────────────────────
@@ -737,8 +819,14 @@ async function handleSwap() {
     let minOut = ethers.constants.Zero;
     if (!isWrapPair()) {
       const reader = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, readProviderForEligibility());
-      const [rIn, rOut] = await reader.getReserves(effAddr(tokenIn), effAddr(tokenOut));
-      const freshOut = await reader.getAmountOut(amountInWei, rIn, rOut);
+      let freshOut;
+      if (swapRoute) {
+        const amounts = await reader.getAmountsOutPath(amountInWei, swapRoute);
+        freshOut = amounts[amounts.length - 1];
+      } else {
+        const [rIn, rOut] = await reader.getReserves(effAddr(tokenIn), effAddr(tokenOut));
+        freshOut = await reader.getAmountOut(amountInWei, rIn, rOut);
+      }
       minOut = freshOut.mul(Math.floor((100 - slippagePct) * 100)).div(10000);
       document.getElementById("amount-out").value =
         trimAmount(ethers.utils.formatUnits(freshOut, tokenOut.decimals));
@@ -769,6 +857,11 @@ async function handleSwap() {
     } else if (isNative(tokenOut)) {
       method = "swapExactTokensForETH";
       args   = [amountInWei, minOut, tokenIn.address, userAddress, deadline, influencePrize];
+    } else if (swapRoute) {
+      // No direct pool — route through WETH. Fee + nudge stay on the input
+      // token, so the game/eligibility semantics match a direct swap.
+      method = "swapExactTokensForTokensPath";
+      args   = [amountInWei, minOut, swapRoute, userAddress, deadline, influencePrize];
     } else {
       method = "swapExactTokensForTokens";
       args   = [amountInWei, minOut, tokenIn.address, tokenOut.address, userAddress, deadline, influencePrize];

@@ -1,5 +1,8 @@
 # Multi-hop routing spec — `TimbSwapRouter`
 
+> **STATUS: IMPLEMENTED** (contract + frontend). Awaiting router redeploy +
+> re-authorization + ADDRESSES update — see dev-docs/ROUTER_REDEPLOY_CHECKLIST.md.
+
 **Goal:** let a user swap `X → Y` when no direct `X/Y` pair exists, by hopping
 through a bridge asset (`X → WETH → Y`). Today the router is single-hop only:
 every swap function resolves exactly one pair via `_getPair(tokenIn, tokenOut)`
