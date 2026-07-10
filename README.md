@@ -114,8 +114,12 @@ Segments settle automatically via GitHub Actions every 10 minutes. Health check 
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `TELEGRAM_CHAT_ID` | Your Telegram chat ID |
 | `TELEGRAM_CHAT_ID_PUBLIC` | (Optional) Community group chat ID — receives only confirmed round-rollover announcements |
+| `X_API_KEY` / `X_API_SECRET` | (Optional) X app consumer keys — enables auto-posting settled rounds to @timbswap |
+| `X_ACCESS_TOKEN` / `X_ACCESS_TOKEN_SECRET` | (Optional) X account tokens (must be Read and Write) |
 
 Manual trigger: Actions → TimbSwap Settler → Run workflow → choose `settle` or `health`.
+
+X posting mode: repo **Variables** → `X_POST_MODE` = `all` (default), `winners` (only rounds that paid out), or `off`.
 
 ---
 

@@ -32,6 +32,7 @@
 // scheduled runs queue instead of double-settling).
 
 const { ethers } = require("ethers");
+const { postRoundToX } = require("./xposter");
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;        // ops: every message, incl. failures
 const TG_CHAT_ID_PUBLIC = process.env.TELEGRAM_CHAT_ID_PUBLIC; // community group: round rollovers only
 const TIMBPRIZE_ADDR = "0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40"; // TimbPrize v3.2 (continuous meter — counters never reset)
+const GAMEREGISTRY_ADDR = "0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774"; // GameRegistry v2 (per-round entrant counts)
 
 // ─── ABI (minimal) ───────────────────────────────────────────────────────────
 
@@ -50,8 +52,24 @@ const TIMBPRIZE_ABI = [
   "function currentSegment() external view returns (uint256)",
   "function segmentStartTime() external view returns (uint256)",
   "function settleSegment() external",
-  "function gameStarted() external view returns (bool)"
+  "function gameStarted() external view returns (bool)",
+  "function getRoundResult(uint256 round) external view returns (bytes6 winningString, uint256 potAmount, address[] winners, uint256 perWinner, uint256 remainder)"
 ];
+
+const GAMEREGISTRY_ABI = [
+  "function getRoundEntrants(uint256 round) external view returns (address[])"
+];
+
+// bytes6 hex ("0x4B375857 32 51") -> "K7XW2Q"
+function bytes6ToStr(b6) {
+  if (!b6 || b6 === "0x000000000000") return "??????";
+  let s = "";
+  for (let i = 2; i < 14; i += 2) {
+    const code = parseInt(b6.slice(i, i + 2), 16);
+    if (code > 0) s += String.fromCharCode(code);
+  }
+  return s;
+}
 
 // ─── Segment-delay alerting ──────────────────────────────────────────────────
 // A segment is 60:00 on the grid (59:45 interaction + 0:15 intermission).
@@ -193,6 +211,26 @@ async function settleOnce(provider, wallet, prize, round, segment) {
       `🟢 Round #${round + 1n} is live — a fresh pot is building right now.\n` +
       `Enter or nudge the scroll → timbswap.xyz/compete`
     );
+
+    // X post (opt-in via X_* secrets; see xposter.js). Fully fenced — a
+    // failed read or post never affects settlement or the next loop turn.
+    try {
+      const registry = new ethers.Contract(GAMEREGISTRY_ADDR, GAMEREGISTRY_ABI, provider);
+      const [res, entrants] = await Promise.all([
+        prize.getRoundResult(round),
+        registry.getRoundEntrants(round).catch(() => [])
+      ]);
+      const potEth = Number(ethers.formatEther(res.potAmount ?? res[1])).toFixed(4).replace(/\.?0+$/, "") || "0";
+      await postRoundToX({
+        round:   Number(round),
+        string6: bytes6ToStr(res.winningString ?? res[0]),
+        entries: entrants.length,
+        potEth,
+        winners: (res.winners ?? res[2]).length
+      });
+    } catch (e) {
+      console.warn("[xposter] round post skipped:", e?.message || e);
+    }
   }
   return isRoundBoundary;
 }
