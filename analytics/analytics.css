@@ -235,3 +235,9 @@
   margin: 0 auto 18px;
 }
 .analytics-gate .btn-connect { display: inline-block; }
+
+/* Winning strings from rounds with documented winners glow gold. */
+.td-string.gold {
+  color: #ffd75e;
+  text-shadow: 0 0 8px rgba(255, 215, 94, 0.4);
+}

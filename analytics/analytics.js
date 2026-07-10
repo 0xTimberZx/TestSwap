@@ -243,7 +243,7 @@ function renderRoundsPage() {
   tbody.innerHTML = rows.map(({ r, res, entries }) => `
     <tr>
       <td>#${r}</td>
-      <td class="td-string">${bytes6ToStr(res.winningString)}</td>
+      <td class="td-string${res.winners.length > 0 ? " gold" : ""}">${bytes6ToStr(res.winningString)}</td>
       <td>${fmt(res.potAmount, 18, 4)} ETH</td>
       <td>${res.winners.length}</td>
       <td>${fmt(res.remainder, 18, 4)} ETH</td>

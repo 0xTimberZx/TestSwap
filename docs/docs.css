@@ -216,3 +216,11 @@
     border-color: var(--green);
   }
 }
+
+/* Let the last section (Disclaimer) scroll high enough to be read as the
+   active section — without this it's pinned at the page bottom and the TOC
+   can never land on it. */
+.docs-section:last-of-type {
+  min-height: calc(100vh - 220px);
+  margin-bottom: 0;
+}

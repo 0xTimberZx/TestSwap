@@ -58,9 +58,15 @@ let eligibleTokens     = [];
 let extraRounds        = 0;
 let entryCostETH_wei   = null;
 let entryCostTIMBS_wei = null;
+// Cached wallet balances + extra-round cost (wei) so the entry button can flag
+// over-balance presets synchronously. null = unknown, never blocks.
+let entryBalWei  = null;   // balance of the currently-selected entry token
+let timbsBalWei  = null;   // TIMBS balance (extra rounds are always TIMBS)
+let extraCostWei = null;   // additionalRoundCost(extraRounds); zero when none
 let currentRoundNum    = null;
 let lastDigitCounters  = null;
 let activeSegIndex     = -1;   // 0-based index into digitCounters for the live segment
+let myActiveTicketStr  = null; // viewer's ticket string playing the CURRENT round (gold streak)
 let activeSegCounter   = null; // BigNumber — that segment's current counter
 let advanceCount       = 1;    // chosen batch size for the Advance panel
 let advanceInSettlement = false; // on-chain settlement window blocks nudges
@@ -142,7 +148,7 @@ function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
     const cell    = document.getElementById("dc" + i);
     const charEl  = document.getElementById("dchar" + i);
     if (!cell || !charEl) continue;
-    cell.classList.remove("locked", "active", "future", "gated", "settling", "gate-mask");
+    cell.classList.remove("locked", "active", "future", "gated", "settling", "gate-mask", "gold", "gold-flash");
     if (seg < segment || (seg === segment && digitLocked[i])) {
       charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
       charEl.style.opacity = "";
@@ -163,6 +169,32 @@ function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
       charEl.style.opacity = "";
       cell.classList.add("future");
     }
+  }
+  applyGoldStreak(segment, digitCounters, digitLocked);
+}
+
+// ─── Winning-streak highlight ─────────────────────────────────────────────────
+// If the viewer's active ticket matches the settled letters as an UNBROKEN run
+// from segment 1, those cells burn lightning-gold instead of green. The first
+// incorrect settled letter kills the whole streak (all cells stay green) — no
+// gaps allowed; gold must flush straight through to represent a live winning
+// match. A full 6/6 match flashes just before the round rolls and resets.
+function applyGoldStreak(segment, digitCounters, digitLocked) {
+  if (!userAddress || !myActiveTicketStr || myActiveTicketStr.length !== 6) return;
+  let run = 0;
+  for (let i = 0; i < 6; i++) {
+    const seg = i + 1;
+    const settled = seg < segment || (seg === segment && digitLocked[i]);
+    if (!settled) break;                                  // streak can only grow as letters settle
+    const ch = ALPHABET[Number(digitCounters[i]) % 36];
+    if (ch !== myActiveTicketStr[i]) return;              // broken — everything stays green
+    run++;
+  }
+  for (let i = 0; i < run; i++) {
+    document.getElementById("dc" + i)?.classList.add("gold");
+  }
+  if (run === 6) {
+    for (let i = 0; i < 6; i++) document.getElementById("dc" + i)?.classList.add("gold-flash");
   }
 }
 
@@ -386,12 +418,15 @@ async function updateCostDisplay() {
     try {
       const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, readProv());
       const extra = await registry.additionalRoundCost(extraRounds);
+      extraCostWei = extra;
       noteEl.textContent = `+ ${fmtTIMBS(extra)} · non-refundable`;
       noteEl.classList.remove("hidden");
-    } catch { noteEl.classList.add("hidden"); }
-  } else if (noteEl) {
-    noteEl.classList.add("hidden");
+    } catch { extraCostWei = null; noteEl.classList.add("hidden"); }
+  } else {
+    extraCostWei = ethers.constants.Zero;
+    if (noteEl) noteEl.classList.add("hidden");
   }
+  updateEntryButton();
 }
 
 // ─── Token Dropdown ───────────────────────────────────────────────────────────
@@ -455,17 +490,24 @@ function selectEntryToken(token) {
 async function refreshEntryBalance() {
   const el = document.getElementById("entry-token-bal");
   if (!el) return;
-  if (!userAddress) { el.textContent = ""; return; }
+  if (!userAddress) { entryBalWei = null; timbsBalWei = null; el.textContent = ""; return; }
   try {
     const bal = selectedToken.isNative
       ? await readProv().getBalance(userAddress)
       : await new ethers.Contract(selectedToken.address, ERC20_BAL_ABI, readProv()).balanceOf(userAddress);
+    entryBalWei = bal;
+    if (!selectedToken.isNative &&
+        selectedToken.address.toLowerCase() === ADDRESSES.TIMBSToken.toLowerCase()) {
+      timbsBalWei = bal;
+    }
     let txt = `Balance: ${fmt(bal, 18, 4)} ${selectedToken.symbol}`;
     if (extraRounds > 0 && selectedToken.isNative) {
       const timbs = await new ethers.Contract(ADDRESSES.TIMBSToken, ERC20_BAL_ABI, readProv()).balanceOf(userAddress);
+      timbsBalWei = timbs;
       txt += ` · ${fmt(timbs, 18, 2)} TIMBS`;
     }
     el.textContent = txt;
+    updateEntryButton();
   } catch {
     // Transient RPC read failure — keep whatever balance was last shown rather
     // than blanking the line, so the readout is consistently present. It'll
@@ -548,10 +590,37 @@ function isEntryValid() {
   return true;
 }
 
+// "Insufficient …" when the preset entry (base cost + extra rounds) exceeds the
+// cached wallet balances; null otherwise. Unknown balances never block — the
+// pre-flight in handleSubmitEntry still catches anything missed here.
+function insufficientEntryLabel() {
+  if (!userAddress) return null;
+  // Updating an existing ticket re-uses its escrow — only extra rounds cost.
+  const baseETH   = hasPlayEntry ? ethers.constants.Zero : (entryCostETH_wei   || null);
+  const baseTIMBS = hasPlayEntry ? ethers.constants.Zero : (entryCostTIMBS_wei || null);
+  if (selectedToken.isNative) {
+    if (baseETH !== null && entryBalWei !== null && entryBalWei.lt(baseETH)) {
+      return "Insufficient ETH balance";
+    }
+    if (extraRounds > 0 && extraCostWei !== null && timbsBalWei !== null &&
+        timbsBalWei.lt(extraCostWei)) {
+      return "Insufficient TIMBS for extra rounds";
+    }
+  } else {
+    if (baseTIMBS !== null && timbsBalWei !== null && extraCostWei !== null &&
+        timbsBalWei.lt(baseTIMBS.add(extraRounds > 0 ? extraCostWei : ethers.constants.Zero))) {
+      return "Insufficient TIMBS balance";
+    }
+  }
+  return null;
+}
+
 function updateEntryButton() {
   const btn = document.getElementById("entry-btn");
   if (!userAddress) { btn.textContent = "Connect wallet to enter"; btn.disabled = true; return; }
   if (!isEntryValid()) { btn.textContent = "Enter a valid 6-character string"; btn.disabled = true; return; }
+  const short = insufficientEntryLabel();
+  if (short) { btn.textContent = short; btn.disabled = true; return; }
   // Only one entry per round — if we already have one queued, this replaces it.
   btn.textContent = hasPlayEntry ? "Update entry" : "Submit Entry";
   btn.disabled    = false;
@@ -754,6 +823,7 @@ async function loadMyEntries() {
   const list = document.getElementById("my-entries-list");
   hasPlayEntry = false;
   if (!userAddress) {
+    myActiveTicketStr = null;
     list.innerHTML = '<div class="empty-state">Connect wallet to view entries</div>';
     updateEntryButton();
     return;
@@ -792,6 +862,17 @@ async function loadMyEntries() {
       t.status === 0 ||
       (t.status === 1 && relRound !== null && relRound <= t.lastEligibleRound.toNumber())
     );
+
+    // The ticket actually playing THIS round drives the gold-streak meter.
+    myActiveTicketStr = null;
+    if (relRound !== null) {
+      const playing = ticketList.find(t =>
+        t.status === 1 &&
+        t.playRound.toNumber() <= relRound &&
+        relRound <= t.lastEligibleRound.toNumber()
+      );
+      if (playing) myActiveTicketStr = bytes6ToStr(playing.string6);
+    }
 
     // Hide history clutter: once a ticket is more than the refund window
     // (2 rounds) past its last eligible round it can't be played or refunded,
@@ -1178,7 +1259,7 @@ async function loadPastRounds() {
       return `<div class="past-round-row${winnerCls}">
           <div class="past-round-left">
             <span class="past-round-num">Round ${r}</span>
-            <span class="past-round-string">${ws}</span>
+            <span class="past-round-string${res.winners.length > 0 ? " gold-string" : ""}">${ws}</span>
           </div>
           <div class="past-round-right">
             <span class="past-round-meta">${entries[r] ?? 0} entr${(entries[r] ?? 0) === 1 ? "y" : "ies"} · ${res.winners.length} winner${res.winners.length !== 1 ? "s" : ""} · ${fmt(res.potAmount)} ETH</span>
