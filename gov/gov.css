@@ -5,6 +5,9 @@
   padding: 40px 24px 80px;
 }
 
+.page-h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+.page-sub { color: var(--text-2); font-size: 15px; margin-bottom: 36px; max-width: 640px; }
+
 /* ─── Stats Bar ──────────────────────────────────────────────────────────── */
 .gov-stats {
   display: grid;

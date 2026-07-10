@@ -459,8 +459,17 @@ a { color: inherit; text-decoration: none; }
   border-top: var(--bw) solid var(--border);
 }
 
-.footer-links { display: flex; gap: 20px; }
-.footer-links a { color: var(--text-3); transition: color 0.15s; }
+.footer-links { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+/* nowrap keeps the ↗ glued to its label on narrow screens (whole links wrap
+   instead); padding + negative margin grows the tap target without moving
+   anything visually. */
+.footer-links a {
+  color: var(--text-3);
+  transition: color 0.15s;
+  white-space: nowrap;
+  padding: 10px 6px;
+  margin: -10px -6px;
+}
 .footer-links a:hover { color: var(--text-2); }
 .footer-left { display: flex; align-items: center; gap: 8px; }
 .footer-left .nav-logo-mark { color: var(--green); }

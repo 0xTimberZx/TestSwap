@@ -335,6 +335,20 @@ async function pollRoundState() {
     const notice = document.getElementById("gated-notice");
     if (notice) notice.classList.toggle("hidden", !!userAddress);
 
+    // Newcomer banner mirrors the gate: pitch the game to wallet-less
+    // visitors with live numbers, vanish the moment a wallet connects.
+    const banner = document.getElementById("newcomer-banner");
+    if (banner) {
+      banner.classList.toggle("hidden", !!userAddress);
+      if (!userAddress) {
+        const potShow = escrowBal && escrowBal.gt(s.pot) ? escrowBal : s.pot;
+        const stats = [`ROUND #${currentRoundNum}`, `${fmt(potShow)} ETH ON THE LINE`];
+        if (entrants) stats.push(`${entrants.length} ${entrants.length === 1 ? "PLAYER" : "PLAYERS"} IN`);
+        const st = document.getElementById("nc-stats");
+        if (st) st.textContent = stats.join("  ·  ");
+      }
+    }
+
     // Advance panel: wallet-gated, disabled during settlement; preview needs
     // the active segment's current digit.
     activeSegIndex   = s.segment.toNumber() - 1;
@@ -1342,8 +1356,10 @@ function handleDisconnect() {
     });
   } else {
     // Not connected — run the CONNECT WALLET marquee right away so no real
-    // digits flash before the first poll resolves.
+    // digits flash before the first poll resolves, and show the newcomer
+    // banner immediately (its live stats fill in when the poll lands).
     startGateMask();
+    document.getElementById("newcomer-banner")?.classList.remove("hidden");
   }
 
   // These five loaders hit the RPC independently — fire them in parallel so

@@ -377,7 +377,10 @@
 
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
-  .swap-page { flex-direction: column; align-items: center; padding: 20px 16px; }
+  /* Column direction flips justify-content's axis to vertical — without
+     flex-start the card floats to the vertical middle of the viewport,
+     leaving a dead gap under the nav on phones. */
+  .swap-page { flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px 16px; }
   .prize-col { max-width: 460px; }
 }
 
