@@ -752,8 +752,16 @@
 .digit-cell.gold .digit-char {
   color: #ffd75e;
   border-color: #ffd75e;
-  background: rgba(255, 215, 94, 0.10);
-  text-shadow: 0 0 12px rgba(255, 215, 94, 0.55);
+  background: rgba(255, 215, 94, 0.12);
+  text-shadow: 0 0 12px rgba(255, 215, 94, 0.6);
+  /* Tiny outward emittance, meter-only. All gold cells (re)gain the class in
+     the same render pass, so the breathe stays in perfect sync across the
+     streak; kept softer than the active cell's blue pulse (6px ring). */
+  animation: gold-breathe 2.4s ease-in-out infinite;
+}
+@keyframes gold-breathe {
+  0%, 100% { box-shadow: 0 0 4px 0 rgba(255, 215, 94, 0.25); }
+  50%      { box-shadow: 0 0 9px 1px rgba(255, 215, 94, 0.45); }
 }
 .digit-cell.gold-flash .digit-char {
   animation: gold-flash 0.45s ease-in-out 4;
