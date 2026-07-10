@@ -54,6 +54,7 @@
 |---------|--------|
 | 0x06aebE938113524D9E29C51BacE7d7A155051a60 | Old factory — no bytecode redeployed |
 | 0xefFea3C2D1aA32eE9D93Cc0E888647E6A168293f | Phantom pair — 500k TIMBS permanently locked (treated as burned) |
+| 0x486Fa4D8351EF81136E83340eA1e3aa2272c9955 | Treasury v1 — retired; ~6,532 TIMBS fee revenue permanently stranded (no working ERC20 exit in v1; treated as burned) |
 
 ---
 
