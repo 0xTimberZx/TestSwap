@@ -17,6 +17,7 @@ using SafeERC20 for IERC20;
 
     interface IWETH {
         function deposit() external payable;
+        function withdraw(uint256 amount) external;
     }
 
     interface ITimbStaking {
@@ -319,6 +320,34 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Withdraw any ERC20 held by the treasury (owner only).
+     * @dev Protocol swap fees arrive as the swap's INPUT token (TIMBS, WETH,
+     *      stables…), not ETH — this is the exit for everything the
+     *      buyback/distribute flows don't cover, and the rescue that v1/v2
+     *      lacked (v1 stranded its TIMBS fee balance permanently).
+     */
+    function withdrawToken(address token, address to, uint256 amount)
+        external
+        nonReentrant
+        onlyOwner
+    {
+        if (token == address(0) || to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        IERC20(token).safeTransfer(to, amount);
+        emit OperationalWithdraw(to, amount);
+    }
+
+    /**
+     * @notice Unwrap WETH fee revenue into ETH (owner only) — feeds
+     *         executeBuyback / distributeToPot, which spend native ETH.
+     */
+    function unwrapWeth(uint256 amount) external nonReentrant onlyOwner {
+        if (weth == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        IWETH(weth).withdraw(amount);
+    }
+
+    /**
      * @notice Withdraw ETH for operational expenses (owner only).
      * @dev Manual operation — owner controls treasury allocations.
      */
@@ -421,7 +450,11 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     }
 
     /// @dev Accept ETH from Router fee transfers and direct deposits.
+    ///      WETH.withdraw refunds under a 2300-gas stipend — too little for
+    ///      the accounting SSTORE+event, so that path returns early (it's an
+    ///      internal conversion, not new revenue).
     receive() external payable {
+        if (msg.sender == weth) return;
         if (msg.value > 0) {
             totalFeesReceived += msg.value;
             emit FeesReceived(msg.sender, msg.value);

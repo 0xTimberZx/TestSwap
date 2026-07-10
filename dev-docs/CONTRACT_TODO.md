@@ -534,3 +534,26 @@ jitter on the freeze); see SPECS "Freeze" line) but the code never
 implements it. Requires a TimbPrize redeploy + full rewire (registry,
 vault, router authorization, settler address) — schedule deliberately,
 not as a hotfix. Testnet risk accepted meanwhile.
+
+### 13.1b Treasury v3 — ERC20 fee exits (fix ready, redeploy when convenient)
+
+Post-mortem on draining v1 revealed the deeper design gap: **protocol fees
+arrive as the swap's INPUT token** (router `_collectProtocolFee` transfers
+TIMBS/WETH/stables), but the treasury only had exits for ETH and TIMBS.
+Consequences:
+
+- v1 held 0 ETH and ~6,532 TIMBS at retirement; with `distributeToStaking`
+  broken (13.1 #2) and no generic ERC20 withdrawal, that TIMBS is
+  **permanently stranded** (documented in SPECS dead-address table).
+- v2 fixes the TIMBS exit but would strand WETH/stablecoin fees the same way.
+
+v3 additions (compiled, awaiting deploy):
+- `withdrawToken(token, to, amount)` — generic owner ERC20 exit.
+- `unwrapWeth(amount)` — converts WETH fee revenue to ETH so
+  `executeBuyback` / `distributeToPot` can spend it.
+- `receive()` early-returns for `msg.sender == weth`: WETH.withdraw refunds
+  under a 2300-gas stipend, which the accounting SSTORE+event would exceed
+  (the unwrap would otherwise revert).
+
+Redeploy is same as v2 (5 constructor args) + the usual 5-pointer rewire.
+No urgency: v2 holds ~nothing yet; do it before meaningful fees accumulate.
