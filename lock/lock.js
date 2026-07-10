@@ -364,7 +364,7 @@ async function openLockDetail(lockId) {
       <div class="ld-row"><span class="ld-key">Status</span><span class="ld-val">${status}</span></div>
       <div class="ld-row"><span class="ld-key">Created</span><span class="ld-val">${_fmtDateUTC(lock.lockedAt)}</span></div>
       <div class="ld-row"><span class="ld-key">Unlocks</span><span class="ld-val">${rem ? "in " + rem : "now — withdrawable"}</span></div>
-      <div class="ld-row"><span class="ld-key">Token</span><span class="ld-val"><a class="ld-link" href="${explorer}" target="_blank" rel="noopener">${fmtAddrMasked(lock.token)} ↗</a></span></div>
+      <div class="ld-row"><span class="ld-key">Token</span><span class="ld-val"><a class="ld-link" href="${explorer}" target="_blank" rel="noopener">${fmtAddrMasked(lock.token)} ↗︎</a></span></div>
       <div class="ld-row"><span class="ld-key">Total supply</span><span class="ld-val">${supply ? fmt(supply, dec, 0) + " " + sym : "—"}</span></div>
       <div class="ld-row"><span class="ld-key">Locker</span><span class="ld-val">${fmtAddrMasked(lock.locker)}</span></div>
     `;
