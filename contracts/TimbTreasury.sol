@@ -13,8 +13,11 @@ using SafeERC20 for IERC20;
 
     interface ITimbsToken is IERC20 {
     function burn(uint256 amount) external;
-    function safeTransfer(address to, uint256 amount) external;
 }
+
+    interface IWETH {
+        function deposit() external payable;
+    }
 
     interface ITimbStaking {
         function notifyRewardAmount(uint256 amount, uint256 duration) external;
@@ -79,6 +82,10 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     /// @notice TIMBS/ETH AMM pair — used for buyback execution.
     address public timbsEthPair;
 
+    /// @notice WETH — the pair holds WETH, not native ETH. Buyback ETH is
+    ///         wrapped here before being paid into the pair.
+    address public weth;
+
     /// @notice % of purchased TIMBS that gets burned (0–100).
     ///         Remainder distributed to TimbStaking.
     uint256 public buybackBurnRatio;
@@ -137,12 +144,14 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
      * @param _timbStaking  TimbStaking contract address.
      * @param _prizeEscrow  PrizeEscrow contract address.
      * @param _timbsEthPair TIMBS/ETH pair address (set after pair deploy).
+     * @param _weth         WETH address (pair reserves are WETH-denominated).
      */
     constructor(
         address _timbsToken,
         address _timbStaking,
         address _prizeEscrow,
-        address _timbsEthPair
+        address _timbsEthPair,
+        address _weth
     ) Ownable(msg.sender) {
         if (_timbsToken == address(0)) revert ZeroAddress();
 
@@ -150,6 +159,7 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         timbStaking             = _timbStaking;
         prizeEscrow             = _prizeEscrow;
         timbsEthPair            = _timbsEthPair;
+        weth                    = _weth;
         buybackBurnRatio        = 50; // 50% burn, 50% to staking
         stakingDistributionPeriod = 30 days;
 
@@ -219,9 +229,18 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
             revert SlippageExceeded(timbsOut, minTimbsOut);
         }
 
-        // Send ETH to pair, then call swap
-        (bool sent,) = payable(timbsEthPair).call{value: ethAmount}("");
-        if (!sent) revert BuybackFailed();
+        if (weth == address(0)) revert ZeroAddress();
+
+        // The pair holds WETH, not native ETH (it has no receive()) — and its
+        // swap() derives the input from its ERC20 balance delta. Wrap first,
+        // then pay the WETH into the pair like any other swap input.
+        IWETH(weth).deposit{value: ethAmount}();
+        IERC20(weth).safeTransfer(timbsEthPair, ethAmount);
+
+        // Measure what THIS swap bought (balance delta), never the treasury's
+        // whole TIMBS balance — pre-existing holdings must not be swept into
+        // the split or mask slippage.
+        uint256 balBefore = timbsToken.balanceOf(address(this));
 
         if (timbsIsToken0) {
             ITimbSwapPair(timbsEthPair).swap(timbsOut, 0, address(this));
@@ -229,8 +248,7 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
             ITimbSwapPair(timbsEthPair).swap(0, timbsOut, address(this));
         }
 
-        // Verify received amount
-        uint256 received = timbsToken.balanceOf(address(this));
+        uint256 received = timbsToken.balanceOf(address(this)) - balBefore;
         if (received < minTimbsOut) revert SlippageExceeded(received, minTimbsOut);
 
         // Split: burn % + distribute %
@@ -243,7 +261,7 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         }
 
         if (toStaking > 0 && timbStaking != address(0)) {
-            timbsToken.safeTransfer(timbStaking, toStaking);
+            IERC20(address(timbsToken)).safeTransfer(timbStaking, toStaking);
             // Notify staking pool of new reward allocation
             ITimbStaking(timbStaking).notifyRewardAmount(
                 toStaking,
@@ -294,7 +312,7 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         uint256 bal = timbsToken.balanceOf(address(this));
         if (timbsAmount > bal) revert ZeroAmount();
 
-        timbsToken.safeTransfer(timbStaking, timbsAmount);
+        IERC20(address(timbsToken)).safeTransfer(timbStaking, timbsAmount);
         ITimbStaking(timbStaking).notifyRewardAmount(timbsAmount, duration);
 
         emit StakingFunded(timbsAmount, duration);
@@ -347,6 +365,11 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         if (_pair == address(0)) revert ZeroAddress();
         timbsEthPair = _pair;
         emit PairSet(_pair);
+    }
+
+    function setWeth(address _weth) external onlyOwner {
+        if (_weth == address(0)) revert ZeroAddress();
+        weth = _weth;
     }
 
     function setStakingDistributionPeriod(uint256 _period) external onlyOwner {
