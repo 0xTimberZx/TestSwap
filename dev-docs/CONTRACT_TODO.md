@@ -491,3 +491,46 @@ Template:
 - Contract change:
 - Follow-on (redeploy / config.js / frontend wiring):
 -->
+
+---
+
+## §13 — External audit findings (July 2026 review)
+
+Third-party review of the contract set surfaced three defects; verified
+against source before acting.
+
+### 13.1 TimbTreasury buyback — FIXED (redeploy pending)
+
+Three confirmed defects, all corrected in `TimbTreasury.sol`:
+
+1. **Native-ETH send to the pair could never succeed.** `executeBuyback`
+   sent ETH via `payable(pair).call{value:}` — but `TimbSwapPair` has no
+   `receive()`/fallback, so the call always returned false → every buyback
+   reverted `BuybackFailed`. Fix: wrap via `IWETH.deposit` and
+   `safeTransfer` the WETH into the pair (the pair derives swap input from
+   its ERC20 balance delta), matching the router's `_wrapAndSend` pattern.
+2. **Phantom `safeTransfer` on the token interface.** `ITimbsToken`
+   declared `safeTransfer(address,uint256)` as a token method — TIMBSToken
+   (ERC20 + Burnable) has no such function, so the staking legs of
+   `executeBuyback` AND all of `distributeToStaking` reverted on a missing
+   selector. Fix: SafeERC20 library call on `IERC20(address(timbsToken))`.
+3. **Slippage/split measured total balance, not the swap delta.**
+   Pre-existing treasury TIMBS would be swept into the burn/staking split
+   and mask slippage. Fix: before/after balance delta.
+
+Constructor now takes `_weth` (5th arg); `setWeth()` added. **Redeploy
+steps:** deploy new TimbTreasury(timbs, staking, escrow, pair, WETH) →
+`router.setTreasury(new)` → re-authorize fee senders → move any held
+ETH/TIMBS from the old treasury (`withdrawOperational` for ETH) → update
+ADDRESSES + README/SPECS.
+
+### 13.2 TimbPrize `_buildWinningString` — OPEN (next redeploy)
+
+The winning string is a raw `counter % 36` per segment with no
+entropy — fully deterministic, so a bot can compute the exact nudges
+needed and snipe the pot in the final blocks of segment 6. The contract
+comments already describe the intended fix (keccak256(blockhash-based
+jitter on the freeze); see SPECS "Freeze" line) but the code never
+implements it. Requires a TimbPrize redeploy + full rewire (registry,
+vault, router authorization, settler address) — schedule deliberately,
+not as a hotfix. Testnet risk accepted meanwhile.
