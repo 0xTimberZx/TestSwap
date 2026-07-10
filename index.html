@@ -32,7 +32,7 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260748a" />
+  <link rel="stylesheet" href="style.css?v=20260750a" />
 </head>
 <body>
 
@@ -109,14 +109,16 @@
   <section class="hero">
     <div class="hero-inner">
       <div class="hero-eyebrow">Arbitrum Sepolia Testnet</div>
-      <h1 class="hero-headline">
-        Trade.<br />
-        <span class="headline-accent">Influence.</span><br />
-        Win.
+      <!-- Revolving headline: "Trade and Earn" holds 3s, "Play and Win" 5s.
+           "Trade. Influence. Win." lives on as the tab title / social meta. -->
+      <h1 class="hero-headline hero-rotator" aria-label="Trade and Earn. Play and Win.">
+        <span class="rot-line rot-on" id="rot-a"><span class="w-blue">Trade</span> and <span class="w-green">Earn</span></span>
+        <span class="rot-line" id="rot-b">Play and <span class="w-gold">Win</span></span>
       </h1>
       <p class="hero-sub">
-        The global participation lottery — every eligible swap
-        nudges the prize scroll toward victory.
+        The most intelligent perpetual prize pool is live for global
+        participation — every trade pushes the scroll, every ticket earns
+        yield for the pot. <strong class="hero-sub-punch">Easy to enter. Much to&nbsp;win.</strong>
       </p>
       <div class="hero-actions">
         <a href="/swap/" class="btn-primary">Start Swapping</a>
@@ -206,7 +208,7 @@
   </footer>
 
   <script src="config.js?v=20260743a"></script>
-<script src="landing.js?v=20260708a"></script>
+<script src="landing.js?v=20260750a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");

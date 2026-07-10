@@ -1,3 +1,20 @@
+// ─── Hero headline rotator ────────────────────────────────────────────────────
+// "Trade and Earn" holds 3s, "Play and Win" holds 5s (the gold one lingers).
+// CSS cross-fades the swap; both lines share one grid cell so nothing shifts.
+(function rotateHero() {
+  const a = document.getElementById("rot-a");
+  const b = document.getElementById("rot-b");
+  if (!a || !b) return;
+  let showA = true;
+  const tick = () => {
+    showA = !showA;
+    a.classList.toggle("rot-on", showA);
+    b.classList.toggle("rot-on", !showA);
+    setTimeout(tick, showA ? 3000 : 5000);
+  };
+  setTimeout(tick, 3000); // first phrase holds its 3s, then the cycle runs
+})();
+
 // landing.js — chain reads for landing page stats + live scroll display
 
 const TIMBPRIZE_ABI   = [

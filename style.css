@@ -281,13 +281,37 @@ body { padding-top: 60px; }
 }
 .headline-accent { color: var(--green); }
 
-.hero-sub {
-  font-size: 18px;
-  color: var(--text-2);
-  max-width: 400px;
-  margin-bottom: 36px;
-  line-height: 1.5;
+/* Revolving headline: both phrases share one grid cell so the block sizes to
+   the taller line and nothing shifts when they swap. Timing lives in
+   landing.js (3s / 5s holds). */
+.hero-rotator { display: grid; }
+.rot-line {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.55s ease, transform 0.55s ease;
+  pointer-events: none;
 }
+.rot-line.rot-on { opacity: 1; transform: none; }
+.w-blue  { color: var(--blue); }
+.w-green { color: var(--green); }
+.w-gold {
+  color: #ffd75e;
+  animation: gold-lightning 2.4s ease-in-out infinite;
+}
+@keyframes gold-lightning {
+  0%, 100% { text-shadow: 0 0 8px rgba(255, 215, 94, 0.35); }
+  50%      { text-shadow: 0 0 24px rgba(255, 215, 94, 0.8), 0 0 46px rgba(255, 215, 94, 0.35); }
+}
+
+.hero-sub {
+  font-size: 21px;
+  color: var(--text-2);
+  max-width: 480px;
+  margin-bottom: 36px;
+  line-height: 1.55;
+}
+.hero-sub-punch { color: var(--text); font-weight: 600; }
 
 .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
