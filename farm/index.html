@@ -33,7 +33,7 @@
     }
   </script>
   <link rel="stylesheet" href="../style.css?v=20260740a" />
-  <link rel="stylesheet" href="farm.css?v=20260725a" />
+  <link rel="stylesheet" href="farm.css?v=20260743a" />
 </head>
 <body>
 
@@ -137,7 +137,6 @@
           </div>
         </div>
 
-        <div class="pool-bal" id="staking-wallet" onclick="setAmount('staking', 100)" title="Use full balance">Balance: —</div>
         <button class="add-wallet-chip" title="Add TIMBS to your wallet"
                 onclick="addTokenToWallet({ address: ADDRESSES.TIMBSToken, symbol: 'TIMBS', decimals: 18 })">
           ＋ Add TIMBS to wallet
@@ -148,6 +147,7 @@
           <button class="pool-max-btn" onclick="setAmount('staking', 50)">50%</button>
           <button class="pool-max-btn" onclick="setAmount('staking', 25)">25%</button>
         </div>
+        <div class="pool-bal" id="staking-wallet" onclick="setAmount('staking', 100)" title="Use full balance">Balance: —</div>
 
         <div class="pool-actions">
           <button class="btn-pool btn-pool-primary" id="staking-stake-btn" onclick="handleStake('staking')" disabled>
@@ -189,13 +189,13 @@
           </div>
         </div>
 
-        <div class="pool-bal" id="farm-wallet" onclick="setAmount('farm', 100)" title="Use full balance">Balance: —</div>
         <div class="pool-input-row">
           <input id="farm-amount" class="pool-input" type="number" placeholder="0.0 LP" />
           <button class="pool-max-btn" onclick="setAmount('farm', 100)">MAX</button>
           <button class="pool-max-btn" onclick="setAmount('farm', 50)">50%</button>
           <button class="pool-max-btn" onclick="setAmount('farm', 25)">25%</button>
         </div>
+        <div class="pool-bal" id="farm-wallet" onclick="setAmount('farm', 100)" title="Use full balance">Balance: —</div>
 
         <div class="pool-actions">
           <button class="btn-pool btn-pool-primary" id="farm-stake-btn" onclick="handleStake('farm')" disabled>

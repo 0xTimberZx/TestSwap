@@ -112,7 +112,8 @@ let gateOffset = 0;
 function startGateMask() {
   for (let i = 0; i < 6; i++) {
     const cell = document.getElementById("dc" + i);
-    if (cell) { cell.classList.remove("locked", "active", "future", "settling"); cell.classList.add("gate-mask"); }
+    // Gold streak is viewer-specific state — it must never survive a disconnect.
+    if (cell) { cell.classList.remove("locked", "active", "future", "settling", "gold", "gold-flash"); cell.classList.add("gate-mask"); }
   }
   if (gateTimer) return;
   const paint = () => {
