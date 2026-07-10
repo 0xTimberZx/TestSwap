@@ -156,8 +156,14 @@
 /* the pot span now carries several segments (Pot · backed by · yield accruing);
    let it wrap at the "·" boundaries so it can't overflow a narrow phone. Each
    segment glues its number to its unit with NBSP, so wraps only between stats. */
-#sub-pot { white-space: normal; overflow-wrap: anywhere; }
+#sub-pot { white-space: normal; overflow-wrap: anywhere; text-align: center; }
 .dot-sep { color: var(--text-3); }
+/* Once the stats wrap onto multiple lines the · separators dangle at line
+   edges — drop them and let each stat stand centered on its own. */
+@media (max-width: 700px) {
+  .dot-sep { display: none; }
+  .round-substats { gap: 4px 14px; }
+}
 
 .gated-notice {
   text-align: center;
@@ -457,6 +463,13 @@
 }
 .past-round-meta { font-size: 11px; color: var(--text-2); }
 .past-round-winner { border-color: rgba(20,241,149,0.25); background: rgba(20,241,149,0.03); }
+/* Narrow screens: the meta wraps under the string only when it doesn't fit,
+   which made neighboring cards render one-line/two-line at random. Force the
+   meta onto its own row on every card so the list reads uniformly. */
+@media (max-width: 700px) {
+  .past-round-row { row-gap: 6px; }
+  .past-round-right { flex-basis: 100%; }
+}
 
 .btn-claim-round {
   background: var(--green);
@@ -820,6 +833,7 @@
 .nc-btn {
   display: block;
   text-align: center;
+  white-space: nowrap; /* keep the ↗︎ glued to the label on narrow phones */
   padding: 10px 18px;
   border-radius: 999px;
   font-size: 13px;
