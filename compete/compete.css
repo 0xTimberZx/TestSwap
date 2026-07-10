@@ -850,3 +850,18 @@
   .nc-actions { flex-direction: row; width: 100%; }
   .nc-btn { flex: 1; }
 }
+
+/* ─── USDT Prize Week chip (links to /competition/) ────────────────────────── */
+.comp-week-chip {
+  display: block;
+  text-align: center;
+  margin: 14px 0 4px;
+  padding: 11px 18px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: #ffd75e;
+  border: var(--bw) solid rgba(255, 215, 94, 0.4);
+  border-radius: 999px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.comp-week-chip:hover { border-color: #ffd75e; background: rgba(255, 215, 94, 0.06); }
