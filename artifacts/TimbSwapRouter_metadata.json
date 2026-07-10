@@ -56,6 +56,22 @@
 				"inputs": [
 					{
 						"internalType": "uint256",
+						"name": "round",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "segment",
+						"type": "uint256"
+					}
+				],
+				"name": "FreeNudgeCapReached",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
 						"name": "amountA",
 						"type": "uint256"
 					},
@@ -135,6 +151,11 @@
 					}
 				],
 				"name": "InvalidNudgeCount",
+				"type": "error"
+			},
+			{
+				"inputs": [],
+				"name": "InvalidPath",
 				"type": "error"
 			},
 			{
@@ -232,6 +253,19 @@
 					}
 				],
 				"name": "EligibleRegistrySet",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "capPerSegment",
+						"type": "uint256"
+					}
+				],
+				"name": "FreeNudgeCapSet",
 				"type": "event"
 			},
 			{
@@ -431,6 +465,19 @@
 				"anonymous": false,
 				"inputs": [
 					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "weight",
+						"type": "uint256"
+					}
+				],
+				"name": "SwapNudgeWeightSet",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
 						"indexed": true,
 						"internalType": "address",
 						"name": "timbPrize",
@@ -488,6 +535,32 @@
 			{
 				"inputs": [],
 				"name": "MAX_BATCH_NUDGE",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "MAX_HOPS",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "MAX_SWAP_NUDGE_WEIGHT",
 				"outputs": [
 					{
 						"internalType": "uint256",
@@ -669,6 +742,57 @@
 				"type": "function"
 			},
 			{
+				"inputs": [],
+				"name": "freeNudgeCapPerSeg",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "user",
+						"type": "address"
+					}
+				],
+				"name": "freeNudgesRemaining",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					}
+				],
+				"name": "freeNudgesUsed",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
 				"inputs": [
 					{
 						"internalType": "uint256",
@@ -724,6 +848,54 @@
 					}
 				],
 				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "amountOut",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address[]",
+						"name": "path",
+						"type": "address[]"
+					}
+				],
+				"name": "getAmountsInPath",
+				"outputs": [
+					{
+						"internalType": "uint256[]",
+						"name": "amounts",
+						"type": "uint256[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "amountIn",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address[]",
+						"name": "path",
+						"type": "address[]"
+					}
+				],
+				"name": "getAmountsOutPath",
+				"outputs": [
+					{
+						"internalType": "uint256[]",
+						"name": "amounts",
+						"type": "uint256[]"
+					}
+				],
+				"stateMutability": "view",
 				"type": "function"
 			},
 			{
@@ -943,6 +1115,32 @@
 			{
 				"inputs": [
 					{
+						"internalType": "uint256",
+						"name": "capPerSegment",
+						"type": "uint256"
+					}
+				],
+				"name": "setFreeNudgeCapPerSeg",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "weight",
+						"type": "uint256"
+					}
+				],
+				"name": "setSwapNudgeWeight",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
 						"internalType": "address",
 						"name": "_p",
 						"type": "address"
@@ -1120,6 +1318,63 @@
 				"inputs": [
 					{
 						"internalType": "uint256",
+						"name": "amountIn",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amountOutMin",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address[]",
+						"name": "path",
+						"type": "address[]"
+					},
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "deadline",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bool",
+						"name": "influencePrize",
+						"type": "bool"
+					}
+				],
+				"name": "swapExactTokensForTokensPath",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "amountOut",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "swapNudgeWeight",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
 						"name": "amountOut",
 						"type": "uint256"
 					},
@@ -1155,6 +1410,50 @@
 					}
 				],
 				"name": "swapTokensForExactTokens",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "amountIn",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "amountOut",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amountInMax",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address[]",
+						"name": "path",
+						"type": "address[]"
+					},
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "deadline",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bool",
+						"name": "influencePrize",
+						"type": "bool"
+					}
+				],
+				"name": "swapTokensForExactTokensPath",
 				"outputs": [
 					{
 						"internalType": "uint256",
@@ -1255,7 +1554,7 @@
 			"kind": "dev",
 			"methods": {
 				"advanceScroll(uint256)": {
-					"details": "The router is the address TimbPrize authorizes for nudgeScroll(),      so no TimbPrize change is needed. Each iteration inherits      TimbPrize's own guards (whenGameStarted, settlement-window block) —      the whole batch reverts if the settlement window opens mid-batch."
+					"details": "The router is the address TimbPrize authorizes for nudgeScroll(),      so no TimbPrize change is needed. Each iteration inherits      TimbPrize's own guards (whenGameStarted, settlement-window block).      #1 — this free (gas-only) path is capped per address per segment so      one wallet can't dominate the meter for free. The request is      CLAMPED to the remaining allowance rather than reverted, so a batch      that overshoots still applies what it can; it only reverts when the      caller has no allowance left this segment. Paid swap-nudges are not      capped (see _maybeNudge)."
 				},
 				"owner()": {
 					"details": "Returns the address of the current owner."
@@ -1282,6 +1581,12 @@
 				"MAX_BATCH_NUDGE()": {
 					"notice": "Gas-bounded cap for batched user nudges per transaction."
 				},
+				"MAX_HOPS()": {
+					"notice": "Max hops in a path-based swap (path.length <= MAX_HOPS + 1).         3 bounds gas and covers every realistic route (X->WETH->Y is 2)."
+				},
+				"MAX_SWAP_NUDGE_WEIGHT()": {
+					"notice": "Sanity ceiling for swapNudgeWeight."
+				},
 				"addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)": {
 					"notice": "Add liquidity to a token/token pair."
 				},
@@ -1291,11 +1596,32 @@
 				"advanceScroll(uint256)": {
 					"notice": "Nudge the prize scroll directly, without swapping. `count` = 1         is a single nudge; higher counts are a batch — accepted as one         transaction and applied one nudge at a time, in order, which         keeps concurrent batch requests cleanly sequenced on-chain."
 				},
+				"freeNudgeCapPerSeg()": {
+					"notice": "#1 — max gas-only (advanceScroll) nudges one address may make         per segment. Paid swap-nudges are NOT capped (they cost fees         per wallet, so sybil doesn't help). 0 = free path disabled."
+				},
+				"freeNudgesRemaining(address)": {
+					"notice": "Remaining free (gas-only) nudges the caller may make this         segment. Frontend reads this to size the Advance batch so a         request never overshoots the cap. Resets each segment."
+				},
+				"freeNudgesUsed(bytes32)": {
+					"notice": "Free-nudge usage, keyed by keccak256(round, segment, user) so         the cap auto-resets every segment with no cleanup."
+				},
+				"getAmountsInPath(uint256,address[])": {
+					"notice": "Amounts along a multi-hop path for an exact output."
+				},
+				"getAmountsOutPath(uint256,address[])": {
+					"notice": "Amounts along a multi-hop path for an exact input — the         frontend quotes routes (and sizes amountOutMin) with this."
+				},
 				"removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)": {
 					"notice": "Remove liquidity from a token/token pair."
 				},
 				"removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)": {
 					"notice": "Remove liquidity from a WETH/token pair, receiving native ETH."
+				},
+				"setFreeNudgeCapPerSeg(uint256)": {
+					"notice": "Owner: set the per-address free-nudge cap per segment (#1).         0 disables the free path entirely (swaps still nudge)."
+				},
+				"setSwapNudgeWeight(uint256)": {
+					"notice": "Owner: set how many meter units an eligible swap is worth (#2)."
 				},
 				"swapExactETHForTokens(uint256,uint256,address,address,uint256,bool)": {
 					"notice": "Swap an exact amount of native ETH for as much tokenOut as possible."
@@ -1306,8 +1632,17 @@
 				"swapExactTokensForTokens(uint256,uint256,address,address,address,uint256,bool)": {
 					"notice": "Swap an exact amount of tokenIn for as much tokenOut as possible."
 				},
+				"swapExactTokensForTokensPath(uint256,uint256,address[],address,uint256,bool)": {
+					"notice": "Swap an exact amount of path[0] along `path` (e.g.         [USDT, WETH, TIMBS]) for as much path[last] as possible —         for pairs with no direct pool. Every adjacent pair in the         path must exist. The protocol fee and prize-nudge eligibility         are keyed on path[0], once, exactly like a single-hop swap."
+				},
+				"swapNudgeWeight()": {
+					"notice": "#2 — meter units an eligible swap is worth. A swap moves the         scroll by this many nudges (each a separate nudgeScroll call),         so the meter race routes through the AMM and feeds the fee/burn         loop. Owner-set, 1..MAX_SWAP_NUDGE_WEIGHT."
+				},
 				"swapTokensForExactTokens(uint256,uint256,address,address,address,uint256,bool)": {
 					"notice": "Swap as little tokenIn as possible for an exact tokenOut amount."
+				},
+				"swapTokensForExactTokensPath(uint256,uint256,address[],address,uint256,bool)": {
+					"notice": "Swap as little path[0] as possible along `path` for an exact         amount of path[last]."
 				}
 			},
 			"notice": "Routes swaps and liquidity through TimbSwap AMM pairs.",
@@ -1411,11 +1746,11 @@
 			]
 		},
 		"contracts/TimbSwapRouter.sol": {
-			"keccak256": "0x8ae186c503a0759aaf54d6d478568e14be41675a03f0cffa981f9257bab0fe2d",
+			"keccak256": "0x4305eea08ce8aab2780535441eb7384dbcae69ccaa5a080eb5e0c9b211bc5c71",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e288db10c2fc914c6b71fa8323df9ff80a88c3757162ac5e36816f9a87268b79",
-				"dweb:/ipfs/QmTpJAJSxE6rxUVwXWZqqpSgGdEBqfXxSFVn9AwifGLa7D"
+				"bzz-raw://04b1b951f861c4c1f8a1ed5938230987d7dc30a1699e397eb85e258b544fb248",
+				"dweb:/ipfs/QmfYTqkoLdCHjHQah5hdTaHMAygXf4R6NT1TgpkYDoDGbe"
 			]
 		}
 	},

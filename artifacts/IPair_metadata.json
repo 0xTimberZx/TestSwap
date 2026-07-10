@@ -216,11 +216,11 @@
 			]
 		},
 		"contracts/TimbSwapRouter.sol": {
-			"keccak256": "0x8ae186c503a0759aaf54d6d478568e14be41675a03f0cffa981f9257bab0fe2d",
+			"keccak256": "0x4305eea08ce8aab2780535441eb7384dbcae69ccaa5a080eb5e0c9b211bc5c71",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e288db10c2fc914c6b71fa8323df9ff80a88c3757162ac5e36816f9a87268b79",
-				"dweb:/ipfs/QmTpJAJSxE6rxUVwXWZqqpSgGdEBqfXxSFVn9AwifGLa7D"
+				"bzz-raw://04b1b951f861c4c1f8a1ed5938230987d7dc30a1699e397eb85e258b544fb248",
+				"dweb:/ipfs/QmfYTqkoLdCHjHQah5hdTaHMAygXf4R6NT1TgpkYDoDGbe"
 			]
 		}
 	},

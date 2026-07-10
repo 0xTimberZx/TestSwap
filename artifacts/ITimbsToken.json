@@ -41,7 +41,6 @@
 			"approve(address,uint256)": "095ea7b3",
 			"balanceOf(address)": "70a08231",
 			"burn(uint256)": "42966c68",
-			"safeTransfer(address,uint256)": "423f6cef",
 			"totalSupply()": "18160ddd",
 			"transfer(address,uint256)": "a9059cbb",
 			"transferFrom(address,address,uint256)": "23b872dd"
@@ -174,24 +173,6 @@
 				}
 			],
 			"name": "burn",
-			"outputs": [],
-			"stateMutability": "nonpayable",
-			"type": "function"
-		},
-		{
-			"inputs": [
-				{
-					"internalType": "address",
-					"name": "to",
-					"type": "address"
-				},
-				{
-					"internalType": "uint256",
-					"name": "amount",
-					"type": "uint256"
-				}
-			],
-			"name": "safeTransfer",
 			"outputs": [],
 			"stateMutability": "nonpayable",
 			"type": "function"

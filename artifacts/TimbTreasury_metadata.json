@@ -26,6 +26,11 @@
 						"internalType": "address",
 						"name": "_timbsEthPair",
 						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "_weth",
+						"type": "address"
 					}
 				],
 				"stateMutability": "nonpayable",
@@ -93,6 +98,17 @@
 			{
 				"inputs": [],
 				"name": "ReentrancyGuardReentrantCall",
+				"type": "error"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "token",
+						"type": "address"
+					}
+				],
+				"name": "SafeERC20FailedOperation",
 				"type": "error"
 			},
 			{
@@ -563,6 +579,19 @@
 				"type": "function"
 			},
 			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_weth",
+						"type": "address"
+					}
+				],
+				"name": "setWeth",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
 				"inputs": [],
 				"name": "stakingDistributionPeriod",
 				"outputs": [
@@ -693,6 +722,19 @@
 				"type": "function"
 			},
 			{
+				"inputs": [],
+				"name": "weth",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
 				"inputs": [
 					{
 						"internalType": "address",
@@ -731,6 +773,11 @@
 					{
 						"details": "Unauthorized reentrant call."
 					}
+				],
+				"SafeERC20FailedOperation(address)": [
+					{
+						"details": "An operation with an ERC-20 token failed."
+					}
 				]
 			},
 			"kind": "dev",
@@ -740,7 +787,8 @@
 						"_prizeEscrow": "PrizeEscrow contract address.",
 						"_timbStaking": "TimbStaking contract address.",
 						"_timbsEthPair": "TIMBS/ETH pair address (set after pair deploy).",
-						"_timbsToken": "TIMBS token address."
+						"_timbsToken": "TIMBS token address.",
+						"_weth": "WETH address (pair reserves are WETH-denominated)."
 					}
 				},
 				"distributeToPot(uint256)": {
@@ -840,6 +888,9 @@
 				},
 				"totalTimbsDistributed()": {
 					"notice": "Total TIMBS distributed to stakers via buybacks (lifetime)."
+				},
+				"weth()": {
+					"notice": "WETH — the pair holds WETH, not native ETH. Buyback ETH is         wrapped here before being paid into the pair."
 				},
 				"withdrawOperational(address,uint256)": {
 					"notice": "Withdraw ETH for operational expenses (owner only)."
@@ -946,11 +997,11 @@
 			]
 		},
 		"contracts/TimbTreasury.sol": {
-			"keccak256": "0xc94ef1613cc2b0fb954cbd753a4b70137a85633b98a9b5b7c0ab62be1ec2800d",
+			"keccak256": "0x040c8045771b3e5d99244f2ad970cdbf1e73b4dbd3698564e61e7ba661ad0501",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e03183290e722b3397170d2a3c42e10dfac1c978df89415f31fa889513decd93",
-				"dweb:/ipfs/QmTbLtH5u6BCuKyfiUWRVwHefu6gg9vJCfsqSg2pXk8J7a"
+				"bzz-raw://ee5362776f618f8d4008e0a936e4df96abf6a9287a26385c79c25312dd17071b",
+				"dweb:/ipfs/QmP8UE9YSjgZc4aCWL9RYbt2fjH61wtRFRTpkgbSnX9vbB"
 			]
 		}
 	},

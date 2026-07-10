@@ -37,11 +37,39 @@
 		},
 		"gasEstimates": null,
 		"methodIdentifiers": {
+			"currentRound()": "8a19c8bc",
+			"currentSegment()": "99b465cb",
 			"isSettlementWindow()": "c33b7586",
 			"nudgeScroll()": "0b7a567b"
 		}
 	},
 	"abi": [
+		{
+			"inputs": [],
+			"name": "currentRound",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "currentSegment",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
 		{
 			"inputs": [],
 			"name": "isSettlementWindow",

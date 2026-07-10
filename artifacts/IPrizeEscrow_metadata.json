@@ -7,9 +7,45 @@
 		"abi": [
 			{
 				"inputs": [],
+				"name": "balance",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
 				"name": "deposit",
 				"outputs": [],
 				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "round",
+						"type": "uint256"
+					}
+				],
+				"name": "pay",
+				"outputs": [],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			}
 		],
@@ -26,7 +62,7 @@
 	},
 	"settings": {
 		"compilationTarget": {
-			"contracts/TimbTreasury.sol": "IPrizeEscrow"
+			"contracts/TimbPrize.sol": "IPrizeEscrow"
 		},
 		"evmVersion": "london",
 		"libraries": {},
@@ -120,12 +156,12 @@
 				"dweb:/ipfs/QmadRjHbkicwqwwh61raUEapaVEtaLMcYbQZWs9gUkgj3u"
 			]
 		},
-		"contracts/TimbTreasury.sol": {
-			"keccak256": "0xc94ef1613cc2b0fb954cbd753a4b70137a85633b98a9b5b7c0ab62be1ec2800d",
+		"contracts/TimbPrize.sol": {
+			"keccak256": "0x620bc2337d21f2d809403d6eb492eac9b74532fb09f924c0619453ba9c1c58ee",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e03183290e722b3397170d2a3c42e10dfac1c978df89415f31fa889513decd93",
-				"dweb:/ipfs/QmTbLtH5u6BCuKyfiUWRVwHefu6gg9vJCfsqSg2pXk8J7a"
+				"bzz-raw://0ed9a3d8b23c35483f799f0e44499f9d149d95b7bb4357725fe2398af8104975",
+				"dweb:/ipfs/QmWLpfRbRngZC6wVFHgnzx2thbkhefFxi22b7ekcrWN1CD"
 			]
 		}
 	},

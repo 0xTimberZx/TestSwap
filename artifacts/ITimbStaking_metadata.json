@@ -132,11 +132,11 @@
 			]
 		},
 		"contracts/TimbTreasury.sol": {
-			"keccak256": "0xc94ef1613cc2b0fb954cbd753a4b70137a85633b98a9b5b7c0ab62be1ec2800d",
+			"keccak256": "0x040c8045771b3e5d99244f2ad970cdbf1e73b4dbd3698564e61e7ba661ad0501",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e03183290e722b3397170d2a3c42e10dfac1c978df89415f31fa889513decd93",
-				"dweb:/ipfs/QmTbLtH5u6BCuKyfiUWRVwHefu6gg9vJCfsqSg2pXk8J7a"
+				"bzz-raw://ee5362776f618f8d4008e0a936e4df96abf6a9287a26385c79c25312dd17071b",
+				"dweb:/ipfs/QmP8UE9YSjgZc4aCWL9RYbt2fjH61wtRFRTpkgbSnX9vbB"
 			]
 		}
 	},
