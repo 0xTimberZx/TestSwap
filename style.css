@@ -104,10 +104,10 @@ body { padding-top: 60px; }
 .nav-links { display: flex; align-items: center; gap: 4px; }
 
 /* Temporarily offline destinations (Governance, Lock Vault, Airdrop):
-   rendered wherever they normally appear — nav dropdowns, mobile overlay,
-   landing feature cards — but dimmed and not clickable. Re-enable by
+   fully hidden wherever they appear — nav dropdowns, mobile overlay, the
+   landing Lock feature card. The markup stays in place; re-enable by
    restoring the href and dropping this class. */
-.nav-off { opacity: 0.4; pointer-events: none; cursor: default; }
+.nav-off { display: none !important; }
 
 .nav-group { position: relative; }
 
@@ -418,7 +418,9 @@ body { padding-top: 60px; }
 /* ─── Features ──────────────────────────────────────────────────────────────── */
 .features {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* auto-fit instead of a fixed 4: with the Lock card hidden (nav-off) the
+     remaining cards split the row evenly instead of leaving an empty cell. */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1px;
   background: var(--border);
   border-top: var(--bw) solid var(--border);
