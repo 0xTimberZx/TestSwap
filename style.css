@@ -61,6 +61,10 @@ body {
 a { color: inherit; text-decoration: none; }
 
 /* ─── Nav ───────────────────────────────────────────────────────────────────── */
+/* fixed, not sticky: iOS Safari (worst in in-app browsers) repositions sticky
+   elements a frame behind momentum scrolling, so the bar visibly drifts down
+   the page mid-scroll. Fixed tracks every frame on all platforms; the body
+   padding below compensates for the bar leaving normal flow. */
 .nav {
   display: flex;
   align-items: center;
@@ -69,10 +73,13 @@ a { color: inherit; text-decoration: none; }
   height: 60px;
   background: var(--bg);
   border-bottom: var(--bw) solid var(--border);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
 }
+body { padding-top: 60px; }
 
 .nav-logo {
   display: flex;
@@ -95,6 +102,12 @@ a { color: inherit; text-decoration: none; }
 }
 
 .nav-links { display: flex; align-items: center; gap: 4px; }
+
+/* Temporarily offline destinations (Governance, Lock Vault, Airdrop):
+   rendered wherever they normally appear — nav dropdowns, mobile overlay,
+   landing feature cards — but dimmed and not clickable. Re-enable by
+   restoring the href and dropping this class. */
+.nav-off { opacity: 0.4; pointer-events: none; cursor: default; }
 
 .nav-group { position: relative; }
 
