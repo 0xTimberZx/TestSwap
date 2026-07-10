@@ -70,6 +70,15 @@ function initScrollSpy() {
   }, { rootMargin: "-80px 0px -70% 0px", threshold: 0 });
 
   for (const sec of map.keys()) observer.observe(sec);
+
+  // Short sections at the very bottom (Disclaimer) can never reach the
+  // observer's activation band — when the page is scrolled to the end,
+  // hand the highlight to the last link explicitly.
+  window.addEventListener("scroll", () => {
+    const atBottom = window.innerHeight + window.scrollY >=
+                     document.documentElement.scrollHeight - 8;
+    if (atBottom) setActive(links[links.length - 1]);
+  }, { passive: true });
 }
 
 // ─── Wallet (optional — nav parity only; the page has no gated content) ─────────

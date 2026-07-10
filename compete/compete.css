@@ -743,3 +743,26 @@
   margin: 4px 0 0;
   min-height: 14px;
 }
+
+/* ─── Winning streak (gold) ─────────────────────────────────────────────────
+   Settled letters matching the viewer's active ticket as an unbroken run from
+   segment 1 burn lightning-gold instead of green; a full 6/6 match flashes
+   just before the round rolls. Winning strings in the history logs share the
+   same golden text. */
+.digit-cell.gold .digit-char {
+  color: #ffd75e;
+  border-color: #ffd75e;
+  background: rgba(255, 215, 94, 0.10);
+  text-shadow: 0 0 12px rgba(255, 215, 94, 0.55);
+}
+.digit-cell.gold-flash .digit-char {
+  animation: gold-flash 0.45s ease-in-out 4;
+}
+@keyframes gold-flash {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 94, 0); }
+  50%      { box-shadow: 0 0 26px rgba(255, 215, 94, 0.9); background: rgba(255, 215, 94, 0.32); }
+}
+.past-round-string.gold-string {
+  color: #ffd75e;
+  text-shadow: 0 0 10px rgba(255, 215, 94, 0.45);
+}

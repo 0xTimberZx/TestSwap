@@ -420,11 +420,16 @@ function readProviderForEligibility() {
 
 // ─── Balances ─────────────────────────────────────────────────────────────────
 
+// Cached pay-side balance (wei) so the quote path can flag over-balance
+// inputs synchronously. null = unknown (disconnected / not yet read).
+let _balInWei = null;
+
 async function refreshBalances() {
   const balIn  = document.getElementById("bal-in");
   const balOut = document.getElementById("bal-out");
 
   if (!userAddress) {
+    _balInWei = null;
     balIn.textContent  = "Balance: —";
     balOut.textContent = "Balance: —";
     return;
@@ -433,15 +438,34 @@ async function refreshBalances() {
   try {
     if (tokenIn) {
       const bal = await tokenBalance(tokenIn);
+      _balInWei = bal;
       balIn.textContent = `Balance: ${fmt(bal, tokenIn.decimals, 4)}`;
     }
     if (tokenOut) {
       const bal = await tokenBalance(tokenOut);
       balOut.textContent = `Balance: ${fmt(bal, tokenOut.decimals, 4)}`;
     }
+    // A landed balance can flip the button either way (insufficient ↔ Swap) —
+    // re-evaluate if the user already has an amount typed.
+    if (tokenIn && tokenOut && document.getElementById("amount-in")?.value) {
+      recalcQuote();
+    }
   } catch (e) {
     console.warn("refreshBalances:", e.message);
   }
+}
+
+// "Insufficient <SYM> balance" when the typed pay amount (plus the 0.05%
+// protocol fee on swaps) exceeds the cached wallet balance; null otherwise.
+// Unknown balance (still loading) never blocks.
+function overBalanceLabel() {
+  if (!userAddress || !tokenIn || _balInWei === null) return null;
+  const amt = document.getElementById("amount-in")?.value;
+  if (!amt || parseFloat(amt) <= 0) return null;
+  let needIn;
+  try { needIn = ethers.utils.parseUnits(amt, tokenIn.decimals); } catch { return null; }
+  if (!isWrapPair()) needIn = needIn.add(needIn.mul(5).div(10000)); // + protocol fee
+  return _balInWei.lt(needIn) ? `Insufficient ${tokenIn.symbol} balance` : null;
 }
 
 // ─── Quote ────────────────────────────────────────────────────────────────────
@@ -482,7 +506,7 @@ async function recalcQuote() {
     infoBox.classList.add("hidden");
     if (!src.value || parseFloat(src.value) <= 0) { updateSwapButton("Enter an amount"); return; }
     if (!userAddress) { updateSwapButton("Connect wallet to swap"); return; }
-    updateSwapButton(isNative(tokenIn) ? "Wrap ETH → WETH" : "Unwrap WETH → ETH");
+    updateSwapButton(overBalanceLabel() || (isNative(tokenIn) ? "Wrap ETH → WETH" : "Unwrap WETH → ETH"));
     return;
   }
 
@@ -546,7 +570,7 @@ async function recalcQuote() {
       renderSwapInfo(amountInWei, amountOutWei, spotOf(reserveIn, reserveOut));
     }
 
-    updateSwapButton(userAddress ? "Swap" : "Connect wallet to swap");
+    updateSwapButton(overBalanceLabel() || (userAddress ? "Swap" : "Connect wallet to swap"));
 
   } catch (e) {
     console.warn("recalcQuote:", e.message);
@@ -615,7 +639,7 @@ async function quoteViaWeth(router, inputIn, inputOut, infoBox) {
     }
     renderSwapInfo(amountInWei, amountOutWei, await pathSpot(router, path), " · via WETH");
     swapRoute = path;
-    updateSwapButton(userAddress ? "Swap via WETH" : "Connect wallet to swap");
+    updateSwapButton(overBalanceLabel() || (userAddress ? "Swap via WETH" : "Connect wallet to swap"));
     return true;
   } catch {
     // Router predates path support, a hop pool is missing, or a hop can't
@@ -653,7 +677,7 @@ function updateSwapButton(text) {
   btn.textContent = text;
   btn.disabled = !userAddress || !tokenIn || !tokenOut ||
                  text === "Enter an amount" || text === "No liquidity for this pair" ||
-                 text === "Insufficient liquidity" || text === "Amount too small for this pool" ||
+                 text.startsWith("Insufficient") || text === "Amount too small for this pool" ||
                  text === "Amount too small for this route";
 }
 
