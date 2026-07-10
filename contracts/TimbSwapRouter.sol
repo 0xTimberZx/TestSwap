@@ -91,6 +91,10 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     /// @notice Sanity ceiling for swapNudgeWeight.
     uint256 public constant MAX_SWAP_NUDGE_WEIGHT = 10;
 
+    /// @notice Max hops in a path-based swap (path.length <= MAX_HOPS + 1).
+    ///         3 bounds gas and covers every realistic route (X->WETH->Y is 2).
+    uint256 public constant MAX_HOPS = 3;
+
     // ─── Events ──────────────────────────────────────────────────────────────
 
     event SwapExecuted(address sender, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, address to);
@@ -125,6 +129,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     error InvalidNudgeCount(uint256 count, uint256 max);
     error PrizeNotSet();
     error FreeNudgeCapReached(uint256 round, uint256 segment);
+    error InvalidPath();
 
     // ─── Modifiers ───────────────────────────────────────────────────────────
 
@@ -238,6 +243,45 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         return (amountA * reserveB) / reserveA;
     }
 
+    // ─── Internal: Multi-hop quotes ───────────────────────────────────────────
+
+    /// @dev Amounts along `path` for an exact input, front-to-back. Every
+    ///      adjacent pair must exist (PairNotFound otherwise).
+    function _getAmountsOut(uint256 amountIn, address[] calldata path)
+        internal view returns (uint256[] memory amounts)
+    {
+        uint256 n = path.length;
+        if (n < 2 || n > MAX_HOPS + 1) revert InvalidPath();
+        amounts = new uint256[](n);
+        amounts[0] = amountIn;
+        for (uint256 i = 0; i < n - 1; i++) {
+            if (path[i] == address(0) || path[i + 1] == address(0) || path[i] == path[i + 1]) {
+                revert InvalidPath();
+            }
+            (uint256 reserveIn, uint256 reserveOut) =
+                _getReserves(_getPair(path[i], path[i + 1]), path[i]);
+            amounts[i + 1] = _getAmountOut(amounts[i], reserveIn, reserveOut);
+        }
+    }
+
+    /// @dev Amounts along `path` for an exact output, filled back-to-front.
+    function _getAmountsIn(uint256 amountOut, address[] calldata path)
+        internal view returns (uint256[] memory amounts)
+    {
+        uint256 n = path.length;
+        if (n < 2 || n > MAX_HOPS + 1) revert InvalidPath();
+        amounts = new uint256[](n);
+        amounts[n - 1] = amountOut;
+        for (uint256 i = n - 1; i > 0; i--) {
+            if (path[i] == address(0) || path[i - 1] == address(0) || path[i - 1] == path[i]) {
+                revert InvalidPath();
+            }
+            (uint256 reserveIn, uint256 reserveOut) =
+                _getReserves(_getPair(path[i - 1], path[i]), path[i - 1]);
+            amounts[i - 1] = _getAmountIn(amounts[i], reserveIn, reserveOut);
+        }
+    }
+
     // ─── Internal: Protocol Fee ───────────────────────────────────────────────
 
     function _collectProtocolFee(address token, uint256 amountIn) internal {
@@ -300,6 +344,33 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         emit SwapExecuted(msg.sender, tokenIn, tokenOut, amountIn, amountOut, to);
     }
 
+    /// @dev Multi-hop execution. The pair derives its input from balance
+    ///      delta and enforces K per leg, so each hop pays its output
+    ///      straight into the next hop's pair; the last hop pays `to`.
+    ///      Router fee + prize nudge are keyed on path[0], once — identical
+    ///      economics to a single-hop swap of the same input.
+    function _executeSwapPath(
+        address[] calldata path,
+        uint256[] memory amounts,
+        address to,
+        bool influencePrize
+    ) internal {
+        uint256 n = path.length;
+
+        address firstPair = _getPair(path[0], path[1]);
+        IERC20(path[0]).safeTransferFrom(msg.sender, firstPair, amounts[0]);
+        _collectProtocolFee(path[0], amounts[0]);
+
+        for (uint256 i = 0; i < n - 1; i++) {
+            address pair = i == 0 ? firstPair : _getPair(path[i], path[i + 1]);
+            address next = i < n - 2 ? _getPair(path[i + 1], path[i + 2]) : to;
+            _swapOnPair(pair, path[i], amounts[i + 1], next);
+        }
+
+        _maybeNudge(path[0], influencePrize);
+        emit SwapExecuted(msg.sender, path[0], path[n - 1], amounts[0], amounts[n - 1], to);
+    }
+
     // ─── View: Quote Helpers ──────────────────────────────────────────────────
 
     function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut)
@@ -321,6 +392,17 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         if (pair == address(0)) return (0, 0);
         return _getReserves(pair, tokenA);
     }
+
+    /// @notice Amounts along a multi-hop path for an exact input — the
+    ///         frontend quotes routes (and sizes amountOutMin) with this.
+    function getAmountsOutPath(uint256 amountIn, address[] calldata path)
+        external view returns (uint256[] memory amounts)
+    { return _getAmountsOut(amountIn, path); }
+
+    /// @notice Amounts along a multi-hop path for an exact output.
+    function getAmountsInPath(uint256 amountOut, address[] calldata path)
+        external view returns (uint256[] memory amounts)
+    { return _getAmountsIn(amountOut, path); }
 
     // ─── Swap: Exact In ───────────────────────────────────────────────────────
 
@@ -383,6 +465,68 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         if (amountIn > amountInMax) revert ExcessiveInputAmount();
 
         _executeSwap(tokenIn, tokenOut, amountIn, amountOut, to, influencePrize);
+    }
+
+    // ─── Swap: Multi-hop (path) ──────────────────────────────────────────────
+
+    /**
+     * @notice Swap an exact amount of path[0] along `path` (e.g.
+     *         [USDT, WETH, TIMBS]) for as much path[last] as possible —
+     *         for pairs with no direct pool. Every adjacent pair in the
+     *         path must exist. The protocol fee and prize-nudge eligibility
+     *         are keyed on path[0], once, exactly like a single-hop swap.
+     */
+    function swapExactTokensForTokensPath(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline,
+        bool    influencePrize
+    )
+        external
+        nonReentrant
+        whenNotPaused
+        ensure(deadline)
+        returns (uint256 amountOut)
+    {
+        if (amountIn == 0)    revert ZeroAmount();
+        if (to == address(0)) revert ZeroAddress();
+
+        uint256[] memory amounts = _getAmountsOut(amountIn, path);
+        amountOut = amounts[amounts.length - 1];
+        if (amountOut < amountOutMin)
+            revert InsufficientOutputAmount(amountOut, amountOutMin);
+
+        _executeSwapPath(path, amounts, to, influencePrize);
+    }
+
+    /**
+     * @notice Swap as little path[0] as possible along `path` for an exact
+     *         amount of path[last].
+     */
+    function swapTokensForExactTokensPath(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to,
+        uint256 deadline,
+        bool    influencePrize
+    )
+        external
+        nonReentrant
+        whenNotPaused
+        ensure(deadline)
+        returns (uint256 amountIn)
+    {
+        if (amountOut == 0)   revert ZeroAmount();
+        if (to == address(0)) revert ZeroAddress();
+
+        uint256[] memory amounts = _getAmountsIn(amountOut, path);
+        amountIn = amounts[0];
+        if (amountIn > amountInMax) revert ExcessiveInputAmount();
+
+        _executeSwapPath(path, amounts, to, influencePrize);
     }
 
     // ─── Swap: Native ETH ─────────────────────────────────────────────────────
