@@ -82,6 +82,9 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         uint256      supersedes;        // conceded ancestor id (0 = none)
         uint256      supersededBy;      // replacement id (0 = live end of chain)
         uint256      createdAt;         // block timestamp at mint
+        uint256      forfeitRound;      // round at which unclaimed escrow is swept
+                                        // (§14: max of the refund-window end and,
+                                        //  if the ticket won, the post-claim window)
     }
 
     // ─── Constants ───────────────────────────────────────────────────────────
@@ -89,12 +92,23 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     /// @notice Cap on extra rounds per ticket — bounds the round-index loop.
     uint256 public constant MAX_EXTRA_ROUNDS = 12;
 
-    /// @notice Principal refund window after lastEligibleRound (in rounds).
-    ///         Deliberately decoupled from TimbPrize's 2-round prize-claim
-    ///         window: every ticket gets a hard 4 rounds to withdraw its
-    ///         escrow before forfeiture — winning (and even letting a prize
-    ///         claim lapse) never shortens it.
+    /// @notice Principal refund window (in rounds). The 4-round forfeiture
+    ///         countdown begins at the LATER of (a) the round the ticket's
+    ///         eligibility ends and (b) the round its prize-claim right ends —
+    ///         so a ticket that wins its last eligible round gets its full
+    ///         refund window AFTER the 2-round claim closes (forfeit at LER+6),
+    ///         while non-winners forfeit at LER+4. §14.
     uint256 public constant REFUND_WINDOW_ROUNDS = 4;
+
+    /// @notice Prize-claim window mirrored from TimbPrize — a winner's claim
+    ///         right runs this many rounds past the round it matched. Used to
+    ///         push the forfeiture anchor when recordWinners() reports a win.
+    uint256 public constant PRIZE_CLAIM_WINDOW_ROUNDS = 2;
+
+    /// @notice Max rounds the forfeiture anchor can be pushed past
+    ///         lastEligibleRound by a win (claim window + refund window).
+    ///         Bounds the settlement sweep's bucket scan.
+    uint256 public constant MAX_FORFEIT_PUSH = PRIZE_CLAIM_WINDOW_ROUNDS;
 
     // ─── State ───────────────────────────────────────────────────────────────
 
@@ -166,6 +180,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     event TicketExpired(uint256 indexed ticketId, uint256 indexed round);
     event TicketClosed(uint256 indexed ticketId, uint256 refundAmount, address escrowToken);
     event TicketIneligible(uint256 indexed ticketId, uint256 absorbedAmount, address escrowToken);
+    event TicketForfeitExtended(uint256 indexed ticketId, uint256 indexed wonRound, uint256 newForfeitRound);
     event ExtraRoundsSunk(address indexed player, uint256 indexed ticketId, uint256 timbsAmount);
     event EntryCostUpdated(uint256 timbsCost, uint256 ethCost);
     event CurrentRoundUpdated(uint256 round);
@@ -274,7 +289,10 @@ contract GameRegistry is Ownable, ReentrancyGuard {
             status:            TicketStatus.Pending,
             supersedes:        supersedes,
             supersededBy:      0,
-            createdAt:         block.timestamp
+            createdAt:         block.timestamp,
+            // Baseline forfeiture: refund window after the last eligible round.
+            // recordWinners() pushes this later if the ticket wins near the end.
+            forfeitRound:      lastRound + REFUND_WINDOW_ROUNDS
         });
         activeTicketOf[owner_] = id;
         _ticketsOf[owner_].push(id);
@@ -494,7 +512,9 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         if (currentRound <= t.lastEligibleRound) {
             revert TicketStillEligible(t.lastEligibleRound, currentRound);
         }
-        if (currentRound > t.lastEligibleRound + REFUND_WINDOW_ROUNDS) {
+        // Refundable through forfeitRound — the later of the refund-window end
+        // and (if this ticket won late) its post-claim window. §14.
+        if (currentRound > t.forfeitRound) {
             revert ClaimWindowClosed(t.lastEligibleRound, currentRound);
         }
 
@@ -553,19 +573,33 @@ contract GameRegistry is Ownable, ReentrancyGuard {
             }
         }
 
-        // 2. Refund-window lapse: lastEligibleRound == settledRound - 4 closes
-        //    now (principal stays withdrawable for the four rounds after the
-        //    run ends, regardless of any prize claim that lapsed earlier).
+        // 2. Refund-window lapse. A ticket forfeits when settledRound reaches
+        //    its per-ticket forfeitRound. Baseline is LER+4, but a win in the
+        //    ticket's last one/two eligible rounds pushes it up to LER+6 (§14),
+        //    so at round S the tickets forfeiting have LER in [S-4-2 .. S-4].
+        //    Scan those LER buckets and forfeit exactly those due this round.
         if (settledRound <= REFUND_WINDOW_ROUNDS) return;
-        uint256 lapsedRound = settledRound - REFUND_WINDOW_ROUNDS;
-        address[] storage lapsed = roundEntrants[lapsedRound];
-        for (uint256 i = 0; i < lapsed.length; i++) {
-            uint256 id = ticketAt[lapsed[i]][lapsedRound];
+        uint256 hi = settledRound - REFUND_WINDOW_ROUNDS;                 // baseline LER bucket (S-4)
+        uint256 lo = hi > MAX_FORFEIT_PUSH ? hi - MAX_FORFEIT_PUSH : 1;   // earliest LER that could forfeit now
+        for (uint256 ler = hi; ler >= lo; ler--) {
+            _sweepLapsedBucket(ler, settledRound);
+        }
+    }
+
+    /// @dev Forfeit tickets in one LER bucket whose forfeitRound == settledRound.
+    ///      The forfeitRound check (not LER alone) is what respects the §14
+    ///      "later of claim/active" anchor — a late winner in an earlier bucket
+    ///      is skipped until its own, later, forfeit round.
+    function _sweepLapsedBucket(uint256 ler, uint256 settledRound) internal {
+        address[] storage bucket = roundEntrants[ler];
+        for (uint256 i = 0; i < bucket.length; i++) {
+            uint256 id = ticketAt[bucket[i]][ler];
             if (id == 0) continue;
             Ticket storage t = tickets[id];
-            if (t.lastEligibleRound != lapsedRound) continue;
+            if (t.lastEligibleRound != ler)          continue;
+            if (t.forfeitRound != settledRound)      continue; // not due yet (won late)
             if (t.status != TicketStatus.Active &&
-                t.status != TicketStatus.Pending) continue;
+                t.status != TicketStatus.Pending)    continue; // already refunded/terminal
 
             uint256 amount = t.escrowAmount;
             address token  = t.escrowToken;
@@ -584,6 +618,24 @@ contract GameRegistry is Ownable, ReentrancyGuard {
                 }
             }
             emit TicketIneligible(id, amount, token);
+        }
+    }
+
+    /// @notice TimbPrize reports the winners of a settled round so the registry
+    ///         can push their forfeiture anchor past the prize-claim window —
+    ///         a winner's principal refund window starts only once the claim
+    ///         right is also over (§14). Idempotent and monotonic: forfeitRound
+    ///         only ever moves later, and settlement calls this in round order.
+    function recordWinners(uint256 round, address[] calldata winners) external onlyTimbPrize {
+        uint256 pushed = round + PRIZE_CLAIM_WINDOW_ROUNDS + REFUND_WINDOW_ROUNDS;
+        for (uint256 i = 0; i < winners.length; i++) {
+            uint256 id = ticketAt[winners[i]][round];
+            if (id == 0) continue;
+            Ticket storage t = tickets[id];
+            if (pushed > t.forfeitRound) {
+                t.forfeitRound = pushed;
+                emit TicketForfeitExtended(id, round, pushed);
+            }
         }
     }
 

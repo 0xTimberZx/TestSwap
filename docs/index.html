@@ -209,7 +209,7 @@
           <li><strong>Free nudges.</strong> You can also advance the scroll directly (gas only), capped per wallet per segment so no one can dominate the meter for free. Paid swap-nudges aren't capped because they cost fees.</li>
           <li><strong>Entries &amp; settlement.</strong> Each round records its entrants; when it settles, the entry count is snapshotted and winners are drawn. Past rounds on the Compete and Analytics pages show the entries recorded at the end of each round.</li>
           <li><strong>One ticket per wallet</strong> per round, with a lineage so you can see and replace a pending entry.</li>
-          <li><strong>Two clocks.</strong> A winner claims within <strong>2 rounds</strong> of the match (a lapsed prize recycles into the pot). Ticket principal stays withdrawable for <strong>4 rounds</strong> after the ticket's last eligible round — winning, or even missing a prize claim, never shortens it.</li>
+          <li><strong>Two clocks.</strong> A winner claims within <strong>2 rounds</strong> of the match (a lapsed prize recycles into the pot). Ticket principal stays withdrawable for <strong>4 rounds</strong> after the later of the ticket's last eligible round and its claim window — so winning near the end never shortens your refund time (it can only extend it, up to LER+6).</li>
           <li><strong>Locked letters are jittered.</strong> When a segment closes, the locked letter is the nudge counter mixed with the settling block's hash — every swap influences the outcome, nobody can aim it.</li>
         </ul>
         <p>The exact tuning (nudge weights, segment caps, emission balance) is documented in the repository's game-balance spec.</p>
