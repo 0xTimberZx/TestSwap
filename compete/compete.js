@@ -864,7 +864,7 @@ function renderTicketRow(t, displayStatus, opts) {
   const raw = t.status;
   const canCancel = raw === 0 && currentRoundNum !== null && playRound > currentRoundNum;
   const expired   = currentRoundNum !== null && currentRoundNum > lastRound;
-  const inWindow  = currentRoundNum !== null && currentRoundNum <= lastRound + 2;
+  const inWindow  = currentRoundNum !== null && currentRoundNum <= lastRound + 4;
   const canRefund = (raw === 0 || raw === 1) && expired && inWindow && !t.escrowAmount.isZero();
 
   let hint = "";
@@ -1315,7 +1315,9 @@ async function loadPastRounds() {
       let claimHtml = "";
       if (userAddress && res.winners.length > 0 &&
           res.winners.map(w => w.toLowerCase()).includes(userAddress.toLowerCase())) {
-        const inWindow = round <= r + 3;
+        // Prize claim: 2 rounds flat from the match (TimbPrize v4 dropped the
+        // old +1 grace) — claimable while currentRound <= settledRound + 2.
+        const inWindow = round <= r + 2;
         if (!claimed[r] && inWindow) {
           claimHtml = `<button id="claim-btn-${r}" class="btn-claim-round" onclick="handleClaimWinnings(${r})">Claim ${fmt(res.perWinner)} ETH</button>`;
         } else if (claimed[r]) {
