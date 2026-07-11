@@ -455,7 +455,7 @@ async function handleConnect() {
   const ok = await connectWallet();
   if (!ok) { DebugHub.logCheckpoint("Wallet Connect Failed", "fail"); return; }
 
-  DebugHub.startSession();
+  DebugHub.startSession(userAddress);
   DebugHub.logSecurity("Chain Check", "pass");
   DebugHub.logCheckpoint("Wallet Connected", "pass");
 
@@ -503,7 +503,7 @@ document.getElementById("lock-amount")?.addEventListener("input", updateLockButt
     document.getElementById("network-badge")?.classList.remove("hidden");
     const _addrEl = document.getElementById("wallet-addr");
     if (_addrEl) _addrEl.textContent = fmtAddr(_reconnected);
-    DebugHub.startSession();
+    DebugHub.startSession(_reconnected);
     DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
     listenForAccountChanges(async (newAddr) => {
       if (!newAddr) { handleDisconnect(); return; }

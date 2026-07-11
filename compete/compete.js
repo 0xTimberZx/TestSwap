@@ -1358,7 +1358,7 @@ async function handleConnect() {
   const ok = await connectWallet();
   if (!ok) { DebugHub.logCheckpoint("Wallet Connect Failed", "fail"); return; }
 
-  DebugHub.startSession();
+  DebugHub.startSession(userAddress);
   DebugHub.logSecurity("Chain Check", "pass");
   DebugHub.logCheckpoint("Wallet Connected", "pass");
 
@@ -1404,7 +1404,7 @@ function handleDisconnect() {
     document.getElementById("network-badge")?.classList.remove("hidden");
     const _el = document.getElementById("wallet-addr");
     if (_el) _el.textContent = fmtAddr(_reconnected);
-    DebugHub.startSession();
+    DebugHub.startSession(_reconnected);
     DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
     // Reflect the connected state on the entry button immediately; without this
     // it keeps reading "Connect wallet to enter" until the user types.

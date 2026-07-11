@@ -38,10 +38,12 @@ aggregate for the first time.
   that resolves carry the address (the session id is already fixed, though).
 - `accountsChanged` handlers pass the fresh account into `startSession(accounts[0])`.
 
-### Fix path (TimbSwap-side only — NO MyDapp copy)
-The v1.2.0 SDK already accepts `startSession(walletOverride)`. TimbSwap calls it
-with **no argument** at all 18 sites. Pass the address that the app already has
-in hand right after `connectWallet()` / `autoReconnect()`:
+### Fix path (TimbSwap-side only — NO MyDapp copy) — ✅ applied
+The v1.2.0 SDK already accepts `startSession(walletOverride)`. TimbSwap used to
+call it with **no argument** at all 19 sites; those now pass the address the app
+already has in hand right after `connectWallet()` / `autoReconnect()`
+(connect handlers → `userAddress`, auto-reconnect branches → the returned
+address, `accountsChanged` → the new account):
 
 ```js
 // before

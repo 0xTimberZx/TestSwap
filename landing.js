@@ -159,7 +159,7 @@ async function handleConnect() {
     return;
   }
 
-  DebugHub.startSession();
+  DebugHub.startSession(userAddress);
   DebugHub.logSecurity("Chain Check", "pass");
   DebugHub.logCheckpoint("Wallet Connected", "pass");
 
@@ -176,7 +176,7 @@ async function handleConnect() {
     } else {
       document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
       DebugHub.endSession();
-      DebugHub.startSession();
+      DebugHub.startSession(newAddr);
     }
   });
 }
@@ -204,7 +204,7 @@ function handleDisconnect() {
     document.getElementById("network-badge")?.classList.remove("hidden");
     const _addrEl = document.getElementById("wallet-addr");
     if (_addrEl) _addrEl.textContent = fmtAddr(_reconnected);
-    DebugHub.startSession();
+    DebugHub.startSession(_reconnected);
     DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
     listenForAccountChanges(async (newAddr) => {
       if (!newAddr) { handleDisconnect(); return; }

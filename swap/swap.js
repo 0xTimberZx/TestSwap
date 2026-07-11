@@ -1402,7 +1402,7 @@ async function handleConnect() {
   const ok = await connectWallet();
   if (!ok) { DebugHub.logCheckpoint("Wallet Connect Failed", "fail"); return; }
 
-  DebugHub.startSession();
+  DebugHub.startSession(userAddress);
   DebugHub.logSecurity("Chain Check", "pass");
   DebugHub.logCheckpoint("Wallet Connected", "pass");
 
@@ -1461,7 +1461,7 @@ function handleDisconnect() {
     updateSwapButton(tokenIn && tokenOut ? "Swap" : "Select tokens");
     await checkEligibility(); // reveal the (wallet-gated) prize panel now
     if (mode === "liquidity") await refreshLiquidity();
-    DebugHub.startSession();
+    DebugHub.startSession(_reconnected);
     DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
     listenForAccountChanges(async (newAddr) => {
       if (!newAddr) { handleDisconnect(); return; }

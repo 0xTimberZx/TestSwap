@@ -559,7 +559,7 @@ function applyDisconnectGate() {
 async function handleConnect() {
   const ok = await connectWallet();
   if (!ok) return;
-  DebugHub.startSession();
+  DebugHub.startSession(userAddress);
   document.getElementById("connect-btn").classList.add("hidden");
   document.getElementById("wallet-info").classList.remove("hidden");
   document.getElementById("network-badge").classList.remove("hidden");
@@ -593,7 +593,7 @@ function handleDisconnect() {
     document.getElementById("network-badge")?.classList.remove("hidden");
     const _el = document.getElementById("wallet-addr");
     if (_el) _el.textContent = fmtAddr(_reconnected);
-    DebugHub.startSession();
+    DebugHub.startSession(_reconnected);
     updateMetricFilterGate();
   }
 
