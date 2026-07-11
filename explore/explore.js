@@ -327,7 +327,7 @@ async function loadActivity() {
     // Volume lives on the pools table — refresh it now that we have fresh numbers.
     if (_poolsLoaded) renderPools();
     trades.sort((a, b) => b.block - a.block);
-    _lastTrades = trades.slice(0, 50);
+    _lastTrades = trades.slice(0, 20);
     renderTrades(_lastTrades);
     if (swapStatus) swapStatus.textContent = `${trades.length} trade${trades.length === 1 ? "" : "s"}`;
     setOverview(null, trades.length, null);
@@ -349,7 +349,7 @@ async function loadActivity() {
       }
     }
     liq.sort((a, b) => b.block - a.block);
-    _lastLiq = liq.slice(0, 50);
+    _lastLiq = liq.slice(0, 20);
     renderLiquidity(_lastLiq);
     if (liqStatus) liqStatus.textContent = `${liq.length} event${liq.length === 1 ? "" : "s"}`;
 

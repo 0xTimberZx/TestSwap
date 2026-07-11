@@ -25,7 +25,7 @@ const ADDRESSES = {
   TimbSwapRouter:       "0x40C7Caf90817C9891D278Ec1400B9deb180911f1", // v8 — multi-hop path routing
   EligibleTokenRegistry:"0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04",
   GameRegistry:         "0xD6c9001c6Bbb55761f7476009AaF5F71C21Fe0b5",
-  TimbPrize:            "0x35490DA1A7FF75C09eF90235Fdde700Fb04DB03F",
+  TimbPrize:            "0xBBcb21Ef7DBEef21d8a0DE5972E61fd0369Ed3c0", // v6 — class-preserving jitter
   TimbStaking:          "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   TimbFarm:             "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
   TimbLockVault:        "0x0157086E7670D1eFb15DC6b5158eE78279927a41",

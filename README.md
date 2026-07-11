@@ -18,7 +18,7 @@ A full-stack DeFi protocol on Arbitrum Sepolia — AMM DEX, prize game, LP farmi
 | TimbSwapRouter v8 | `0x40C7Caf90817C9891D278Ec1400B9deb180911f1` |
 | EligibleTokenRegistry | `0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04` |
 | GameRegistry v5 | `0xD6c9001c6Bbb55761f7476009AaF5F71C21Fe0b5` |
-| TimbPrize v5 | `0x35490DA1A7FF75C09eF90235Fdde700Fb04DB03F` |
+| TimbPrize v6 | `0xBBcb21Ef7DBEef21d8a0DE5972E61fd0369Ed3c0` |
 | TimbYieldVault | `0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F` |
 | PrizeEscrow | `0x865C50d933e63BbE388EEAFa017AE634B0A6fB6D` |
 | TimbStaking | `0xe776c7b700B190ED8248741F9b518B08d8733C8F` |
