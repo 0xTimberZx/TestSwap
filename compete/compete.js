@@ -166,7 +166,20 @@ function stopGateMask() {
   }
 }
 
-function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
+// Decode the contract's bytes6 currentWindow ("0x414243…") into 6 chars.
+// Locked positions carry the JITTERED character the round will actually
+// score (TimbPrize v4 §13.2); 0x00 positions (future segments) become null.
+function windowChars(window6) {
+  const hex = (window6 || "0x").replace(/^0x/, "").padEnd(12, "0");
+  const out = [];
+  for (let i = 0; i < 6; i++) {
+    const code = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    out.push(code > 0 ? String.fromCharCode(code) : null);
+  }
+  return out;
+}
+
+function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement, winChars) {
   // Wallet-gated: hide every real digit behind the CONNECT WALLET marquee.
   if (!userAddress) { startGateMask(); return; }
   stopGateMask();
@@ -178,10 +191,13 @@ function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
     if (!cell || !charEl) continue;
     cell.classList.remove("locked", "active", "future", "gated", "settling", "gate-mask", "gold", "gold-flash");
     if (seg < segment || (seg === segment && digitLocked[i])) {
-      charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
+      // Locked: the jittered character the contract froze — NOT counter % 36
+      // (falls back to the counter char only if the window byte is missing).
+      charEl.textContent = (winChars && winChars[i]) || ALPHABET[Number(digitCounters[i]) % 36];
       charEl.style.opacity = "";
       cell.classList.add("locked");
     } else if (seg === segment) {
+      // Live digit — the pre-jitter influence meter.
       charEl.textContent = ALPHABET[Number(digitCounters[i]) % 36];
       charEl.style.opacity = "";
       // Keep the current segment marked as active even during settlement so the
@@ -198,7 +214,7 @@ function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
       cell.classList.add("future");
     }
   }
-  applyGoldStreak(segment, digitCounters, digitLocked);
+  applyGoldStreak(segment, digitCounters, digitLocked, winChars);
 }
 
 // ─── Winning-streak highlight ─────────────────────────────────────────────────
@@ -207,14 +223,15 @@ function renderDigitTrack(segment, digitCounters, digitLocked, inSettlement) {
 // incorrect settled letter kills the whole streak (all cells stay green) — no
 // gaps allowed; gold must flush straight through to represent a live winning
 // match. A full 6/6 match flashes just before the round rolls and resets.
-function applyGoldStreak(segment, digitCounters, digitLocked) {
+function applyGoldStreak(segment, digitCounters, digitLocked, winChars) {
   if (!userAddress || !myActiveTicketStr || myActiveTicketStr.length !== 6) return;
   let run = 0;
   for (let i = 0; i < 6; i++) {
     const seg = i + 1;
     const settled = seg < segment || (seg === segment && digitLocked[i]);
     if (!settled) break;                                  // streak can only grow as letters settle
-    const ch = ALPHABET[Number(digitCounters[i]) % 36];
+    // Match against the LOCKED (jittered) character — the one the round scores.
+    const ch = (winChars && winChars[i]) || ALPHABET[Number(digitCounters[i]) % 36];
     if (ch !== myActiveTicketStr[i]) return;              // broken — everything stays green
     run++;
   }
@@ -355,7 +372,8 @@ async function pollRoundState() {
       s.segment.toNumber(),
       s.digitCounters,
       s.digitLocked,
-      s.inSettlement
+      s.inSettlement,
+      windowChars(s.currentWindow)
     );
 
     // Show/hide gated notice
@@ -926,11 +944,11 @@ async function loadMyEntries() {
     }
 
     // Hide history clutter: once a ticket is more than the refund window
-    // (2 rounds) past its last eligible round it can't be played or refunded,
+    // (4 rounds) past its last eligible round it can't be played or refunded,
     // so drop those heads. Live/pending and still-refundable tickets stay.
     const withinRelevance = (t) => {
       if (relRound === null) return true;
-      return relRound <= t.lastEligibleRound.toNumber() + 2;
+      return relRound <= t.lastEligibleRound.toNumber() + 4;
     };
 
     const heads = ticketList

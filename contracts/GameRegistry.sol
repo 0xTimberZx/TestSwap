@@ -32,10 +32,10 @@ interface ITimbYieldVault {
  *   Active     — counted into the round; escrow weight registered in the
  *                yield vault (earning for the prize pool); eligible to win.
  *                After lastEligibleRound passes it is refundable (derived,
- *                not a stored status) within the claim window.
+ *                not a stored status) within the refund window.
  *   Conceded   — replaced; ineligible to win; principal moved to replacement;
  *                stays visible tethered beneath the replacement.
- *   Ineligible — claim window lapsed unclaimed (escrow absorbed to protocol
+ *   Ineligible — refund window lapsed unclaimed (escrow absorbed to protocol
  *                sink) or admin-flagged ticket/game inconsistency.
  *   Cancelled  — voluntary pre-round withdrawal; principal refunded; no tally.
  *                Reported as Closed (derived) once its play round begins.
@@ -89,8 +89,12 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     /// @notice Cap on extra rounds per ticket — bounds the round-index loop.
     uint256 public constant MAX_EXTRA_ROUNDS = 12;
 
-    /// @notice Refund claim window after lastEligibleRound (in rounds).
-    uint256 public constant CLAIM_WINDOW_ROUNDS = 2;
+    /// @notice Principal refund window after lastEligibleRound (in rounds).
+    ///         Deliberately decoupled from TimbPrize's 2-round prize-claim
+    ///         window: every ticket gets a hard 4 rounds to withdraw its
+    ///         escrow before forfeiture — winning (and even letting a prize
+    ///         claim lapse) never shortens it.
+    uint256 public constant REFUND_WINDOW_ROUNDS = 4;
 
     // ─── State ───────────────────────────────────────────────────────────────
 
@@ -475,7 +479,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
 
     /**
      * @notice Withdraw the principal of a ticket whose run has ended, within
-     *         the claim window. Ticket becomes Closed (terminal, hidden).
+     *         the refund window. Ticket becomes Closed (terminal, hidden).
      * @param ticketId The ticket to close.
      */
     function claimRefund(uint256 ticketId) external nonReentrant {
@@ -490,7 +494,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         if (currentRound <= t.lastEligibleRound) {
             revert TicketStillEligible(t.lastEligibleRound, currentRound);
         }
-        if (currentRound > t.lastEligibleRound + CLAIM_WINDOW_ROUNDS) {
+        if (currentRound > t.lastEligibleRound + REFUND_WINDOW_ROUNDS) {
             revert ClaimWindowClosed(t.lastEligibleRound, currentRound);
         }
 
@@ -531,7 +535,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
      * @notice Post-settlement hook, called once per settled round:
      *         1. Tickets whose run ended this round stop earning yield and
      *            free their wallet to enter again (refund window opens).
-     *         2. Tickets whose claim window just lapsed become Ineligible and
+     *         2. Tickets whose refund window just lapsed become Ineligible and
      *            their unclaimed escrow is absorbed to the protocol sink.
      */
     function onRoundSettled(uint256 settledRound) external onlyTimbPrize {
@@ -549,10 +553,11 @@ contract GameRegistry is Ownable, ReentrancyGuard {
             }
         }
 
-        // 2. Claim-window lapse: lastEligibleRound == settledRound - 2 closes
-        //    now (refund window spans the two rounds after the run ends).
-        if (settledRound <= CLAIM_WINDOW_ROUNDS) return;
-        uint256 lapsedRound = settledRound - CLAIM_WINDOW_ROUNDS;
+        // 2. Refund-window lapse: lastEligibleRound == settledRound - 4 closes
+        //    now (principal stays withdrawable for the four rounds after the
+        //    run ends, regardless of any prize claim that lapsed earlier).
+        if (settledRound <= REFUND_WINDOW_ROUNDS) return;
+        uint256 lapsedRound = settledRound - REFUND_WINDOW_ROUNDS;
         address[] storage lapsed = roundEntrants[lapsedRound];
         for (uint256 i = 0; i < lapsed.length; i++) {
             uint256 id = ticketAt[lapsed[i]][lapsedRound];

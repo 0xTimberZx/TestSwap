@@ -123,7 +123,8 @@ These three buckets must never mingle.
 - **Freeze:** keccak256(blockhash(n-1) + counter + round) % 3 offset
 - **Entry:** 6 chars, A-Z + 0-9, no repeats, plays in round N+1
 - **Payout:** floor(pot/n) × n, remainder r snowballs
-- **Claim window:** 2 rounds after lastEligibleRound
+- **Prize claim window:** 2 rounds from the winning round (flat, no grace)
+- **Principal refund window:** 4 rounds after lastEligibleRound (decoupled; a lapsed prize never shortens it)
 - **Verification:** dual-layer — verifyEntryExisted() + verifyEntryValid()
 
 ### Yield Vault rate (TimbYieldVault)
@@ -218,7 +219,8 @@ so they work on any host/custom domain.
 | Entry cost | ETH (`entryCostETH`) or TIMBS (`entryCostTIMBS`), both governance-adjustable |
 | Extra rounds | `entryCostTIMBS` each, max 12/ticket, non-refundable |
 | Segment timing | 60 min = 59 min 45 s open + 15 s permissionless settlement; 6 segments/round |
-| Claim/refund window | 2 rounds after a ticket's last eligible round |
+| Prize claim window | 2 rounds from the round the ticket matched |
+| Principal refund window | 4 rounds after a ticket's last eligible round |
 | Buyback burn ratio | 50% (adjustable via TimbTreasury) |
 | Emissions | Governance-unlockable, off by default |
 | Protocol fee | 0.05% of swap volume |
