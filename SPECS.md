@@ -124,7 +124,7 @@ These three buckets must never mingle.
 - **Segment:** 59:45 interaction + 0:15 settlement
 - **Scroll:** positionCounter +1 per eligible swap, never resets
 - **Window:** alphabet[(counter+i) % 36] for i 0–5
-- **Freeze:** keccak256(blockhash(n-1) + counter + round) % 3 offset
+- **Lock (§13.2):** per segment, char jittered from keccak256(blockhash(n-1), counter, round, segment), kept in the live char's class — letter→letter (mod 26), digit→digit (mod 10). Class is aimable via nudging; exact char is not
 - **Entry:** 6 chars, A-Z + 0-9, no repeats, plays in round N+1
 - **Payout:** floor(pot/n) × n, remainder r snowballs
 - **Prize claim window:** 2 rounds from the winning round (flat, no grace)
