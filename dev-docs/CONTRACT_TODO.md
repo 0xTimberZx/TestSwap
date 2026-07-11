@@ -649,3 +649,39 @@ revert-during, and expired-winner-keeps-principal.
    table; SPECS tables; Sourcify verify both.
 6. Optional settler follow-up: call `recycleUnclaimed(round-3)`
    opportunistically after each rollover.
+
+---
+
+## 15. Class-preserving jitter — TimbPrize v6 (§13.2 favor)  ⟶ PENDING REDEPLOY
+
+**What changed (code, compiled ✅ 0/0):** `_lockCurrentSegment()` keeps the
+locked char in the SAME class as the live (pre-jitter) char, instead of
+`mix % 36` across the whole alphabet:
+
+- live index `counter % 36` < 26 (a letter A–Z) ⇒ `ALPHABET[mix % 26]`
+- else (a digit 0–9)                            ⇒ `ALPHABET[26 + (mix % 10)]`
+
+Effect: nudging lets a player **aim the class** (letter vs digit) of each of the
+6 positions; the exact character within that class stays block-jittered and
+unaimable. Header comment + player docs (docs/index.html, compete "How It
+Works") + SPECS §13.2 updated to match.
+
+**Redeploy — TimbPrize only** (GameRegistry v5, vault, escrow, router all
+unaffected — same shape as §11):
+
+1. **Deploy TimbPrize v6** with the current constructor args (prizeEscrow,
+   GameRegistry v5 = `0xD6c9001c6Bbb55761f7476009AaF5F71C21Fe0b5`, router).
+2. Wire prize v6: `setYieldVault(<vault>)`, `setEligibleRegistry(<existing>)`,
+   `setWinnersPerRound(<current>)`, plus any other live setters. Entry costs
+   live on the registry — unchanged.
+3. Repoint neighbors to the new prize: `escrow.setTimbPrize(v6)`,
+   `registry.setTimbPrize(v6)`, `vault.setTimbPrize(v6)` (if present),
+   `router.setTimbPrize(v6)` (nudge target). Old prize left dark — once the
+   escrow points away it can no longer pay out (escrow-pointer rule).
+4. `startGame()` — fresh round 1 (old rounds stay readable at the v5 address).
+5. **Frontend/settler:** `ADDRESSES.TimbPrize` in config.js + cache token,
+   `TIMBPRIZE_ADDR` in scripts/settler.js, docs/SPECS address tables,
+   Sourcify-verify v6.
+6. Env-snapshot rule: the running settler keeps the old prize address until its
+   next run — expect the usual startup "CRITICALLY DELAYED" alarm after
+   cutover; self-corrects on the next run.

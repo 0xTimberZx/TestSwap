@@ -51,9 +51,11 @@ interface IEligibleTokenRegistry {
  *   - 6 segments per round: 59:45 interaction + 0:15 settlement.
  *   - positionCounter increments +1 per eligible swap (via nudgeScroll).
  *   - Winning string = the 6 per-segment LOCKED characters (jittered).
- *   - Lock (per segment, §13.2): char = ALPHABET[keccak256(
- *     blockhash(block.number-1), counter, round, segment) % 36] — swaps
- *     influence the outcome, nobody can aim it.
+ *   - Lock (per segment, §13.2): char is jittered from keccak256(
+ *     blockhash(block.number-1), counter, round, segment) but kept in the
+ *     SAME class as the live char — letter→letter (mod 26), digit→digit
+ *     (mod 10). Swaps let a player aim the class (letter vs digit); the
+ *     exact character within that class stays unaimable.
  *   - Winners: exact 6-char match, equal split, remainder (r) snowballs.
  *   - Prize ETH held in PrizeEscrow, paid on winner claim.
  *   - Dual-layer verification at settlement via GameRegistry.
@@ -528,7 +530,18 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             currentRound,
             currentSegment
         )));
-        segmentLockedChar[currentSegment]  = ALPHABET[mix % 36];
+        // Class-preserving jitter (§13.2). The pre-jitter live char is
+        // ALPHABET[counter % 36]: index 0-25 is a letter (A-Z), 26-35 a digit
+        // (0-9). The locked char is jittered by block entropy but stays in the
+        // SAME class as the live char — so a player can aim the class by
+        // nudging (letter ↔ digit), while the exact character within that
+        // class remains unpredictable.
+        uint256 liveIdx = segmentDigitCounter[currentSegment] % 36;
+        if (liveIdx < 26) {
+            segmentLockedChar[currentSegment] = ALPHABET[mix % 26];        // letter → letter
+        } else {
+            segmentLockedChar[currentSegment] = ALPHABET[26 + (mix % 10)]; // digit → digit
+        }
         segmentDigitLocked[currentSegment] = true;
     }
 
