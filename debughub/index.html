@@ -19,7 +19,7 @@
     .dh-head .page-h1 { margin-bottom: .35rem; }
     .dh-note {
       border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2, rgba(255,255,255,.02));
-      padding: .85rem 1rem; font-size: .82rem; color: var(--text-dim); line-height: 1.5; margin-bottom: 1.5rem;
+      padding: .85rem 1rem; font-size: .82rem; color: var(--text-dim, #8ca3bf); line-height: 1.5; margin-bottom: 1.5rem;
     }
     .dh-note strong { color: var(--text); }
     .dh-toolbar { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.1rem; }
@@ -30,16 +30,16 @@
     }
     .dh-btn:hover { border-color: var(--green); color: var(--green); }
     .dh-btn.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
-    .dh-count { font-size: .78rem; color: var(--text-dim); margin-left: auto; font-family: "Space Mono", monospace; }
+    .dh-count { font-size: .78rem; color: var(--text-dim, #8ca3bf); margin-left: auto; font-family: "Space Mono", monospace; }
     .dh-tabs { display: flex; gap: .5rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
     .dh-tab {
       font-family: inherit; font-size: .82rem; font-weight: 600; cursor: pointer;
-      background: none; border: none; color: var(--text-dim); padding: .6rem .9rem;
+      background: none; border: none; color: var(--text-dim, #8ca3bf); padding: .6rem .9rem;
       border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s;
     }
     .dh-tab:hover { color: var(--text); }
     .dh-tab.active { color: var(--green); border-bottom-color: var(--green); }
-    .empty-state { text-align: center; padding: 4rem 1rem; color: var(--text-dim); }
+    .empty-state { text-align: center; padding: 4rem 1rem; color: var(--text-dim, #8ca3bf); }
     .empty-state .big { font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: .4rem; font-style: italic; }
     /* Cards */
     .session-card, .error-card {
@@ -49,7 +49,7 @@
     .session-top { display: flex; align-items: center; gap: .6rem; margin-bottom: .7rem; }
     .session-id { font-family: "Space Mono", monospace; font-size: .85rem; font-weight: 700; }
     .session-row { display: flex; justify-content: space-between; padding: .2rem 0; font-size: .82rem; }
-    .session-row .label { color: var(--text-dim); }
+    .session-row .label { color: var(--text-dim, #8ca3bf); }
     .session-row .value { font-family: "Space Mono", monospace; }
     .lamp { width: 10px; height: 10px; border-radius: 50%; flex: none; }
     .lamp.active { background: var(--gold, #ffd75e); box-shadow: 0 0 8px var(--gold, #ffd75e); }
@@ -64,16 +64,16 @@
     .timeline-item:last-child { border-bottom: none; }
     .timeline-item .lamp { margin-top: .35rem; }
     .timeline-name { font-weight: 600; font-size: .88rem; }
-    .timeline-meta { display: flex; gap: .8rem; flex-wrap: wrap; font-size: .74rem; color: var(--text-dim); font-family: "Space Mono", monospace; margin-top: .15rem; }
+    .timeline-meta { display: flex; gap: .8rem; flex-wrap: wrap; font-size: .74rem; color: var(--text-dim, #8ca3bf); font-family: "Space Mono", monospace; margin-top: .15rem; }
     .timeline-session { font-size: .7rem; color: var(--text-faint, #4a6278); font-family: "Space Mono", monospace; margin-top: .1rem; }
     /* Errors */
     .error-card { border-left: 3px solid #ff6b6b; }
     .error-explanation { font-size: .9rem; line-height: 1.5; margin-bottom: .6rem; }
-    .error-meta { display: flex; gap: .9rem; flex-wrap: wrap; font-size: .76rem; color: var(--text-dim); font-family: "Space Mono", monospace; }
+    .error-meta { display: flex; gap: .9rem; flex-wrap: wrap; font-size: .76rem; color: var(--text-dim, #8ca3bf); font-family: "Space Mono", monospace; }
     .error-card details { margin-top: .6rem; }
-    .error-card summary { cursor: pointer; font-size: .76rem; color: var(--text-dim); }
+    .error-card summary { cursor: pointer; font-size: .76rem; color: var(--text-dim, #8ca3bf); }
     .error-raw {
-      background: rgba(0,0,0,.35); border: 1px solid var(--border); border-radius: 8px; padding: .7rem;
+      background: rgba(127,127,127,.14); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: .7rem;
       font-size: .72rem; overflow-x: auto; margin: .5rem 0; white-space: pre;
     }
     /* Wallets */
@@ -82,7 +82,7 @@
       border: 1px solid var(--border); border-radius: 10px; padding: .7rem .9rem; margin-bottom: .5rem;
       font-family: "Space Mono", monospace; font-size: .82rem;
     }
-    .wallet-row .sub { color: var(--text-dim); font-size: .74rem; }
+    .wallet-row .sub { color: var(--text-dim, #8ca3bf); font-size: .74rem; }
   </style>
 </head>
 <body>
