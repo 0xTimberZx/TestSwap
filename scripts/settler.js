@@ -41,8 +41,8 @@ const PRIVATE_KEY   = process.env.SETTLER_PRIVATE_KEY;
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;        // ops: every message, incl. failures
 const TG_CHAT_ID_PUBLIC = process.env.TELEGRAM_CHAT_ID_PUBLIC; // community group: round rollovers only
-const TIMBPRIZE_ADDR = "0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40"; // TimbPrize v3.2 (continuous meter — counters never reset)
-const GAMEREGISTRY_ADDR = "0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774"; // GameRegistry v2 (per-round entrant counts)
+const TIMBPRIZE_ADDR = "0xD69a518f04900762F460563d71Bdc8DdF86FB350"; // TimbPrize v4 (jittered locks, 2-round prize claim)
+const GAMEREGISTRY_ADDR = "0x4d74F2111fB12f64F39A285251075cf455B84201"; // GameRegistry v3 (4-round principal refund window)
 
 // ─── ABI (minimal) ───────────────────────────────────────────────────────────
 
