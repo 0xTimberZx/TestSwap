@@ -455,16 +455,19 @@ async function refreshBalances() {
   }
 }
 
-// "Insufficient <SYM> balance" when the typed pay amount (plus the 0.05%
-// protocol fee on swaps) exceeds the cached wallet balance; null otherwise.
-// Unknown balance (still loading) never blocks.
+// "Insufficient <SYM> balance" when the typed pay amount exceeds the cached
+// wallet balance; null otherwise. Mirrors the handleSwap() pre-flight: the
+// 0.05% protocol fee is added on top only for native-ETH sells, where
+// msg.value must cover input + fee. For ERC20 sells the fee is taken out of
+// the input, so the wallet needs exactly amountIn (an exact-balance MAX must
+// pass). Unknown balance (still loading) never blocks.
 function overBalanceLabel() {
   if (!userAddress || !tokenIn || _balInWei === null) return null;
   const amt = document.getElementById("amount-in")?.value;
   if (!amt || parseFloat(amt) <= 0) return null;
   let needIn;
   try { needIn = ethers.utils.parseUnits(amt, tokenIn.decimals); } catch { return null; }
-  if (!isWrapPair()) needIn = needIn.add(needIn.mul(5).div(10000)); // + protocol fee
+  if (isNative(tokenIn) && !isWrapPair()) needIn = needIn.add(needIn.mul(5).div(10000)); // + protocol fee
   return _balInWei.lt(needIn) ? `Insufficient ${tokenIn.symbol} balance` : null;
 }
 
