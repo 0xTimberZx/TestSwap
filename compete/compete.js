@@ -851,14 +851,25 @@ function bytes6ToStr(b6) {
 // Renders one ticket card. Conceded ancestors render tethered beneath their
 // replacement, dimmed, so the chain aiming for victory stays readable.
 function renderTicketRow(t, displayStatus, opts) {
+  const playRound = t.playRound.toNumber();
+  const lastRound = t.lastEligibleRound.toNumber();
+
+  // Re-anchor the badge to the PRIZE's currentRoundNum. The registry derives
+  // displayStatus from its own currentRound, which lags the prize's after a
+  // prize swap + game restart (round resets to 1 while old tickets keep
+  // Active). A ticket whose play round hasn't arrived in the CURRENT game must
+  // read Pending, not Active — it cannot be active or qualify until its play
+  // round is actually reached. (In normal play a ticket is Pending until its
+  // play round, so this only ever corrects the post-restart desync.)
+  const notYetPlaying = currentRoundNum !== null && currentRoundNum < playRound;
+  if (notYetPlaying && (displayStatus === 1 || t.status === 1)) displayStatus = 0; // → Pending
+
   const statusName  = STATUS_NAMES[displayStatus] || "Unknown";
   const statusClass = "status-" + statusName.toLowerCase();
   const isETH       = t.escrowToken === "0x0000000000000000000000000000000000000000";
   const principal   = t.escrowAmount.isZero()
     ? ""
     : ` · ${isETH ? fmtETH(t.escrowAmount) : fmtTIMBS(t.escrowAmount)}`;
-  const playRound = t.playRound.toNumber();
-  const lastRound = t.lastEligibleRound.toNumber();
   const roundsTxt = playRound === lastRound ? `R${playRound}` : `R${playRound}–R${lastRound}`;
 
   // Raw status drives the action buttons; display status drives the badge.
@@ -873,6 +884,7 @@ function renderTicketRow(t, displayStatus, opts) {
 
   let hint = "";
   if (canCancel)                       hint = ` · withdrawable until R${playRound} starts`;
+  else if (raw === 1 && notYetPlaying) hint = ` · waiting for R${playRound}`;
   else if (raw === 1 && !expired)      hint = ` · earning yield for the pool`;
   else if (canRefund)                  hint = ` · principal refundable now`;
   else if ((raw === 0 || raw === 1) && expired && !inWindow) hint = ` · refund window closed`;
