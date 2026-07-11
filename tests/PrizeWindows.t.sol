@@ -165,29 +165,31 @@ contract PrizeWindowsTest is Test {
 
     function test_RefundSucceedsAtWindowEdge() public {
         runUntilRound(2);
+        uint256 id;
         vm.prank(player);
         registry.submitEntry{value: ENTRY_ETH}(bytes6("AB12CD"), true, 0); // plays round 3
+        id = registry.activeTicketOf(player);
         uint256 ler = 3;
         runUntilRound(ler + 4);                     // currentRound == LER+4: still refundable
-        uint256 id = registry.activeTicketOf(player);
         uint256 balBefore = player.balance;
         vm.prank(player);
-        registry.refundEntry(id);
+        registry.claimRefund(id);
         assertEq(player.balance, balBefore + ENTRY_ETH, "principal not refunded");
     }
 
     function test_ForfeitedAfterFourRounds() public {
         runUntilRound(2);
+        uint256 id;
         vm.prank(player);
         registry.submitEntry{value: ENTRY_ETH}(bytes6("AB12CD"), true, 0); // plays round 3
+        id = registry.activeTicketOf(player);
         uint256 ler = 3;
-        uint256 id = registry.activeTicketOf(player);
         uint256 sinkBefore = sink.balance;
         runUntilRound(ler + 5);                     // settling LER+4 sweeps the lapse
         assertEq(sink.balance, sinkBefore + ENTRY_ETH, "escrow not forfeited to sink");
         vm.prank(player);
         vm.expectRevert();
-        registry.refundEntry(id);
+        registry.claimRefund(id);
     }
 
     // ─── §14 Missed prize ≠ lost principal ───────────────────────────────────
@@ -218,7 +220,7 @@ contract PrizeWindowsTest is Test {
             : registry.ticketAt(player, T);
         uint256 balBefore = player.balance;
         vm.prank(player);
-        registry.refundEntry(id);
+        registry.claimRefund(id);
         assertEq(player.balance, balBefore + ENTRY_ETH, "expired winner lost principal");
     }
 }

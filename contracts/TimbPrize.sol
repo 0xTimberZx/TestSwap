@@ -33,7 +33,7 @@ interface IGameRegistry {
     function setCurrentRound(uint256 round) external;
 }
 
-interface ITimbYieldVault {
+interface ITimbYieldVaultPrize {
     function harvest() external returns (uint256);
 }
 
@@ -634,7 +634,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
      */
     function _harvestYield(uint256 round) internal {
         if (yieldVault == address(0)) return;
-        try ITimbYieldVault(yieldVault).harvest() returns (uint256 amount) {
+        try ITimbYieldVaultPrize(yieldVault).harvest() returns (uint256 amount) {
             if (amount > 0) {
                 currentAccumulatedRewards += amount;
                 IPrizeEscrow(prizeEscrow).deposit{value: amount}();

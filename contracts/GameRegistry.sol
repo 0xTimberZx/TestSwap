@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-interface ITimbYieldVault {
+interface ITimbYieldVaultRegistry {
     function register(uint256 ticketId, address token, uint256 amount) external;
     function remove(uint256 ticketId) external;
 }
@@ -297,13 +297,13 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     /// @dev Vault weight on — never bricks the game on vault failure.
     function _vaultRegister(uint256 ticketId, address token, uint256 amount) internal {
         if (yieldVault == address(0) || amount == 0) return;
-        try ITimbYieldVault(yieldVault).register(ticketId, token, amount) {} catch {}
+        try ITimbYieldVaultRegistry(yieldVault).register(ticketId, token, amount) {} catch {}
     }
 
     /// @dev Vault weight off — idempotent, never bricks the game.
     function _vaultRemove(uint256 ticketId) internal {
         if (yieldVault == address(0)) return;
-        try ITimbYieldVault(yieldVault).remove(ticketId) {} catch {}
+        try ITimbYieldVaultRegistry(yieldVault).remove(ticketId) {} catch {}
     }
 
     /// @dev Pay out ETH or TIMBS principal.
