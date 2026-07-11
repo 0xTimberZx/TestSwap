@@ -1,5 +1,8 @@
 # DebugHub network sink — apply-ready patch package
 
+> **Operational notes & known issues:** see [`NOTES.md`](./NOTES.md) — wallet
+> connect / attribution, SDK caveats, and macro/architecture gotchas.
+
 ## Why
 
 DebugHub was localStorage-only. `localStorage` is **origin-scoped**, so once
