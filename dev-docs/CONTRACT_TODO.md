@@ -179,7 +179,7 @@ economics decision below still stands if you want to charge.
 ## 7. Entry cost shows 0.0000 ETH and ETH entries always revert — SUPERSEDED BY §8
 
 > Both fixes below are carried into §8's GameRegistry v2, and §8's checklist
-> step 4 sets the agreed costs (1000 TIMBS / 0.0001 ETH). Deploy §8.
+> step 4 sets the agreed costs (100 TIMBS / 0.0001 ETH). Deploy §8.
 
 - **Symptom:** Compete's "Entry cost" reads 0.0000 ETH, and submitting an ETH
   entry always fails gas estimation (`UNPREDICTABLE_GAS_LIMIT` on
@@ -262,8 +262,8 @@ coordinated deploy. All three contracts compile clean on solc 0.8.24
 2. **TimbYieldVault**: deploy `()`.
 3. **TimbPrize v2**: deploy `(PrizeEscrow, <registry v2>, TimbSwapRouter)`.
 4. Wire registry: `setTimbPrize(<prize v2>)`, `setYieldVault(<vault>)`,
-   `setEntryCosts(1000000000000000000000, 100000000000000)`
-   (= 1000 TIMBS, 0.0001 ETH — the agreed initial costs).
+   `setEntryCosts(100000000000000000000, 100000000000000)`
+   (= 100 TIMBS, 0.0001 ETH — the agreed initial costs).
 5. Wire vault: `setGameRegistry(<registry v2>)`, `setTimbPrize(<prize v2>)`,
    `setTimbsWeight1e18(100000000000)` (1e11 ⇒ 1000 TIMBS ≙ 0.0001 ETH
    weight, entry-cost parity), `setYieldAPRBps(<e.g. 1000 = 10%>)`,
