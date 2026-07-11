@@ -23,7 +23,7 @@
 | TimbSwapRouter v8 | 0x40C7Caf90817C9891D278Ec1400B9deb180911f1 | Sourcify ✅ |
 | EligibleTokenRegistry | 0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04 | Sourcify ✅ |
 | GameRegistry v5 | 0xD6c9001c6Bbb55761f7476009AaF5F71C21Fe0b5 | Sourcify ✅ |
-| TimbPrize v6 | 0xBBcb21Ef7DBEef21d8a0DE5972E61fd0369Ed3c0 | class-preserving jitter |
+| TimbPrize v6 | 0xBBcb21Ef7DBEef21d8a0DE5972E61fd0369Ed3c0 | Sourcify ✅ (class-preserving jitter) |
 | TimbYieldVault | 0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F | Sourcify ✅ |
 | TimbStaking | 0xe776c7b700B190ED8248741F9b518B08d8733C8F | Sourcify ✅ |
 | TimbFarm | 0xE319E2206F71A5cD8dd2c411C6F29712935f9011 | Sourcify ✅ |
