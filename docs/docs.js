@@ -85,7 +85,7 @@ function initScrollSpy() {
 async function handleConnect() {
   const ok = await connectWallet();
   if (!ok) return;
-  DebugHub.startSession();
+  DebugHub.startSession(userAddress);
   document.getElementById("connect-btn").classList.add("hidden");
   document.getElementById("wallet-info").classList.remove("hidden");
   document.getElementById("network-badge").classList.remove("hidden");
@@ -137,7 +137,7 @@ document.addEventListener("click", function (e) {
       document.getElementById("network-badge")?.classList.remove("hidden");
       const el = document.getElementById("wallet-addr");
       if (el) el.textContent = fmtAddr(addr);
-      DebugHub.startSession();
+      DebugHub.startSession(addr);
     }
   } catch {}
 })();
