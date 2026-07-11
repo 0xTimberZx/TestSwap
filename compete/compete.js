@@ -14,7 +14,8 @@ const TIMBPRIZE_ABI = [
 const TICKET_TUPLE =
   "tuple(uint256 id, address owner, bytes6 string6, uint256 playRound, " +
   "uint256 lastEligibleRound, uint256 escrowAmount, address escrowToken, " +
-  "uint8 status, uint256 supersedes, uint256 supersededBy, uint256 createdAt)";
+  "uint8 status, uint256 supersedes, uint256 supersededBy, uint256 createdAt, " +
+  "uint256 forfeitRound)";
 
 const GAME_REGISTRY_ABI = [
   "function currentRound() external view returns (uint256)",
@@ -864,7 +865,10 @@ function renderTicketRow(t, displayStatus, opts) {
   const raw = t.status;
   const canCancel = raw === 0 && currentRoundNum !== null && playRound > currentRoundNum;
   const expired   = currentRoundNum !== null && currentRoundNum > lastRound;
-  const inWindow  = currentRoundNum !== null && currentRoundNum <= lastRound + 4;
+  // Refundable through the contract's per-ticket forfeitRound — the later of
+  // the refund-window end and (for a late winner) the post-claim window (§14).
+  const forfeitRound = t.forfeitRound ? t.forfeitRound.toNumber() : lastRound + 4;
+  const inWindow  = currentRoundNum !== null && currentRoundNum <= forfeitRound;
   const canRefund = (raw === 0 || raw === 1) && expired && inWindow && !t.escrowAmount.isZero();
 
   let hint = "";
@@ -943,12 +947,16 @@ async function loadMyEntries() {
       if (playing) myActiveTicketStr = bytes6ToStr(playing.string6);
     }
 
-    // Hide history clutter: once a ticket is more than the refund window
-    // (4 rounds) past its last eligible round it can't be played or refunded,
-    // so drop those heads. Live/pending and still-refundable tickets stay.
+    // Hide history clutter: once a ticket is past its forfeitRound (the §14
+    // per-ticket refund deadline — LER+4, or LER+6 for a late winner) it can't
+    // be played or refunded, so drop those heads. Live/pending and
+    // still-refundable tickets stay.
     const withinRelevance = (t) => {
       if (relRound === null) return true;
-      return relRound <= t.lastEligibleRound.toNumber() + 4;
+      const fr = t.forfeitRound && !t.forfeitRound.isZero()
+        ? t.forfeitRound.toNumber()
+        : t.lastEligibleRound.toNumber() + 4;
+      return relRound <= fr;
     };
 
     const heads = ticketList

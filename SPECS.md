@@ -222,7 +222,7 @@ so they work on any host/custom domain.
 | Extra rounds | `entryCostTIMBS` each, max 12/ticket, non-refundable |
 | Segment timing | 60 min = 59 min 45 s open + 15 s permissionless settlement; 6 segments/round |
 | Prize claim window | 2 rounds from the round the ticket matched |
-| Principal refund window | 4 rounds after a ticket's last eligible round |
+| Principal refund window | 4 rounds after the LATER of the ticket's last eligible round and its prize-claim window (LER+4 for non-winners; up to LER+6 if it wins its last eligible round) |
 | Buyback burn ratio | 50% (adjustable via TimbTreasury) |
 | Emissions | Governance-unlockable, off by default |
 | Protocol fee | 0.05% of swap volume |

@@ -29,6 +29,7 @@ interface IGameRegistry {
     function getRoundEntrants(uint256 round)
         external view returns (address[] memory);
     function activateRoundEntries(uint256 round, address[] calldata players) external;
+    function recordWinners(uint256 round, address[] calldata winners) external;
     function onRoundSettled(uint256 settledRound) external;
     function setCurrentRound(uint256 round) external;
 }
@@ -456,8 +457,17 @@ contract TimbPrize is Ownable, ReentrancyGuard {
 
         _distributePotAndRecord(round, winners, winnerCount);
 
+        // §14: tell the registry who won so it can push those tickets'
+        // forfeiture anchor past the 2-round prize-claim window — a winner's
+        // principal refund window starts only after the claim right is over.
+        // Must precede onRoundSettled so this round's lapse sweep sees the
+        // updated anchors. (winners is already trimmed to winnerCount.)
+        if (winnerCount > 0) {
+            IGameRegistry(gameRegistry).recordWinners(round, winners);
+        }
+
         // Registry post-settlement hook: ends yield weight for tickets whose
-        // run finished this round, and absorbs escrow of tickets whose claim
+        // run finished this round, and absorbs escrow of tickets whose refund
         // window just lapsed (→ Ineligible).
         IGameRegistry(gameRegistry).onRoundSettled(round);
 

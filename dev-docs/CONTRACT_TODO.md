@@ -567,7 +567,13 @@ No urgency: v2 holds ~nothing yet; do it before meaningful fees accumulate.
 
 ---
 
-## 14. Claim-window rework — 2-round prize claim / 4-round principal refund (v3/v4, awaiting deploy)
+## 14. Claim-window rework — 2-round prize claim / 4-round principal refund
+       (v3/v4 DEPLOYED; v5 refinement awaiting deploy)
+
+Deployed: GameRegistry v3 `0x4d74F2111fB12f64F39A285251075cf455B84201`,
+TimbPrize v4 `0xD69a518f04900762F460563d71Bdc8DdF86FB350`. The **v5**
+refinement below (forfeiture starts after the later of active/claim end) needs
+a fresh GameRegistry + TimbPrize redeploy on top.
 
 The two windows were coupled at 2 rounds under one shared constant name
 across two contracts. Now decoupled:
@@ -583,16 +589,37 @@ across two contracts. Now decoupled:
   a missed prize recycles to the pot (`recycleUnclaimed`, now
   **permissionless** with a window-lapsed guard — same posture as
   `settleSegment`) while the winner's principal window runs untouched.
-  Since prize deadline R+2 ≤ LER+2 < LER+4, final ticket forfeiture is
-  always the 4-round principal mark.
 
-Timeline (ticket plays rounds 10–12, wins round 11):
+**§14 (v5) refinement — forfeiture starts after the LATER of active-end and
+claim-end.** The v3/v4 refund window was a flat LER+4, so a ticket that wins
+its last one/two eligible rounds had its 2-round claim window *overlap* the
+refund window ("half spent as an expired winner"). v5 sequences them: the
+4-round forfeiture countdown starts at `max(lastEligibleRound, wonRound +
+CLAIM_WINDOW)`, so:
+
+- Non-winner / early winner (won ≤ LER−2): forfeit at **LER+4** (unchanged).
+- Won round LER−1: forfeit at **LER+5**.
+- Won round LER: forfeit at **LER+6** (full 4-round refund after claim closes).
+
+Implementation:
+- `Ticket.forfeitRound` — stored per ticket, set to `LER + REFUND_WINDOW` at
+  mint. `refundEntry`/`claimRefund` gate on `currentRound > t.forfeitRound`.
+- New `GameRegistry.recordWinners(round, winners)` (onlyTimbPrize) bumps each
+  winner's `forfeitRound` to `round + CLAIM_WINDOW + REFUND_WINDOW`; monotonic.
+  TimbPrize v5 calls it in `_settleRound` **before** `onRoundSettled` so the
+  same round's lapse sweep sees the updated anchors.
+- Lapse sweep scans LER buckets `[S−4 .. S−6]` (bounded by `MAX_FORFEIT_PUSH
+  = 2`) and forfeits tickets whose `forfeitRound == S` — the per-ticket check,
+  not LER alone, is what respects "whichever is later."
+
+Timeline (ticket plays rounds 10–12, wins round 12 = its last eligible round):
 
 ```
-round:        10   11   12   13   14   15   16   17
-ticket        play play play
-prize (won @11)     ── claim 12,13 ──╳ recycled → pot
-principal                 ── withdraw 13,14,15,16 ──╳ forfeited → treasury
+round:        12   13   14   15   16   17   18
+active        play
+claim (won 12)     claim claim ╳ right over (14)
+principal          ── withdraw 13 … 18 ──╳ forfeited → treasury (18 = LER+6)
+                              ↑ old v4 would have forfeited at 16 (LER+4)
 ```
 
 Tests: `tests/PrizeWindows.t.sol` (run locally: `forge test
