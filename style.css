@@ -594,4 +594,4 @@ body { padding-top: 60px; }
 }
 
 /* Compact "time ago" subline under a Block cell in activity tables. */
-.td-age { font-size: .68rem; color: var(--muted, #8ca3bf); margin-top: 2px; line-height: 1; }
+.td-age { font-size: .68rem; color: currentColor; opacity: .6; margin-top: 2px; line-height: 1; }
