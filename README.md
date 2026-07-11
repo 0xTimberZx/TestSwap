@@ -119,7 +119,13 @@ Segments settle automatically via GitHub Actions every 10 minutes. Health check 
 
 Manual trigger: Actions → TimbSwap Settler → Run workflow → choose `settle` or `health`.
 
-X posting mode: repo **Variables** → `X_POST_MODE` = `all` (default), `winners` (only rounds that paid out), or `off`.
+X posting (repo **Variables**, not secrets — these are public):
+
+| Variable | Value |
+|----------|-------|
+| `X_POST_MODE` | `all` (default), `winners` (only rounds that paid out), or `off` |
+| `X_HASHTAGS` | (Optional) trailing hashtag line, e.g. `TimbSwap Arbitrum DeFi Testnet`. Space/comma separated (`#` added if missing); several `\|`-separated groups rotate by round number so posts aren't identical. Trimmed to fit X's 280-char limit. Unset ⇒ no hashtags |
+| `X_HASHTAGS_WINNER` | (Optional) hashtag line for winner posts only; falls back to `X_HASHTAGS` when unset |
 
 ---
 
