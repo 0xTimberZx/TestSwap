@@ -32,7 +32,7 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="../style.css?v=20260750a" />
+  <link rel="stylesheet" href="../style.css?v=20260757c" />
   <link rel="stylesheet" href="analytics.css?v=20260739a" />
 </head>
 <body>
@@ -310,6 +310,30 @@
       </div>
     </div>
 
+    <!-- ─── Recent Liquidity ───────────────────────────────────────────── -->
+    <div class="section-label" data-gated>RECENT LIQUIDITY</div>
+    <div class="data-card" data-gated>
+      <div class="data-card-header">
+        <span class="data-card-title">Adds &amp; Removes</span>
+        <span class="data-refresh" id="liq-status">Loading…</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="liq-table">
+          <thead>
+            <tr>
+              <th>Block</th>
+              <th>Action</th>
+              <th>Amounts</th>
+              <th>Provider</th>
+            </tr>
+          </thead>
+          <tbody id="liq-tbody">
+            <tr><td colspan="4" class="table-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ─── Claims History ─────────────────────────────────────────────── -->
     <div class="section-label">CLAIMS</div>
     <div class="data-card">
@@ -349,8 +373,8 @@
     </div>
   </footer>
 
-  <script src="../config.js?v=20260757b"></script>
-  <script src="analytics.js?v=20260745a"></script>
+  <script src="../config.js?v=20260757c"></script>
+  <script src="analytics.js?v=20260757c"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");

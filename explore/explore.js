@@ -128,6 +128,8 @@ function fmtNum(x, dp = 4) {
 let _pools = [];      // [{ address, t0, t1, sym0, sym1, dec0, dec1, r0, r1, tvl }]
 let _lastTrades = []; // cached rows so the search box can re-filter without refetching
 let _lastLiq = [];
+let _curBlock = null; // head block + calibrated block rate, for "time ago" labels
+let _bps = null;
 const _vol24h = {};   // pair address (lowercased) -> USD swap volume in the last ~24h
 let _poolsLoaded = false;    // true once we've rendered pools at least once
 let _activityLoaded = false; // true once we've rendered activity at least once
@@ -274,6 +276,8 @@ async function loadActivity() {
     const prov = readProv();
     const currentBlock = await prov.getBlockNumber();
     const blocks24h    = await blocksForDays(prov, 1);
+    _curBlock = currentBlock;
+    _bps = await blocksPerSecond(prov); // cached after blocksForDays above
     const windowBlocks = blocks24h * WINDOW_DAYS;
 
     // Make sure we know the pools (and their token metadata) first.
@@ -327,7 +331,7 @@ async function loadActivity() {
     // Volume lives on the pools table — refresh it now that we have fresh numbers.
     if (_poolsLoaded) renderPools();
     trades.sort((a, b) => b.block - a.block);
-    _lastTrades = trades.slice(0, 20);
+    _lastTrades = trades.slice(0, 15);
     renderTrades(_lastTrades);
     if (swapStatus) swapStatus.textContent = `${trades.length} trade${trades.length === 1 ? "" : "s"}`;
     setOverview(null, trades.length, null);
@@ -349,7 +353,7 @@ async function loadActivity() {
       }
     }
     liq.sort((a, b) => b.block - a.block);
-    _lastLiq = liq.slice(0, 20);
+    _lastLiq = liq.slice(0, 15);
     renderLiquidity(_lastLiq);
     if (liqStatus) liqStatus.textContent = `${liq.length} event${liq.length === 1 ? "" : "s"}`;
 
@@ -378,7 +382,7 @@ function renderTrades(rows) {
   for (const r of filtered) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${r.block}</td>
+      <td>${r.block}<div class="td-age">${blockAge(r.block, _curBlock, _bps)}</div></td>
       <td class="td-pair">${r.pair}</td>
       <td>${r.detail}</td>
       <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.trader}','_blank')">${fmtAddr(r.trader)}</td>
@@ -399,7 +403,7 @@ function renderLiquidity(rows) {
   for (const r of filtered) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${r.block}</td>
+      <td>${r.block}<div class="td-age">${blockAge(r.block, _curBlock, _bps)}</div></td>
       <td class="${r.type === "Add" ? "td-in" : "td-out"}">${r.type}</td>
       <td class="td-pair">${r.pair}</td>
       <td>${r.detail}</td>

@@ -4,7 +4,9 @@ const PAIR_ABI = [
   "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
   "function token0() external view returns (address)",
   "function totalSupply() external view returns (uint256)",
-  "event Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)"
+  "event Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)",
+  "event Mint(address indexed sender, uint256 amount0, uint256 amount1)",
+  "event Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)"
 ];
 
 const PRIZE_ABI = [
@@ -50,7 +52,7 @@ async function scanRange(prov) {
 // Every activity table shows a fixed number of newest rows — no scrolling
 // walls. The status chip stays accurate: "6 of 19 events" when truncated,
 // plain "19 events" when everything fits.
-const TABLE_CAPS = { swaps: 20, vault: 6, weights: 12, claims: 12 };
+const TABLE_CAPS = { swaps: 15, liquidity: 15, vault: 6, weights: 12, claims: 12 };
 function shownOf(shown, total, noun) {
   return shown < total ? `${shown} of ${total} ${noun}` : `${total} ${noun}`;
 }
@@ -299,6 +301,7 @@ async function loadRecentSwaps() {
     const timbsIs0   = token0Addr.toLowerCase() === ADDRESSES.TIMBSToken.toLowerCase();
 
     const { currentBlock, windowBlocks } = await scanRange(prov);
+    const bps = await blocksPerSecond(prov); // cached; for "time ago" labels
     const events = await queryFilterWindow(pair, pair.filters.Swap(), currentBlock, windowBlocks);
     const recent  = events.slice(-TABLE_CAPS.swaps).reverse();
 
@@ -324,7 +327,7 @@ async function loadRecentSwaps() {
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${ev.blockNumber}</td>
+        <td>${ev.blockNumber}<div class="td-age">${blockAge(ev.blockNumber, currentBlock, bps)}</div></td>
         <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${sender}','_blank')">${fmtAddr(sender)}</td>
         <td class="${buyingTIMBS ? 'td-in' : 'td-out'}">${direction}</td>
         <td>${amtIn}</td>
@@ -339,6 +342,64 @@ async function loadRecentSwaps() {
     tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Could not load swap history</td></tr>';
     statusEl.textContent = "Error";
     DebugHub.logError("loadRecentSwaps", e);
+  }
+}
+
+// ─── Recent Liquidity (Adds & Removes) — TIMBS/ETH pair ───────────────────────
+
+async function loadRecentLiquidity() {
+  const tbody    = document.getElementById("liq-tbody");
+  const statusEl = document.getElementById("liq-status");
+  if (!tbody) return;
+  const prov = readProv();
+
+  try {
+    const pair       = new ethers.Contract(ADDRESSES.TimbsEthPair, PAIR_ABI, prov);
+    const token0Addr = await pair.token0();
+    const timbsIs0   = token0Addr.toLowerCase() === ADDRESSES.TIMBSToken.toLowerCase();
+    const sym0 = timbsIs0 ? "TIMBS" : "WETH";
+    const sym1 = timbsIs0 ? "WETH"  : "TIMBS";
+    const dp0  = timbsIs0 ? 2 : 4;
+    const dp1  = timbsIs0 ? 4 : 2;
+
+    const { currentBlock, windowBlocks } = await scanRange(prov);
+    const bps = await blocksPerSecond(prov);
+    const [mints, burns] = await Promise.all([
+      queryFilterWindow(pair, pair.filters.Mint(), currentBlock, windowBlocks),
+      queryFilterWindow(pair, pair.filters.Burn(), currentBlock, windowBlocks)
+    ]);
+
+    const rows = [];
+    for (const ev of mints) rows.push({ block: ev.blockNumber, type: "Add",    a0: ev.args.amount0, a1: ev.args.amount1, who: ev.args.sender });
+    for (const ev of burns) rows.push({ block: ev.blockNumber, type: "Remove", a0: ev.args.amount0, a1: ev.args.amount1, who: ev.args.to });
+    rows.sort((a, b) => b.block - a.block);
+    const recent = rows.slice(0, TABLE_CAPS.liquidity);
+
+    if (recent.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No liquidity changes in the last 7 days</td></tr>';
+      statusEl.textContent = "0 events";
+      return;
+    }
+
+    tbody.innerHTML = "";
+    for (const r of recent) {
+      const amts = `${fmt(r.a0, 18, dp0)} ${sym0} + ${fmt(r.a1, 18, dp1)} ${sym1}`;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.block}<div class="td-age">${blockAge(r.block, currentBlock, bps)}</div></td>
+        <td class="${r.type === "Add" ? "td-in" : "td-out"}">${r.type}</td>
+        <td>${amts}</td>
+        <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.who}','_blank')">${fmtAddr(r.who)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    statusEl.textContent = shownOf(recent.length, rows.length, "events");
+    DebugHub.logCheckpoint("Analytics:Liquidity Loaded", "pass");
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Could not load liquidity history</td></tr>';
+    statusEl.textContent = "Error";
+    DebugHub.logError("loadRecentLiquidity", e);
   }
 }
 
@@ -409,6 +470,7 @@ async function loadVault() {
   const statusEl = document.getElementById("vault-status");
   try {
     const { currentBlock, windowBlocks } = await scanRange(prov);
+    const bps = await blocksPerSecond(prov);
     const [funded, harvested] = await Promise.all([
       queryFilterWindow(vault, vault.filters.Funded(),    currentBlock, windowBlocks),
       queryFilterWindow(vault, vault.filters.Harvested(), currentBlock, windowBlocks)
@@ -436,7 +498,7 @@ async function loadVault() {
           <td class="${r.cls}">${r.type}</td>
           <td>${fmt(r.amount, 18, 6)} ETH</td>
           <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.who}','_blank')">${fmtAddr(r.who)}</td>
-          <td>${r.block}</td>
+          <td>${r.block}<div class="td-age">${blockAge(r.block, currentBlock, bps)}</div></td>
         `;
         tbody.appendChild(tr);
       }
@@ -462,6 +524,7 @@ async function loadVault() {
 
   try {
     const { currentBlock, windowBlocks } = await scanRange(prov);
+    const bps = await blocksPerSecond(prov);
     const [weight, rate, reserve, lastTs, regs, rems] = await Promise.all([
       vault.totalWeight(),
       vault.ratePerSecond1e18(),
@@ -501,7 +564,7 @@ async function loadVault() {
           <td class="${r.cls}">${r.dir}</td>
           <td>${fmt(r.w, 18, 6)}</td>
           <td>${fmt(r.total, 18, 6)}</td>
-          <td>${r.block}</td>
+          <td>${r.block}<div class="td-age">${blockAge(r.block, currentBlock, bps)}</div></td>
         `;
         wTbody.appendChild(tr);
       }
@@ -605,6 +668,7 @@ function handleDisconnect() {
     loadLiveMetrics(),
     loadRoundHistory(),
     loadRecentSwaps(),
+    loadRecentLiquidity(),
     loadClaims(),
     loadVault()
   ]);
@@ -612,7 +676,7 @@ function handleDisconnect() {
   // Refresh live metrics every 15s, events every 60s — but only while the tab
   // is visible; catch up on return so a backgrounded dashboard costs nothing.
   const whenVisible = (fn) => () => { if (!document.hidden) fn(); };
-  const loadEvents = () => { loadRecentSwaps(); loadClaims(); loadVault(); };
+  const loadEvents = () => { loadRecentSwaps(); loadRecentLiquidity(); loadClaims(); loadVault(); };
   setInterval(whenVisible(loadLiveMetrics), 15000);
   setInterval(whenVisible(loadEvents), 60000);
   document.addEventListener("visibilitychange", () => {

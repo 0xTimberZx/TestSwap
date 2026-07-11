@@ -284,6 +284,25 @@ async function blocksForDays(prov, days) {
   return Math.round((await blocksPerSecond(prov)) * 86400 * days);
 }
 
+// Compact abbreviated "time ago" from a seconds delta: 30 → "30s", 5 → "5m",
+// 2 → "2h", 3 → "3d". Used for activity tables. Approximate when fed a
+// block-time estimate (blocks ÷ blocksPerSecond), which is fine for relative
+// display.
+function fmtAgo(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60)    return sec + "s";
+  const m = Math.floor(sec / 60);    if (m < 60) return m + "m";
+  const h = Math.floor(sec / 3600);  if (h < 24) return h + "h";
+  return Math.floor(sec / 86400) + "d";
+}
+
+// "Nx ago" label for a block, given the current head and calibrated block rate
+// (blocks/sec). Returns "" if inputs are missing.
+function blockAge(block, currentBlock, bps) {
+  if (!block || !currentBlock || !bps) return "";
+  return fmtAgo((currentBlock - block) / bps);
+}
+
 // eth_getLogs over a multi-day window can exceed a public RPC's range/result
 // limits. Try the wanted window first, then shrink (¼, then 1/20) before
 // giving up, so a strict endpoint still yields the most recent slice of
