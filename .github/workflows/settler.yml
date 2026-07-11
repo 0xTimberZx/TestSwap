@@ -56,6 +56,8 @@ jobs:
           X_ACCESS_TOKEN:       ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           X_POST_MODE:          ${{ vars.X_POST_MODE }}
+          X_HASHTAGS:           ${{ vars.X_HASHTAGS }}
+          X_HASHTAGS_WINNER:    ${{ vars.X_HASHTAGS_WINNER }}
         run: |
           if [ "${{ github.event.inputs.mode }}" = "health" ] || \
              [ "${{ github.event.schedule }}" = "0 12 * * *" ]; then

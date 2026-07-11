@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("timbswap_theme")==="light"?"light":"dark"}catch(e){}</script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DebugHub — TimbSwap</title>
+  <meta name="description" content="Local diagnostics for TimbSwap — sessions, checkpoints, and errors logged in this browser." />
+  <meta name="robots" content="noindex" />
+  <link rel="canonical" href="https://timbswap.xyz/debughub/" />
+  <meta name="theme-color" content="#0b0f14" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../style.css?v=20260750a" />
+  <style>
+    .dh-page { max-width: 900px; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+    .dh-head { margin-bottom: 1.5rem; }
+    .dh-head .page-h1 { margin-bottom: .35rem; }
+    .dh-note {
+      border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2, rgba(255,255,255,.02));
+      padding: .85rem 1rem; font-size: .82rem; color: var(--text-dim); line-height: 1.5; margin-bottom: 1.5rem;
+    }
+    .dh-note strong { color: var(--text); }
+    .dh-toolbar { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.1rem; }
+    .dh-btn {
+      font-family: inherit; font-size: .8rem; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--border); background: transparent; color: var(--text);
+      border-radius: 999px; padding: .5rem 1rem; transition: border-color .15s, color .15s;
+    }
+    .dh-btn:hover { border-color: var(--green); color: var(--green); }
+    .dh-btn.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
+    .dh-count { font-size: .78rem; color: var(--text-dim); margin-left: auto; font-family: "Space Mono", monospace; }
+    .dh-tabs { display: flex; gap: .5rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
+    .dh-tab {
+      font-family: inherit; font-size: .82rem; font-weight: 600; cursor: pointer;
+      background: none; border: none; color: var(--text-dim); padding: .6rem .9rem;
+      border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s;
+    }
+    .dh-tab:hover { color: var(--text); }
+    .dh-tab.active { color: var(--green); border-bottom-color: var(--green); }
+    .empty-state { text-align: center; padding: 4rem 1rem; color: var(--text-dim); }
+    .empty-state .big { font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: .4rem; font-style: italic; }
+    /* Cards */
+    .session-card, .error-card {
+      border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: .8rem;
+      background: var(--surface-2, rgba(255,255,255,.015));
+    }
+    .session-top { display: flex; align-items: center; gap: .6rem; margin-bottom: .7rem; }
+    .session-id { font-family: "Space Mono", monospace; font-size: .85rem; font-weight: 700; }
+    .session-row { display: flex; justify-content: space-between; padding: .2rem 0; font-size: .82rem; }
+    .session-row .label { color: var(--text-dim); }
+    .session-row .value { font-family: "Space Mono", monospace; }
+    .lamp { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+    .lamp.active { background: var(--gold, #ffd75e); box-shadow: 0 0 8px var(--gold, #ffd75e); }
+    .lamp.pass { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .lamp.fail { background: #ff6b6b; box-shadow: 0 0 8px #ff6b6b; }
+    .status-badge { font-size: .68rem; font-weight: 700; letter-spacing: .06em; padding: .2rem .55rem; border-radius: 999px; }
+    .status-badge.active { color: var(--gold, #ffd75e); border: 1px solid var(--gold, #ffd75e); }
+    .status-badge.pass { color: var(--green); border: 1px solid var(--green); }
+    .status-badge.fail { color: #ff6b6b; border: 1px solid #ff6b6b; }
+    /* Timeline */
+    .timeline-item { display: flex; gap: .7rem; padding: .55rem 0; border-bottom: 1px solid var(--border); }
+    .timeline-item:last-child { border-bottom: none; }
+    .timeline-item .lamp { margin-top: .35rem; }
+    .timeline-name { font-weight: 600; font-size: .88rem; }
+    .timeline-meta { display: flex; gap: .8rem; flex-wrap: wrap; font-size: .74rem; color: var(--text-dim); font-family: "Space Mono", monospace; margin-top: .15rem; }
+    .timeline-session { font-size: .7rem; color: var(--text-faint, #4a6278); font-family: "Space Mono", monospace; margin-top: .1rem; }
+    /* Errors */
+    .error-card { border-left: 3px solid #ff6b6b; }
+    .error-explanation { font-size: .9rem; line-height: 1.5; margin-bottom: .6rem; }
+    .error-meta { display: flex; gap: .9rem; flex-wrap: wrap; font-size: .76rem; color: var(--text-dim); font-family: "Space Mono", monospace; }
+    .error-card details { margin-top: .6rem; }
+    .error-card summary { cursor: pointer; font-size: .76rem; color: var(--text-dim); }
+    .error-raw {
+      background: rgba(0,0,0,.35); border: 1px solid var(--border); border-radius: 8px; padding: .7rem;
+      font-size: .72rem; overflow-x: auto; margin: .5rem 0; white-space: pre;
+    }
+    /* Wallets */
+    .wallet-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+      border: 1px solid var(--border); border-radius: 10px; padding: .7rem .9rem; margin-bottom: .5rem;
+      font-family: "Space Mono", monospace; font-size: .82rem;
+    }
+    .wallet-row .sub { color: var(--text-dim); font-size: .74rem; }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-mark">⬡</span>
+      <span class="nav-logo-text">Timb<svg class="nav-logo-s" viewBox="31 30 38 42" preserveAspectRatio="xMidYMid meet"><path d="M66 33 L41 33 L34 40 L34 44 L41 51 L59 51 L66 58 L66 62 L59 69 L34 69" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter" stroke-miterlimit="8" stroke-linecap="butt"/></svg>wap</span>
+    </a>
+    <div class="nav-actions">
+      <button id="theme-toggle-lite" class="dh-btn" onclick="(function(){var d=document.documentElement;var l=d.dataset.theme==='light';d.dataset.theme=l?'dark':'light';try{localStorage.setItem('timbswap_theme',l?'dark':'light')}catch(e){}})()">Theme</button>
+      <a href="/docs/" class="dh-btn">Docs</a>
+    </div>
+  </nav>
+
+  <div class="dh-page">
+    <div class="dh-head">
+      <h1 class="page-h1">DebugHub</h1>
+      <p class="page-sub">Local diagnostics for TimbSwap — read live from this browser.</p>
+    </div>
+
+    <div class="dh-note">
+      <strong>This view is local to your browser.</strong> The DebugHub SDK stores telemetry in
+      <code>localStorage</code>, which is origin-scoped — so events logged on <code>timbswap.xyz</code>
+      live here, not in the shared ecosystem hub on <code>github.io</code>. This page reads the same
+      origin the app writes to, so it always reflects <em>your own</em> sessions on this device.
+    </div>
+
+    <div class="dh-toolbar">
+      <button class="dh-btn" onclick="DH.render()">Refresh</button>
+      <button class="dh-btn" onclick="DH.exportJson()">Export JSON</button>
+      <button class="dh-btn danger" onclick="DH.clearAll()">Clear</button>
+      <span class="dh-count" id="dh-count">—</span>
+    </div>
+
+    <div class="dh-tabs" id="dh-tabs"></div>
+    <main id="dh-content"></main>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-left">
+      <span class="nav-logo-mark">⬡</span> TimbSwap — DebugHub (local)
+    </div>
+    <div class="footer-links">
+      <a href="/docs/">Docs</a>
+      <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">Ecosystem Hub ↗︎</a>
+      <a href="https://github.com/0xTimberZx/TimbSwap" target="_blank">GitHub ↗︎</a>
+    </div>
+  </footer>
+
+  <script>
+  (function () {
+    "use strict";
+
+    var APP_NAME = "TimbSwap";
+    var STORAGE_KEY = APP_NAME + "_sessions";
+    var TABS = ["Sessions", "Checkpoints", "Errors", "Wallets"];
+    var activeTab = "Sessions";
+
+    // Mirror of the hub's error catalog (MyDapp/debughub/app.js → ERROR_EXPLANATIONS).
+    var ERROR_EXPLANATIONS = {
+      "-32002": "Wallet already has a pending request — open MetaMask/Brave and check for a waiting popup.",
+      "-32603": "Internal JSON-RPC error — often a contract revert or bad call data. Check the contract state and parameters.",
+      "4001": "The wallet rejected the request — user tapped Cancel or denied the signature.",
+      "-32000": "Invalid input — often: (a) maxFeePerGas below base fee, (b) insufficient ETH for gas, or (c) bad tx parameters. Apply the 130% fee buffer fix.",
+      "-32700": "Parse error — the RPC received malformed JSON. Usually a client-side serialisation bug.",
+      "-32601": "Method not found — the RPC node does not support this call. Try a different RPC endpoint.",
+      "-32003": "Transaction rejected — nonce too low or tx would fail on-chain. Fetch a fresh pending nonce.",
+      "-32005": "RPC rate limit exceeded. Add a delay or switch RPC endpoints.",
+      "SERVER_ERROR_401": "RPC endpoint returned 401 Unauthorized — ARB_SEPOLIA_RPC secret is missing, expired, or API key is invalid.",
+      "UNSUPPORTED_OPERATION": "Wallet session dropped — the signer has no account behind it (browser backgrounded or wallet auto-locked). Reconnect the wallet.",
+      "NONCE_EXPIRED": "Nonce too low — always fetch via getTransactionCount(address, 'pending') on every write call.",
+      "REPLACEMENT_UNDERPRICED": "A pending tx with the same nonce exists. Wait for it to confirm or resend with higher gas.",
+      "UNPREDICTABLE_GAS_LIMIT": "Gas estimation failed — tx would revert. Check allowances, contract state, and input params.",
+      "CALL_EXCEPTION": "Contract call reverted. Check: allowance, entry cost, contract not paused, correct address in config.js.",
+      "INSUFFICIENT_FUNDS": "Wallet has insufficient ETH for gas. Top up from 0xFaucet.",
+      "NETWORK_ERROR": "Lost connection to RPC node. Check internet connection and retry.",
+      "TIMEOUT": "RPC request timed out. Node may be congested — retry.",
+      "InsufficientOutputAmount": "Swap slippage exceeded — price moved before tx confirmed. Increase slippage tolerance or retry.",
+      "ExcessiveInputAmount": "Swap exact-out: required input exceeded amountInMax. Increase slippage tolerance.",
+      "PairNotFound": "No liquidity pair exists for this token combination.",
+      "RouterPaused": "TimbSwap Router is paused. No swaps until unpaused.",
+      "Expired": "Transaction deadline passed. Increase the deadline or submit faster.",
+      "WethNotSet": "WETH address not configured on Router. Call router.setWeth().",
+      "RefundFailed": "ETH refund after addLiquidityETH failed — recipient may be a contract rejecting ETH.",
+      "InsufficientLiquidity": "Insufficient liquidity in the pool for this trade size.",
+      "InvalidCharacter": "Entry string has an invalid character — only A-Z and 0-9 allowed.",
+      "RepeatingCharacter": "Entry string has a repeating character — all 6 must be unique.",
+      "ActiveEntryExists": "You already have an active entry for this round. Use Replace Entry.",
+      "LockNotUnlocked": "Lock duration has not elapsed. Check timeUntilUnlock() for remaining time.",
+      "NotLocker": "Only the original locker can withdraw this lock.",
+      "ClaimWindowClosed": "Claim window closed — 2 rounds after last eligible round.",
+      "GameNotStarted": "TimbPrize.startGame() has not been called yet.",
+      "SettlementPaused": "Settlement is paused by the owner.",
+      "NotSettler": "Only the designated settler address can call settleSegment().",
+      "SegmentNotComplete": "Segment interaction window has not elapsed yet. Settler called too early.",
+      "RoundNotSettled": "Round has not been settled yet — no winner data available.",
+      "AlreadyClaimed": "Winnings already claimed for this round.",
+      "NotAWinner": "This wallet is not a documented winner for the requested round.",
+      "LpTokenNotSet": "LP token not set on TimbFarm. Call farm.setLpToken().",
+      "LpTokenAlreadyLocked": "LP token is locked after first stake and cannot be changed.",
+      "BelowThreshold": "TIMBS balance is below the proposal threshold required to create a proposal.",
+      "AlreadyVoted": "This wallet has already voted on this proposal.",
+      "VotingPowerLocked": "Voting power is locked — you have participated in an active or passed proposal.",
+      "ProposalNotActive": "Proposal is not in active voting state.",
+      "ProposalNotPassed": "Proposal has not passed — cannot execute.",
+      "ExecutionWindowExpired": "Execution window has closed — proposal has expired.",
+      "WRONG_CHAIN": "Wrong network — TimbSwap requires Arbitrum Sepolia (Chain ID: 421614). Switch in your wallet.",
+      "InsufficientAAmount": "removeLiquidity: received less tokenA than amountAMin. Increase slippage tolerance or reduce the liquidity amount.",
+      "InsufficientBAmount": "removeLiquidity: received less tokenB than amountBMin. Increase slippage tolerance or reduce the liquidity amount.",
+      "InsufficientVotingPower": "No TIMBS deposited in governance contract. Call depositVotingPower() before attempting to vote.",
+      "QuorumNotReached": "Proposal reached vote threshold but total participation was below the quorum requirement."
+    };
+
+    // ---------- storage ----------
+    function b64decode(s) { return decodeURIComponent(escape(atob(s))); }
+    function loadEvents() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [];
+        return JSON.parse(b64decode(raw));
+      } catch (e) { return []; }
+    }
+
+    // ---------- helpers ----------
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    function shortWallet(a) { return !a ? "—" : a.slice(0, 6) + "..." + a.slice(-4); }
+    function formatTime(ts) { return !ts ? "—" : new Date(ts).toLocaleString(); }
+    function explainError(evt) {
+      var code = evt.code != null ? String(evt.code) : null;
+      if (code && ERROR_EXPLANATIONS[code]) return ERROR_EXPLANATIONS[code];
+      var msg = evt.message || "";
+      for (var key in ERROR_EXPLANATIONS) {
+        if (msg.indexOf(key) !== -1) return ERROR_EXPLANATIONS[key];
+      }
+      return msg || "Unrecognized error — add it to the DebugHub catalog.";
+    }
+
+    // ---------- session grouping ----------
+    function buildSessions(events) {
+      var s = {}, order = [];
+      events.forEach(function (e) {
+        var id = e.sessionId; if (!id) return;
+        if (!s[id]) { s[id] = { id: id, wallet: e.wallet, started: null, ended: null, lastCheckpoint: null, lastStatus: null, lastTimestamp: e.timestamp }; order.push(id); }
+        var x = s[id]; x.lastTimestamp = e.timestamp;
+        if (e.type === "session_start") x.started = e.timestamp;
+        if (e.type === "session_end") x.ended = e.timestamp;
+        if (e.type === "checkpoint" || e.type === "security") { x.lastCheckpoint = e.name; x.lastStatus = e.status; }
+        if (e.type === "error") { x.lastCheckpoint = "Error: " + (e.function || e.functionName || "unknown"); x.lastStatus = "fail"; }
+      });
+      return order.map(function (id) { return s[id]; }).sort(function (a, b) { return b.lastTimestamp - a.lastTimestamp; });
+    }
+    function statusClass(s) { return !s.ended ? "active" : (s.lastStatus === "fail" ? "fail" : "pass"); }
+    function statusLabel(s) { return !s.ended ? "ACTIVE" : (s.lastStatus === "fail" ? "FAIL" : "PASS"); }
+
+    // ---------- renderers ----------
+    function empty(big, sub) {
+      return '<div class="empty-state"><div class="big">' + big + '</div><div>' + sub + '</div></div>';
+    }
+    function renderSessions(events) {
+      var sessions = buildSessions(events);
+      if (!sessions.length) return empty("No sessions yet", "Open TimbSwap and connect a wallet — sessions will appear here.");
+      return sessions.map(function (s) {
+        var c = statusClass(s);
+        return '<div class="session-card"><div class="session-top"><div class="lamp ' + c + '"></div>' +
+          '<div class="session-id">' + esc(s.id) + '</div><div style="flex:1"></div>' +
+          '<div class="status-badge ' + c + '">' + statusLabel(s) + '</div></div>' +
+          '<div class="session-row"><span class="label">Wallet</span><span class="value">' + shortWallet(s.wallet) + '</span></div>' +
+          '<div class="session-row"><span class="label">Duration</span><span class="value">' + (s.ended && s.started ? Math.round((s.ended - s.started) / 1000) + "s" : "active") + '</span></div>' +
+          '<div class="session-row"><span class="label">Last checkpoint</span><span class="value">' + esc(s.lastCheckpoint || "—") + '</span></div>' +
+          '<div class="session-row"><span class="label">Last activity</span><span class="value">' + formatTime(s.lastTimestamp) + '</span></div></div>';
+      }).join("");
+    }
+    function renderCheckpoints(events) {
+      var cps = events.filter(function (e) { return e.type === "checkpoint" || e.type === "security"; });
+      if (!cps.length) return empty("No checkpoints yet", "Checkpoint and security events will appear here.");
+      cps.sort(function (a, b) { return b.timestamp - a.timestamp; });
+      return cps.map(function (e) {
+        var c = e.status === "fail" ? "fail" : "pass";
+        var kind = e.type === "security" ? "Security" : "Checkpoint";
+        return '<div class="timeline-item"><div class="lamp ' + c + '"></div><div class="timeline-body">' +
+          '<div class="timeline-name">' + esc(e.name) + '</div>' +
+          '<div class="timeline-meta"><span>' + kind + '</span><span>' + shortWallet(e.wallet) + '</span><span>' + formatTime(e.timestamp) + '</span></div>' +
+          '<div class="timeline-session">' + esc(e.sessionId) + '</div></div></div>';
+      }).join("");
+    }
+    function renderErrors(events) {
+      var errs = events.filter(function (e) { return e.type === "error"; });
+      if (!errs.length) return empty("No errors logged", "Caught errors will appear here.");
+      var groups = {}, order = [];
+      errs.forEach(function (e) {
+        var k = (e.function || e.functionName) + "|" + e.code + "|" + e.message;
+        if (!groups[k]) { groups[k] = { function: e.function || e.functionName, code: e.code, message: e.message, count: 0, lastSeen: e.timestamp, raw: e }; order.push(k); }
+        var g = groups[k]; g.count++;
+        if (e.timestamp > g.lastSeen) { g.lastSeen = e.timestamp; g.raw = e; }
+      });
+      return order.map(function (k) { return groups[k]; })
+        .sort(function (a, b) { return b.lastSeen - a.lastSeen; })
+        .map(function (g, i) {
+          return '<div class="error-card"><div class="error-explanation">' + esc(explainError(g.raw)) + '</div>' +
+            '<div class="error-meta"><span><strong>' + esc(g.function) + '</strong>()</span><span>x' + g.count + '</span><span>' + formatTime(g.lastSeen) + '</span></div>' +
+            '<details><summary>Raw error details</summary><pre class="error-raw">' + esc(JSON.stringify(g.raw, null, 2)) + '</pre></details></div>';
+        }).join("");
+    }
+    function renderWallets(events) {
+      var seen = {};
+      events.forEach(function (e) {
+        if (!e.wallet) return;
+        if (!seen[e.wallet]) seen[e.wallet] = { wallet: e.wallet, count: 0, last: e.timestamp, chainId: e.chainId };
+        seen[e.wallet].count++;
+        if (e.timestamp > seen[e.wallet].last) seen[e.wallet].last = e.timestamp;
+      });
+      var list = Object.keys(seen).map(function (k) { return seen[k]; }).sort(function (a, b) { return b.last - a.last; });
+      if (!list.length) return empty("No wallets seen yet", "Wallets that connect to TimbSwap will appear here.");
+      return list.map(function (w) {
+        return '<div class="wallet-row"><div><div>' + esc(w.wallet) + '</div><div class="sub">chain ' + (w.chainId || "—") + ' · last ' + formatTime(w.last) + '</div></div><div>x' + w.count + '</div></div>';
+      }).join("");
+    }
+
+    // ---------- shell ----------
+    function render() {
+      var events = loadEvents();
+      document.getElementById("dh-count").textContent = events.length + " event" + (events.length === 1 ? "" : "s");
+      var tabs = document.getElementById("dh-tabs");
+      tabs.innerHTML = TABS.map(function (t) {
+        return '<button class="dh-tab' + (t === activeTab ? " active" : "") + '" data-tab="' + t + '">' + t + '</button>';
+      }).join("");
+      Array.prototype.forEach.call(tabs.querySelectorAll(".dh-tab"), function (b) {
+        b.onclick = function () { activeTab = b.getAttribute("data-tab"); render(); };
+      });
+      var content = document.getElementById("dh-content");
+      if (activeTab === "Sessions") content.innerHTML = renderSessions(events);
+      else if (activeTab === "Checkpoints") content.innerHTML = renderCheckpoints(events);
+      else if (activeTab === "Errors") content.innerHTML = renderErrors(events);
+      else content.innerHTML = renderWallets(events);
+    }
+    function exportJson() {
+      var data = JSON.stringify(loadEvents(), null, 2);
+      var blob = new Blob([data], { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "timbswap-debughub-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".json";
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    }
+    function clearAll() {
+      if (!confirm("Clear all locally-stored TimbSwap diagnostics on this browser? This cannot be undone.")) return;
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+      render();
+    }
+
+    window.DH = { render: render, exportJson: exportJson, clearAll: clearAll };
+    render();
+  })();
+  </script>
+</body>
+</html>

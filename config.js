@@ -452,8 +452,19 @@ _applyTheme(_currentTheme());
 // ─── DebugHub Stub ────────────────────────────────────────────────────────────
 // Loaded by SDK script tag in each page. Fallback stub defined here
 // so DebugHub never breaks TimbSwap if the SDK fails to load.
+//
+// supabaseUrl/Key point the SDK at the shared network sink so telemetry reaches
+// the hub across origins/devices (localStorage alone can't — timbswap.xyz is a
+// different origin than the hub). The SDK reads these lazily at send time, so
+// setting them here (after the SDK script tag) is fine. The current 1.1.0 SDK
+// ignores them; they activate once MyDapp ships debugger.js v1.2.0. Anon key is
+// public by design — RLS is the boundary. See dev-docs/debughub-network/.
 
-window.DEBUGHUB_CONFIG = { appName: "TimbSwap" };
+window.DEBUGHUB_CONFIG = {
+  appName:     "TimbSwap",
+  supabaseUrl: "https://ipyfodnidwsdvwqrcjrl.supabase.co",
+  supabaseKey: "sb_publishable_yg4wjMwvGrlf5C9vqs2nkw_Hfks0Ux9"
+};
 
 if (!window.DebugHub) {
   window.DebugHub = {
