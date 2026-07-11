@@ -241,3 +241,12 @@
   color: #ffd75e;
   text-shadow: 0 0 8px rgba(255, 215, 94, 0.4);
 }
+
+/* ─── Collapsible table cards ─────────────────────────────────────────────── */
+.data-card-header.collapsible { cursor: pointer; user-select: none; -webkit-user-select: none; }
+.card-caret {
+  display: inline-block; margin-right: 7px; font-size: 11px;
+  color: var(--text-3); transition: transform .15s ease;
+}
+.data-card-header.collapsed .card-caret { transform: rotate(-90deg); }
+.table-wrap.collapsed { display: none; }

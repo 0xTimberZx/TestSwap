@@ -585,10 +585,50 @@ function handleDisconnect() {
   updateMetricFilterGate();
 }
 
+// ─── Collapsible tables ────────────────────────────────────────────────────────
+
+// Click a table card's header to fold/unfold its table. State persists per
+// title in localStorage. Works for the nested Vault Internals header too (its
+// table-wrap follows a metrics grid, so we scan forward for it).
+function setupCollapsibleTables() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("timbswap_analytics_collapsed") || "{}"); } catch (e) {}
+
+  document.querySelectorAll(".data-card-header").forEach(header => {
+    let wrap = header.nextElementSibling;
+    while (wrap && !wrap.classList.contains("table-wrap")) wrap = wrap.nextElementSibling;
+    if (!wrap) return; // header with no table below it — skip
+
+    const titleEl = header.querySelector(".data-card-title");
+    const key = (titleEl ? titleEl.textContent : "").trim();
+    if (titleEl && !titleEl.querySelector(".card-caret")) {
+      const caret = document.createElement("span");
+      caret.className = "card-caret";
+      caret.textContent = "▾";
+      titleEl.insertBefore(caret, titleEl.firstChild);
+    }
+    header.classList.add("collapsible");
+
+    const apply = (collapsed) => {
+      header.classList.toggle("collapsed", collapsed);
+      wrap.classList.toggle("collapsed", collapsed);
+    };
+    if (saved[key]) apply(true);
+
+    header.addEventListener("click", () => {
+      const collapsed = !wrap.classList.contains("collapsed");
+      apply(collapsed);
+      saved[key] = collapsed;
+      try { localStorage.setItem("timbswap_analytics_collapsed", JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 (async () => {
     DebugHub.logCheckpoint("Analytics:Page Loaded", "pass");
+  setupCollapsibleTables();
   const _reconnected = await autoReconnect();
   if (_reconnected) {
     document.getElementById("connect-btn")?.classList.add("hidden");
