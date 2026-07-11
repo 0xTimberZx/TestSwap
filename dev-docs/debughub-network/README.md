@@ -34,18 +34,29 @@ No further backend work is required unless you want the optional 30-day prune
 
 ## What you apply in `MyDapp` (the only remaining steps)
 
+It's a **copy-two-files** job — no hand-editing:
+
 1. **Replace the SDK.** Copy [`debugger.js`](./debugger.js) over
-   `MyDapp/debughub/sdk/debugger.js`. It's a full v1.2.0 drop-in — same public
-   API, now with the network sink. Nothing else in MyDapp references its
-   internals.
+   `MyDapp/debughub/sdk/debugger.js`. Full v1.2.0 drop-in — same public API,
+   now with the network sink.
 
-2. **Patch the hub reader.** Follow [`hub-app-patch.md`](./hub-app-patch.md) to
-   make `MyDapp/debughub/app.js` read from Supabase (≈4 small edits, no new
-   deps). The `Export JSON` button and `ERROR_EXPLANATIONS` catalog are
-   untouched.
+2. **Replace the hub logic.** Copy [`app.js`](./app.js) over
+   `MyDapp/debughub/app.js`. Full drop-in that reads from Supabase (with a
+   localStorage fallback); the gate, tabs, `Export JSON`, and the
+   `ERROR_EXPLANATIONS` catalog are byte-for-byte unchanged from the original.
+   ([`hub-app-patch.md`](./hub-app-patch.md) explains exactly what it changed,
+   if you'd rather review the delta than trust the drop-in.)
 
-Push those to MyDapp and the shared hub lights up with TimbSwap (and every other
-app) regardless of origin or device.
+Push those two files to MyDapp and the shared hub lights up with TimbSwap (and
+every other app) regardless of origin or device.
+
+Both files have `SUPABASE_URL` / `SUPABASE_KEY` pre-filled for this project. The
+SDK also reads them from `DEBUGHUB_CONFIG` if present (TimbSwap already supplies
+them); the hub uses its own top-of-file constants.
+
+Verified headless: the hub fetches `?app=eq.TimbSwap&order=event_ts.asc`, maps
+DB columns (`fn`→`function`, `event_ts`→`timestamp`) back to the event shape,
+and renders Sessions / Checkpoints / Errors / Wallets correctly.
 
 ## TimbSwap side — already wired ✅
 

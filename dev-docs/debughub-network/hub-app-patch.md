@@ -1,5 +1,9 @@
 # Hub read-from-Supabase patch (`MyDapp/debughub/app.js`)
 
+> **You don't have to hand-apply this.** A complete drop-in is provided as
+> [`app.js`](./app.js) in this folder — just copy it over `MyDapp/debughub/app.js`.
+> This document explains what that drop-in changes, for review.
+
 The hub currently reads only its **own origin's** `localStorage` (line ~33,
 `loadEvents`). To aggregate every app across origins and devices, make it read
 the Supabase sink instead, falling back to localStorage when the backend isn't
