@@ -5,6 +5,12 @@
 //   - Silently no-ops unless all four X_* secrets are configured.
 //   - X_POST_MODE: "all" (default) posts every rollover, "winners" posts only
 //     rounds that paid out, "off" disables without removing secrets.
+//   - X_HASHTAGS / X_HASHTAGS_WINNER: optional trailing hashtag line. Tags are
+//     space/comma separated ("#" added if missing); several "|"-separated
+//     groups rotate by round number so posts aren't byte-identical. Winner
+//     posts use X_HASHTAGS_WINNER when set, else X_HASHTAGS. The line is
+//     trimmed to fit X's 280-char limit. Unset ⇒ no hashtags (current
+//     behaviour).
 //   - Every failure is caught by the caller — a bad post can never break
 //     settling.
 //
@@ -21,9 +27,55 @@ const X_API_SECRET          = process.env.X_API_SECRET;
 const X_ACCESS_TOKEN        = process.env.X_ACCESS_TOKEN;
 const X_ACCESS_TOKEN_SECRET = process.env.X_ACCESS_TOKEN_SECRET;
 const X_POST_MODE           = (process.env.X_POST_MODE || "all").toLowerCase();
+const X_HASHTAGS            = process.env.X_HASHTAGS        || "";
+const X_HASHTAGS_WINNER     = process.env.X_HASHTAGS_WINNER || "";
 
 function xConfigured() {
   return !!(X_API_KEY && X_API_SECRET && X_ACCESS_TOKEN && X_ACCESS_TOKEN_SECRET);
+}
+
+// ─── Hashtags ──────────────────────────────────────────────────────────────────
+
+// Normalize one group string ("#a, b  c") → "#a #b #c": add a leading "#" where
+// missing, drop blanks and case-insensitive duplicates, preserve order.
+function normTags(group) {
+  const seen = new Set();
+  const out  = [];
+  for (let t of group.split(/[\s,]+/)) {
+    if (!t) continue;
+    if (t[0] !== "#") t = "#" + t;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out.join(" ");
+}
+
+// Hashtag line for this round, or "" when none configured. Winner posts prefer
+// X_HASHTAGS_WINNER (falling back to X_HASHTAGS); either env may hold several
+// "|"-separated groups that rotate by round number.
+function hashtagLine(round, won) {
+  const raw = (won && X_HASHTAGS_WINNER.trim()) ? X_HASHTAGS_WINNER : X_HASHTAGS;
+  if (!raw.trim()) return "";
+  const groups = raw.split("|").map(normTags).filter(Boolean);
+  if (!groups.length) return "";
+  const n = Number(round) || 0;
+  return groups[((n % groups.length) + groups.length) % groups.length];
+}
+
+// Append the hashtag line on its own paragraph, dropping trailing tags until the
+// whole post fits X's 280-char budget. The compete URL auto-shortens to 23;
+// a small margin covers emoji (weight 2, one code point).
+function appendHashtags(text, line) {
+  if (!line) return text;
+  const MAX = 278; // 280 less a 2-char emoji-weighting margin
+  const weighted = s =>
+    [...s.replace(/[a-z0-9.-]+\.(?:xyz|com|io|app)\/\S*/gi, "#".repeat(23))].length;
+  const base = weighted(text) + 2; // the "\n\n" separator
+  let tags = line.split(" ");
+  while (tags.length && base + weighted(tags.join(" ")) > MAX) tags.pop();
+  return tags.length ? text + "\n\n" + tags.join(" ") : text;
 }
 
 // ─── OAuth 1.0a ────────────────────────────────────────────────────────────────
@@ -204,13 +256,14 @@ async function postRoundToX(result) {
   }
 
   const won = result.winners > 0;
-  const text = won
+  const baseText = won
     ? `🏆 Round #${result.round} SETTLED — we have ${result.winners === 1 ? "a winner" : result.winners + " winners"}!\n\n` +
       `Winning string: ${result.string6}\n${result.entries} entries · ${result.potEth} ETH paid out\n\n` +
       `A new round is already live → timbswap.xyz/compete`
     : `📜 Round #${result.round} settled\n\n` +
       `Winning string: ${result.string6} · ${result.entries} entries · pot snowballs\n\n` +
       `Enter the next round → timbswap.xyz/compete`;
+  const text = appendHashtags(baseText, hashtagLine(result.round, won));
 
   let mediaId = null;
   try {
