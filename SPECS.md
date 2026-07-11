@@ -22,8 +22,8 @@
 | TimbSwapFactory | 0xCCd6d3f0A86042d2B7056eDd381d367126628AF5 | Sourcify ✅ |
 | TimbSwapRouter v8 | 0x40C7Caf90817C9891D278Ec1400B9deb180911f1 | Sourcify ✅ |
 | EligibleTokenRegistry | 0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04 | Sourcify ✅ |
-| GameRegistry v2 | 0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774 | Sourcify ✅ |
-| TimbPrize v3.2 | 0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40 | Sourcify ✅ |
+| GameRegistry v3 | 0x4d74F2111fB12f64F39A285251075cf455B84201 | pending verify |
+| TimbPrize v4 | 0xD69a518f04900762F460563d71Bdc8DdF86FB350 | pending verify |
 | TimbYieldVault | 0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F | Sourcify ✅ |
 | TimbStaking | 0xe776c7b700B190ED8248741F9b518B08d8733C8F | Sourcify ✅ |
 | TimbFarm | 0xE319E2206F71A5cD8dd2c411C6F29712935f9011 | Sourcify ✅ |
@@ -56,6 +56,8 @@
 | 0xefFea3C2D1aA32eE9D93Cc0E888647E6A168293f | Phantom pair — 500k TIMBS permanently locked (treated as burned) |
 | 0x486Fa4D8351EF81136E83340eA1e3aa2272c9955 | Treasury v1 — retired; ~6,532 TIMBS fee revenue permanently stranded (no working ERC20 exit in v1; treated as burned) |
 | 0x566395B9FAd004520e39FCacbA7E5e805ae97889 | Treasury v2 — retired same-day (held nothing); superseded by v3's ERC20 fee exits |
+| 0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774 | GameRegistry v2 — retired; superseded by v3 (4-round refund window). Old game history readable here |
+| 0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40 | TimbPrize v3.2 — retired; superseded by v4 (jittered locks, 2-round prize claim). Old rounds readable here |
 
 ---
 
