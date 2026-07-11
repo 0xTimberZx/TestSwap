@@ -401,7 +401,7 @@ async function loadVault() {
       vault.reserve()
     ]);
     set("m-yield", fmt(accrued, 18, 6) + " ETH");
-    set("m-yield-sub", `reserve ${fmt(reserve, 18, 4)} ETH`);
+    set("m-yield-sub", `reserve ${fmt(reserve, 18, 6)} ETH`);
   } catch (e) {
     console.warn("loadVault metrics:", e.message);
   }
