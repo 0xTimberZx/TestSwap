@@ -524,16 +524,23 @@ steps:** deploy new TimbTreasury(timbs, staking, escrow, pair, WETH) →
 ETH/TIMBS from the old treasury (`withdrawOperational` for ETH) → update
 ADDRESSES + README/SPECS.
 
-### 13.2 TimbPrize `_buildWinningString` — OPEN (next redeploy)
+### 13.2 TimbPrize `_buildWinningString` — FIXED in v4 (awaiting deploy, see §14)
 
-The winning string is a raw `counter % 36` per segment with no
-entropy — fully deterministic, so a bot can compute the exact nudges
-needed and snipe the pot in the final blocks of segment 6. The contract
-comments already describe the intended fix (keccak256(blockhash-based
-jitter on the freeze); see SPECS "Freeze" line) but the code never
-implements it. Requires a TimbPrize redeploy + full rewire (registry,
-vault, router authorization, settler address) — schedule deliberately,
-not as a hotfix. Testnet risk accepted meanwhile.
+Was: raw `counter % 36` per segment, fully deterministic → snipeable by
+last-second nudge steering. Now: each segment's LOCKED character is
+`ALPHABET[keccak256(blockhash(block.number-1), counter, round, segment) % 36]`
+frozen at lock time (`_lockCurrentSegment`), stored in `segmentLockedChar`,
+and the winning string is built from those stored chars. Swaps still
+influence the outcome (every nudge changes the mix) but nobody can aim it.
+`getCurrentWindow`/`getSegmentDigit` return locked (jittered) chars for
+settled segments and the live pre-jitter char for the active one — the
+frontend reads letters from `currentWindow` instead of deriving `% 36`.
+
+Accepted residual (documented in-code): a manual settler can grind
+settlement timing inside the 15s window (~1/36 per block) since
+blockhash(n-1) is known within block n; the keeper settling within seconds
+of each boundary leaves little room. Full elimination needs
+commit-reveal/VRF — out of scope for testnet.
 
 ### 13.1b Treasury v3 — ERC20 fee exits (fix ready, redeploy when convenient)
 
@@ -557,3 +564,61 @@ v3 additions (compiled, awaiting deploy):
 
 Redeploy is same as v2 (5 constructor args) + the usual 5-pointer rewire.
 No urgency: v2 holds ~nothing yet; do it before meaningful fees accumulate.
+
+---
+
+## 14. Claim-window rework — 2-round prize claim / 4-round principal refund (v3/v4, awaiting deploy)
+
+The two windows were coupled at 2 rounds under one shared constant name
+across two contracts. Now decoupled:
+
+- **Prize claim (TimbPrize v4):** 2 rounds flat from the winning round —
+  claimable during R+1 and R+2 only (the hidden `+1` grace round is gone).
+  Runs even if the ticket is in its expiry tail.
+- **Principal refund (GameRegistry v3):** `REFUND_WINDOW_ROUNDS = 4`
+  (renamed from `CLAIM_WINDOW_ROUNDS`) — every ticket has a hard 4 rounds
+  after `lastEligibleRound` to withdraw escrow before the lapse sweep
+  forfeits it to the protocol sink.
+- **Winning changes nothing about the ticket:** no status/escrow effect;
+  a missed prize recycles to the pot (`recycleUnclaimed`, now
+  **permissionless** with a window-lapsed guard — same posture as
+  `settleSegment`) while the winner's principal window runs untouched.
+  Since prize deadline R+2 ≤ LER+2 < LER+4, final ticket forfeiture is
+  always the 4-round principal mark.
+
+Timeline (ticket plays rounds 10–12, wins round 11):
+
+```
+round:        10   11   12   13   14   15   16   17
+ticket        play play play
+prize (won @11)     ── claim 12,13 ──╳ recycled → pot
+principal                 ── withdraw 13,14,15,16 ──╳ forfeited → treasury
+```
+
+Tests: `tests/PrizeWindows.t.sol` (run locally: `forge test
+--match-contract PrizeWindowsTest -vvv`; forge-std via
+`forge install foundry-rs/forge-std`). Covers the keccak mirror, winning
+string from locked chars, claim at R+2 pass / R+3 revert, refund at LER+4
+pass / forfeit-then-revert after, recycle permissionless-after /
+revert-during, and expired-winner-keeps-principal.
+
+### Combined redeploy checklist (§13.2 + §14 — one session)
+
+1. **Deploy** GameRegistry v3 (`timbsToken`, `protocolSink = Treasury v3`,
+   `timbPrize = 0x0`), then TimbPrize v4 (`prizeEscrow`, `newRegistry`,
+   `router v8`).
+2. **Wire new pair:** `registry.setTimbPrize(prize)`,
+   `registry.setEntryCosts(…, …)` (copy live values),
+   `registry.setYieldVault(vault)`, `prize.setEligibleRegistry(…)`,
+   `prize.setYieldVault(vault)`, `prize.setWinnersPerRound(…)`.
+3. **Rewire ecosystem:** `escrow.setTimbPrize(prize)`,
+   `vault.setGameRegistry(newRegistry)` (+ prize pointer if present),
+   `router.setTimbPrize/setGameRegistry` (whichever the router exposes for
+   nudge target), old prize/registry left dark.
+4. `prize.startGame()` — fresh round 1 (old game history stays readable at
+   the old addresses).
+5. **Frontend:** config.js ADDRESSES (GameRegistry, TimbPrize) + cache
+   token; settler.js `GAMEREGISTRY_ADDR` + prize address; docs address
+   table; SPECS tables; Sourcify verify both.
+6. Optional settler follow-up: call `recycleUnclaimed(round-3)`
+   opportunistically after each rollover.

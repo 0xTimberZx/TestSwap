@@ -49,8 +49,10 @@ interface IEligibleTokenRegistry {
  *   - Perpetual self-continuing rounds (6 hours each).
  *   - 6 segments per round: 59:45 interaction + 0:15 settlement.
  *   - positionCounter increments +1 per eligible swap (via nudgeScroll).
- *   - Winning string = 6-char window in 36-char alphabet at freeze point.
- *   - Freeze: keccak256(blockhash(block.number-1) + counter + roundNumber).
+ *   - Winning string = the 6 per-segment LOCKED characters (jittered).
+ *   - Lock (per segment, §13.2): char = ALPHABET[keccak256(
+ *     blockhash(block.number-1), counter, round, segment) % 36] — swaps
+ *     influence the outcome, nobody can aim it.
  *   - Winners: exact 6-char match, equal split, remainder (r) snowballs.
  *   - Prize ETH held in PrizeEscrow, paid on winner claim.
  *   - Dual-layer verification at settlement via GameRegistry.
@@ -101,7 +103,11 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     /// @notice Full round duration (6 hours).
     uint256 public constant ROUND_DURATION = SEGMENT_DURATION * SEGMENTS_PER_ROUND;
 
-    /// @notice Claim window: 2 rounds after lastEligibleRound.
+    /// @notice Prize claim window: 2 rounds from the round a winner matched,
+    ///         with no grace round. Runs on its own clock — deliberately
+    ///         decoupled from GameRegistry's 4-round principal refund window
+    ///         (a winner who lets the prize lapse keeps their full principal
+    ///         window; the lapsed prize recycles to the pot).
     uint256 public constant CLAIM_WINDOW_ROUNDS = 2;
 
     // ─── State ───────────────────────────────────────────────────────────────
@@ -133,6 +139,12 @@ contract TimbPrize is Ownable, ReentrancyGuard {
 
     /// @notice Whether each segment's digit is locked (settled).
     mapping(uint256 => bool) public segmentDigitLocked;
+
+    /// @notice The LOCKED character per segment for the current round —
+    ///         the nudge counter jittered with the settling block's entropy
+    ///         (§13.2). This, not counter % 36, is what the winning string
+    ///         is built from. Cleared at each round start.
+    mapping(uint256 => bytes1) public segmentLockedChar;
 
     /// @notice Shuffle enabled — if true, alphabet reseeded each round.
     bool public shuffleEnabled;
@@ -359,11 +371,11 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         bytes memory result = new bytes(6);
         for (uint256 i = 1; i <= SEGMENTS_PER_ROUND; i++) {
             uint8 idx = uint8(i - 1);
-            if (i < currentSegment) {
-                // Locked digit
-                result[idx] = ALPHABET[segmentDigitCounter[i] % 36];
+            if (segmentDigitLocked[i]) {
+                // Locked digit — the jittered character the round will score
+                result[idx] = segmentLockedChar[i];
             } else if (i == currentSegment) {
-                // Live digit — current nudge state
+                // Live digit — current nudge state (pre-jitter)
                 result[idx] = ALPHABET[segmentDigitCounter[i] % 36];
             } else {
                 // Future digit — not yet active
@@ -378,6 +390,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
      * @dev Returns 0x00 if segment hasn't been settled yet.
      */
     function getSegmentDigit(uint256 segment) external view returns (bytes1) {
+        if (segmentDigitLocked[segment]) return segmentLockedChar[segment];
         if (segment > currentSegment) return 0x00;
         return ALPHABET[segmentDigitCounter[segment] % 36];
     }
@@ -416,13 +429,13 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             // The incoming segment's counter is NOT reset: the meter is
             // continuous — each digit carries its value across segments and
             // rounds, and nudging resumes from wherever it last sat.
-            segmentDigitLocked[currentSegment] = true;
+            _lockCurrentSegment();
             currentSegment++;
             segmentStartTime = _nextSegmentStart();
             emit SegmentAdvanced(currentRound, currentSegment, block.timestamp);
         } else {
             // Final segment — lock and settle round
-            segmentDigitLocked[currentSegment] = true;
+            _lockCurrentSegment();
             _settleRound();
         }
     }
@@ -472,6 +485,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         segmentStartTime = nextStart;
         for (uint256 i = 1; i <= SEGMENTS_PER_ROUND; i++) {
             segmentDigitLocked[i] = false;
+            segmentLockedChar[i]  = 0x00; // jittered chars are per-round
         }
 
         IGameRegistry(gameRegistry).setCurrentRound(currentRound);
@@ -482,12 +496,40 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Build winning string from the 6 locked segment digit counters.
+     * @dev Lock the current segment: freeze its character as the nudge
+     *      counter mixed with the previous block's hash (§13.2). Nudgers
+     *      during the open window cannot know the hash of whichever block
+     *      eventually settles the segment, so swaps still INFLUENCE the
+     *      outcome (every nudge changes it) but nobody can AIM it — the
+     *      deterministic counter % 36 mapping this replaces was
+     *      MEV-snipeable via last-second nudge steering.
+     *
+     *      Residual (accepted, documented): a manual settler can grind
+     *      timing inside the 15s settlement window (~1/36 per block) since
+     *      blockhash(n-1) is known within block n. The keeper settling
+     *      within seconds of the boundary leaves almost no grind room;
+     *      full elimination needs commit-reveal/VRF — deliberately out of
+     *      scope for testnet.
+     */
+    function _lockCurrentSegment() internal {
+        uint256 mix = uint256(keccak256(abi.encodePacked(
+            blockhash(block.number - 1),
+            segmentDigitCounter[currentSegment],
+            currentRound,
+            currentSegment
+        )));
+        segmentLockedChar[currentSegment]  = ALPHABET[mix % 36];
+        segmentDigitLocked[currentSegment] = true;
+    }
+
+    /**
+     * @dev Build winning string from the 6 locked (jittered) segment chars.
+     *      All six are locked by the time the round settles.
      */
     function _buildWinningString() internal view returns (bytes6) {
         bytes memory result = new bytes(6);
         for (uint256 i = 1; i <= SEGMENTS_PER_ROUND; i++) {
-            result[i - 1] = ALPHABET[segmentDigitCounter[i] % 36];
+            result[i - 1] = segmentLockedChar[i];
         }
         return bytes6(bytes(result));
     }
@@ -610,7 +652,9 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     {
         if (roundWinningString[round] == bytes6(0)) revert RoundNotSettled(round);
         if (hasClaimed[round][msg.sender]) revert AlreadyClaimed(msg.sender, round);
-        if (currentRound > round + CLAIM_WINDOW_ROUNDS + 1) revert ClaimWindowExpired(round);
+        // Claimable during rounds R+1 and R+2 only — 2 rounds flat from the
+        // match, even if the winning ticket is deep in its expiry tail.
+        if (currentRound > round + CLAIM_WINDOW_ROUNDS) revert ClaimWindowExpired(round);
 
         bool isWinner = false;
         address[] memory winners = roundWinners[round];
@@ -634,11 +678,15 @@ contract TimbPrize is Ownable, ReentrancyGuard {
      *         expired back into the live pot ("seeding from unclaimed
      *         rounds"). The ETH never left PrizeEscrow — this is pure
      *         bookkeeping between the unclaimed pool and the live pot.
+     * @dev PERMISSIONLESS, same posture as settleSegment(): once the claim
+     *      window is over the outcome is fixed regardless of caller, so the
+     *      settler keeper (or anyone) may sweep instead of waiting on the
+     *      owner. The window guard is the protection, not the caller.
      */
-    function recycleUnclaimed(uint256 round) external onlyOwner {
+    function recycleUnclaimed(uint256 round) external {
         if (roundWinningString[round] == bytes6(0)) revert RoundNotSettled(round);
         // Claim window must be over (mirrors the claimWinnings deadline).
-        if (currentRound <= round + CLAIM_WINDOW_ROUNDS + 1) revert ClaimWindowExpired(round);
+        if (currentRound <= round + CLAIM_WINDOW_ROUNDS) revert ClaimWindowExpired(round);
         if (roundRecycled[round]) revert AlreadyClaimed(address(0), round);
         roundRecycled[round] = true;
 
