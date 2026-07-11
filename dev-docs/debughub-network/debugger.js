@@ -145,7 +145,7 @@
 
   function getWallet() {
     try {
-      if (window.ethereum && window.ethereum.selectedAddress) return window.ethereum.selectedAddress;
+      if (window.ethereum && window.ethereum.selectedAddress) return window.ethereum.selectedAddress.toLowerCase();
     } catch (e) {}
     return null;
   }
@@ -185,7 +185,10 @@
   // ---------- public API ----------
 
   function startSession(walletOverride) {
+    // Normalize case so the same wallet from different sources (checksummed
+    // override vs lowercase eth_accounts/selectedAddress) never double-logs.
     var wallet = walletOverride || getWallet();
+    if (wallet) wallet = wallet.toLowerCase();
     var chainId = getChainId();
 
     currentSession = { id: genSessionId(wallet), wallet: wallet, chainId: chainId, startedAt: Date.now() };
@@ -206,7 +209,7 @@
     try {
       window.ethereum.request({ method: "eth_accounts" }).then(function (accounts) {
         if (accounts && accounts.length > 0 && currentSession === session && !currentSession.wallet) {
-          currentSession.wallet = accounts[0];
+          currentSession.wallet = accounts[0].toLowerCase();
         }
       }).catch(function () {});
     } catch (e) {}

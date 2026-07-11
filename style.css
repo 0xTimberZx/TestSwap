@@ -592,3 +592,6 @@ body { padding-top: 60px; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* Compact "time ago" subline under a Block cell in activity tables. */
+.td-age { font-size: .68rem; color: var(--muted, #8ca3bf); margin-top: 2px; line-height: 1; }

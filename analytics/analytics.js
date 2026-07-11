@@ -50,7 +50,7 @@ async function scanRange(prov) {
 // Every activity table shows a fixed number of newest rows — no scrolling
 // walls. The status chip stays accurate: "6 of 19 events" when truncated,
 // plain "19 events" when everything fits.
-const TABLE_CAPS = { swaps: 20, vault: 6, weights: 12, claims: 12 };
+const TABLE_CAPS = { swaps: 15, vault: 6, weights: 12, claims: 12 };
 function shownOf(shown, total, noun) {
   return shown < total ? `${shown} of ${total} ${noun}` : `${total} ${noun}`;
 }
@@ -299,6 +299,7 @@ async function loadRecentSwaps() {
     const timbsIs0   = token0Addr.toLowerCase() === ADDRESSES.TIMBSToken.toLowerCase();
 
     const { currentBlock, windowBlocks } = await scanRange(prov);
+    const bps = await blocksPerSecond(prov); // cached; for "time ago" labels
     const events = await queryFilterWindow(pair, pair.filters.Swap(), currentBlock, windowBlocks);
     const recent  = events.slice(-TABLE_CAPS.swaps).reverse();
 
@@ -324,7 +325,7 @@ async function loadRecentSwaps() {
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${ev.blockNumber}</td>
+        <td>${ev.blockNumber}<div class="td-age">${blockAge(ev.blockNumber, currentBlock, bps)}</div></td>
         <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${sender}','_blank')">${fmtAddr(sender)}</td>
         <td class="${buyingTIMBS ? 'td-in' : 'td-out'}">${direction}</td>
         <td>${amtIn}</td>
@@ -409,6 +410,7 @@ async function loadVault() {
   const statusEl = document.getElementById("vault-status");
   try {
     const { currentBlock, windowBlocks } = await scanRange(prov);
+    const bps = await blocksPerSecond(prov);
     const [funded, harvested] = await Promise.all([
       queryFilterWindow(vault, vault.filters.Funded(),    currentBlock, windowBlocks),
       queryFilterWindow(vault, vault.filters.Harvested(), currentBlock, windowBlocks)
@@ -436,7 +438,7 @@ async function loadVault() {
           <td class="${r.cls}">${r.type}</td>
           <td>${fmt(r.amount, 18, 6)} ETH</td>
           <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.who}','_blank')">${fmtAddr(r.who)}</td>
-          <td>${r.block}</td>
+          <td>${r.block}<div class="td-age">${blockAge(r.block, currentBlock, bps)}</div></td>
         `;
         tbody.appendChild(tr);
       }
@@ -462,6 +464,7 @@ async function loadVault() {
 
   try {
     const { currentBlock, windowBlocks } = await scanRange(prov);
+    const bps = await blocksPerSecond(prov);
     const [weight, rate, reserve, lastTs, regs, rems] = await Promise.all([
       vault.totalWeight(),
       vault.ratePerSecond1e18(),
@@ -501,7 +504,7 @@ async function loadVault() {
           <td class="${r.cls}">${r.dir}</td>
           <td>${fmt(r.w, 18, 6)}</td>
           <td>${fmt(r.total, 18, 6)}</td>
-          <td>${r.block}</td>
+          <td>${r.block}<div class="td-age">${blockAge(r.block, currentBlock, bps)}</div></td>
         `;
         wTbody.appendChild(tr);
       }

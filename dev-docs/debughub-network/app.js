@@ -422,7 +422,7 @@
     var order = [];
 
     events.forEach(function (evt) {
-      var addr = evt.wallet || "unknown";
+      var addr = (evt.wallet || "unknown").toLowerCase(); // dedupe mixed-case
       if (!wallets[addr]) {
         wallets[addr] = { connections: 0, errors: 0, pass: 0, fail: 0 };
         order.push(addr);
