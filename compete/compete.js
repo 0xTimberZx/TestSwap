@@ -860,7 +860,13 @@ function renderTicketRow(t, displayStatus, opts) {
 
   // Raw status drives the action buttons; display status drives the badge.
   const raw = t.status;
-  const canCancel = raw === 0 && currentRoundNum !== null && playRound > currentRoundNum;
+  // The contract's cancelEntry accepts ANY raw-Pending ticket regardless of
+  // round — once a ticket's play round arrives it's flipped to Active, so
+  // raw === 0 already means "hasn't started playing yet." Gating additionally
+  // on currentRoundNum hid the Withdraw button whenever the round poll hadn't
+  // landed yet (null) or briefly lagged, even though the on-chain cancel would
+  // have succeeded. Mirror the contract: raw-Pending ⇒ withdrawable.
+  const canCancel = raw === 0;
   const expired   = currentRoundNum !== null && currentRoundNum > lastRound;
   // Refundable through the contract's per-ticket forfeitRound — the later of
   // the refund-window end and (for a late winner) the post-claim window (§14).
