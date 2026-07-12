@@ -840,15 +840,16 @@ function renderTicketRow(t, displayStatus, opts) {
   const playRound = t.playRound.toNumber();
   const lastRound = t.lastEligibleRound.toNumber();
 
-  // Re-anchor the badge to the PRIZE's currentRoundNum. The registry derives
-  // displayStatus from its own currentRound, which lags the prize's after a
-  // prize swap + game restart (round resets to 1 while old tickets keep
-  // Active). A ticket whose play round hasn't arrived in the CURRENT game must
-  // read Pending, not Active — it cannot be active or qualify until its play
-  // round is actually reached. (In normal play a ticket is Pending until its
-  // play round, so this only ever corrects the post-restart desync.)
+  // A raw-Active ticket whose play round is still AHEAD in the current game is
+  // a migration artifact ("carried over"): it was activated in a prior game
+  // cycle, then startGame on the reused GameRegistry reset the round below its
+  // play round. It stays committed on-chain — Active, earning, NOT withdrawable
+  // (cancelEntry rejects a non-Pending ticket) and refundable only after its
+  // run ends. We used to re-anchor its badge to "Pending", but that read as
+  // "withdrawable" and produced the confusing Pending-with-no-Withdraw row.
+  // Show it honestly as Active and explain the state in the hint instead.
   const notYetPlaying = currentRoundNum !== null && currentRoundNum < playRound;
-  if (notYetPlaying && (displayStatus === 1 || t.status === 1)) displayStatus = 0; // → Pending
+  const carriedOver   = notYetPlaying && t.status === 1;
 
   const statusName  = STATUS_NAMES[displayStatus] || "Unknown";
   const statusClass = "status-" + statusName.toLowerCase();
@@ -876,7 +877,7 @@ function renderTicketRow(t, displayStatus, opts) {
 
   let hint = "";
   if (canCancel)                       hint = ` · withdrawable until R${playRound} starts`;
-  else if (raw === 1 && notYetPlaying) hint = ` · waiting for R${playRound}`;
+  else if (carriedOver)                hint = ` · carried from a prior game · locked in, refundable after R${lastRound}`;
   else if (raw === 1 && !expired)      hint = ` · earning yield for the pool`;
   else if (canRefund)                  hint = ` · principal refundable now`;
   else if ((raw === 0 || raw === 1) && expired && !inWindow) hint = ` · refund window closed`;
