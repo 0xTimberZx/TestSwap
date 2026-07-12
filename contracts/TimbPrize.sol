@@ -486,18 +486,22 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             block.timestamp
         );
 
-        // Auto-queue next round. The meter NEVER clears: every digit counter
-        // carries its end-of-round value into the new round (round 1 ending
-        // ABCJLA means round 2's segments resume from A,B,C,J,L,A) — only
-        // the locks release. The new round's first segment starts on the
-        // 60-minute grid, same as a plain segment advance.
+        // Auto-queue next round. The meter NEVER clears: each segment resumes
+        // from the JITTERED character it just scored, not its raw nudge counter.
+        // So a round ending "KM3PQ7" leaves round N+1's segments starting on
+        // K,M,3,P,Q,7 and nudging up from there — the pre-jitter continuity,
+        // now linked to the actual winning char. The new round's first segment
+        // starts on the 60-minute grid, same as a plain segment advance.
         uint256 nextStart = _nextSegmentStart();
         currentRound++;
         currentSegment   = 1;
         segmentStartTime = nextStart;
         for (uint256 i = 1; i <= SEGMENTS_PER_ROUND; i++) {
-            segmentDigitLocked[i] = false;
-            segmentLockedChar[i]  = 0x00; // jittered chars are per-round
+            // Seed the new counter to the index of this round's locked char so
+            // the live meter (ALPHABET[counter % 36]) opens on that exact char.
+            segmentDigitCounter[i] = _alphabetIndexOf(segmentLockedChar[i]);
+            segmentDigitLocked[i]  = false;
+            segmentLockedChar[i]   = 0x00; // jittered chars are per-round
         }
 
         IGameRegistry(gameRegistry).setCurrentRound(currentRound);
@@ -555,6 +559,18 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             result[i - 1] = segmentLockedChar[i];
         }
         return bytes6(bytes(result));
+    }
+
+    /// @dev Index of a character within ALPHABET — the inverse of the
+    ///      ALPHABET[idx] mapping the live meter uses. A-Z → 0-25, 0-9 → 26-35.
+    ///      Used at round rollover to seed the next round's counter from the
+    ///      jittered winning char. Unrecognised bytes (e.g. an unlocked 0x00)
+    ///      fall back to 0 so the segment simply reopens at the start.
+    function _alphabetIndexOf(bytes1 c) internal pure returns (uint256) {
+        uint8 b = uint8(c);
+        if (b >= 0x41 && b <= 0x5A) return uint256(b) - 0x41;      // A-Z → 0-25
+        if (b >= 0x30 && b <= 0x39) return uint256(b) - 0x30 + 26; // 0-9 → 26-35
+        return 0;
     }
 
 
