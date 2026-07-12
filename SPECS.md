@@ -126,6 +126,7 @@ These three buckets must never mingle.
 - **Scroll:** positionCounter +1 per eligible swap, never resets
 - **Window:** alphabet[(counter+i) % 36] for i 0–5
 - **Lock (§13.2):** per segment, char jittered from keccak256(blockhash(n-1), counter, round, segment), kept in the live char's class — letter→letter (mod 26), digit→digit (mod 10). Class is aimable via nudging; exact char is not
+- **Rollover (v7):** at round settle, each segment's next-round counter is seeded to the index of the char it just locked, so the meter opens the new round on the previous round's **jittered winning string** and nudges up from there (pre-jitter continuity, now linked to the scored char, not the raw counter)
 - **Entry:** 6 chars, A-Z + 0-9, no repeats, plays in round N+1
 - **Payout:** floor(pot/n) × n, remainder r snowballs
 - **Prize claim window:** 2 rounds from the winning round (flat, no grace)
