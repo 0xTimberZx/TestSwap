@@ -30,8 +30,8 @@ const ADDRESSES = {
   TimbSwapFactory:      "0xCCd6d3f0A86042d2B7056eDd381d367126628AF5",
   TimbSwapRouter:       "0x40C7Caf90817C9891D278Ec1400B9deb180911f1", // v8 — multi-hop path routing
   EligibleTokenRegistry:"0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04",
-  GameRegistry:         "0xcDd1633F9FBD4dD189cF69FF82a005B4fcBe09eB", // fresh deploy — drops pre-restart tickets
-  TimbPrize:            "0x52dF701BD15B63Ece56141c22392a5435B608B72", // v7 — meter resumes from jittered winning char
+  GameRegistry:         "0xfca8C2A107298273508BE8C5f469344b0Fc8B5B4", // v4 — game generations (prior-game tickets go inert + reclaimable)
+  TimbPrize:            "0x35976f4D2260127848a6274D2eC89ee054412432", // built against registry v4; startGame bumps the generation
   TimbStaking:          "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   TimbFarm:             "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
   TimbLockVault:        "0x0157086E7670D1eFb15DC6b5158eE78279927a41",
