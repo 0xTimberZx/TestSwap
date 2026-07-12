@@ -41,8 +41,8 @@ const PRIVATE_KEY   = process.env.SETTLER_PRIVATE_KEY;
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;        // ops: every message, incl. failures
 const TG_CHAT_ID_PUBLIC = process.env.TELEGRAM_CHAT_ID_PUBLIC; // community group: round rollovers only
-const TIMBPRIZE_ADDR = "0xBBcb21Ef7DBEef21d8a0DE5972E61fd0369Ed3c0"; // TimbPrize v6 (class-preserving jitter: letter→letter, digit→digit)
-const GAMEREGISTRY_ADDR = "0xD6c9001c6Bbb55761f7476009AaF5F71C21Fe0b5"; // GameRegistry v5 (forfeit at max(LER, wonRound+claim)+refund)
+const TIMBPRIZE_ADDR = "0x52dF701BD15B63Ece56141c22392a5435B608B72"; // TimbPrize v7 (meter resumes from jittered winning char)
+const GAMEREGISTRY_ADDR = "0xcDd1633F9FBD4dD189cF69FF82a005B4fcBe09eB"; // GameRegistry (fresh deploy — matches config.js)
 
 // ─── ABI (minimal) ───────────────────────────────────────────────────────────
 
