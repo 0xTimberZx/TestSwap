@@ -26,7 +26,7 @@ const STAKING_ABI     = ["function totalStaked() external view returns (uint256)
 const FARM_ABI        = ["function totalStaked() external view returns (uint256)"];
 const LOCKVAULT_ABI   = ["function totalLocks() external view returns (uint256)"];
 const ESCROW_ABI      = ["function balance() external view returns (uint256)"];
-const VAULT_ABI       = ["function reserve() external view returns (uint256)"];
+const VAULT_ABI       = ["function previewAccrued() external view returns (uint256)"];
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
@@ -90,56 +90,14 @@ function stopMask() {
 let lastCounter = null;
 let lastSegment = null;
 
-// ─── "Up for Grabs" total: prize pot + vault backing, in ETH ⇄ USD ───────────
-// The headline figure is pot (live prize) + the yield vault's reserve (the ETH
-// backing future pot growth). It rotates between the ETH total and its USD
-// worth. USD uses a FIXED real ETH rate (ETH_USD_PRICE) — testnet ETH has no
-// market price, so a testnet pool ratio would be meaningless/misleading.
-
-const _usdPerEth = ETH_USD_PRICE;
-
-function fmtUsd(v) {
-  const dp = v >= 100 ? 0 : v >= 1 ? 2 : 4;
-  return "$" + v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
-}
-
-let _potEth  = "loading…";   // e.g. "1.2345 ETH"
-let _potUsd  = null;          // e.g. "$3,210" or null when unpriceable
-let _showUsd = false;
-let _potRotTimer = null;
-
-// Render the current value on both targets. withFade is for the ETH⇄USD swap;
-// a plain refresh of the number (same phase) updates in place, no blink.
-function renderPot(withFade) {
-  const useUsd = _showUsd && _potUsd !== null;
-  const txt = useUsd ? _potUsd : _potEth;
+// "Up for Grabs" shows the exact same value as the compete LIVE banner: the
+// winnable pot (larger of the accounted pot and the PrizeEscrow balance) plus
+// any accruing yield. Rendered on the scroll card and the stats bar, in ETH.
+function renderUpForGrabs(weiTotal) {
+  const txt = fmtETH(weiTotal);
   [document.getElementById("scroll-pot-val"), document.getElementById("stat-pot")].forEach(el => {
-    if (!el) return;
-    el.classList.add("pot-val");
-    const apply = () => {
-      el.textContent = txt;
-      el.classList.toggle("val-usd", useUsd);
-      el.classList.remove("fading");
-    };
-    if (withFade) { el.classList.add("fading"); setTimeout(apply, 350); }
-    else          { apply(); }
+    if (el) el.textContent = txt;
   });
-}
-
-function setPotTotal(totalWei) {
-  _potEth = fmtETH(totalWei);   // fmtETH already appends " ETH"
-  _potUsd = _usdPerEth !== null
-    ? fmtUsd(parseFloat(ethers.utils.formatEther(totalWei)) * _usdPerEth)
-    : null;
-  if (_potUsd === null) _showUsd = false;   // never strand on a blank USD phase
-  renderPot(false);                          // reflect the fresh number at once
-  if (!_potRotTimer) {
-    _potRotTimer = setInterval(() => {
-      if (_potUsd === null) return;          // unpriceable → hold on ETH, no blink
-      _showUsd = !_showUsd;
-      renderPot(true);
-    }, 4000);
-  }
 }
 
 async function updateScroll() {
@@ -169,15 +127,19 @@ async function updateScroll() {
     const roundEl = document.getElementById("scroll-round");
     if (roundEl) roundEl.textContent = `Round ${round}`;
 
-    // "Up for Grabs" = live pot + the vault's ETH reserve backing it. Vault read
-    // is best-effort — an unfunded/unreachable vault just leaves the pot alone.
-    let total = pot;
+    // "Up for Grabs" mirrors the compete LIVE banner: max(pot, escrow balance)
+    // plus accruing yield. Each read is best-effort — falls back to the pot.
+    let combined = pot;
     try {
-      const reserve = await readContract("TimbYieldVault", VAULT_ABI).reserve();
-      total = pot.add(reserve);
-    } catch (e) { /* backing unavailable → show pot only */ }
+      const [escrowBal, accrued] = await Promise.all([
+        ADDRESSES.PrizeEscrow ? readProvider.getBalance(ADDRESSES.PrizeEscrow).catch(() => null) : null,
+        readContract("TimbYieldVault", VAULT_ABI).previewAccrued().catch(() => null),
+      ]);
+      if (escrowBal && escrowBal.gt(pot)) combined = escrowBal;
+      if (accrued) combined = combined.add(accrued);
+    } catch (e) { /* reads unavailable → show pot only */ }
 
-    setPotTotal(total);
+    renderUpForGrabs(combined);
 
   } catch (e) {
     console.warn("updateScroll:", e.message);
