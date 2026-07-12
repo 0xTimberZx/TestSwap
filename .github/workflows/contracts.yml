@@ -1,0 +1,40 @@
+name: contracts
+
+# Lightweight Foundry gate: compile the contracts and run the Solidity test
+# suite on any PR that touches contracts/tests/config. Frontend-only PRs skip
+# it (path filter), so this only runs when it can actually catch something.
+on:
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "tests/**"
+      - "foundry.toml"
+      - ".github/workflows/contracts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  forge:
+    name: build + test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive   # lib/openzeppelin-contracts + lib/forge-std
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          # Pin to the stable release. The default (nightly) has different
+          # block-number semantics that break PrizeWindows.t.sol's
+          # blockhash-based fixtures (which pass on stable locally).
+          version: stable
+
+      - name: forge build
+        run: forge build --sizes
+
+      - name: forge test
+        run: forge test -vvv
