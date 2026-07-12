@@ -420,8 +420,8 @@ body { padding-top: 60px; }
 .pot-val.fading  { opacity: 0; }
 
 /* ─── Stats Bar ─────────────────────────────────────────────────────────────── */
-/* ─── Three-step strip (how it works) ────────────────────────────────────────── */
-.how {
+/* ─── Three-step flow strip (landing "how it works") ─────────────────────────── */
+.flow-strip {
   display: flex;
   align-items: stretch;
   justify-content: center;
@@ -430,7 +430,7 @@ body { padding-top: 60px; }
   border-top: var(--bw) solid var(--border);
 }
 
-.how-step {
+.flow-step {
   flex: 1;
   max-width: 340px;
   display: flex;
@@ -441,13 +441,13 @@ body { padding-top: 60px; }
   padding: 28px 26px;
 }
 
-.how-emoji {
-  font-size: 30px;
+.flow-emoji {
+  font-size: 28px;
   line-height: 1;
   margin-bottom: 4px;
 }
 
-.how-title {
+.flow-title {
   font-family: var(--mono);
   font-size: 13px;
   font-weight: 700;
@@ -456,14 +456,14 @@ body { padding-top: 60px; }
   color: var(--text);
 }
 
-.how-desc {
+.flow-desc {
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-2);
   max-width: 26ch;
 }
 
-.how-arrow {
+.flow-arrow {
   display: flex;
   align-items: center;
   font-size: 22px;
@@ -473,9 +473,9 @@ body { padding-top: 60px; }
 }
 
 @media (max-width: 640px) {
-  .how { flex-direction: column; align-items: center; }
-  .how-step { max-width: 380px; width: 100%; padding: 22px 26px; }
-  .how-arrow { transform: rotate(90deg); padding: 2px 0; }
+  .flow-strip { flex-direction: column; align-items: center; }
+  .flow-step { max-width: 380px; width: 100%; padding: 22px 26px; }
+  .flow-arrow { transform: rotate(90deg); padding: 2px 0; }
 }
 
 .stats-bar {
