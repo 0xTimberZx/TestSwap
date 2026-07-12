@@ -32,7 +32,7 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260757d" />
+  <link rel="stylesheet" href="style.css?v=20260757i" />
 </head>
 <body>
 
@@ -139,7 +139,10 @@
       <div class="scroll-meta">
         <span id="scroll-round">Round —</span>
       </div>
-      <div class="scroll-pot" id="scroll-pot">Prize Pot: loading…</div>
+      <div class="scroll-pot">
+        <span class="scroll-pot-label">Up for Grabs</span>
+        <span class="scroll-pot-val" id="scroll-pot-val">loading…</span>
+      </div>
     </div>
   </section>
 
@@ -161,7 +164,7 @@
       <span class="stat-val" id="stat-locks">—</span>
     </div>
     <div class="stat-item">
-      <span class="stat-label">Prize Pot</span>
+      <span class="stat-label">Up for Grabs</span>
       <span class="stat-val" id="stat-pot">—</span>
     </div>
   </div>
@@ -208,7 +211,7 @@
   </footer>
 
   <script src="config.js?v=20260757h"></script>
-<script src="landing.js?v=20260750a"></script>
+<script src="landing.js?v=20260757i"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
