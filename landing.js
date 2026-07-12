@@ -92,12 +92,41 @@ let lastSegment = null;
 
 // "Up for Grabs" shows the exact same value as the compete LIVE banner: the
 // winnable pot (larger of the accounted pot and the PrizeEscrow balance) plus
-// any accruing yield. Rendered on the scroll card and the stats bar, in ETH.
-function renderUpForGrabs(weiTotal) {
-  const txt = fmtETH(weiTotal);
+// any accruing yield. It revolves between that ETH figure and its USD worth
+// at a FIXED real ETH rate (config ETH_USD_PRICE) — testnet ETH has no market
+// price, so a testnet pool ratio would be meaningless.
+function fmtUsd(v) {
+  const dp = v >= 100 ? 0 : v >= 1 ? 2 : 4;
+  return "$" + v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+}
+
+let _potEth = "loading…", _potUsd = null, _showUsd = false, _potRotTimer = null;
+
+// Render the current phase on both targets. withFade animates the ETH⇄USD swap;
+// a plain refresh (same phase) updates the number in place, no blink.
+function renderUpForGrabs(withFade) {
+  const useUsd = _showUsd && _potUsd !== null;
+  const txt = useUsd ? _potUsd : _potEth;
   [document.getElementById("scroll-pot-val"), document.getElementById("stat-pot")].forEach(el => {
-    if (el) el.textContent = txt;
+    if (!el) return;
+    el.classList.add("pot-val");
+    const apply = () => {
+      el.textContent = txt;
+      el.classList.toggle("val-usd", useUsd);
+      el.classList.remove("fading");
+    };
+    if (withFade) { el.classList.add("fading"); setTimeout(apply, 350); }
+    else          { apply(); }
   });
+}
+
+function setUpForGrabs(weiTotal) {
+  _potEth = fmtETH(weiTotal);                                   // e.g. "0.0100 ETH"
+  _potUsd = fmtUsd(parseFloat(ethers.utils.formatEther(weiTotal)) * ETH_USD_PRICE);
+  renderUpForGrabs(false);                                      // reflect fresh number now
+  if (!_potRotTimer) {
+    _potRotTimer = setInterval(() => { _showUsd = !_showUsd; renderUpForGrabs(true); }, 4000);
+  }
 }
 
 async function updateScroll() {
@@ -139,7 +168,7 @@ async function updateScroll() {
       if (accrued) combined = combined.add(accrued);
     } catch (e) { /* reads unavailable → show pot only */ }
 
-    renderUpForGrabs(combined);
+    setUpForGrabs(combined);
 
   } catch (e) {
     console.warn("updateScroll:", e.message);
