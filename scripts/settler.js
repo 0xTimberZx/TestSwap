@@ -53,7 +53,7 @@ function addrFromConfig(key) {
   const src = fs.readFileSync(path.join(__dirname, "..", "config.js"), "utf8");
   const m = src.match(new RegExp("\\b" + key + '\\s*:\\s*"(0x[0-9a-fA-F]{40})"'));
   if (!m) throw new Error(`Address "${key}" not found in config.js — refusing to start settler`);
-  return ethers.utils.getAddress(m[1]); // checksum-normalize; throws on a bad address
+  return ethers.getAddress(m[1]); // checksum-normalize (ethers v6); throws on a bad address
 }
 
 const TIMBPRIZE_ADDR    = addrFromConfig("TimbPrize");
