@@ -32,6 +32,7 @@ interface IGameRegistry {
     function recordWinners(uint256 round, address[] calldata winners) external;
     function onRoundSettled(uint256 settledRound) external;
     function setCurrentRound(uint256 round) external;
+    function onGameStarted() external;
 }
 
 interface ITimbYieldVaultPrize {
@@ -296,7 +297,10 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             segmentDigitLocked[i]  = false;
         }
 
-        IGameRegistry(gameRegistry).setCurrentRound(currentRound);
+        // Begin a fresh game epoch in the registry (bumps generation on every
+        // prize deploy after the first, retiring the prior game's tickets) and
+        // sets its round to 1. Replaces a bare setCurrentRound(1).
+        IGameRegistry(gameRegistry).onGameStarted();
         _activateRoundEntries(currentRound);
 
         emit GameStarted(block.timestamp);

@@ -85,6 +85,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         uint256      forfeitRound;      // round at which unclaimed escrow is swept
                                         // (§14: max of the refund-window end and,
                                         //  if the ticket won, the post-claim window)
+        uint256      generation;        // game epoch this ticket was minted in
     }
 
     // ─── Constants ───────────────────────────────────────────────────────────
@@ -134,6 +135,20 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     /// @notice Current active round number (pushed by TimbPrize).
     uint256 public currentRound;
 
+    /// @notice Current game generation (epoch). Every prize deploy runs its
+    ///         one-time startGame, which bumps this via onGameStarted(). All
+    ///         round-keyed state is namespaced by generation, so round N of one
+    ///         game never collides with round N of the next — a prior game's
+    ///         tickets go inert (not live, not eligible, no vault/forfeit
+    ///         effect) and their principal is recoverable via
+    ///         reclaimFromPastGame(). Starts at 1; the FIRST game keeps 1.
+    uint256 public generation = 1;
+
+    /// @dev True once any game has started. Lets the first startGame keep
+    ///      generation 1 (so pre-start entries are valid) while every later
+    ///      prize deploy bumps to a fresh generation.
+    bool private _firstGameStarted;
+
     /// @notice Emergency pause — blocks new tickets; refunds always available.
     bool public paused;
 
@@ -149,18 +164,19 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     /// @notice wallet → all ticket ids ever minted (history, incl. terminal).
     mapping(address => uint256[]) private _ticketsOf;
 
-    /// @notice wallet → round → the ticket id eligible for that round.
-    mapping(address => mapping(uint256 => uint256)) public ticketAt;
+    /// @notice generation → wallet → round → the ticket id eligible for that
+    ///         round. Namespaced by generation so games can't collide.
+    mapping(uint256 => mapping(address => mapping(uint256 => uint256))) public ticketAt;
 
-    /// @notice round → wallets with a ticket eligible in that round (deduped).
-    mapping(uint256 => address[]) public roundEntrants;
+    /// @notice generation → round → wallets with a ticket eligible that round.
+    mapping(uint256 => mapping(uint256 => address[])) public roundEntrants;
 
-    /// @notice round → wallet → already in roundEntrants.
-    mapping(uint256 => mapping(address => bool)) public hasEntryInRound;
+    /// @notice generation → round → wallet → already in roundEntrants.
+    mapping(uint256 => mapping(uint256 => mapping(address => bool))) public hasEntryInRound;
 
-    /// @notice round → string → wallets that hold that string for the round.
+    /// @notice generation → round → string → wallets holding that string.
     ///         Stale rows (conceded/replaced) are filtered at verification.
-    mapping(uint256 => mapping(bytes6 => address[])) public stringEntrants;
+    mapping(uint256 => mapping(uint256 => mapping(bytes6 => address[]))) public stringEntrants;
 
     // ─── Events ──────────────────────────────────────────────────────────────
 
@@ -184,6 +200,8 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     event ExtraRoundsSunk(address indexed player, uint256 indexed ticketId, uint256 timbsAmount);
     event EntryCostUpdated(uint256 timbsCost, uint256 ethCost);
     event CurrentRoundUpdated(uint256 round);
+    event GenerationStarted(uint256 indexed generation);
+    event TicketReclaimed(uint256 indexed ticketId, uint256 amount, address escrowToken);
     event TimbPrizeSet(address indexed timbPrize);
     event ProtocolSinkSet(address indexed sink);
     event YieldVaultSet(address indexed vault);
@@ -205,6 +223,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     error TicketNotPending(TicketStatus status);
     error TicketNotReplaceable(TicketStatus status);
     error TicketNotRefundable(TicketStatus status);
+    error TicketNotReclaimable();
     error TicketStillEligible(uint256 lastEligibleRound, uint256 currentRound);
     error ClaimWindowClosed(uint256 lastEligibleRound, uint256 currentRound);
     error RoundAlreadyStarted(uint256 playRound, uint256 currentRound);
@@ -261,7 +280,11 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     // ─── Internal: Ticket Lifecycle Helpers ──────────────────────────────────
 
     /// @dev True while a ticket blocks its wallet from minting another.
+    ///      A prior-generation ticket is never live — a new game frees the
+    ///      wallet to play, and the stranded principal is recovered via
+    ///      reclaimFromPastGame().
     function _isLive(Ticket storage t) internal view returns (bool) {
+        if (t.generation != generation) return false;
         if (t.status == TicketStatus.Pending) return true;
         if (t.status == TicketStatus.Active && currentRound <= t.lastEligibleRound) return true;
         return false;
@@ -292,17 +315,19 @@ contract GameRegistry is Ownable, ReentrancyGuard {
             createdAt:         block.timestamp,
             // Baseline forfeiture: refund window after the last eligible round.
             // recordWinners() pushes this later if the ticket wins near the end.
-            forfeitRound:      lastRound + REFUND_WINDOW_ROUNDS
+            forfeitRound:      lastRound + REFUND_WINDOW_ROUNDS,
+            generation:        generation
         });
         activeTicketOf[owner_] = id;
         _ticketsOf[owner_].push(id);
 
+        uint256 g = generation;
         for (uint256 r = playRound; r <= lastRound; r++) {
-            ticketAt[owner_][r] = id;
-            stringEntrants[r][string6].push(owner_);
-            if (!hasEntryInRound[r][owner_]) {
-                hasEntryInRound[r][owner_] = true;
-                roundEntrants[r].push(owner_);
+            ticketAt[g][owner_][r] = id;
+            stringEntrants[g][r][string6].push(owner_);
+            if (!hasEntryInRound[g][r][owner_]) {
+                hasEntryInRound[g][r][owner_] = true;
+                roundEntrants[g][r].push(owner_);
             }
         }
 
@@ -529,6 +554,37 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         emit TicketClosed(ticketId, amount, token);
     }
 
+    /**
+     * @notice Recover the principal of a ticket stranded by a new game epoch.
+     *         When a new prize deploys and starts a game, generation bumps and
+     *         every prior-generation ticket goes inert. Its round numbers no
+     *         longer apply, so the normal round-window refund path can never
+     *         fire — this path is round-agnostic and available immediately.
+     *         Only un-terminated tickets that still hold principal qualify
+     *         (Pending/Active); Conceded/Ineligible/Cancelled/Closed already
+     *         had their escrow handled.
+     * @param ticketId The prior-generation ticket to reclaim.
+     */
+    function reclaimFromPastGame(uint256 ticketId) external nonReentrant {
+        Ticket storage t = tickets[ticketId];
+        if (t.id == 0)                    revert TicketNotFound(ticketId);
+        if (t.owner != msg.sender)        revert NotTicketOwner(ticketId, msg.sender);
+        if (t.generation >= generation)   revert TicketNotReclaimable(); // still a current-game ticket
+        if (t.status != TicketStatus.Active && t.status != TicketStatus.Pending) {
+            revert TicketNotRefundable(t.status);
+        }
+
+        uint256 amount = t.escrowAmount;
+        address token  = t.escrowToken;
+        t.status       = TicketStatus.Closed;
+        t.escrowAmount = 0;
+        _vaultRemove(ticketId);
+        if (activeTicketOf[msg.sender] == ticketId) activeTicketOf[msg.sender] = 0;
+
+        if (amount > 0) _payEscrow(msg.sender, token, amount);
+        emit TicketReclaimed(ticketId, amount, token);
+    }
+
     // ─── TimbPrize: Round Lifecycle ──────────────────────────────────────────
 
     /**
@@ -539,8 +595,9 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         external
         onlyTimbPrize
     {
+        uint256 g = generation;
         for (uint256 i = 0; i < players.length; i++) {
-            uint256 id = ticketAt[players[i]][round];
+            uint256 id = ticketAt[g][players[i]][round];
             if (id == 0) continue;
             Ticket storage t = tickets[id];
             if (t.status == TicketStatus.Pending && t.playRound <= round) {
@@ -560,9 +617,9 @@ contract GameRegistry is Ownable, ReentrancyGuard {
      */
     function onRoundSettled(uint256 settledRound) external onlyTimbPrize {
         // 1. End-of-run: eligibility ended with this round.
-        address[] storage ended = roundEntrants[settledRound];
+        address[] storage ended = roundEntrants[generation][settledRound];
         for (uint256 i = 0; i < ended.length; i++) {
-            uint256 id = ticketAt[ended[i]][settledRound];
+            uint256 id = ticketAt[generation][ended[i]][settledRound];
             if (id == 0) continue;
             Ticket storage t = tickets[id];
             if (t.status == TicketStatus.Active &&
@@ -591,9 +648,9 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     ///      "later of claim/active" anchor — a late winner in an earlier bucket
     ///      is skipped until its own, later, forfeit round.
     function _sweepLapsedBucket(uint256 ler, uint256 settledRound) internal {
-        address[] storage bucket = roundEntrants[ler];
+        address[] storage bucket = roundEntrants[generation][ler];
         for (uint256 i = 0; i < bucket.length; i++) {
-            uint256 id = ticketAt[bucket[i]][ler];
+            uint256 id = ticketAt[generation][bucket[i]][ler];
             if (id == 0) continue;
             Ticket storage t = tickets[id];
             if (t.lastEligibleRound != ler)          continue;
@@ -629,7 +686,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     function recordWinners(uint256 round, address[] calldata winners) external onlyTimbPrize {
         uint256 pushed = round + PRIZE_CLAIM_WINDOW_ROUNDS + REFUND_WINDOW_ROUNDS;
         for (uint256 i = 0; i < winners.length; i++) {
-            uint256 id = ticketAt[winners[i]][round];
+            uint256 id = ticketAt[generation][winners[i]][round];
             if (id == 0) continue;
             Ticket storage t = tickets[id];
             if (pushed > t.forfeitRound) {
@@ -645,6 +702,23 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         emit CurrentRoundUpdated(round);
     }
 
+    /// @notice Begin a new game epoch — called once by each TimbPrize at its
+    ///         startGame. The first game ever keeps generation 1 (so any
+    ///         pre-start entries stay valid); every later prize deploy bumps to
+    ///         a fresh generation, retiring the prior game's tickets from all
+    ///         round-keyed state without any unbounded loop. Also resets the
+    ///         round to 1.
+    function onGameStarted() external onlyTimbPrize {
+        if (_firstGameStarted) {
+            generation += 1;
+        } else {
+            _firstGameStarted = true;
+        }
+        currentRound = 1;
+        emit GenerationStarted(generation);
+        emit CurrentRoundUpdated(1);
+    }
+
     // ─── Dual-Layer Verification (TimbPrize settlement) ──────────────────────
 
     /// @notice Layer 1: a ticket existed for this player and round.
@@ -653,7 +727,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         view
         returns (bool exists, bytes6 string6)
     {
-        uint256 id = ticketAt[player][round];
+        uint256 id = ticketAt[generation][player][round];
         if (id == 0) return (false, bytes6(0));
         return (true, tickets[id].string6);
     }
@@ -664,7 +738,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         view
         returns (bool valid, bytes6 string6)
     {
-        uint256 id = ticketAt[player][round];
+        uint256 id = ticketAt[generation][player][round];
         if (id == 0) return (false, bytes6(0));
         Ticket storage t = tickets[id];
         if (t.status != TicketStatus.Active)                       return (false, bytes6(0));
@@ -679,7 +753,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         view
         returns (address[] memory)
     {
-        return stringEntrants[round][string6];
+        return stringEntrants[generation][round][string6];
     }
 
     /// @notice Wallets with a ticket eligible in a round.
@@ -688,7 +762,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         view
         returns (address[] memory)
     {
-        return roundEntrants[round];
+        return roundEntrants[generation][round];
     }
 
     // ─── Views: Tickets ──────────────────────────────────────────────────────
@@ -752,7 +826,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
 
     /// @notice Identical-string count for the next round (collision display).
     function getIdenticalCount(bytes6 string6) external view returns (uint256) {
-        return stringEntrants[currentRound + 1][string6].length;
+        return stringEntrants[generation][currentRound + 1][string6].length;
     }
 
     /// @notice Extra-round cost helper.

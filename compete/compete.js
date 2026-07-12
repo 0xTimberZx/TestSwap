@@ -15,10 +15,12 @@ const TICKET_TUPLE =
   "tuple(uint256 id, address owner, bytes6 string6, uint256 playRound, " +
   "uint256 lastEligibleRound, uint256 escrowAmount, address escrowToken, " +
   "uint8 status, uint256 supersedes, uint256 supersededBy, uint256 createdAt, " +
-  "uint256 forfeitRound)";
+  "uint256 forfeitRound, uint256 generation)";
 
 const GAME_REGISTRY_ABI = [
   "function currentRound() external view returns (uint256)",
+  "function generation() external view returns (uint256)",
+  "function reclaimFromPastGame(uint256 ticketId) external",
   "function entryCostTIMBS() external view returns (uint256)",
   "function entryCostETH() external view returns (uint256)",
   "function additionalRoundCost(uint256 extraRounds) external view returns (uint256)",
@@ -65,6 +67,7 @@ let entryBalWei  = null;   // balance of the currently-selected entry token
 let timbsBalWei  = null;   // TIMBS balance (extra rounds are always TIMBS)
 let extraCostWei = null;   // additionalRoundCost(extraRounds); zero when none
 let currentRoundNum    = null;
+let currentGen         = null;   // registry game generation; prior-gen tickets are reclaimable
 let lastDigitCounters  = null;
 let activeSegIndex     = -1;   // 0-based index into digitCounters for the live segment
 let myActiveTicketStr  = null; // viewer's ticket string playing the CURRENT round (gold streak)
@@ -848,8 +851,15 @@ function renderTicketRow(t, displayStatus, opts) {
   // run ends. We used to re-anchor its badge to "Pending", but that read as
   // "withdrawable" and produced the confusing Pending-with-no-Withdraw row.
   // Show it honestly as Active and explain the state in the hint instead.
+  // A ticket from a PAST generation was stranded by a new game epoch. Its
+  // round numbers no longer apply to the live game, so none of the current-game
+  // actions (withdraw / refund-window / carried-over) are meaningful — the only
+  // action is reclaimFromPastGame(), which returns the principal immediately.
+  const gen        = t.generation ? t.generation.toNumber() : 0;
+  const isPastGen  = currentGen !== null && gen < currentGen;
+
   const notYetPlaying = currentRoundNum !== null && currentRoundNum < playRound;
-  const carriedOver   = notYetPlaying && t.status === 1;
+  const carriedOver   = notYetPlaying && t.status === 1 && !isPastGen;
 
   const statusName  = STATUS_NAMES[displayStatus] || "Unknown";
   const statusClass = "status-" + statusName.toLowerCase();
@@ -867,16 +877,19 @@ function renderTicketRow(t, displayStatus, opts) {
   // on currentRoundNum hid the Withdraw button whenever the round poll hadn't
   // landed yet (null) or briefly lagged, even though the on-chain cancel would
   // have succeeded. Mirror the contract: raw-Pending ⇒ withdrawable.
-  const canCancel = raw === 0;
+  const canCancel = raw === 0 && !isPastGen;
   const expired   = currentRoundNum !== null && currentRoundNum > lastRound;
   // Refundable through the contract's per-ticket forfeitRound — the later of
   // the refund-window end and (for a late winner) the post-claim window (§14).
   const forfeitRound = t.forfeitRound ? t.forfeitRound.toNumber() : lastRound + 4;
   const inWindow  = currentRoundNum !== null && currentRoundNum <= forfeitRound;
-  const canRefund = (raw === 0 || raw === 1) && expired && inWindow && !t.escrowAmount.isZero();
+  const canRefund = (raw === 0 || raw === 1) && expired && inWindow && !t.escrowAmount.isZero() && !isPastGen;
+  // Prior-game leftover with principal still held — reclaim it immediately.
+  const canReclaim = isPastGen && (raw === 0 || raw === 1) && !t.escrowAmount.isZero();
 
   let hint = "";
-  if (canCancel)                       hint = ` · withdrawable until R${playRound} starts`;
+  if (canReclaim)                      hint = ` · from a previous game · reclaim your deposit`;
+  else if (canCancel)                  hint = ` · withdrawable until R${playRound} starts`;
   else if (carriedOver)                hint = ` · carried from a prior game · locked in, refundable after R${lastRound}`;
   else if (raw === 1 && !expired)      hint = ` · earning yield for the pool`;
   else if (canRefund)                  hint = ` · principal refundable now`;
@@ -891,6 +904,7 @@ function renderTicketRow(t, displayStatus, opts) {
     </div>
     <div style="display:flex;align-items:center;gap:6px">
       <span class="entry-status-badge ${statusClass}">${statusName}</span>
+      ${canReclaim ? `<button class="btn-claim-mini" onclick="handleReclaimPastGame(${t.id})">Reclaim principal</button>` : ""}
       ${canRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${t.id})">Refund principal</button>` : ""}
       ${canCancel ? `<button class="btn-claim-mini" onclick="handleCancelEntry()">Withdraw</button>` : ""}
     </div>`;
@@ -913,11 +927,13 @@ async function loadMyEntries() {
     // fall back to the registry's own round so old closed tickets are hidden
     // instead of the filter short-circuiting and showing everything.
     let relRound = currentRoundNum;
-    const [res, roundFallback] = await Promise.all([
+    const [res, roundFallback, genRead] = await Promise.all([
       registry.getTicketsOf(userAddress),
-      relRound === null ? registry.currentRound().catch(() => null) : Promise.resolve(null)
+      relRound === null ? registry.currentRound().catch(() => null) : Promise.resolve(null),
+      registry.generation().catch(() => null)
     ]);
     if (relRound === null && roundFallback !== null) relRound = roundFallback.toNumber();
+    if (genRead !== null) currentGen = genRead.toNumber();
     const ticketList = res.list ?? res[0];
     const displays   = res.displayStatuses ?? res[1];
     DebugHub.logCheckpoint("Compete:Tickets Loaded", "pass");
@@ -935,16 +951,24 @@ async function loadMyEntries() {
       displayById.set(t.id.toString(), displays[i]);
     });
 
+    // A ticket only counts toward the current game if it belongs to the current
+    // generation. Prior-generation tickets are inert (reclaimable), never the
+    // wallet's live entry — mirrors the contract's _isLive gen guard.
+    const isCurGen = (t) => currentGen === null || t.generation.toNumber() === currentGen;
+
     // One eligible live ticket per wallet — determines Submit vs Update.
     hasPlayEntry = ticketList.some(t =>
-      t.status === 0 ||
-      (t.status === 1 && relRound !== null && relRound <= t.lastEligibleRound.toNumber())
+      isCurGen(t) && (
+        t.status === 0 ||
+        (t.status === 1 && relRound !== null && relRound <= t.lastEligibleRound.toNumber())
+      )
     );
 
     // The ticket actually playing THIS round drives the gold-streak meter.
     myActiveTicketStr = null;
     if (relRound !== null) {
       const playing = ticketList.find(t =>
+        isCurGen(t) &&
         t.status === 1 &&
         t.playRound.toNumber() <= relRound &&
         relRound <= t.lastEligibleRound.toNumber()
@@ -957,6 +981,13 @@ async function loadMyEntries() {
     // be played or refunded, so drop those heads. Live/pending and
     // still-refundable tickets stay.
     const withinRelevance = (t) => {
+      // A prior-generation ticket that still holds principal stays relevant no
+      // matter the current round — it's reclaimable, and its forfeitRound is in
+      // a retired generation's numbering that no longer applies.
+      if (currentGen !== null && t.generation.toNumber() < currentGen &&
+          (t.status === 0 || t.status === 1) && !t.escrowAmount.isZero()) {
+        return true;
+      }
       if (relRound === null) return true;
       const fr = t.forfeitRound && !t.forfeitRound.isZero()
         ? t.forfeitRound.toNumber()
@@ -1010,6 +1041,25 @@ async function handleClaimRefund(ticketId) {
     DebugHub.logError("handleClaimRefund", err);
     DebugHub.logCheckpoint("Prize:Refund Failed", "fail");
     alert("Refund failed: " + (err?.reason || err.message));
+  }
+}
+
+// Reclaim principal from a ticket stranded by a previous game epoch. The
+// contract's reclaimFromPastGame is round-agnostic — it only requires the
+// ticket be from a prior generation and still hold escrow — so it succeeds the
+// instant a new game starts, no refund-window wait.
+async function handleReclaimPastGame(ticketId) {
+  try {
+    DebugHub.logCheckpoint("Prize:Reclaim Requested", "pass");
+    const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    await confirmTx(await registry.reclaimFromPastGame(ticketId, { ...gas, nonce }));
+    DebugHub.logCheckpoint("Prize:Reclaim Confirmed", "pass");
+    await loadMyEntries();
+  } catch (err) {
+    DebugHub.logError("handleReclaimPastGame", err);
+    DebugHub.logCheckpoint("Prize:Reclaim Failed", "fail");
+    alert("Reclaim failed: " + (err?.reason || err.message));
   }
 }
 
