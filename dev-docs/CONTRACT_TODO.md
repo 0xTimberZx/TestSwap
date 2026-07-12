@@ -713,3 +713,11 @@ TimbYieldVault, AND TimbSwapRouter** via `setTimbPrize(new)`. The router is the
 easy miss — it holds `timbPrize` and calls `nudgeScroll()`, so skipping it leaves
 swaps + the Advance button nudging the OLD prize while the new meter sits frozen.
 `dev-docs/TIMBPRIZE_V7_REDEPLOY.md` §4 now lists all four.
+
+**Settler lint gotcha (v7 hotfix #133):** `node --check` only parses — it won't
+catch a wrong-version API call. The settler is **ethers v6** (`ethers.getAddress`,
+`ethers.formatEther`, `new ethers.JsonRpcProvider` — no `.utils`/`.providers`
+namespaces). A `ethers.utils.getAddress` (v5) slipped through a syntax check and
+crash-looped the keeper at startup. Before touching `scripts/settler.js`, actually
+run it (`cd scripts && npm i ethers && node settler.js` — it exits fast if RPC/env
+are unset) so a v5/v6 API mismatch surfaces locally, not in Actions.
