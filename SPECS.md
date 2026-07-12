@@ -22,9 +22,9 @@
 | TimbSwapFactory | 0xCCd6d3f0A86042d2B7056eDd381d367126628AF5 | Sourcify ✅ |
 | TimbSwapRouter v8 | 0x40C7Caf90817C9891D278Ec1400B9deb180911f1 | Sourcify ✅ |
 | EligibleTokenRegistry | 0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04 | Sourcify ✅ |
-| GameRegistry v5 | 0xD6c9001c6Bbb55761f7476009AaF5F71C21Fe0b5 | Sourcify ✅ |
-| TimbPrize v6 | 0xBBcb21Ef7DBEef21d8a0DE5972E61fd0369Ed3c0 | Sourcify ✅ (class-preserving jitter) |
-| TimbYieldVault | 0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F | Sourcify ✅ |
+| GameRegistry (generations) | 0xfca8C2A107298273508BE8C5f469344b0Fc8B5B4 | Sourcify ✅ (game-generation epochs; supersedes all earlier registries) |
+| TimbPrize (generations) | 0x35976f4D2260127848a6274D2eC89ee054412432 | Sourcify ✅ (startGame bumps the registry generation) |
+| TimbYieldVault | 0x43D833e828e2AF951527C2b573Eb70c358FfEB0B | Sourcify ✅ |
 | TimbStaking | 0xe776c7b700B190ED8248741F9b518B08d8733C8F | Sourcify ✅ |
 | TimbFarm | 0xE319E2206F71A5cD8dd2c411C6F29712935f9011 | Sourcify ✅ |
 | TimbLockVault | 0x0157086E7670D1eFb15DC6b5158eE78279927a41 | Sourcify ✅ |
@@ -61,6 +61,11 @@
 | 0xD69a518f04900762F460563d71Bdc8DdF86FB350 | TimbPrize v4 — retired; superseded by v5 |
 | 0xee2c3b12e8dED226a6AE8e950e5B6C67eF4CB774 | GameRegistry v2 — retired; superseded by v3 (4-round refund window). Old game history readable here |
 | 0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40 | TimbPrize v3.2 — retired; superseded by v4 (jittered locks, 2-round prize claim). Old rounds readable here |
+| 0xD6c9001c6Bbb55761f7476009AaF5F71C21Fe0b5 | GameRegistry v5 — retired; superseded by the generations rewrite. Old game history readable here |
+| 0xcDd1633F9FBD4dD189cF69FF82a005B4fcBe09eB | GameRegistry — retired; last non-generation registry, superseded by the generations rewrite. Un-terminated tickets here refund on their own round windows |
+| 0xBBcb21Ef7DBEef21d8a0DE5972E61fd0369Ed3c0 | TimbPrize v6 — retired; superseded by v7 (meter resumes from jittered winning char) |
+| 0x52dF701BD15B63Ece56141c22392a5435B608B72 | TimbPrize v7 — retired; superseded by the generations-compatible prize. Old rounds readable here |
+| 0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F | TimbYieldVault — retired; superseded by 0x43D833… (fresh weight on the registry cutover) |
 
 ---
 

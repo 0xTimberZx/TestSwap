@@ -1,5 +1,13 @@
 # TimbPrize v7 redeploy checklist — "meter resumes from the jittered winning char"
 
+> ⚠️ **SUPERSEDED — historical.** This documents the v6→v7 prize cutover against
+> the pre-generations registry (`0xcDd1633…`, now retired). For any **current**
+> prize redeploy follow **`GAME_SYNC_GENERATIONS.md` §8** — the live registry
+> (`0xfca8C2A1…`) and prize (`0x35976f4D…`) use game generations, so a prize
+> redeploy is just the four `setTimbPrize` re-points + `startGame` (which bumps
+> the generation), with **no registry redeploy**. The four-re-point and
+> round-sync notes below still apply; the addresses do not.
+
 **Prize-only redeploy.** GameRegistry, TimbYieldVault, PrizeEscrow, Router, and
 everything else **stay put** — only TimbPrize's logic changed (§13.2 rollover:
 each segment's next-round counter is seeded to the index of the char it just

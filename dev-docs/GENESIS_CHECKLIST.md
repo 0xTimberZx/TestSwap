@@ -14,6 +14,23 @@ accruing or entries vanish, not when you deploy.
 
 ---
 
+## Status: the registry↔prize round-collision class is now SOLVED
+
+As of the **generations** rewrite (`GameRegistry` `0xfca8C2A1…`, `TimbPrize`
+`0x35976f4D…`, see `GAME_SYNC_GENERATIONS.md`), the specific class where a
+**reused GameRegistry** collides with a fresh prize across round numbers is
+fixed structurally: the registry is namespaced by a `generation` that
+`startGame`→`onGameStarted()` bumps, so prior-game tickets go inert and are
+recoverable via `reclaimFromPastGame`. A future **prize** redeploy now needs
+only the four `setTimbPrize` re-points + `startGame` — **no registry redeploy**,
+no round contamination.
+
+This checklist still applies to **any other partial redeploy** — a fresh vault
+against a live registry, a fresh escrow, etc. The examples below are kept as the
+canonical illustration of how these bugs present.
+
+---
+
 ## The two that bit us (2026-07-11 registry cutover)
 
 Concrete instances, kept here as the canonical examples.

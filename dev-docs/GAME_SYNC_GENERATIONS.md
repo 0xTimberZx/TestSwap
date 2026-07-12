@@ -124,7 +124,10 @@ dust. This is the last redeploy that ever needs a fresh registry.
 
 ## 8. Redeploy checklist (coordinated: registry + prize)
 1. Deploy **GameRegistry v4** (this file's contract).
-2. `setEntryCosts`, `setYieldVault(vault)`, `vault.setGameRegistry(v4)`, sink.
+2. `setEntryCosts(1000e18, 0.0001e18)` — i.e. `(1000000000000000000000,
+   100000000000000)`; **does NOT carry over on a fresh registry**, so entries are
+   free until set. Then `setYieldVault(vault)`, `vault.setGameRegistry(newReg)`,
+   `setProtocolSink`.
 3. Deploy **TimbPrize** against v4 (`_gameRegistry = v4`).
 4. FOUR `setTimbPrize` re-points → new prize: PrizeEscrow, **v4 registry**,
    YieldVault, Router. `newPrize.setRouter(router)`; `newPrize.setYieldVault(...)`.
