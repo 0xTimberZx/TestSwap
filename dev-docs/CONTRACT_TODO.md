@@ -685,3 +685,31 @@ unaffected — same shape as §11):
 6. Env-snapshot rule: the running settler keeps the old prize address until its
    next run — expect the usual startup "CRITICALLY DELAYED" alarm after
    cutover; self-corrects on the next run.
+
+---
+
+## 16. Settler single-source config — hardening (partly DONE)
+
+**Done (#131):** `scripts/settler.js` no longer hardcodes `TIMBPRIZE_ADDR` /
+`GAMEREGISTRY_ADDR` — `addrFromConfig()` reads them out of `config.js` (the
+frontend's source of truth) at startup, checksum-validates via
+`ethers.getAddress`, and throws loudly on a missing/bad key. A redeploy now only
+needs `config.js` edited; the settler follows. (Root-caused after the settler was
+found still targeting the retired v6 prize / v5 registry.)
+
+**TODO — extend the same pattern to the settler's remaining config so nothing
+else can drift:**
+- **RPC:** `RPC_URL` is `process.env.ARB_SEPOLIA_RPC`. Fine as a secret, but
+  consider falling back to `config.js`'s `RPC_URL` (already the public endpoint)
+  when the env var is absent, so a fresh checkout still runs.
+- **Any future addresses** the settler needs (vault, escrow) should go through
+  `addrFromConfig(...)`, never a literal.
+- Sweep on every redeploy: `grep -n '0x[0-9a-fA-F]\{40\}' scripts/*.js` should
+  return **nothing** (all addresses derived), so a stale literal can't hide.
+
+**Redeploy re-point rule — FOUR contracts, not three (learned the hard way,
+v7):** a TimbPrize redeploy must repoint **PrizeEscrow, GameRegistry,
+TimbYieldVault, AND TimbSwapRouter** via `setTimbPrize(new)`. The router is the
+easy miss — it holds `timbPrize` and calls `nudgeScroll()`, so skipping it leaves
+swaps + the Advance button nudging the OLD prize while the new meter sits frozen.
+`dev-docs/TIMBPRIZE_V7_REDEPLOY.md` §4 now lists all four.
