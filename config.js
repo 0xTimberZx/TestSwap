@@ -222,7 +222,19 @@ function getContract(name, signerOrProvider) {
 
 // ─── Gas Helpers (ecosystem pattern) ─────────────────────────────────────────
 
+// Mobile in-app wallets (MetaMask, Brave) can drop the injected provider after a
+// background/tab-switch/reload while the session (userAddress) persists — leaving
+// a tx handler running with provider/signer = null. Re-establish silently before
+// any write, and fail with a clear message if the wallet truly isn't available
+// (instead of "null is not an object (evaluating 'provider.getTransactionCount')").
+async function ensureSigner() {
+  if (provider && signer) return true;
+  try { await autoReconnect(); } catch {}
+  return !!(provider && signer);
+}
+
 async function getGasParams() {
+  if (!(await ensureSigner())) throw new Error("Wallet disconnected — reconnect and try again.");
   const feeData = await provider.getFeeData();
   return {
     maxFeePerGas:         feeData.maxFeePerGas.mul(130).div(100),
@@ -231,6 +243,7 @@ async function getGasParams() {
 }
 
 async function getPendingNonce() {
+  if (!(await ensureSigner())) throw new Error("Wallet disconnected — reconnect and try again.");
   return provider.getTransactionCount(userAddress, "pending");
 }
 
