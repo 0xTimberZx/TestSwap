@@ -242,9 +242,16 @@ async function getGasParams() {
   };
 }
 
+// Let the WALLET assign the nonce. Forcing a manual nonce (from a "pending"
+// count) desyncs with mobile MetaMask's own nonce tracking and throws
+// NONCE_EXPIRED ("nonce too low") — seen in the mobile DebugHub logs. Every
+// call site sends a single, awaited tx (no batching that needs sequential
+// nonces), so undefined is correct: ethers/the wallet fills the right nonce.
+// Kept as a function (not removed) so all ~25 `{ ...gas, nonce }` call sites
+// keep working unchanged, and so the ensureSigner guard still runs pre-tx.
 async function getPendingNonce() {
   if (!(await ensureSigner())) throw new Error("Wallet disconnected — reconnect and try again.");
-  return provider.getTransactionCount(userAddress, "pending");
+  return undefined;
 }
 
 // ─── Transaction Confirmation (ecosystem pattern) ────────────────────────────
