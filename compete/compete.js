@@ -94,31 +94,10 @@ function contractRO(address, abi) {
 }
 
 // ─── USD pricing (newcomer banner) ───────────────────────────────────────────
-// Value the pot in dollars the same way the explore page does — via the
-// on-site USDC/WETH pool. Cached for a minute so the 4s poll doesn't hammer
-// two extra reads; returns null (banner falls back to ETH) if unpriceable.
-const _PRICE_FACTORY_ABI = ["function getPairAddress(address tokenA, address tokenB) external view returns (address)"];
-const _PRICE_PAIR_ABI = [
-  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
-  "function token0() external view returns (address)"
-];
-let _usdPerEth = null, _usdPerEthAt = 0;
-async function usdPerEth() {
-  if (_usdPerEth && Date.now() - _usdPerEthAt < 60000) return _usdPerEth;
-  try {
-    const factory = contractRO(ADDRESSES.TimbSwapFactory, _PRICE_FACTORY_ABI);
-    const p = await factory.getPairAddress(ADDRESSES.USDC, ADDRESSES.WETH);
-    if (p && !/^0x0{40}$/.test(p.replace("0x", ""))) {
-      const pair = contractRO(p, _PRICE_PAIR_ABI);
-      const [r, t0] = await Promise.all([pair.getReserves(), pair.token0()]);
-      const usdcIs0 = t0.toLowerCase() === ADDRESSES.USDC.toLowerCase();
-      const usdc = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve0 : r.reserve1, 6));
-      const weth = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve1 : r.reserve0, 18));
-      if (usdc > 0 && weth > 0) { _usdPerEth = usdc / weth; _usdPerEthAt = Date.now(); }
-    }
-  } catch {}
-  return _usdPerEth;
-}
+// Fixed real ETH rate (config ETH_USD_PRICE), the same figure the landing
+// "Win the Pot" uses — so the banner's dollars match the dashboard. Testnet ETH
+// has no market price, so a testnet pool ratio would be meaningless.
+async function usdPerEth() { return ETH_USD_PRICE; }
 
 // The yield read runs on the 4s poll; log a read failure only once per session
 // so a persistent RPC hiccup doesn't spam DebugHub every tick.
@@ -389,7 +368,7 @@ async function pollRoundState() {
       if (!userAddress) {
         // One combined figure: the winnable pot (whichever is larger of the
         // accounted pot and its escrow backing) plus any accruing yield,
-        // shown in dollars when the USDC/WETH pool can price ETH.
+        // in dollars at the fixed display rate — matches the landing "Win the Pot".
         let combined = escrowBal && escrowBal.gt(s.pot) ? escrowBal : s.pot;
         if (accrued) combined = combined.add(accrued);
         const ethFloat = parseFloat(ethers.utils.formatEther(combined));
