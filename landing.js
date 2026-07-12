@@ -26,6 +26,12 @@ const STAKING_ABI     = ["function totalStaked() external view returns (uint256)
 const FARM_ABI        = ["function totalStaked() external view returns (uint256)"];
 const LOCKVAULT_ABI   = ["function totalLocks() external view returns (uint256)"];
 const ESCROW_ABI      = ["function balance() external view returns (uint256)"];
+const VAULT_ABI       = ["function reserve() external view returns (uint256)"];
+const FACTORY_ABI     = ["function getPairAddress(address,address) external view returns (address)"];
+const PAIR_ABI        = [
+  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+  "function token0() external view returns (address)"
+];
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
@@ -89,6 +95,74 @@ function stopMask() {
 let lastCounter = null;
 let lastSegment = null;
 
+// ─── "Up for Grabs" total: prize pot + vault backing, in ETH ⇄ USD ───────────
+// The headline figure is pot (live prize) + the yield vault's reserve (the ETH
+// backing future pot growth). It rotates between the ETH total and its USD
+// worth, priced off the on-chain USDC/WETH pool (no external API).
+
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+let _usdPerEth = null;
+
+async function refreshEthPrice() {
+  try {
+    const factory = readContract("TimbSwapFactory", FACTORY_ABI);
+    const pairAddr = await factory.getPairAddress(ADDRESSES.USDC, ADDRESSES.WETH);
+    if (!pairAddr || pairAddr === ZERO_ADDR) return;
+    const pair = new ethers.Contract(pairAddr, PAIR_ABI, readProvider);
+    const [r, t0] = await Promise.all([pair.getReserves(), pair.token0()]);
+    const usdcIs0 = t0.toLowerCase() === ADDRESSES.USDC.toLowerCase();
+    const usdc = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve0 : r.reserve1, 6));
+    const weth = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve1 : r.reserve0, 18));
+    if (usdc > 0 && weth > 0) _usdPerEth = usdc / weth;
+  } catch (e) {
+    console.warn("refreshEthPrice:", e.message);
+  }
+}
+
+function fmtUsd(v) {
+  const dp = v >= 100 ? 0 : v >= 1 ? 2 : 4;
+  return "$" + v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+}
+
+let _potEth  = "loading…";   // e.g. "1.2345 ETH"
+let _potUsd  = null;          // e.g. "$3,210" or null when unpriceable
+let _showUsd = false;
+let _potRotTimer = null;
+
+// Render the current value on both targets. withFade is for the ETH⇄USD swap;
+// a plain refresh of the number (same phase) updates in place, no blink.
+function renderPot(withFade) {
+  const useUsd = _showUsd && _potUsd !== null;
+  const txt = useUsd ? _potUsd : _potEth;
+  [document.getElementById("scroll-pot-val"), document.getElementById("stat-pot")].forEach(el => {
+    if (!el) return;
+    el.classList.add("pot-val");
+    const apply = () => {
+      el.textContent = txt;
+      el.classList.toggle("val-usd", useUsd);
+      el.classList.remove("fading");
+    };
+    if (withFade) { el.classList.add("fading"); setTimeout(apply, 350); }
+    else          { apply(); }
+  });
+}
+
+function setPotTotal(totalWei) {
+  _potEth = fmtETH(totalWei);   // fmtETH already appends " ETH"
+  _potUsd = _usdPerEth !== null
+    ? fmtUsd(parseFloat(ethers.utils.formatEther(totalWei)) * _usdPerEth)
+    : null;
+  if (_potUsd === null) _showUsd = false;   // never strand on a blank USD phase
+  renderPot(false);                          // reflect the fresh number at once
+  if (!_potRotTimer) {
+    _potRotTimer = setInterval(() => {
+      if (_potUsd === null) return;          // unpriceable → hold on ETH, no blink
+      _showUsd = !_showUsd;
+      renderPot(true);
+    }, 4000);
+  }
+}
+
 async function updateScroll() {
   try {
     const prize = readContract("TimbPrize", TIMBPRIZE_ABI);
@@ -114,14 +188,17 @@ async function updateScroll() {
     }
 
     const roundEl = document.getElementById("scroll-round");
-    const potEl   = document.getElementById("scroll-pot");
-
     if (roundEl) roundEl.textContent = `Round ${round}`;
-    if (potEl)   potEl.textContent   = `Prize Pot: ${fmt(pot)} ETH`;
 
-    // Also update stats bar pot
-    const statPot = document.getElementById("stat-pot");
-    if (statPot) statPot.textContent = fmt(pot) + " ETH";
+    // "Up for Grabs" = live pot + the vault's ETH reserve backing it. Vault read
+    // is best-effort — an unfunded/unreachable vault just leaves the pot alone.
+    let total = pot;
+    try {
+      const reserve = await readContract("TimbYieldVault", VAULT_ABI).reserve();
+      total = pot.add(reserve);
+    } catch (e) { /* backing unavailable → show pot only */ }
+
+    setPotTotal(total);
 
   } catch (e) {
     console.warn("updateScroll:", e.message);
@@ -217,6 +294,10 @@ function handleDisconnect() {
 
   // Load static stats once
   await loadStats();
+
+  // Price ETH once up front (for the USD rotation), then refresh occasionally.
+  await refreshEthPrice();
+  setInterval(refreshEthPrice, 60000);  // reserves drift slowly — 60s is plenty
 
   // Start scroll polling immediately — no wallet needed
   await updateScroll();

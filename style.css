@@ -396,10 +396,28 @@ body { padding-top: 60px; }
 }
 
 .scroll-pot {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
   font-size: 13px;
-  color: var(--blue);
   font-weight: 500;
 }
+.scroll-pot-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  color: var(--text-3);
+}
+/* Value rotates between the ETH total and its USD worth with a soft fade.
+   ETH keeps each element's own colour; USD pops green for marketing. */
+.pot-val {
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.35s ease, color 0.35s ease;
+}
+.scroll-pot-val { color: var(--blue); }
+.pot-val.val-usd { color: var(--green); }
+.pot-val.fading  { opacity: 0; }
 
 /* ─── Stats Bar ─────────────────────────────────────────────────────────────── */
 .stats-bar {
