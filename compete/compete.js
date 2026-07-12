@@ -293,6 +293,13 @@ async function pollRoundState() {
     document.getElementById("hdr-round").textContent      = "#" + s.round.toString();
     document.getElementById("hdr-segment-num").textContent = s.segment.toString();
 
+    // An entry always plays the NEXT round — the current round's meter is
+    // already locking. Show the concrete target round on the entry form so
+    // "Plays next round" isn't mistaken for "plays this round" (the source of
+    // the "why is my round-1 entry active at round 3" confusion).
+    const playsEl = document.getElementById("entry-plays-round");
+    if (playsEl) playsEl.textContent = "round " + (currentRoundNum + 1);
+
     // Pot substats as ordered segments: Pot · backed by · yield accruing.
     // "backed by" (escrow reserve) sits right after the pot; yield accruing
     // is its own segment (no longer parenthetical).
