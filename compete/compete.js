@@ -32,7 +32,8 @@ const GAME_REGISTRY_ABI = [
 ];
 
 const YIELD_VAULT_ABI = [
-  "function previewAccrued() external view returns (uint256)"
+  "function previewAccrued() external view returns (uint256)",
+  "function reserve() external view returns (uint256)"
 ];
 
 const TIMBS_ABI = [
@@ -93,32 +94,9 @@ function contractRO(address, abi) {
   return _roContracts[address] || (_roContracts[address] = new ethers.Contract(address, abi, readProv()));
 }
 
-// ─── USD pricing (newcomer banner) ───────────────────────────────────────────
-// Value the pot in dollars the same way the explore page does — via the
-// on-site USDC/WETH pool. Cached for a minute so the 4s poll doesn't hammer
-// two extra reads; returns null (banner falls back to ETH) if unpriceable.
-const _PRICE_FACTORY_ABI = ["function getPairAddress(address tokenA, address tokenB) external view returns (address)"];
-const _PRICE_PAIR_ABI = [
-  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
-  "function token0() external view returns (address)"
-];
-let _usdPerEth = null, _usdPerEthAt = 0;
-async function usdPerEth() {
-  if (_usdPerEth && Date.now() - _usdPerEthAt < 60000) return _usdPerEth;
-  try {
-    const factory = contractRO(ADDRESSES.TimbSwapFactory, _PRICE_FACTORY_ABI);
-    const p = await factory.getPairAddress(ADDRESSES.USDC, ADDRESSES.WETH);
-    if (p && !/^0x0{40}$/.test(p.replace("0x", ""))) {
-      const pair = contractRO(p, _PRICE_PAIR_ABI);
-      const [r, t0] = await Promise.all([pair.getReserves(), pair.token0()]);
-      const usdcIs0 = t0.toLowerCase() === ADDRESSES.USDC.toLowerCase();
-      const usdc = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve0 : r.reserve1, 6));
-      const weth = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve1 : r.reserve0, 18));
-      if (usdc > 0 && weth > 0) { _usdPerEth = usdc / weth; _usdPerEthAt = Date.now(); }
-    }
-  } catch {}
-  return _usdPerEth;
-}
+// USD-per-ETH for display. Fixed real rate (config.js ETH_USD_PRICE) — testnet
+// ETH has no market price, so a testnet USDC/WETH ratio would be meaningless.
+async function usdPerEth() { return ETH_USD_PRICE; }
 
 // The yield read runs on the 4s poll; log a read failure only once per session
 // so a persistent RPC hiccup doesn't spam DebugHub every tick.
@@ -314,29 +292,24 @@ async function pollRoundState() {
     document.getElementById("hdr-round").textContent      = "#" + s.round.toString();
     document.getElementById("hdr-segment-num").textContent = s.segment.toString();
 
-    // Pot substats as ordered segments: Pot · backed by · yield accruing.
-    // "backed by" (escrow reserve) sits right after the pot; yield accruing
-    // is its own segment (no longer parenthetical).
-    // Each segment glues its own words with non-breaking spaces ( ) so it
-    // never breaks mid-value; segments join with regular spaces around " · "
-    // so the line wraps only *between* stats on a narrow (mobile) viewport.
-    const potSegs = ["Pot: " + fmt(s.pot) + " ETH"];
-
-    // The three secondary reads (escrow backing, accruing yield, round
-    // entrants) are independent — fire them together instead of three serial
+    // The secondary reads (vault reserve backing, accruing yield, round
+    // entrants) are independent — fire them together instead of serial
     // round-trips on every 4s poll. Each resolves to null on read failure.
     const hasVault = ADDRESSES.TimbYieldVault && !/^0x0{40}$/.test(ADDRESSES.TimbYieldVault.replace("0x",""));
-    const [escrowBal, accrued, entrants] = await Promise.all([
-      ADDRESSES.PrizeEscrow ? readProv().getBalance(ADDRESSES.PrizeEscrow).catch(() => null) : null,
-      hasVault ? contractRO(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI).previewAccrued().catch(e => { _logYieldErrOnce(e); return null; }) : null,
+    const vaultRO = hasVault ? contractRO(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI) : null;
+    const [reserve, accrued, entrants] = await Promise.all([
+      vaultRO ? vaultRO.reserve().catch(e => { _logYieldErrOnce(e); return null; }) : null,
+      vaultRO ? vaultRO.previewAccrued().catch(() => null) : null,
       contractRO(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI).getRoundEntrants(currentRoundNum).catch(() => null),
     ]);
 
-    // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
-    // a direct seed not registered via fundPot().
-    if (escrowBal && escrowBal.gt(s.pot)) potSegs.push(`backed by ${fmt(escrowBal)} ETH`);
-    // Live yield accruing from active-ticket escrow (4th pot source).
-    if (accrued && !accrued.isZero()) potSegs.push(`yield accruing ${fmt(accrued)} ETH`);
+    // "Up for Grabs" leads, computed identically to the landing page: pot +
+    // the yield vault's ETH reserve. Breakdown follows so the source is clear.
+    const total = reserve ? s.pot.add(reserve) : s.pot;
+    const potSegs = [`Up for Grabs: ${fmt(total)} ETH`, `pot ${fmt(s.pot)} ETH`];
+    if (reserve && !reserve.isZero()) potSegs.push(`backing ${fmt(reserve)} ETH`);
+    // Live yield already accrued and pending harvest into the pot.
+    if (accrued && !accrued.isZero()) potSegs.push(`yield accruing ${fmt(accrued)} ETH`);
     document.getElementById("sub-pot").textContent = potSegs.join(" · ");
 
     // Entries playing THIS round — was a dead "— entries" placeholder.
@@ -387,11 +360,9 @@ async function pollRoundState() {
     if (banner) {
       banner.classList.toggle("hidden", !!userAddress);
       if (!userAddress) {
-        // One combined figure: the winnable pot (whichever is larger of the
-        // accounted pot and its escrow backing) plus any accruing yield,
-        // shown in dollars when the USDC/WETH pool can price ETH.
-        let combined = escrowBal && escrowBal.gt(s.pot) ? escrowBal : s.pot;
-        if (accrued) combined = combined.add(accrued);
+        // One combined figure = pot + vault reserve, identical to the landing
+        // "Up for Grabs" total, shown in dollars at the fixed display rate.
+        let combined = reserve ? s.pot.add(reserve) : s.pot;
         const ethFloat = parseFloat(ethers.utils.formatEther(combined));
         const px = await usdPerEth();
         const line = px !== null
