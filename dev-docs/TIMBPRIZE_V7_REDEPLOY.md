@@ -49,16 +49,23 @@ The constructor also sets, automatically: `settler = deployer`, `winnersPerRound
 | d | `setEligibleRegistry(...)` | Optional/vestigial — set for consistency if you want |
 | e | `fundPot()` (payable) | Seed the starting pot if desired |
 
-## 4. Re-point the three contracts that call INTO the prize
+## 4. Re-point the FOUR contracts that hold the prize address
 
-Each gates its privileged path to `msg.sender == timbPrize`, so all three must be
-updated or those calls revert. **Do these before `startGame`.**
+Each stores `timbPrize` and either gates a call to `msg.sender == timbPrize` or
+calls into the prize — so all four must point at the new prize. **Do these
+before `startGame`.** (The router one is the easy miss — without it the meter
+is dead to swaps.)
 
 | Contract | Call | Why |
 |----------|------|-----|
 | **PrizeEscrow** `0x865C…fB6D` | `setTimbPrize(<new prize>)` | else prize **payouts** revert (`NotTimbPrize`) |
 | **GameRegistry** `0xcDd1633…` | `setTimbPrize(<new prize>)` | else `setCurrentRound` / `recordWinners` / `onRoundSettled` revert |
 | **TimbYieldVault** `0x43D833…` | `setTimbPrize(<new prize>)` | else `harvest` (yield → pot) reverts |
+| **TimbSwapRouter** `0x40C7Caf…` | `setTimbPrize(<new prize>)` | **else swaps + the Advance button nudge the OLD prize** — the new meter never moves from user activity, only the settler's time-grid segment advances |
+
+> Note the two-way router link: `newPrize.setRouter(router)` (step 3, so the
+> prize authorizes the router's `nudgeScroll`) **and** `router.setTimbPrize(new)`
+> here (so the router nudges *this* prize). Both are required.
 
 ## 5. Start the game
 
