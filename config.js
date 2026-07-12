@@ -16,6 +16,13 @@ const CHAIN_CONFIG = {
   blockExplorerUrls: ["https://sepolia.arbiscan.io"]
 };
 
+// ─── Display pricing ──────────────────────────────────────────────────────────
+// Fixed USD-per-ETH used only for the marketing "Up for Grabs" USD figure on the
+// landing page. Testnet ETH has no market price, so we value it as if it were
+// real ETH at this rate rather than reading a meaningless testnet pool. Adjust
+// this one number to track ETH's real price.
+const ETH_USD_PRICE = 3000;
+
 // ─── Contract Addresses ───────────────────────────────────────────────────────
 
 const ADDRESSES = {

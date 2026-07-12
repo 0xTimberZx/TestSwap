@@ -27,11 +27,6 @@ const FARM_ABI        = ["function totalStaked() external view returns (uint256)
 const LOCKVAULT_ABI   = ["function totalLocks() external view returns (uint256)"];
 const ESCROW_ABI      = ["function balance() external view returns (uint256)"];
 const VAULT_ABI       = ["function reserve() external view returns (uint256)"];
-const FACTORY_ABI     = ["function getPairAddress(address,address) external view returns (address)"];
-const PAIR_ABI        = [
-  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
-  "function token0() external view returns (address)"
-];
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
@@ -98,26 +93,10 @@ let lastSegment = null;
 // ─── "Up for Grabs" total: prize pot + vault backing, in ETH ⇄ USD ───────────
 // The headline figure is pot (live prize) + the yield vault's reserve (the ETH
 // backing future pot growth). It rotates between the ETH total and its USD
-// worth, priced off the on-chain USDC/WETH pool (no external API).
+// worth. USD uses a FIXED real ETH rate (ETH_USD_PRICE) — testnet ETH has no
+// market price, so a testnet pool ratio would be meaningless/misleading.
 
-const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
-let _usdPerEth = null;
-
-async function refreshEthPrice() {
-  try {
-    const factory = readContract("TimbSwapFactory", FACTORY_ABI);
-    const pairAddr = await factory.getPairAddress(ADDRESSES.USDC, ADDRESSES.WETH);
-    if (!pairAddr || pairAddr === ZERO_ADDR) return;
-    const pair = new ethers.Contract(pairAddr, PAIR_ABI, readProvider);
-    const [r, t0] = await Promise.all([pair.getReserves(), pair.token0()]);
-    const usdcIs0 = t0.toLowerCase() === ADDRESSES.USDC.toLowerCase();
-    const usdc = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve0 : r.reserve1, 6));
-    const weth = parseFloat(ethers.utils.formatUnits(usdcIs0 ? r.reserve1 : r.reserve0, 18));
-    if (usdc > 0 && weth > 0) _usdPerEth = usdc / weth;
-  } catch (e) {
-    console.warn("refreshEthPrice:", e.message);
-  }
-}
+const _usdPerEth = ETH_USD_PRICE;
 
 function fmtUsd(v) {
   const dp = v >= 100 ? 0 : v >= 1 ? 2 : 4;
@@ -294,10 +273,6 @@ function handleDisconnect() {
 
   // Load static stats once
   await loadStats();
-
-  // Price ETH once up front (for the USD rotation), then refresh occasionally.
-  await refreshEthPrice();
-  setInterval(refreshEthPrice, 60000);  // reserves drift slowly — 60s is plenty
 
   // Start scroll polling immediately — no wallet needed
   await updateScroll();
