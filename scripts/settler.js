@@ -32,6 +32,8 @@
 // scheduled runs queue instead of double-settling).
 
 const { ethers } = require("ethers");
+const fs   = require("fs");
+const path = require("path");
 const { postRoundToX } = require("./xposter");
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -41,8 +43,21 @@ const PRIVATE_KEY   = process.env.SETTLER_PRIVATE_KEY;
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;        // ops: every message, incl. failures
 const TG_CHAT_ID_PUBLIC = process.env.TELEGRAM_CHAT_ID_PUBLIC; // community group: round rollovers only
-const TIMBPRIZE_ADDR = "0x52dF701BD15B63Ece56141c22392a5435B608B72"; // TimbPrize v7 (meter resumes from jittered winning char)
-const GAMEREGISTRY_ADDR = "0xcDd1633F9FBD4dD189cF69FF82a005B4fcBe09eB"; // GameRegistry (fresh deploy — matches config.js)
+// Contract addresses come straight from config.js — the single source of
+// truth the frontend already uses — so a redeploy only ever needs config.js
+// edited and the settler follows automatically (no more drifting hardcodes).
+// config.js isn't Node-requireable (it touches window/document at load), so we
+// read it as text and pull the address out of its ADDRESSES map. Fails LOUD if
+// a key is missing/malformed rather than silently settling the wrong contract.
+function addrFromConfig(key) {
+  const src = fs.readFileSync(path.join(__dirname, "..", "config.js"), "utf8");
+  const m = src.match(new RegExp("\\b" + key + '\\s*:\\s*"(0x[0-9a-fA-F]{40})"'));
+  if (!m) throw new Error(`Address "${key}" not found in config.js — refusing to start settler`);
+  return ethers.utils.getAddress(m[1]); // checksum-normalize; throws on a bad address
+}
+
+const TIMBPRIZE_ADDR    = addrFromConfig("TimbPrize");
+const GAMEREGISTRY_ADDR = addrFromConfig("GameRegistry");
 
 // ─── ABI (minimal) ───────────────────────────────────────────────────────────
 
