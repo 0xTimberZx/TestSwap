@@ -27,6 +27,11 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          # Pin to the stable release. The default (nightly) has different
+          # block-number semantics that break PrizeWindows.t.sol's
+          # blockhash-based fixtures (which pass on stable locally).
+          version: stable
 
       - name: forge build
         run: forge build --sizes
