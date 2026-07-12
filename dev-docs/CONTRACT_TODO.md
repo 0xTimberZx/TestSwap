@@ -9,6 +9,14 @@ do a contract round.
 > + wire the new function into the relevant page. Frontend-only items do **not**
 > belong in this file.
 
+> ✅ **Done (game-sync / generations):** the reused-registry round-collision
+> class is resolved by the **generations** rewrite — `GameRegistry`
+> `0xfca8C2A1…` + `TimbPrize` `0x35976f4D…`. See `GAME_SYNC_GENERATIONS.md`.
+> Future **prize** redeploys no longer need a registry redeploy: four
+> `setTimbPrize` re-points + `startGame` (bumps the generation). After any fresh
+> registry, remember `setEntryCosts(1000e18, 0.0001e18)` — it does **not** carry
+> over.
+
 ---
 
 ## 1. Cancel / withdraw a Pending prize entry (pre-round) — SUPERSEDED BY §8

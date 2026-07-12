@@ -17,8 +17,8 @@ A full-stack DeFi protocol on Arbitrum Sepolia — AMM DEX, prize game, LP farmi
 | TimbSwapFactory | `0xCCd6d3f0A86042d2B7056eDd381d367126628AF5` |
 | TimbSwapRouter v8 | `0x40C7Caf90817C9891D278Ec1400B9deb180911f1` |
 | EligibleTokenRegistry | `0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04` |
-| GameRegistry | `0xcDd1633F9FBD4dD189cF69FF82a005B4fcBe09eB` |
-| TimbPrize v7 | `0x52dF701BD15B63Ece56141c22392a5435B608B72` |
+| GameRegistry (generations) | `0xfca8C2A107298273508BE8C5f469344b0Fc8B5B4` |
+| TimbPrize (generations) | `0x35976f4D2260127848a6274D2eC89ee054412432` |
 | TimbYieldVault | `0x43D833e828e2AF951527C2b573Eb70c358FfEB0B` |
 | PrizeEscrow | `0x865C50d933e63BbE388EEAFa017AE634B0A6fB6D` |
 | TimbStaking | `0xe776c7b700B190ED8248741F9b518B08d8733C8F` |
@@ -58,7 +58,7 @@ Everything runs on **Arbitrum Sepolia (Chain ID 421614)**. Grab gas and stables 
 
 **AMM Swap** — Uniswap v2-style. 0.3% fee split 0.25% to LPs / 0.05% to treasury. Supports `addLiquidity`, `addLiquidityETH`, `removeLiquidity`, `removeLiquidityETH`.
 
-**Prize Game** — Perpetual round-based game. Each round = 6 segments of 60 min (59 min 45 s open + 15 s settlement). Players hold a **ticket** — a 6-character string (A–Z, 0–9, no repeats) that plays the next round. Every eligible swap nudges the active segment's digit upward on a continuous meter; when a segment closes its digit locks and the next becomes active. After all 6 lock, an exact match wins the pot. Segments settle **permissionlessly** once the open window elapses (anyone can call `settleSegment`). Entry can be paid in ETH or TIMBS; **extra rounds** cost `entryCostTIMBS` each (up to 12, non-refundable). Ticket principal stays refundable for **4 rounds** after the ticket's last eligible round (and if you win near the end, the refund window starts *after* your claim window closes — up to LER+6) and, while active, earns yield via the **TimbYieldVault** that grows the pot. Winners claim their prize on a separate, shorter clock — **2 rounds from the match** — and a lapsed prize recycles into the pot without touching the winner's principal window. At each segment close the locked letter is the nudge counter **jittered with the settling block's hash**, so swaps influence the outcome but nobody can aim it.
+**Prize Game** — Perpetual round-based game. Each round = 6 segments of 60 min (59 min 45 s open + 15 s settlement). Players hold a **ticket** — a 6-character string (A–Z, 0–9, no repeats) that plays the next round. Every eligible swap nudges the active segment's digit upward on a continuous meter; when a segment closes its digit locks and the next becomes active. After all 6 lock, an exact match wins the pot. Segments settle **permissionlessly** once the open window elapses (anyone can call `settleSegment`). Entry can be paid in ETH or TIMBS; **extra rounds** cost `entryCostTIMBS` each (up to 12, non-refundable). Ticket principal stays refundable for **4 rounds** after the ticket's last eligible round (and if you win near the end, the refund window starts *after* your claim window closes — up to LER+6) and, while active, earns yield via the **TimbYieldVault** that grows the pot. Winners claim their prize on a separate, shorter clock — **2 rounds from the match** — and a lapsed prize recycles into the pot without touching the winner's principal window. At each segment close the locked letter is the nudge counter **jittered with the settling block's hash**, so swaps influence the outcome but nobody can aim it. The registry is keyed by a **game generation**: when a new TimbPrize is deployed and `startGame` runs, the generation bumps and every prior-game ticket goes inert — its principal is recoverable any time via **Reclaim principal** on the compete page — so a redeploy never contaminates the new game and never needs a fresh registry again.
 
 **LP Farming** — Stake TIMBS/ETH LP tokens to earn TIMBS emissions.
 
