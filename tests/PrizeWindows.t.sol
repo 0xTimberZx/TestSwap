@@ -221,7 +221,7 @@ contract PrizeWindowsTest is Test {
         runUntilRound(T + 4);
         uint256 id = registry.activeTicketOf(player) != 0
             ? registry.activeTicketOf(player)
-            : registry.ticketAt(player, T);
+            : registry.ticketAt(registry.generation(), player, T);
         uint256 balBefore = player.balance;
         vm.prank(player);
         registry.claimRefund(id);
@@ -232,7 +232,7 @@ contract PrizeWindowsTest is Test {
 
     function _ticketId(uint256 round) internal view returns (uint256) {
         uint256 id = registry.activeTicketOf(player);
-        return id != 0 ? id : registry.ticketAt(player, round);
+        return id != 0 ? id : registry.ticketAt(registry.generation(), player, round);
     }
 
     function test_WinnerLastRound_ForfeitRoundIsLERPlus6() public {
