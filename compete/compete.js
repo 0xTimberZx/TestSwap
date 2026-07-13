@@ -858,7 +858,14 @@ function renderTicketRow(t, displayStatus, opts) {
   const gen        = t.generation ? t.generation.toNumber() : 0;
   const isPastGen  = currentGen !== null && gen < currentGen;
 
-  const notYetPlaying = currentRoundNum !== null && currentRoundNum < playRound;
+  // Prefer the round the loader resolved (it falls back to the registry's own
+  // currentRound when the 4s poll hasn't landed) over the module global, which
+  // can still be null on first paint. Reading the null global made an expired
+  // ticket render as "Active / earning yield" with NO Refund button — so it
+  // looked permanently stuck even though its principal was refundable.
+  const roundNow = (opts && opts.round != null) ? opts.round : currentRoundNum;
+
+  const notYetPlaying = roundNow !== null && roundNow < playRound;
   const carriedOver   = notYetPlaying && t.status === 1 && !isPastGen;
 
   const statusName  = STATUS_NAMES[displayStatus] || "Unknown";
@@ -878,11 +885,11 @@ function renderTicketRow(t, displayStatus, opts) {
   // landed yet (null) or briefly lagged, even though the on-chain cancel would
   // have succeeded. Mirror the contract: raw-Pending ⇒ withdrawable.
   const canCancel = raw === 0 && !isPastGen;
-  const expired   = currentRoundNum !== null && currentRoundNum > lastRound;
+  const expired   = roundNow !== null && roundNow > lastRound;
   // Refundable through the contract's per-ticket forfeitRound — the later of
   // the refund-window end and (for a late winner) the post-claim window (§14).
   const forfeitRound = t.forfeitRound ? t.forfeitRound.toNumber() : lastRound + 4;
-  const inWindow  = currentRoundNum !== null && currentRoundNum <= forfeitRound;
+  const inWindow  = roundNow !== null && roundNow <= forfeitRound;
   const canRefund = (raw === 0 || raw === 1) && expired && inWindow && !t.escrowAmount.isZero() && !isPastGen;
   // Prior-game leftover with principal still held — reclaim it immediately.
   const canReclaim = isPastGen && (raw === 0 || raw === 1) && !t.escrowAmount.isZero();
@@ -1015,14 +1022,14 @@ async function loadMyEntries() {
 
     list.innerHTML = "";
     for (const head of heads) {
-      list.appendChild(renderTicketRow(head, displayById.get(head.id.toString()), { tethered: false }));
+      list.appendChild(renderTicketRow(head, displayById.get(head.id.toString()), { tethered: false, round: relRound }));
       // Walk conceded ancestry, newest first, tethered beneath the head.
       let cursor = head.supersedes;
       let depth  = 0;
       while (!cursor.isZero() && depth < 8) {
         const anc = byId.get(cursor.toString());
         if (!anc) break;
-        list.appendChild(renderTicketRow(anc, displayById.get(anc.id.toString()), { tethered: true }));
+        list.appendChild(renderTicketRow(anc, displayById.get(anc.id.toString()), { tethered: true, round: relRound }));
         cursor = anc.supersedes;
         depth++;
       }
