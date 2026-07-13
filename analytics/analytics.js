@@ -21,7 +21,10 @@ const TIMBS_ABI  = ["function totalSupply() external view returns (uint256)"];
 const STAKING_ABI = ["function totalStaked() external view returns (uint256)"];
 const FARM_ABI    = ["function totalStaked() external view returns (uint256)"];
 const VAULT_ABI   = ["function totalLocks() external view returns (uint256)"];
-const REGISTRY_ABI = ["function getRoundEntrants(uint256 round) external view returns (address[])"];
+const REGISTRY_ABI = [
+  "function getRoundEntrants(uint256 round) external view returns (address[])",
+  "function verifyEntryValid(address player, uint256 round) external view returns (bool valid, bytes6 string6)"
+];
 const FACTORY_MIN_ABI = ["function getPairAddress(address tokenA, address tokenB) external view returns (address)"];
 
 // TimbYieldVault — ticket capital earns yield for the prize pot.
@@ -189,7 +192,18 @@ async function loadLiveMetrics() {
     set("m-lp-staked",    fmt(lpStaked, 18, 4) + " LP");
     set("m-supply",       fmt(supply, 18, 0) + " TIMBS");
     set("m-locks",        locks.toString());
-    set("m-entries",      `${entrants.length} ticket${entrants.length === 1 ? "" : "s"}`);
+    // "Active Entries" = wallets with a genuinely VALID ticket this round.
+    // getRoundEntrants is append-only and round-scoped, but can still list a
+    // wallet whose ticket for the round is conceded/cancelled — so filter each
+    // through the contract's verifyEntryValid (the same check settlement uses).
+    let activeCount = entrants.length;
+    try {
+      const valid = await Promise.all(entrants.map(a =>
+        registry.verifyEntryValid(a, round).then(r => !!(r.valid ?? r[0])).catch(() => true)
+      ));
+      activeCount = valid.filter(Boolean).length;
+    } catch {}
+    set("m-entries",      `${activeCount} ticket${activeCount === 1 ? "" : "s"}`);
     if (earningWeight) set("m-entries-sub", `${fmt(earningWeight, 18, 4)} ETH-eq earning yield`);
 
     DebugHub.logCheckpoint("Analytics:Metrics Loaded", "pass");

@@ -386,6 +386,7 @@
 .status-conceded   { background: rgba(255,255,255,0.05); color: var(--text-3); }
 .status-ineligible { background: rgba(255,92,92,0.12);   color: #ff5c5c; }
 .status-cancelled  { background: rgba(255,184,74,0.12);  color: #ffb84a; }
+.status-refundable { background: rgba(255,184,74,0.12);  color: #ffb84a; }
 .status-closed     { background: rgba(255,255,255,0.04); color: var(--text-3); }
 
 /* Conceded ticket tethered beneath its replacement in the chain */
