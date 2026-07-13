@@ -132,7 +132,7 @@
       <div class="metric-card" data-cat="platform">
         <div class="metric-label">Prize Pot</div>
         <div class="metric-val metric-green" id="m-pot">—</div>
-        <div class="metric-sub" id="m-pot-sub">Round — · Seg —/6</div>
+        <div class="metric-sub" id="m-pot-sub">≈ $— · yield —</div>
       </div>
       <div class="metric-card" data-cat="platform">
         <div class="metric-label">Scroll Position</div>
@@ -159,10 +159,10 @@
         <div class="metric-val" id="m-locks">—</div>
         <div class="metric-sub">across all tokens</div>
       </div>
-      <div class="metric-card" data-cat="earnings">
-        <div class="metric-label">Vault Yield</div>
-        <div class="metric-val metric-green" id="m-yield">—</div>
-        <div class="metric-sub" id="m-yield-sub">accruing for the pot</div>
+      <div class="metric-card" data-cat="platform">
+        <div class="metric-label">Escrow Backing</div>
+        <div class="metric-val" id="m-escrow">—</div>
+        <div class="metric-sub" id="m-escrow-sub">last funded —</div>
       </div>
       <div class="metric-card" data-cat="earnings">
         <div class="metric-label">Active Entries</div>
@@ -256,9 +256,9 @@
             <div class="metric-sub">per day at current weight</div>
           </div>
           <div class="metric-card">
-            <div class="metric-label">Reserve</div>
-            <div class="metric-val" id="v-reserve">—</div>
-            <div class="metric-sub">funds yield until dry</div>
+            <div class="metric-label">Vault Yield</div>
+            <div class="metric-val metric-green" id="m-yield">—</div>
+            <div class="metric-sub" id="m-yield-sub">reserve —</div>
           </div>
           <div class="metric-card">
             <div class="metric-label">Last Accrual</div>
@@ -350,7 +350,7 @@
   </footer>
 
   <script src="../config.js?v=20260758b"></script>
-  <script src="analytics.js?v=20260757e"></script>
+  <script src="analytics.js?v=20260758b"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
