@@ -501,6 +501,22 @@ async function loadVault() {
     // Daily yield at the current weight: totalWeight × rate/sec × 86400
     const perDay = weight.mul(rate).div(ethers.constants.WeiPerEther).mul(86400);
     set("v-weight",  fmt(weight, 18, 6) + " ETH-eq");
+    // 7-day net change in total weight: every WeightRegistered adds its weight,
+    // every WeightRemoved subtracts it, so the sum of deltas in the window is
+    // the change over the last 7 days. Green ▲ up, red ▼ down.
+    let net7d = ethers.constants.Zero;
+    for (const ev of regs) net7d = net7d.add(ev.args.weight);
+    for (const ev of rems) net7d = net7d.sub(ev.args.weight);
+    const wSub = document.getElementById("v-weight-sub");
+    if (wSub) {
+      if (net7d.isZero()) {
+        wSub.innerHTML = "no change · 7d";
+      } else {
+        const up = net7d.gt(0);
+        wSub.innerHTML = `<span class="${up ? "td-in" : "td-out"}">`
+          + `${up ? "▲ +" : "▼ −"}${fmt(net7d.abs(), 18, 6)} ETH-eq</span> · 7d`;
+      }
+    }
     set("v-rate",    fmt(perDay, 18, 8) + " ETH");
     // The Vault Yield card (m-yield / m-yield-sub) — yield value + reserve — is
     // populated by loadVault's top-line read above; it replaced the Reserve card.
