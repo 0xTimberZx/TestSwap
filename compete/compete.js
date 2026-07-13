@@ -900,6 +900,13 @@ function renderTicketRow(t, displayStatus, opts) {
   let badgeName  = statusName;
   let badgeClass = statusClass;
   if (canRefund) { badgeName = "Refundable"; badgeClass = "status-refundable"; }
+  // Expired and out of play with nothing left to do — either it never held a
+  // deposit (a free mint before entry costs were set) or its refund window has
+  // closed. Either way it's not "Active" anymore; show it as Expired so it
+  // stops reading as a live entry.
+  else if (expired && !isPastGen && (raw === 0 || raw === 1)) {
+    badgeName = "Expired"; badgeClass = "status-expired";
+  }
 
   let hint = "";
   if (canReclaim)                      hint = ` · from a previous game · reclaim your deposit`;
@@ -907,6 +914,7 @@ function renderTicketRow(t, displayStatus, opts) {
   else if (carriedOver)                hint = ` · carried from a prior game · locked in, refundable after R${lastRound}`;
   else if (raw === 1 && !expired)      hint = ` · earning yield for the pool`;
   else if (canRefund)                  hint = ` · principal refundable now`;
+  else if ((raw === 0 || raw === 1) && expired && t.escrowAmount.isZero()) hint = ` · expired · no deposit to refund`;
   else if ((raw === 0 || raw === 1) && expired && !inWindow) hint = ` · refund window closed`;
 
   const row = document.createElement("div");
