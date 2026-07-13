@@ -37,6 +37,9 @@ const YV_ABI = [
   "event WeightRemoved(uint256 indexed ticketId, uint256 weight, uint256 totalWeight)"
 ];
 
+// PrizeEscrow — physical ETH backing the pot; Deposited fires on each top-up.
+const ESCROW_ABI = ["event Deposited(address indexed from, uint256 amount)"];
+
 // Event-scan lookback. Converted to blocks at runtime via blocksForDays
 // (config.js) — Arb Sepolia block numbers advance ~270k/day, so a hard-coded
 // block count drifts badly as a time window.
@@ -106,9 +109,10 @@ async function loadLiveMetrics() {
     // replaced ticket's escrow keeps its vault weight through its last
     // eligible round while the pending replacement isn't counted until
     // activation, so tickets and ETH-equivalent weight can diverge.
-    const [entrants, earningWeight] = await Promise.all([
+    const [entrants, earningWeight, accrued] = await Promise.all([
       registry.getRoundEntrants(round).catch(() => []),
-      yvault.totalWeight().catch(() => null)
+      yvault.totalWeight().catch(() => null),
+      yvault.previewAccrued().catch(() => null)
     ]);
 
     // Sort reserves by token direction
@@ -154,14 +158,32 @@ async function loadLiveMetrics() {
     set("m-price-sub",    priceUsd ? `per TIMBS · ≈ $${priceUsd}` : "per TIMBS");
     set("m-timbs-reserve", fmt(timbsReserve, 18, 0) + " TIMBS");
     set("m-weth-reserve",  fmt(wethReserve, 18, 4)  + " WETH");
-    set("m-pot",          fmt(pot, 18, 4) + " ETH");
+    // Pot to 6 decimals max (trimmed) so tiny yield-fed pots are legible.
+    set("m-pot", Number(ethers.utils.formatUnits(pot, 18))
+      .toLocaleString("en-US", { maximumFractionDigits: 6 }) + " ETH");
     const potUsd = usd(parseFloat(ethers.utils.formatUnits(pot, 18)));
-    // Show escrow backing only when it exceeds the accounted (winnable) pot —
-    // e.g. a direct seed that hasn't been registered via fundPot().
-    const backing = (escrowBal && escrowBal.gt(pot))
-      ? ` · backed by ${fmt(escrowBal, 18, 4)} ETH in escrow`
-      : "";
-    set("m-pot-sub",      `Round ${round} · Seg ${segment}/6` + (potUsd ? ` · ≈ $${potUsd}` : "") + backing);
+    // Sub-line: USD value + the live vault yield accruing into the pot.
+    const accruedStr = accrued ? fmt(accrued, 18, 6) + " ETH" : "—";
+    set("m-pot-sub",  (potUsd ? `≈ $${potUsd} · ` : "") + `yield ${accruedStr}`);
+
+    // Escrow Backing card — physical ETH securing the pot, with when it was
+    // last topped up (latest PrizeEscrow Deposited event) and by how much.
+    set("m-escrow", escrowBal
+      ? Number(ethers.utils.formatUnits(escrowBal, 18)).toLocaleString("en-US", { maximumFractionDigits: 5 }) + " ETH"
+      : "—");
+    try {
+      const escrow = new ethers.Contract(ADDRESSES.PrizeEscrow, ESCROW_ABI, prov);
+      const { currentBlock, windowBlocks } = await scanRange(prov);
+      const bps = await blocksPerSecond(prov);
+      const deps = await queryFilterWindow(escrow, escrow.filters.Deposited(), currentBlock, windowBlocks);
+      if (deps.length) {
+        const last = deps.reduce((a, b) => (b.blockNumber > a.blockNumber ? b : a));
+        set("m-escrow-sub", `last funded ${blockAge(last.blockNumber, currentBlock, bps)} · +${fmt(last.args.amount, 18, 5)} ETH`);
+      } else {
+        set("m-escrow-sub", "no deposits in 7d");
+      }
+    } catch { set("m-escrow-sub", "last funded —"); }
+
     set("m-scroll",       counter.toString());
     set("m-staked",       fmt(staked, 18, 0) + " TIMBS");
     set("m-lp-staked",    fmt(lpStaked, 18, 4) + " LP");
@@ -401,7 +423,10 @@ async function loadVault() {
       vault.reserve()
     ]);
     set("m-yield", fmt(accrued, 18, 6) + " ETH");
-    set("m-yield-sub", `reserve ${fmt(reserve, 18, 6)} ETH`);
+    // Reserve attached, to 5 decimals max (trimmed) for an accurate read.
+    const reserveStr = Number(ethers.utils.formatUnits(reserve, 18))
+      .toLocaleString("en-US", { maximumFractionDigits: 5 });
+    set("m-yield-sub", `reserve ${reserveStr} ETH`);
   } catch (e) {
     console.warn("loadVault metrics:", e.message);
   }
@@ -465,10 +490,9 @@ async function loadVault() {
   try {
     const { currentBlock, windowBlocks } = await scanRange(prov);
     const bps = await blocksPerSecond(prov);
-    const [weight, rate, reserve, lastTs, regs, rems] = await Promise.all([
+    const [weight, rate, lastTs, regs, rems] = await Promise.all([
       vault.totalWeight(),
       vault.ratePerSecond1e18(),
-      vault.reserve(),
       vault.lastAccrual(),
       queryFilterWindow(vault, vault.filters.WeightRegistered(), currentBlock, windowBlocks),
       queryFilterWindow(vault, vault.filters.WeightRemoved(),    currentBlock, windowBlocks)
@@ -478,7 +502,8 @@ async function loadVault() {
     const perDay = weight.mul(rate).div(ethers.constants.WeiPerEther).mul(86400);
     set("v-weight",  fmt(weight, 18, 6) + " ETH-eq");
     set("v-rate",    fmt(perDay, 18, 8) + " ETH");
-    set("v-reserve", fmt(reserve, 18, 4) + " ETH");
+    // The Vault Yield card (m-yield / m-yield-sub) — yield value + reserve — is
+    // populated by loadVault's top-line read above; it replaced the Reserve card.
     const ts = lastTs.toNumber();
     set("v-accrual", ts ? new Date(ts * 1000).toLocaleTimeString() : "—");
     set("v-accrual-sub", ts ? new Date(ts * 1000).toLocaleDateString() : "on-chain touch");
