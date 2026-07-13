@@ -158,9 +158,9 @@ async function loadLiveMetrics() {
     set("m-price-sub",    priceUsd ? `per TIMBS · ≈ $${priceUsd}` : "per TIMBS");
     set("m-timbs-reserve", fmt(timbsReserve, 18, 0) + " TIMBS");
     set("m-weth-reserve",  fmt(wethReserve, 18, 4)  + " WETH");
-    // Pot to 6 decimals max (trimmed) so tiny yield-fed pots are legible.
+    // Pot to 5 decimals max (trailing zeros trimmed).
     set("m-pot", Number(ethers.utils.formatUnits(pot, 18))
-      .toLocaleString("en-US", { maximumFractionDigits: 6 }) + " ETH");
+      .toLocaleString("en-US", { maximumFractionDigits: 5 }) + " ETH");
     const potUsd = usd(parseFloat(ethers.utils.formatUnits(pot, 18)));
     // Sub-line: USD value + the live vault yield accruing into the pot.
     const accruedStr = accrued ? fmt(accrued, 18, 6) + " ETH" : "—";
