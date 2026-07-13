@@ -161,7 +161,9 @@ async function loadLiveMetrics() {
     const backing = (escrowBal && escrowBal.gt(pot))
       ? ` · backed by ${fmt(escrowBal, 18, 4)} ETH in escrow`
       : "";
-    set("m-pot-sub",      `Round ${round} · Seg ${segment}/6` + (potUsd ? ` · ≈ $${potUsd}` : "") + backing);
+    // Lead the pot's sub-line with its USD value (the headline detail), then
+    // the round/segment context and any escrow backing.
+    set("m-pot-sub",      (potUsd ? `≈ $${potUsd} · ` : "") + `Round ${round} · Seg ${segment}/6` + backing);
     set("m-scroll",       counter.toString());
     set("m-staked",       fmt(staked, 18, 0) + " TIMBS");
     set("m-lp-staked",    fmt(lpStaked, 18, 4) + " LP");
@@ -478,7 +480,8 @@ async function loadVault() {
     const perDay = weight.mul(rate).div(ethers.constants.WeiPerEther).mul(86400);
     set("v-weight",  fmt(weight, 18, 6) + " ETH-eq");
     set("v-rate",    fmt(perDay, 18, 8) + " ETH");
-    set("v-reserve", fmt(reserve, 18, 4) + " ETH");
+    // Reserve is now shown on the Vault Yield card (m-yield-sub) via loadVault's
+    // top-line read, so the dedicated Reserve card was removed.
     const ts = lastTs.toNumber();
     set("v-accrual", ts ? new Date(ts * 1000).toLocaleTimeString() : "—");
     set("v-accrual-sub", ts ? new Date(ts * 1000).toLocaleDateString() : "on-chain touch");
