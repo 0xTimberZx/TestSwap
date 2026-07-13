@@ -887,6 +887,13 @@ function renderTicketRow(t, displayStatus, opts) {
   // Prior-game leftover with principal still held — reclaim it immediately.
   const canReclaim = isPastGen && (raw === 0 || raw === 1) && !t.escrowAmount.isZero();
 
+  // A ticket past its last eligible round but not yet swept is still raw-Active,
+  // yet it's out of play — only its refund remains. Show "Refundable" rather
+  // than a misleading "Active", so the badge count matches the round's entries.
+  let badgeName  = statusName;
+  let badgeClass = statusClass;
+  if (canRefund) { badgeName = "Refundable"; badgeClass = "status-refundable"; }
+
   let hint = "";
   if (canReclaim)                      hint = ` · from a previous game · reclaim your deposit`;
   else if (canCancel)                  hint = ` · withdrawable until R${playRound} starts`;
@@ -903,7 +910,7 @@ function renderTicketRow(t, displayStatus, opts) {
       <div class="entry-row-meta">Ticket #${t.id} · plays ${roundsTxt}${principal}${hint}</div>
     </div>
     <div style="display:flex;align-items:center;gap:6px">
-      <span class="entry-status-badge ${statusClass}">${statusName}</span>
+      <span class="entry-status-badge ${badgeClass}">${badgeName}</span>
       ${canReclaim ? `<button class="btn-claim-mini" onclick="handleReclaimPastGame(${t.id})">Reclaim principal</button>` : ""}
       ${canRefund ? `<button class="btn-claim-mini" onclick="handleClaimRefund(${t.id})">Refund principal</button>` : ""}
       ${canCancel ? `<button class="btn-claim-mini" onclick="handleCancelEntry()">Withdraw</button>` : ""}
