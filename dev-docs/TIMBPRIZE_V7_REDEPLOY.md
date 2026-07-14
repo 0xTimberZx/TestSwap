@@ -101,8 +101,13 @@ is dead to swaps.)
   frontend shows `· · · · · ·`, not `AAAAAA`).
 - Nudge/settle round 1; at rollover, confirm **round 2's meter opens on round 1's
   winning string** (the v7 behavior) and nudges up from there.
-- Confirm a settle doesn't revert (proves PrizeEscrow / registry / vault are all
-  re-pointed).
+- Confirm a settle doesn't revert (proves PrizeEscrow / registry are re-pointed).
+  ⚠️ A non-reverting settle does **NOT** prove the **vault** is re-pointed:
+  `_harvestYield` swallows a rejected `harvest()` in `try/catch{}`, so a settle
+  succeeds even with the yield wire dead. Verify yield separately — read back
+  `TimbYieldVault.timbPrize()` == new prize, and confirm `previewAccrued()` drops
+  to ~0 across a settlement (a `YieldHarvested` event fired). See
+  `GAME_SYNC_GENERATIONS.md §8` step 9.
 
 ## 8. SPECS / docs
 
