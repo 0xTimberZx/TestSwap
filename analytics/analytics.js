@@ -14,7 +14,9 @@ const PRIZE_ABI = [
   "function positionCounter() external view returns (uint256)",
   "function getRoundResult(uint256 round) external view returns (bytes6 winningString, uint256 potAmount, address[] winners, uint256 perWinner, uint256 remainder)",
   "event RoundSettled(uint256 indexed round, bytes6 winningString, uint256 potAmount, uint256 numWinners, uint256 remainderR, uint256 totalEntries, uint256 timestamp)",
-  "event WinningsClaimed(address indexed winner, uint256 indexed round, uint256 amount)"
+  "event WinningsClaimed(address indexed winner, uint256 indexed round, uint256 amount)",
+  // Per-round yield swept from the vault into that round's pot at settlement.
+  "event YieldHarvested(uint256 indexed round, uint256 amount)"
 ];
 
 const TIMBS_ABI  = ["function totalSupply() external view returns (uint256)"];
@@ -241,7 +243,7 @@ async function loadRoundHistory() {
     const currentRound = (await prize.currentRound()).toNumber();
     if (currentRound <= 1) {
       _allRounds = [];
-      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">No completed rounds yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="table-empty">No completed rounds yet</td></tr>';
       statusEl.textContent = "No rounds settled";
       renderRoundsPager();
       return;
@@ -262,11 +264,23 @@ async function loadRoundHistory() {
       x.entries = (await registry.getRoundEntrants(x.r).catch(() => [])).length;
     }));
 
+    // Per-round yield swept into that round's pot at settlement. The pot amount
+    // already includes it; YieldHarvested breaks out how much came from vault
+    // yield. Windowed like the vault table — rounds older than the scan window
+    // show "—" rather than a wrong zero.
+    try {
+      const { currentBlock, windowBlocks } = await scanRange(readProv());
+      const yh = await queryFilterWindow(prize, prize.filters.YieldHarvested(), currentBlock, windowBlocks);
+      const yieldByRound = new Map();
+      yh.forEach(ev => yieldByRound.set(ev.args.round.toNumber(), ev.args.amount));
+      settled.forEach(x => { x.yieldAmt = yieldByRound.has(x.r) ? yieldByRound.get(x.r) : null; });
+    } catch { /* leave yieldAmt undefined → renders as — */ }
+
     // Non-destructive: if a refresh came back empty but we already have rows,
     // keep the last good page rather than blanking the table.
     if (settled.length === 0) {
       if (_allRounds.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="table-empty">No completed rounds yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="table-empty">No completed rounds yet</td></tr>';
         statusEl.textContent = "No rounds settled";
       }
       return;
@@ -277,7 +291,7 @@ async function loadRoundHistory() {
     DebugHub.logCheckpoint("Analytics:Rounds Loaded", "pass");
   } catch (e) {
     if (_allRounds.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Could not load round history</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Could not load round history</td></tr>';
       statusEl.textContent = "Error";
     }
     DebugHub.logError("loadRoundHistory", e);
@@ -292,11 +306,12 @@ function renderRoundsPage() {
   _roundPage     = Math.min(Math.max(0, _roundPage), pages - 1);
 
   const rows = _allRounds.slice(_roundPage * ROUNDS_PER_PAGE, (_roundPage + 1) * ROUNDS_PER_PAGE);
-  tbody.innerHTML = rows.map(({ r, res, entries }) => `
+  tbody.innerHTML = rows.map(({ r, res, entries, yieldAmt }) => `
     <tr>
       <td>#${r}</td>
       <td class="td-string${res.winners.length > 0 ? " gold" : ""}">${bytes6ToStr(res.winningString)}</td>
       <td>${fmt(res.potAmount, 18, 4)} ETH</td>
+      <td class="${yieldAmt != null && !yieldAmt.isZero() ? "td-in" : ""}">${yieldAmt != null ? "+" + fmt(yieldAmt, 18, 6) + " ETH" : "—"}</td>
       <td>${res.winners.length}</td>
       <td>${fmt(res.remainder, 18, 4)} ETH</td>
       <td>${entries ?? "—"}</td>
@@ -448,11 +463,15 @@ async function loadVault() {
   const tbody    = document.getElementById("vault-tbody");
   const statusEl = document.getElementById("vault-status");
   try {
+    const prize = new ethers.Contract(ADDRESSES.TimbPrize, PRIZE_ABI, prov);
     const { currentBlock, windowBlocks } = await scanRange(prov);
     const bps = await blocksPerSecond(prov);
+    // Funded = treasury topping up the vault reserve (in). For the harvest-out
+    // rows, read TimbPrize's YieldHarvested(round, amount) rather than the
+    // vault's round-less Harvested — so each sweep shows which round it fed.
     const [funded, harvested] = await Promise.all([
-      queryFilterWindow(vault, vault.filters.Funded(),    currentBlock, windowBlocks),
-      queryFilterWindow(vault, vault.filters.Harvested(), currentBlock, windowBlocks)
+      queryFilterWindow(vault, vault.filters.Funded(),         currentBlock, windowBlocks),
+      queryFilterWindow(prize, prize.filters.YieldHarvested(), currentBlock, windowBlocks)
     ]);
     const all = [
       ...funded.map(ev => ({
@@ -460,8 +479,8 @@ async function loadVault() {
         amount: ev.args.amount, who: ev.args.from
       })),
       ...harvested.map(ev => ({
-        block: ev.blockNumber, type: "Harvested → Pot", cls: "td-out",
-        amount: ev.args.amount, who: ev.args.to
+        block: ev.blockNumber, type: `Yield → Pot · R${ev.args.round}`, cls: "td-out",
+        amount: ev.args.amount, who: ADDRESSES.TimbPrize
       }))
     ].sort((a, b) => b.block - a.block);
     const rows = all.slice(0, TABLE_CAPS.vault);
