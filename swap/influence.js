@@ -8,6 +8,9 @@ const TIMBPRIZE_MINI_ABI = [
   "function getRoundState() external view returns (uint256 round, uint256 segment, uint256 segmentStart, uint256 counter, bytes6 currentWindow, uint256 pot, uint256 unclaimedPool, bool inSettlement)",
   "function gameStarted() external view returns (bool)"
 ];
+// The router decides how many meter units an eligible swap is worth (owner-set,
+// 1..10). Read it live so the label never drifts from the contract.
+const ROUTER_MINI_ABI = ["function swapNudgeWeight() external view returns (uint256)"];
 
 function PrizeIndicators() {
   const [state, setState] = useState(null);
@@ -19,18 +22,24 @@ function PrizeIndicators() {
       const readProv = (typeof provider !== "undefined" && provider)
         ? provider
         : new ethers.providers.JsonRpcProvider(RPC_URL);
-      const prize = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_MINI_ABI, readProv);
+      const prize  = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_MINI_ABI, readProv);
+      const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_MINI_ABI, readProv);
 
       const started = await prize.gameStarted();
       if (!started) { setState({ started: false }); return; }
 
       const s = await prize.getRoundState();
+      // Live nudge weight; fall back to 3 (current on-chain value) if the read
+      // hiccups, so the label never shows "+undefined".
+      let nudge = 3;
+      try { nudge = (await router.swapNudgeWeight()).toNumber(); } catch {}
       setState({
         started: true,
         round: s.round.toString(),
         segment: s.segment.toString(),
         counter: s.counter.toString(),
         pot: s.pot,
+        nudge,
         inSettlement: s.inSettlement,
         segmentStart: s.segmentStart.toNumber()
       });
@@ -72,7 +81,7 @@ function PrizeIndicators() {
     React.createElement("div", { className: "pi-card" },
       React.createElement("div", { className: "pi-label" }, "SCROLL POSITION"),
       React.createElement("div", { className: "pi-value pi-mono" }, "#" + state.counter),
-      React.createElement("div", { className: "pi-sub" }, "Nudges +1 per eligible swap")
+      React.createElement("div", { className: "pi-sub" }, `Nudges +${state.nudge} per eligible swap`)
     ),
 
     // Card 2 — Segment status
