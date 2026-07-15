@@ -29,6 +29,32 @@ const REGISTRY_ABI = [
 ];
 const FACTORY_MIN_ABI = ["function getPairAddress(address tokenA, address tokenB) external view returns (address)"];
 
+// Best-effort ETH→USD from the USDC/WETH pool, cached module-wide so any table
+// (not just the metrics grid) can value ETH-denominated rows. Returns null when
+// the pool doesn't exist / is empty.
+let _ethUsd = null;
+async function ethUsdPrice(prov) {
+  try {
+    const factory  = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_MIN_ABI, prov);
+    const usdcPair = await factory.getPairAddress(ADDRESSES.USDC, ADDRESSES.WETH);
+    if (usdcPair !== ethers.constants.AddressZero) {
+      const pc = new ethers.Contract(usdcPair, PAIR_ABI, prov);
+      const [ur, ut0] = await Promise.all([pc.getReserves(), pc.token0()]);
+      const usdcIs0 = ut0.toLowerCase() === ADDRESSES.USDC.toLowerCase();
+      const usdc = parseFloat(ethers.utils.formatUnits(usdcIs0 ? ur.reserve0 : ur.reserve1, 6));
+      const weth = parseFloat(ethers.utils.formatUnits(usdcIs0 ? ur.reserve1 : ur.reserve0, 18));
+      if (usdc > 0 && weth > 0) _ethUsd = usdc / weth;
+    }
+  } catch {}
+  return _ethUsd;
+}
+function fmtUsd2(v) {
+  if (v === null || v === undefined) return "—";
+  if (v === 0) return "$0";
+  if (v < 0.01) return "$" + v.toPrecision(2);
+  return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
 // TimbYieldVault — ticket capital earns yield for the prize pot.
 const YV_ABI = [
   "function previewAccrued() external view returns (uint256)",
@@ -351,11 +377,12 @@ async function loadRecentSwaps() {
 
     const { currentBlock, windowBlocks } = await scanRange(prov);
     const bps = await blocksPerSecond(prov); // cached; for "time ago" labels
+    const px  = await ethUsdPrice(prov);     // ETH→USD for the value column
     const events = await queryFilterWindow(pair, pair.filters.Swap(), currentBlock, windowBlocks);
     const recent  = events.slice(-TABLE_CAPS.swaps).reverse();
 
     if (recent.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No swaps in the last 7 days</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">No swaps in the last 7 days</td></tr>';
       statusEl.textContent = "0 swaps";
       return;
     }
@@ -374,6 +401,12 @@ async function loadRecentSwaps() {
         : (amount1Out.gt(0) ? fmt(amount1Out, 18, 2) + " TIMBS" : fmt(amount0Out, 18, 4) + " WETH");
       const direction = buyingTIMBS ? "Buy TIMBS" : "Sell TIMBS";
 
+      // Value = the WETH leg (always one side of this pair) priced in USD.
+      const wethWei = timbsIs0
+        ? (amount1In.gt(0) ? amount1In : amount1Out)
+        : (amount0In.gt(0) ? amount0In : amount0Out);
+      const usdVal = px !== null ? parseFloat(ethers.utils.formatUnits(wethWei, 18)) * px : null;
+
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${ev.blockNumber}<div class="td-age">${blockAge(ev.blockNumber, currentBlock, bps)}</div></td>
@@ -381,6 +414,7 @@ async function loadRecentSwaps() {
         <td class="${buyingTIMBS ? 'td-in' : 'td-out'}">${direction}</td>
         <td>${amtIn}</td>
         <td>${amtOut}</td>
+        <td>${fmtUsd2(usdVal)}</td>
       `;
       tbody.appendChild(tr);
     }
@@ -388,7 +422,7 @@ async function loadRecentSwaps() {
     statusEl.textContent = shownOf(recent.length, events.length, "swaps");
     DebugHub.logCheckpoint("Analytics:Swaps Loaded", "pass");
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Could not load swap history</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Could not load swap history</td></tr>';
     statusEl.textContent = "Error";
     DebugHub.logError("loadRecentSwaps", e);
   }
