@@ -332,20 +332,20 @@ async function loadActivity() {
         const outSym = zeroToOne ? p.sym1 : p.sym0;
         const inAmt  = zeroToOne ? ethers.utils.formatUnits(amount0In,  p.dec0) : ethers.utils.formatUnits(amount1In,  p.dec1);
         const outAmt = zeroToOne ? ethers.utils.formatUnits(amount1Out, p.dec1) : ethers.utils.formatUnits(amount0Out, p.dec0);
+        // Value each swap by whichever side we can price (in first, then out) —
+        // a constant-product trade is worth ~the same on both legs. null when
+        // neither token is priceable (shows "—").
+        const inAddr  = zeroToOne ? p.t0 : p.t1;
+        const outAddr = zeroToOne ? p.t1 : p.t0;
+        let usd = usdOf(inAddr.toLowerCase(), parseFloat(inAmt));
+        if (usd === null) usd = usdOf(outAddr.toLowerCase(), parseFloat(outAmt));
         trades.push({
           block: ev.blockNumber, pair: pairLabel(p),
           trader: poolAddrs.has(to.toLowerCase()) ? sender : to,
-          detail: `${fmtNum(parseFloat(inAmt), 4)} ${inSym} → ${fmtNum(parseFloat(outAmt), 4)} ${outSym}`
+          detail: `${fmtNum(parseFloat(inAmt), 4)} ${inSym} → ${fmtNum(parseFloat(outAmt), 4)} ${outSym}`,
+          usd
         });
-        // Value each recent swap by whichever side we can price (in first, then
-        // out) — a constant-product trade is worth ~the same on both legs.
-        if (ev.blockNumber >= vol24hFrom) {
-          const inAddr  = zeroToOne ? p.t0 : p.t1;
-          const outAddr = zeroToOne ? p.t1 : p.t0;
-          let usd = usdOf(inAddr.toLowerCase(), parseFloat(inAmt));
-          if (usd === null) usd = usdOf(outAddr.toLowerCase(), parseFloat(outAmt));
-          if (usd !== null) vol += usd;
-        }
+        if (usd !== null && ev.blockNumber >= vol24hFrom) vol += usd;
       }
       _vol24h[p.address.toLowerCase()] = vol;
     }
@@ -396,7 +396,7 @@ function renderTrades(rows) {
   const q = (document.getElementById("pool-search")?.value || "").trim().toLowerCase();
   const filtered = rows.filter(r => !q || r.pair.toLowerCase().includes(q));
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No trades in the last 7 days</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No trades in the last 7 days</td></tr>';
     return;
   }
   tbody.innerHTML = "";
@@ -406,6 +406,7 @@ function renderTrades(rows) {
       <td>${r.block}<div class="td-age">${blockAge(r.block, _curBlock, _bps)}</div></td>
       <td class="td-pair">${r.pair}</td>
       <td>${r.detail}</td>
+      <td>${fmtUsd(r.usd)}</td>
       <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${r.trader}','_blank')">${fmtAddr(r.trader)}</td>
     `;
     tbody.appendChild(tr);
