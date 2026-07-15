@@ -129,14 +129,48 @@ dust. This is the last redeploy that ever needs a fresh registry.
    free until set. Then `setYieldVault(vault)`, `vault.setGameRegistry(newReg)`,
    `setProtocolSink`.
 3. Deploy **TimbPrize** against v4 (`_gameRegistry = v4`).
-4. FOUR `setTimbPrize` re-points → new prize: PrizeEscrow, **v4 registry**,
-   YieldVault, Router. `newPrize.setRouter(router)`; `newPrize.setYieldVault(...)`.
+4. **Re-point all FOUR prize-holding contracts** to the new prize (each stores
+   `timbPrize` and gates `msg.sender == timbPrize` or calls into the prize):
+   - `PrizeEscrow.setTimbPrize(new)` — else payouts revert.
+   - `GameRegistry(v4).setTimbPrize(new)` — else `setCurrentRound`/`recordWinners`/`onRoundSettled` revert.
+   - `TimbYieldVault.setTimbPrize(new)` — else `harvest()` reverts **and is silently swallowed** (`_harvestYield` `try/catch{}`); yield never reaches the pot and nothing errors.
+   - `TimbSwapRouter.setTimbPrize(new)` — else swaps + Advance nudge the OLD prize.
+
+   Plus the prize's own **outward** links: `newPrize.setRouter(router)` and
+   `newPrize.setYieldVault(vault)`.
+
+   ⚠️ **Two-way links — both directions required:**
+   - Router: `router.setTimbPrize(new)` ⇄ `newPrize.setRouter(router)`
+   - Yield:  `vault.setTimbPrize(new)`  ⇄ `newPrize.setYieldVault(vault)`
+
+   A one-sided yield link is the exact gap that killed harvest for 8 rounds: the
+   prize pointed at the vault, but the vault still authorized the *retired* prize,
+   so every `harvest()` reverted into the silent catch.
+
+   **Read back BEFORE `startGame`** — every value must match:
+   | Read | Expect |
+   |------|--------|
+   | `PrizeEscrow.timbPrize()`    | new prize |
+   | `GameRegistry.timbPrize()`   | new prize |
+   | `TimbYieldVault.timbPrize()` | new prize |
+   | `TimbSwapRouter.timbPrize()` | new prize |
+   | `TimbPrize.yieldVault()`     | current vault |
+   | `TimbPrize.router()`         | current router |
 5. `newPrize.startGame()` → `onGameStarted()` → generation 1, round 1.
 6. `config.js` ADDRESSES → v4 registry + new prize; bump cache tokens.
 7. Settler reads addresses from config.js (§16) — confirm.
 8. Verify: genesis meter `······`; simulate a *second* game (redeploy a throwaway
    prize on testnet, `startGame`) → confirm gen bumps to 2, old-gen ticket is
    inert (`_isLive` false, can't win a colliding round) and shows **Reclaim**.
+9. **Yield liveness — do NOT skip, a broken harvest is invisible.** `_harvestYield`
+   wraps `harvest()` in `try/catch{}`, so **a settle succeeds even when the vault
+   rejects the prize** — "settle didn't revert" proves *nothing* about yield. After
+   the first settlement with active-ticket weight, confirm BOTH:
+   - `TimbYieldVault.previewAccrued()` **dropped to ~0** (the harvest swept it) and
+     then climbs again. If it keeps climbing straight through a settlement, harvest
+     is dead → re-check the two-way yield link in step 4.
+   - a `TimbPrize.YieldHarvested(round, amount)` event fired that round — i.e. the
+     analytics **"Yield → Pot"** column shows `+N`, not `—`.
 
 ## 9. Foundry tests (tests/GameRegistryGenerations.t.sol)
 - gen bump makes an old Active ticket inert (`verifyEntryValid` false at the
