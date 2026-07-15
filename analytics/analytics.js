@@ -55,6 +55,18 @@ function fmtUsd2(v) {
   return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+// The Swap event's `sender` is the router, not the human. The tx initiator
+// (tx.from) is the real trader. Resolve + cache per tx hash (immutable).
+const _txFrom = {};
+async function txFrom(hash) {
+  if (_txFrom[hash]) return _txFrom[hash];
+  try {
+    const tx = await readProv().getTransaction(hash);
+    if (tx && tx.from) return (_txFrom[hash] = tx.from);
+  } catch {}
+  return null;
+}
+
 // TimbYieldVault — ticket capital earns yield for the prize pot.
 const YV_ABI = [
   "function previewAccrued() external view returns (uint256)",
@@ -387,9 +399,15 @@ async function loadRecentSwaps() {
       return;
     }
 
+    // Resolve the real trader (tx initiator) for each row — the event's own
+    // `sender` is the router. Cached, so refreshes don't re-fetch.
+    const froms = await Promise.all(recent.map(ev => txFrom(ev.transactionHash)));
+
     tbody.innerHTML = "";
-    for (const ev of recent) {
+    for (let i = 0; i < recent.length; i++) {
+      const ev = recent[i];
       const { amount0In, amount1In, amount0Out, amount1Out, sender } = ev.args;
+      const trader = froms[i] || sender; // tx.from, else fall back to event sender
 
       // Determine direction
       const buyingTIMBS = timbsIs0 ? amount0Out.gt(0) : amount1Out.gt(0);
@@ -410,7 +428,7 @@ async function loadRecentSwaps() {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${ev.blockNumber}<div class="td-age">${blockAge(ev.blockNumber, currentBlock, bps)}</div></td>
-        <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${sender}','_blank')">${fmtAddr(sender)}</td>
+        <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${trader}','_blank')">${fmtAddr(trader)}</td>
         <td class="${buyingTIMBS ? 'td-in' : 'td-out'}">${direction}</td>
         <td>${amtIn}</td>
         <td>${amtOut}</td>
