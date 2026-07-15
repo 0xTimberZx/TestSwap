@@ -222,6 +222,26 @@ async function loadPools() {
   }
 }
 
+// Quote-token priority: stables > native (WETH) > everything else. The higher-
+// priority token becomes the QUOTE (denominator), shown second — so every pair
+// reads consistently (X/USDC, X/WETH) instead of in arbitrary factory address
+// order. Equal priority keeps the pool's own token0/token1 order.
+function quoteRank(addr) {
+  const a = (addr || "").toLowerCase();
+  const is = (k) => ADDRESSES[k] && a === ADDRESSES[k].toLowerCase();
+  if (is("USDC") || is("USDT")) return 3; // stables quote first
+  if (is("WETH")) return 2;               // then native
+  return 1;                                // then whitelisted / others
+}
+// Orient a pool as base/quote by that priority (higher rank = quote, shown 2nd).
+function orient(p) {
+  const flip = quoteRank(p.t0) > quoteRank(p.t1); // t0 outranks t1 → t0 is quote
+  return flip
+    ? { baseSym: p.sym1, quoteSym: p.sym0, baseR: p.r1, quoteR: p.r0 }
+    : { baseSym: p.sym0, quoteSym: p.sym1, baseR: p.r0, quoteR: p.r1 };
+}
+function pairLabel(p) { const o = orient(p); return `${o.baseSym}/${o.quoteSym}`; }
+
 function renderPools() {
   const tbody = document.getElementById("pools-tbody");
   const q = (document.getElementById("pool-search")?.value || "").trim().toLowerCase();
@@ -233,10 +253,11 @@ function renderPools() {
   }
   tbody.innerHTML = "";
   for (const p of rows) {
+    const o = orient(p);
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td class="td-pair">${p.sym0}/${p.sym1}</td>
-      <td>${fmtNum(p.r0, 4)} ${p.sym0} · ${fmtNum(p.r1, 4)} ${p.sym1}</td>
+      <td class="td-pair">${o.baseSym}/${o.quoteSym}</td>
+      <td>${fmtNum(o.baseR, 4)} ${o.baseSym} · ${fmtNum(o.quoteR, 4)} ${o.quoteSym}</td>
       <td>${fmtUsd(p.tvl)}</td>
       <td>${vol24hOf(p)}</td>
       <td class="td-addr" onclick="window.open('https://sepolia.arbiscan.io/address/${p.address}','_blank')">${fmtAddr(p.address)}</td>
@@ -254,7 +275,7 @@ function vol24hOf(p) {
 
 function matchesPool(p, q) {
   return p.sym0.toLowerCase().includes(q) || p.sym1.toLowerCase().includes(q) ||
-         `${p.sym0}/${p.sym1}`.toLowerCase().includes(q) ||
+         pairLabel(p).toLowerCase().includes(q) ||
          p.address.toLowerCase() === q || p.t0.toLowerCase() === q || p.t1.toLowerCase() === q;
 }
 
@@ -312,7 +333,7 @@ async function loadActivity() {
         const inAmt  = zeroToOne ? ethers.utils.formatUnits(amount0In,  p.dec0) : ethers.utils.formatUnits(amount1In,  p.dec1);
         const outAmt = zeroToOne ? ethers.utils.formatUnits(amount1Out, p.dec1) : ethers.utils.formatUnits(amount0Out, p.dec0);
         trades.push({
-          block: ev.blockNumber, pair: `${p.sym0}/${p.sym1}`,
+          block: ev.blockNumber, pair: pairLabel(p),
           trader: poolAddrs.has(to.toLowerCase()) ? sender : to,
           detail: `${fmtNum(parseFloat(inAmt), 4)} ${inSym} → ${fmtNum(parseFloat(outAmt), 4)} ${outSym}`
         });
@@ -341,13 +362,13 @@ async function loadActivity() {
     for (const { p, mints, burns } of perPool) {
       for (const ev of mints) {
         liq.push({
-          block: ev.blockNumber, type: "Add", pair: `${p.sym0}/${p.sym1}`, who: ev.args.sender,
+          block: ev.blockNumber, type: "Add", pair: pairLabel(p), who: ev.args.sender,
           detail: `${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount0, p.dec0)), 4)} ${p.sym0} + ${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount1, p.dec1)), 4)} ${p.sym1}`
         });
       }
       for (const ev of burns) {
         liq.push({
-          block: ev.blockNumber, type: "Remove", pair: `${p.sym0}/${p.sym1}`, who: ev.args.to,
+          block: ev.blockNumber, type: "Remove", pair: pairLabel(p), who: ev.args.to,
           detail: `${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount0, p.dec0)), 4)} ${p.sym0} + ${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount1, p.dec1)), 4)} ${p.sym1}`
         });
       }
