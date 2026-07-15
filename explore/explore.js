@@ -43,6 +43,19 @@ function contractRO(address, abi) {
   return _roContracts[address] || (_roContracts[address] = new ethers.Contract(address, abi, readProv()));
 }
 
+// The `sender`/`to` on Swap/Mint/Burn is usually the router (or, on a multi-hop
+// leg, the next pool) — not the human. The transaction initiator (tx.from) is
+// always the real user. Resolve + cache it per tx hash (a tx is immutable).
+const _txFrom = {};
+async function txFrom(hash) {
+  if (_txFrom[hash]) return _txFrom[hash];
+  try {
+    const tx = await readProv().getTransaction(hash);
+    if (tx && tx.from) return (_txFrom[hash] = tx.from);
+  } catch {}
+  return null;
+}
+
 // ─── Token metadata (symbol + decimals), cached ────────────────────────────────
 
 const _tokenMeta = {}; // lowercased address -> { symbol, decimals }
@@ -340,7 +353,8 @@ async function loadActivity() {
         let usd = usdOf(inAddr.toLowerCase(), parseFloat(inAmt));
         if (usd === null) usd = usdOf(outAddr.toLowerCase(), parseFloat(outAmt));
         trades.push({
-          block: ev.blockNumber, pair: pairLabel(p),
+          block: ev.blockNumber, pair: pairLabel(p), txHash: ev.transactionHash,
+          // Fallback only; overridden by the tx initiator below.
           trader: poolAddrs.has(to.toLowerCase()) ? sender : to,
           detail: `${fmtNum(parseFloat(inAmt), 4)} ${inSym} → ${fmtNum(parseFloat(outAmt), 4)} ${outSym}`,
           usd
@@ -353,6 +367,8 @@ async function loadActivity() {
     if (_poolsLoaded) renderPools();
     trades.sort((a, b) => b.block - a.block);
     _lastTrades = trades.slice(0, 15);
+    // Show the human who sent the tx, not the router/pool from the event.
+    await Promise.all(_lastTrades.map(async t => { const f = await txFrom(t.txHash); if (f) t.trader = f; }));
     renderTrades(_lastTrades);
     if (swapStatus) swapStatus.textContent = `${trades.length} trade${trades.length === 1 ? "" : "s"}`;
     setOverview(null, trades.length, null);
@@ -362,19 +378,21 @@ async function loadActivity() {
     for (const { p, mints, burns } of perPool) {
       for (const ev of mints) {
         liq.push({
-          block: ev.blockNumber, type: "Add", pair: pairLabel(p), who: ev.args.sender,
+          block: ev.blockNumber, type: "Add", pair: pairLabel(p), txHash: ev.transactionHash, who: ev.args.sender,
           detail: `${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount0, p.dec0)), 4)} ${p.sym0} + ${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount1, p.dec1)), 4)} ${p.sym1}`
         });
       }
       for (const ev of burns) {
         liq.push({
-          block: ev.blockNumber, type: "Remove", pair: pairLabel(p), who: ev.args.to,
+          block: ev.blockNumber, type: "Remove", pair: pairLabel(p), txHash: ev.transactionHash, who: ev.args.to,
           detail: `${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount0, p.dec0)), 4)} ${p.sym0} + ${fmtNum(parseFloat(ethers.utils.formatUnits(ev.args.amount1, p.dec1)), 4)} ${p.sym1}`
         });
       }
     }
     liq.sort((a, b) => b.block - a.block);
     _lastLiq = liq.slice(0, 15);
+    // Provider = the human who sent the tx (the Mint event's sender is the router).
+    await Promise.all(_lastLiq.map(async r => { const f = await txFrom(r.txHash); if (f) r.who = f; }));
     renderLiquidity(_lastLiq);
     if (liqStatus) liqStatus.textContent = `${liq.length} event${liq.length === 1 ? "" : "s"}`;
 
