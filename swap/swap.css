@@ -127,6 +127,15 @@
 .amount-input::-webkit-inner-spin-button { -webkit-appearance: none; }
 .amount-input::placeholder { color: var(--text-3); }
 
+/* "≈ $" estimate under a pay/receive amount — muted, mono, empty until priced */
+.amount-usd {
+  min-height: 15px;
+  margin-top: 4px;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--text-3);
+}
+
 .token-picker-btn {
   display: flex;
   align-items: center;

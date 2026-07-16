@@ -476,11 +476,42 @@ function overBalanceLabel() {
 async function onAmountInChange() {
   lastEditedSide = "in";
   await recalcQuote();
+  updateSwapUsd();
 }
 async function onAmountOutChange() {
   lastEditedSide = "out";
   await recalcQuote();
+  updateSwapUsd();
 }
+
+// "≈ $" estimates under the pay/receive amounts. Priced via the shared oracle
+// (config.js), which prices ETH through WETH — so effAddr() maps native ETH to
+// WETH for the lookup. Cached with a short TTL, so keystrokes are cheap.
+async function updateSwapUsd() {
+  const payEl = document.getElementById("pay-usd");
+  const rcvEl = document.getElementById("receive-usd");
+  const inV  = document.getElementById("amount-in")?.value;
+  const outV = document.getElementById("amount-out")?.value;
+  if (payEl) payEl.textContent = (tokenIn  && inV)  ? await usdEst(effAddr(tokenIn),  inV)  : "";
+  if (rcvEl) rcvEl.textContent = (tokenOut && outV) ? await usdEst(effAddr(tokenOut), outV) : "";
+}
+
+// Keep the quote + USD live against pool moves (other wallets' trades). Re-quote
+// to current reserves only when the user isn't mid-edit, so it never fights
+// typing; the USD lines refresh every tick regardless (prices carry a 12s TTL).
+function _swapLiveTick() {
+  const a = document.activeElement;
+  const editing = a && (a.id === "amount-in" || a.id === "amount-out");
+  const inV  = document.getElementById("amount-in")?.value;
+  const outV = document.getElementById("amount-out")?.value;
+  const hasAmt = (inV && parseFloat(inV) > 0) || (outV && parseFloat(outV) > 0);
+  if (!editing && tokenIn && tokenOut && hasAmt) {
+    recalcQuote().then(updateSwapUsd).catch(() => {});
+  } else {
+    updateSwapUsd();
+  }
+}
+setInterval(_swapLiveTick, 4000);
 
 // Active multi-hop route (effective addresses, e.g. [USDT, WETH, TIMBS]) or
 // null when the trade is direct / a wrap. Set only by a successful path quote.
