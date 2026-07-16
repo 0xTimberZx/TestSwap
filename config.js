@@ -391,6 +391,85 @@ function fmtTIMBS(wei, dp = 2) {
   return fmt(wei, 18, dp) + " TIMBS";
 }
 
+// ─── Shared USD price oracle ──────────────────────────────────────────────────
+// Prices any listed token in USD off the live V2 pools, so any page can show an
+// "≈ $" estimate. Stables = $1; WETH via the USDC/WETH pool; anything else via
+// its USDC pair (direct), else its WETH pair × the ETH price. Cached with a
+// short TTL so readouts track pool moves (other wallets' trades) on refresh
+// without hammering the RPC. All reads hit the canonical public RPC.
+const _PRICE_PAIR_ABI = [
+  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+  "function token0() external view returns (address)"
+];
+const _PRICE_FACTORY_ABI = ["function getPairAddress(address a, address b) external view returns (address)"];
+const _PRICE_TTL = 12000; // ms; a tick of ~12s keeps estimates live but cheap
+const _usdCache = {};     // lowercased addr -> { px: number|null, ts }
+let _priceProv = null;
+function _priceProvider() {
+  return _priceProv || (_priceProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+}
+function _tokenDecimals(lc) {
+  const t = DEFAULT_TOKENS.find(x => x.address.toLowerCase() === lc);
+  return t ? t.decimals : 18;
+}
+function _isStableAddr(lc) {
+  return (ADDRESSES.USDC && lc === ADDRESSES.USDC.toLowerCase()) ||
+         (ADDRESSES.USDT && lc === ADDRESSES.USDT.toLowerCase());
+}
+// USD value of one whole `quote` token = quoteUsd; returns USD-per-`token`, read
+// off the token/quote pool. null if the pair doesn't exist or is empty.
+async function _priceViaPair(prov, factory, token, quote, quoteUsd) {
+  if (quoteUsd === null || quoteUsd === undefined) return null;
+  const addr = await factory.getPairAddress(token, quote);
+  if (!addr || addr === ethers.constants.AddressZero) return null;
+  const pc = new ethers.Contract(addr, _PRICE_PAIR_ABI, prov);
+  const [r, t0] = await Promise.all([pc.getReserves(), pc.token0()]);
+  const tokLc  = token.toLowerCase();
+  const tokIs0 = t0.toLowerCase() === tokLc;
+  const tokRes = parseFloat(ethers.utils.formatUnits(tokIs0 ? r.reserve0 : r.reserve1, _tokenDecimals(tokLc)));
+  const qRes   = parseFloat(ethers.utils.formatUnits(tokIs0 ? r.reserve1 : r.reserve0, _tokenDecimals(quote.toLowerCase())));
+  if (tokRes <= 0 || qRes <= 0) return null;
+  return (qRes / tokRes) * quoteUsd; // (quote per token) × (USD per quote)
+}
+async function _ethUsd(prov, factory) {
+  return _priceViaPair(prov, factory, ADDRESSES.WETH, ADDRESSES.USDC, 1);
+}
+// USD per 1 whole token (number), or null if unpriceable. TTL-cached.
+async function usdPriceOf(tokenAddr) {
+  if (!tokenAddr) return null;
+  const lc  = tokenAddr.toLowerCase();
+  const now = Date.now();
+  const c   = _usdCache[lc];
+  if (c && now - c.ts < _PRICE_TTL) return c.px;
+  let px = null;
+  try {
+    const prov    = _priceProvider();
+    const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, _PRICE_FACTORY_ABI, prov);
+    if (_isStableAddr(lc)) px = 1;
+    else if (lc === ADDRESSES.WETH.toLowerCase()) px = await _ethUsd(prov, factory);
+    else {
+      px = await _priceViaPair(prov, factory, tokenAddr, ADDRESSES.USDC, 1);
+      if (px === null) {
+        const eth = await _ethUsd(prov, factory);
+        px = await _priceViaPair(prov, factory, tokenAddr, ADDRESSES.WETH, eth);
+      }
+    }
+  } catch {}
+  _usdCache[lc] = { px, ts: now };
+  return px;
+}
+// "≈ $X.XX" for `amountFloat` of the token at `tokenAddr`, or "" if unpriceable.
+async function usdEst(tokenAddr, amountFloat) {
+  const a = parseFloat(amountFloat);
+  if (!isFinite(a) || a <= 0) return "";
+  const px = await usdPriceOf(tokenAddr);
+  if (px === null || px === undefined) return "";
+  const v = a * px;
+  if (v === 0) return "≈ $0";
+  if (v < 0.01) return "≈ $" + v.toPrecision(2);
+  return "≈ $" + v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
 // bytes6 → readable string (e.g. 0x414243 → "ABC")
 function fmtBytes6(bytes6) {
   if (!bytes6 || bytes6 === "0x000000000000") return "——";
