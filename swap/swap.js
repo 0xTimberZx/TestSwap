@@ -500,6 +500,9 @@ async function updateSwapUsd() {
 // to current reserves only when the user isn't mid-edit, so it never fights
 // typing; the USD lines refresh every tick regardless (prices carry a 12s TTL).
 function _swapLiveTick() {
+  // Liquidity USD + withdrawal preview (cheap, cached) refresh every tick.
+  updateLqUsd();
+  renderRemovePreview();
   const a = document.activeElement;
   const editing = a && (a.id === "amount-in" || a.id === "amount-out");
   const inV  = document.getElementById("amount-in")?.value;
@@ -1181,8 +1184,20 @@ async function _mirrorLq(fromId, toId, fromTok, toTok, invert) {
   } catch {}
   updateLqButtons();
 }
-function onLqAmountA() { return _mirrorLq("lq-amount-a", "lq-amount-b", tokenIn, tokenOut, false); }
-function onLqAmountB() { return _mirrorLq("lq-amount-b", "lq-amount-a", tokenOut, tokenIn, true); }
+async function onLqAmountA() { await _mirrorLq("lq-amount-a", "lq-amount-b", tokenIn, tokenOut, false); updateLqUsd(); }
+async function onLqAmountB() { await _mirrorLq("lq-amount-b", "lq-amount-a", tokenOut, tokenIn, true); updateLqUsd(); }
+
+// "≈ $" estimates under the two Deposit amounts (add-liquidity), same oracle as
+// the swap fields. Liquidity uses WETH (not native ETH), so effAddr() is a
+// no-op here, but kept for symmetry.
+async function updateLqUsd() {
+  const aEl = document.getElementById("lq-usd-a");
+  const bEl = document.getElementById("lq-usd-b");
+  const aV  = document.getElementById("lq-amount-a")?.value;
+  const bV  = document.getElementById("lq-amount-b")?.value;
+  if (aEl) aEl.textContent = (tokenIn  && aV) ? await usdEst(effAddr(tokenIn),  aV) : "";
+  if (bEl) bEl.textContent = (tokenOut && bV) ? await usdEst(effAddr(tokenOut), bV) : "";
+}
 
 // True when `amountStr` parses to more than the wallet holds. Returns false
 // on anything unknown (null balance, empty/partial input, over-precise
@@ -1256,6 +1271,22 @@ function renderRemovePreview() {
     `${fmt(outB, tokenOut.decimals, 4)} ${tokenOut.symbol}`;
   // Also show the LP amount being burned next to the "LP:" label.
   if (lpEl) lpEl.textContent = `Burn ${fmt(liq, 18, 6)} of ${fmt(lpBalanceWei, 18, 6)} LP`;
+
+  // Append the total USD of the withdrawal (async; guarded so a later drag that
+  // rewrote the preview isn't clobbered by a stale price resolution).
+  const _base = el.textContent;
+  (async () => {
+    const aF = parseFloat(ethers.utils.formatUnits(outA, tokenIn.decimals));
+    const bF = parseFloat(ethers.utils.formatUnits(outB, tokenOut.decimals));
+    const [pa, pb] = await Promise.all([usdPriceOf(effAddr(tokenIn)), usdPriceOf(effAddr(tokenOut))]);
+    let total = 0, ok = false;
+    if (pa != null) { total += aF * pa; ok = true; }
+    if (pb != null) { total += bF * pb; ok = true; }
+    if (ok && el.textContent === _base) {
+      total = total < 0.01 ? total.toPrecision(2) : total.toLocaleString("en-US", { maximumFractionDigits: 2 });
+      el.textContent = `${_base}  ·  ≈ $${total}`;
+    }
+  })();
 }
 
 function showLqTx(hash) {
