@@ -297,11 +297,11 @@ async function pollRoundState() {
     document.getElementById("hdr-segment-num").textContent = s.segment.toString();
 
     // An entry always plays the NEXT round — the current round's meter is
-    // already locking. Show the concrete target round on the entry form so
+    // already locking. Show the concrete target round(s) on the entry form so
     // "Plays next round" isn't mistaken for "plays this round" (the source of
-    // the "why is my round-1 entry active at round 3" confusion).
-    const playsEl = document.getElementById("entry-plays-round");
-    if (playsEl) playsEl.textContent = "round " + (currentRoundNum + 1);
+    // the "why is my round-1 entry active at round 3" confusion), and so the
+    // extra rounds the user is paying for are reflected as a range.
+    renderPlaysRound(currentRoundNum);
 
     // Pot substats as ordered segments: Pot · backed by · yield accruing.
     // "backed by" (escrow reserve) sits right after the pot; yield accruing
@@ -600,8 +600,23 @@ const MAX_EXTRA_ROUNDS = 12;
 function adjustExtraRounds(delta) {
   extraRounds = Math.min(MAX_EXTRA_ROUNDS, Math.max(0, extraRounds + delta));
   document.getElementById("extra-rounds-val").textContent = extraRounds;
+  renderPlaysRound(currentRoundNum);
   refreshEntryBalance();
   updateCostDisplay();
+}
+
+// The entry plays the NEXT round (curRound + 1), and each extra round extends
+// its play window by one — so the ticket ends up playing curRound+1 through
+// curRound+1+extraRounds. Mirror the ticket display's "R{first}–R{last}" range
+// so the preview reflects what the extra-rounds TIMBS actually buy, instead of
+// showing only the first round. Called from the poll (round changes) and the
+// stepper (extra-rounds changes) so it stays live on both.
+function renderPlaysRound(curRound) {
+  const el = document.getElementById("entry-plays-round");
+  if (!el || curRound == null) return;
+  const first = curRound + 1;
+  const last  = first + extraRounds;
+  el.textContent = extraRounds > 0 ? `rounds ${first}–${last}` : `round ${first}`;
 }
 
 // ─── Entry Validation ─────────────────────────────────────────────────────────
@@ -776,6 +791,32 @@ async function handleSubmitEntry() {
       }
     }
 
+    // Pre-flight the ETH side too: gas for submitEntry grows with extra
+    // rounds (observed live: 12 extra rounds needs >593k gas — a wallet
+    // holding 0.0013 ETH hit "gas required exceeds allowance" 10 times in a
+    // row because balance − entry value capped estimateGas below the real
+    // cost). Budget ~800k gas at the current fee and say exactly what's
+    // missing instead of letting estimateGas fail opaquely.
+    {
+      const ethBal   = await readProv().getBalance(userAddress);
+      const entryVal = (!replacing && useETH) ? entryCostETH_wei : ethers.BigNumber.from(0);
+      const feeData  = await readProv().getFeeData().catch(() => null);
+      const maxFee   = feeData && feeData.maxFeePerGas ? feeData.maxFeePerGas : ethers.utils.parseUnits("2", "gwei");
+      const gasBudget = maxFee.mul(800_000);
+      if (ethBal.lt(entryVal.add(gasBudget))) {
+        alert(
+          `Not enough ETH to cover gas for this entry.\n` +
+          `You have ${fmtETH(ethBal)} ETH; this needs about ` +
+          `${fmtETH(entryVal.add(gasBudget))} ETH` +
+          (useETH && !replacing ? ` (entry + gas)` : ` (gas)`) +
+          `. Entries with more extra rounds need more gas — top up ETH or ` +
+          `lower the extra-rounds count.`
+        );
+        btn.disabled = false; btn.textContent = resetLabel;
+        return;
+      }
+    }
+
     if (timbsNeeded.gt(0)) {
       const timbs = await writeContract(ADDRESSES.TIMBSToken, TIMBS_ABI);
       const allow = await timbs.allowance(userAddress, ADDRESSES.GameRegistry);
@@ -818,7 +859,17 @@ async function handleSubmitEntry() {
     if (sel) DebugHub.logError("handleSubmitEntry.revertSelector", new Error("selector " + sel));
     DebugHub.logError("handleSubmitEntry", err);
     DebugHub.logCheckpoint("Prize:Entry Failed", "fail");
-    if (ENTRY_REVERTS[sel]) alert(ENTRY_REVERTS[sel]);
+    if (ENTRY_REVERTS[sel]) {
+      alert(ENTRY_REVERTS[sel]);
+    } else if (/gas required exceeds allowance/i.test(err.message || "")) {
+      // estimateGas capped by the wallet's ETH balance — the pre-flight
+      // budget is an estimate, so this can still slip through on a fee spike.
+      alert(
+        "Not enough ETH to cover gas for this entry. " +
+        "Entries with more extra rounds need more gas — top up ETH or " +
+        "lower the extra-rounds count."
+      );
+    }
     btn.textContent = "Failed — try again";
     setTimeout(() => { btn.textContent = resetLabel; btn.disabled = false; }, 2500);
   }
