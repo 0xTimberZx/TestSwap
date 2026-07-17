@@ -297,11 +297,11 @@ async function pollRoundState() {
     document.getElementById("hdr-segment-num").textContent = s.segment.toString();
 
     // An entry always plays the NEXT round — the current round's meter is
-    // already locking. Show the concrete target round on the entry form so
+    // already locking. Show the concrete target round(s) on the entry form so
     // "Plays next round" isn't mistaken for "plays this round" (the source of
-    // the "why is my round-1 entry active at round 3" confusion).
-    const playsEl = document.getElementById("entry-plays-round");
-    if (playsEl) playsEl.textContent = "round " + (currentRoundNum + 1);
+    // the "why is my round-1 entry active at round 3" confusion), and so the
+    // extra rounds the user is paying for are reflected as a range.
+    renderPlaysRound(currentRoundNum);
 
     // Pot substats as ordered segments: Pot · backed by · yield accruing.
     // "backed by" (escrow reserve) sits right after the pot; yield accruing
@@ -600,8 +600,23 @@ const MAX_EXTRA_ROUNDS = 12;
 function adjustExtraRounds(delta) {
   extraRounds = Math.min(MAX_EXTRA_ROUNDS, Math.max(0, extraRounds + delta));
   document.getElementById("extra-rounds-val").textContent = extraRounds;
+  renderPlaysRound(currentRoundNum);
   refreshEntryBalance();
   updateCostDisplay();
+}
+
+// The entry plays the NEXT round (curRound + 1), and each extra round extends
+// its play window by one — so the ticket ends up playing curRound+1 through
+// curRound+1+extraRounds. Mirror the ticket display's "R{first}–R{last}" range
+// so the preview reflects what the extra-rounds TIMBS actually buy, instead of
+// showing only the first round. Called from the poll (round changes) and the
+// stepper (extra-rounds changes) so it stays live on both.
+function renderPlaysRound(curRound) {
+  const el = document.getElementById("entry-plays-round");
+  if (!el || curRound == null) return;
+  const first = curRound + 1;
+  const last  = first + extraRounds;
+  el.textContent = extraRounds > 0 ? `rounds ${first}–${last}` : `round ${first}`;
 }
 
 // ─── Entry Validation ─────────────────────────────────────────────────────────
