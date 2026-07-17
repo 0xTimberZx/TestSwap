@@ -7,6 +7,34 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
+ * @notice Hook/vault callback — lets the boosted ecosystem call into other
+ *         vaults and secondary emitters (e.g. a BoostRewarder paying WETH).
+ *         Hooks are per-pool, owner add/removable, and best-effort: a broken
+ *         hook can NEVER trap user LP (all calls are try/catch-guarded).
+ */
+interface IBoostHook {
+    /// @param action 0 = deposit, 1 = withdraw, 2 = claim, 3 = emergency
+    /// @param stakedAfter user's pool balance AFTER this action — lets
+    ///        rewarders mirror stake without trusting deltas.
+    function onBoostAction(
+        uint8   action,
+        uint256 pid,
+        address user,
+        uint256 amount,
+        uint256 stakedAfter
+    ) external;
+}
+
+interface ITimbPairLike {
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+}
+
+interface ITimbFactoryLike {
+    function getPair(address tokenA, address tokenB) external view returns (address);
+}
+
+/**
  * @title TimbBoostFarm
  * @notice Multi-pool "boosted farms" — extra LP pairs (stables, boosted extra
  *         pairs, etc.) competing for ONE shared TIMBS reward pool.
@@ -26,6 +54,18 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  *   - NOT part of the game loop: boosted pool assets are never added to
  *     EligibleTokenRegistry (whitelist) and never count toward swap nudges.
  *     Nothing in this contract touches the prize meter — keep it that way.
+ *   - HOOKS: each pool carries owner-managed hook contracts (add/remove).
+ *     Hooks receive every deposit/withdraw/claim/emergency callback so the
+ *     boosted ecosystem can call into other vaults and secondary emitters —
+ *     e.g. a BoostRewarder streaming WETH on top of the TIMBS emission.
+ *     Replace the hook to replace the emitted token. Hook calls are
+ *     best-effort (try/catch + HookFailed event): a broken or malicious
+ *     hook can never block a withdrawal.
+ *   - NO PHANTOMS: addPool validates the LP against TimbSwapFactory —
+ *     token0/token1 must round-trip through getPair back to the LP address,
+ *     so a fabricated pair contract can't join the competition. Hooks must
+ *     have code. (setFactory(0) disables the pair check only if ever needed
+ *     for a legitimate external LP — deliberate owner action.)
  *
  * Security (defiSKILL):
  *   - ReentrancyGuard on deposit/withdraw/claim/exit/notify.
@@ -99,6 +139,16 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
     /// @notice Global emergency pause (per-pool pause is in PoolInfo).
     bool public paused;
 
+    /// @notice TimbSwapFactory used to validate pools are genuine pairs.
+    ///         address(0) disables the check (deliberate owner action only).
+    address public factory;
+
+    /// @notice Per-pool hook contracts (vaults / secondary emitters).
+    mapping(uint256 => address[]) private _poolHooks;
+
+    /// @notice Hard bound on hooks per pool — keeps user gas predictable.
+    uint256 public constant MAX_HOOKS_PER_POOL = 4;
+
     // ─── Events ──────────────────────────────────────────────────────────────
 
     event PoolAdded(uint256 indexed pid, address indexed lpToken, uint256 weight);
@@ -115,6 +165,10 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
     event Paused(address indexed by);
     event Unpaused(address indexed by);
     event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 lpAmount);
+    event FactorySet(address indexed factory);
+    event HookAdded(uint256 indexed pid, address indexed hook);
+    event HookRemoved(uint256 indexed pid, address indexed hook);
+    event HookFailed(uint256 indexed pid, address indexed hook, uint8 action);
 
     // ─── Errors ──────────────────────────────────────────────────────────────
 
@@ -130,6 +184,11 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
     error NoPendingRewards();
     error InsufficientStake(uint256 requested, uint256 available);
     error InsufficientRewardBalance(uint256 required, uint256 available);
+    error NotAContract();
+    error NotAFactoryPair();
+    error HookAlreadyAdded();
+    error HookNotFound();
+    error TooManyHooks();
 
     // ─── Modifiers ───────────────────────────────────────────────────────────
 
@@ -149,14 +208,17 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
      * @param _timbsToken     TIMBS ERC-20 (reward token).
      * @param _emissionWindow Seconds to aim the reserve over (a bit over 6
      *                        rounds of the prize game).
+     * @param _factory        TimbSwapFactory — validates every added pool is
+     *                        a genuine pair (anti-phantom).
      */
-    constructor(address _timbsToken, uint256 _emissionWindow)
+    constructor(address _timbsToken, uint256 _emissionWindow, address _factory)
         Ownable(msg.sender)
     {
         if (_timbsToken == address(0)) revert ZeroAddress();
         if (_emissionWindow == 0) revert ZeroAmount();
         timbsToken     = IERC20(_timbsToken);
         emissionWindow = _emissionWindow;
+        factory        = _factory;
         rewardNotifiers[msg.sender] = true;
     }
 
@@ -294,6 +356,7 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         user.rewardDebt  = user.amount * pool.accRewardPerShare / 1e18;
 
         pool.lpToken.safeTransferFrom(msg.sender, address(this), amount);
+        _notifyHooks(0, pid, msg.sender, amount, user.amount);
         emit Deposited(msg.sender, pid, amount);
     }
 
@@ -320,6 +383,7 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         user.rewardDebt   = user.amount * pool.accRewardPerShare / 1e18;
 
         pool.lpToken.safeTransfer(msg.sender, amount);
+        _notifyHooks(1, pid, msg.sender, amount, user.amount);
         emit Withdrawn(msg.sender, pid, amount);
     }
 
@@ -356,6 +420,7 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         _retarget();
 
         timbsToken.safeTransfer(msg.sender, reward);
+        _notifyHooks(2, pid, msg.sender, reward, user.amount);
         emit RewardsClaimed(msg.sender, pid, reward);
     }
 
@@ -382,6 +447,7 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
             user.amount       = 0;
             pool.totalStaked -= staked;
             pool.lpToken.safeTransfer(msg.sender, staked);
+            _notifyHooks(1, pid, msg.sender, staked, 0);
             emit Withdrawn(msg.sender, pid, staked);
         }
         user.rewardDebt = 0;
@@ -392,6 +458,7 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
             _updateAllPools();
             _retarget();
             timbsToken.safeTransfer(msg.sender, reward);
+            _notifyHooks(2, pid, msg.sender, reward, 0);
             emit RewardsClaimed(msg.sender, pid, reward);
         }
         // If reserve is short, pending stays claimable later — LP still returned.
@@ -437,6 +504,19 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         if (lp == address(timbsToken)) revert LpCannotBeReward();
         if (poolIdPlusOne[lp] != 0) revert PoolExists();
         if (weight == 0) revert ZeroAmount();
+        if (lp.code.length == 0) revert NotAContract();
+
+        // Anti-phantom: the LP must be a REAL factory pair — its token0/token1
+        // must round-trip through getPair back to this exact address. A
+        // fabricated "pair" contract cannot pass this without being deployed
+        // by the factory.
+        if (factory != address(0)) {
+            address t0 = ITimbPairLike(lp).token0();
+            address t1 = ITimbPairLike(lp).token1();
+            if (ITimbFactoryLike(factory).getPair(t0, t1) != lp) {
+                revert NotAFactoryPair();
+            }
+        }
 
         _updateAllPools();
 
@@ -500,7 +580,98 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         emit PoolUnpaused(pid);
     }
 
+    // ─── Owner: hooks (vaults / secondary emitters) ──────────────────────────
+
+    /**
+     * @notice Attach a hook contract to pool `pid`. Hooks receive every
+     *         deposit/withdraw/claim/emergency callback — this is how the
+     *         boosted ecosystem calls into other vaults, and how secondary
+     *         emission tokens (WETH etc.) are added: attach a BoostRewarder
+     *         paying that token. Replace a token by removing its rewarder
+     *         and adding another.
+     */
+    function addPoolHook(uint256 pid, address hook)
+        external
+        onlyOwner
+        validPool(pid)
+    {
+        if (hook == address(0)) revert ZeroAddress();
+        if (hook.code.length == 0) revert NotAContract();
+        address[] storage hooks = _poolHooks[pid];
+        if (hooks.length >= MAX_HOOKS_PER_POOL) revert TooManyHooks();
+        for (uint256 i = 0; i < hooks.length; i++) {
+            if (hooks[i] == hook) revert HookAlreadyAdded();
+        }
+        hooks.push(hook);
+        emit HookAdded(pid, hook);
+    }
+
+    /**
+     * @notice Detach a hook from pool `pid` (swap-and-pop; order not kept).
+     */
+    function removePoolHook(uint256 pid, address hook)
+        external
+        onlyOwner
+        validPool(pid)
+    {
+        address[] storage hooks = _poolHooks[pid];
+        for (uint256 i = 0; i < hooks.length; i++) {
+            if (hooks[i] == hook) {
+                hooks[i] = hooks[hooks.length - 1];
+                hooks.pop();
+                emit HookRemoved(pid, hook);
+                return;
+            }
+        }
+        revert HookNotFound();
+    }
+
+    /**
+     * @notice Hooks attached to pool `pid`.
+     */
+    function poolHooks(uint256 pid)
+        external
+        view
+        validPool(pid)
+        returns (address[] memory)
+    {
+        return _poolHooks[pid];
+    }
+
+    /**
+     * @dev Fan an action out to the pool's hooks. STRICTLY best-effort: a
+     *      reverting or gas-hungry hook logs HookFailed and is skipped —
+     *      user funds and claims can never be blocked by a vault callback.
+     */
+    function _notifyHooks(
+        uint8   action,
+        uint256 pid,
+        address user,
+        uint256 amount,
+        uint256 stakedAfter
+    ) internal {
+        address[] storage hooks = _poolHooks[pid];
+        uint256 n = hooks.length;
+        for (uint256 i = 0; i < n; i++) {
+            try IBoostHook(hooks[i]).onBoostAction(action, pid, user, amount, stakedAfter) {
+            } catch {
+                emit HookFailed(pid, hooks[i], action);
+            }
+        }
+    }
+
     // ─── Owner: config ───────────────────────────────────────────────────────
+
+    /**
+     * @notice Point at the TimbSwapFactory used for pair validation.
+     *         Setting address(0) disables the anti-phantom check — only do
+     *         this deliberately (e.g. a legitimate external LP), and set it
+     *         back after.
+     */
+    function setFactory(address _factory) external onlyOwner {
+        factory = _factory;
+        emit FactorySet(_factory);
+    }
 
     /**
      * @notice Set the emission window ("a bit over 6 rounds", in seconds).
@@ -549,6 +720,7 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         pool.totalStaked -= staked;
 
         pool.lpToken.safeTransfer(msg.sender, staked);
+        _notifyHooks(3, pid, msg.sender, staked, 0);
         emit EmergencyWithdraw(msg.sender, pid, staked);
     }
 

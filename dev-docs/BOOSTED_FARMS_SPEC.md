@@ -149,6 +149,31 @@ each epoch settles exactly once and `w`/`y`/`z` windows never overlap or gap.
 | `TimbStaking` | (on-chain path only) claimed counter | keeper path: **no**; on-chain path: yes + migration |
 | `TimbPrize` | epoch-boundary read (`currentRound % 6`) | no (read-only) |
 
+## 7b. Hooks, secondary emitters, anti-phantom (v2)
+
+Added after the initial build (pre-deploy, so no migration):
+
+- **Hooks — call into other vaults.** Each pool carries up to 4 owner-managed
+  hook contracts (`addPoolHook` / `removePoolHook`). Every
+  deposit/withdraw/claim/emergency fans out to them
+  (`IBoostHook.onBoostAction(action, pid, user, amount, stakedAfter)`).
+  Calls are try/catch-guarded with a `HookFailed` event — a broken or
+  malicious vault can never trap user LP.
+- **Secondary emission tokens (WETH etc.) — `BoostRewarder.sol`.** One
+  rewarder per (pool, token): it implements the hook interface, mirrors
+  stake balances from the authoritative `stakedAfter` (sync semantics, not
+  deltas), and streams its own token with the same self-retargeting
+  reserve/window emission. **Add** a token by attaching another rewarder;
+  **replace** one by swapping the hook. Users claim via
+  `rewarder.claim(pid)`. A staker already in the pool before a rewarder
+  attaches starts earning at their next farm interaction (first sync).
+- **Anti-phantom validation.** `addPool` requires the LP to be a live
+  contract AND a genuine factory pair: `lp.token0()/token1()` must
+  round-trip through `TimbSwapFactory.getPair` back to the LP address — a
+  fabricated pair contract cannot pass. Hooks must have code. `setFactory(0)`
+  disables the pair check only as a deliberate owner action (legit external
+  LP), set it back after.
+
 ## 8. Frontend (later)
 - Boosted-farms tab: per-pool APR/weight, wallet's pro-rata claimable, paused
   badge, "not eligible for nudges" note.
@@ -156,10 +181,16 @@ each epoch settles exactly once and `w`/`y`/`z` windows never overlap or gap.
 
 ## 9. Deploy checklist
 
-1. **Deploy `TimbBoostFarm(TIMBSToken, emissionWindow)`** — `emissionWindow` in
-   seconds, "a bit over 6 rounds": `6 × ROUND_DURATION + buffer` (read
-   `ROUND_DURATION()` off TimbPrize; e.g. +20% buffer). Owner-tunable later
-   via `setEmissionWindow`.
+1. **Deploy `TimbBoostFarm(TIMBSToken, emissionWindow, TimbSwapFactory)`** —
+   `emissionWindow` in seconds, "a bit over 6 rounds": `6 × ROUND_DURATION +
+   buffer` (read `ROUND_DURATION()` off TimbPrize; e.g. +20% buffer).
+   Owner-tunable later via `setEmissionWindow`. The factory arg arms the
+   anti-phantom pair check from block one.
+1b. **Per secondary token (optional, e.g. WETH):** deploy
+   `BoostRewarder(boostFarm, weth, emissionWindow)`, then
+   `boostFarm.addPoolHook(pid, rewarder)` and fund via
+   `rewarder.notifyRewardAmount(amount)` (approve first). Keeper can be
+   authorised with `rewarder.setRewardNotifier(keeper, true)`.
 2. `addPool(lp, weight)` per boosted pair (USDC/USDT etc.). Weights are
    relative — the active set behaves as a scale of 1. **Never** add these LPs
    to `EligibleTokenRegistry`, and the pairs stay out of nudge eligibility.
