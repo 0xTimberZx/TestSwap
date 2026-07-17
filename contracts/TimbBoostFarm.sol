@@ -125,6 +125,18 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
     ///         inflate emissions without a notify.)
     uint256 public rewardReserve;
 
+    /// @notice TIMBS already accrued to stakers but not yet claimed, across
+    ///         all pools. The emission always streams against the FREE
+    ///         reserve (rewardReserve − totalOwed): once owed reaches
+    ///         SOLVENCY_STOP_BPS of the reserve, the rate retargets to zero
+    ///         and accrual stops — every accrued wei stays payable, and LP
+    ///         deposit/withdraw keep working while emissions wait for the
+    ///         next top-up.
+    uint256 public totalOwed;
+
+    /// @notice Accrual halts when totalOwed ≥ 99% of rewardReserve.
+    uint256 public constant SOLVENCY_STOP_BPS = 9_900;
+
     PoolInfo[] public poolInfo;
 
     /// @notice pid => user => position.
@@ -288,6 +300,7 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
             uint256 elapsed    = applicable - pool.lastRewardTime;
             uint256 poolReward = elapsed * rewardRatePerSecond * pool.weight / totalWeight;
             pool.accRewardPerShare += poolReward * 1e18 / pool.totalStaked;
+            totalOwed += poolReward;
         }
         pool.lastRewardTime = applicable;
     }
@@ -305,17 +318,26 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Re-aim the CURRENT reserve over emissionWindow. The spec's
-     *      "recalculates whenever claims are called, after the deduction or
-     *      top-up": rate = reserve / window, window restarts from now.
+     * @dev Re-aim the FREE reserve (reserve − owed) over emissionWindow. The
+     *      spec's "recalculates whenever claims are called, after the
+     *      deduction or top-up": rate = free / window, window restarts now.
+     *      Streaming the gross reserve instead would re-promise TIMBS that
+     *      is already owed to stakers — repeated top-ups without claims
+     *      could then accrue more than the balance holds. Solvency stop:
+     *      once owed ≥ 99% of the reserve, the rate goes to ZERO — accrual
+     *      halts, every accrued wei stays payable, LP deposit/withdraw keep
+     *      working, and the next top-up (or claims freeing owed) restarts
+     *      emission on its own.
      *      Must run AFTER rolling every pool forward at the OLD rate — the
      *      per-pool lastRewardTime handles that lazily, so callers must
      *      _updatePool(all) first (see _updateAllPools).
      */
     function _retarget() internal {
-        rewardRatePerSecond = rewardReserve / emissionWindow;
+        uint256 owedCap = rewardReserve * SOLVENCY_STOP_BPS / 10_000;
+        uint256 free    = totalOwed < owedCap ? rewardReserve - totalOwed : 0;
+        rewardRatePerSecond = free / emissionWindow;
         periodFinish        = block.timestamp + emissionWindow;
-        emit RateRetargeted(rewardReserve, rewardRatePerSecond, periodFinish);
+        emit RateRetargeted(free, rewardRatePerSecond, periodFinish);
     }
 
     /**
@@ -414,6 +436,9 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         user.pending    = 0;
         user.rewardDebt = user.amount * pool.accRewardPerShare / 1e18;
         rewardReserve  -= reward;
+        // Saturating: per-user pendings floor at the accumulator, so their sum
+        // can only trail totalOwed (dust stays owed — the safe direction).
+        totalOwed = totalOwed > reward ? totalOwed - reward : 0;
 
         // Deduction changed the reserve — re-aim it over the window.
         _updateAllPools();
@@ -455,6 +480,7 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         if (reward > 0 && reward <= rewardReserve) {
             user.pending   = 0;
             rewardReserve -= reward;
+            totalOwed = totalOwed > reward ? totalOwed - reward : 0;
             _updateAllPools();
             _retarget();
             timbsToken.safeTransfer(msg.sender, reward);
@@ -713,6 +739,13 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[pid];
         uint256 staked = user.amount;
         if (staked == 0) revert ZeroAmount();
+
+        // Forfeited pending is no longer owed to anyone — release it from
+        // the solvency ledger so it can be re-emitted.
+        uint256 forfeited = user.pending;
+        if (forfeited > 0) {
+            totalOwed = totalOwed > forfeited ? totalOwed - forfeited : 0;
+        }
 
         user.amount      = 0;
         user.rewardDebt  = 0;

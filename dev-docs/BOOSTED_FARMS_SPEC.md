@@ -174,6 +174,30 @@ Added after the initial build (pre-deploy, so no migration):
   disables the pair check only as a deliberate owner action (legit external
   LP), set it back after.
 
+## 7c. Solvency stop (v2.1)
+
+Owner's integrity rule: **if total pending across wallets exceeds the balance
+or reaches 99%, things stop — no accruing happens.** Implemented in both
+TimbBoostFarm and BoostRewarder:
+
+- `totalOwed` tracks accrued-but-unclaimed rewards across all pools/stakers
+  (incremented on accrual, decremented on claim; emergency-forfeited pending
+  is released back).
+- Every retarget streams the **free** reserve (`rewardReserve − totalOwed`)
+  over the window instead of the gross reserve — the flaw this fixes:
+  repeated top-ups without claims previously re-promised TIMBS already owed.
+- At `totalOwed ≥ 99%` of the reserve (`SOLVENCY_STOP_BPS = 9_900`), the
+  rate retargets to **zero**: accrual halts, every accrued wei stays
+  payable, and **LP deposit/withdraw keep functioning**. The next top-up
+  (or claims freeing owed) restarts emission automatically — no owner
+  intervention.
+
+> Note (Jul 17): a fresh single-pool `TimbFarm` was deployed at
+> `0xe4c67D18A8301B9A2e68a635FBCBb0E799C920a5` intending it as the extra-pairs
+> farm — but TimbFarm holds exactly ONE lp token (locked on first stake), so
+> it cannot serve "USDT/LINK/DAPP pairs etc.". Park it unfunded; deploy
+> `TimbBoostFarm` (this spec) for that role.
+
 ## 8. Frontend (later)
 - Boosted-farms tab: per-pool APR/weight, wallet's pro-rata claimable, paused
   badge, "not eligible for nudges" note.
