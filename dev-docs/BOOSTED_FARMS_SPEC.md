@@ -1,8 +1,9 @@
 # Boosted farms + 6-round epoch distribution — design spec
 
-Status: **DRAFT / design.** No contracts written yet. This captures the rule as
-described so we can lock the math and the architecture before touching code.
-Open questions are marked **⚠ DECIDE**.
+Status: **BUILT — awaiting deploy.** All three decisions locked (§5).
+Artifacts: `contracts/TimbBoostFarm.sol` (compile-verified, solc 0.8.24
+viaIR/optimizer-200/paris, ~7.1 KB bytecode), `scripts/epoch.js` (keeper),
+`.github/workflows/epoch.yml`. Deploy checklist in §9.
 
 Extends `FARM_FUNDING.md` (which is the manual owner-funding reference). This doc
 is about the **automatic** funding loop.
@@ -105,26 +106,21 @@ encoded in §2. Farm cleaning out the budget starves staking and boost; staking
 cleaning out the remainder starves boost; boost exhausting its remainder ends
 draws until the next cycle. Total outflow ≤ `z`; no reserve drawdown.
 
-### 5b. On-chain hook vs keeper
-The 5% boost draw reacts to **each main-farm claim**. Two ways:
-- **On-chain hook** — `TimbFarm.claimRewards()` calls the Treasury→BoostFarm
-  draw inline. Cleanest economics, but requires **redeploying `TimbFarm`**,
-  which forces an **LP migration** (every farmer unstakes from old, restakes
-  into new).
-- **Keeper (batched)** — the settler reads main-farm claims since its last run,
-  draws 5% of the batch into the boost pool, and re-notifies the boost emission.
-  Since boost emissions already spread over ~6 rounds, per-claim immediacy isn't
-  economically necessary — batching at keeper cadence is equivalent. **No
-  redeploy, no migration.** Same trust model as today's buybacks/settler.
+### 5b. On-chain hook vs keeper — ✅ DECIDED (keeper)
+The keeper (settler-style script) computes `w`/`y`/`z` from events each epoch
+and batches the 5% boost draws: it reads main-farm `RewardsClaimed` since its
+last run, draws 5% of the batch from the Treasury into the boost pool (within
+`boostBudget`), and re-notifies the boost emission. Since boost emissions
+spread over ~6 rounds, per-claim immediacy isn't economically necessary —
+batching at keeper cadence is equivalent. **No redeploy of live Staking/Farm,
+no migration.** Same trust model as today's buybacks/settler. On-chain
+counters + trustless EpochDistributor stay a possible later upgrade
+(`CONTRACT_TODO.md` when chosen).
 
-Same fork governs `w`/`y`/`z`: on-chain needs counters in
-Staking+Farm+Treasury (⇒ redeploy all three, migrate stakers+farmers); keeper
-reads events (⇒ no redeploy).
-
-### 5c. Epoch trigger
-Boundary = first settle where `TimbPrize.currentRound` crosses a multiple of 6.
-Either a permissionless `runEpoch()` with a once-per-epoch guard, or the keeper
-fires it. (Keeper is consistent with the settler that already advances rounds.)
+### 5c. Epoch trigger — ✅ DECIDED (keeper-fired, follows 5b)
+Boundary = first keeper run where `TimbPrize.currentRound` has crossed the next
+multiple of 6. The keeper persists the last-settled epoch + block cursor so
+each epoch settles exactly once and `w`/`y`/`z` windows never overlap or gap.
 
 ## 6. Recommended architecture (greenfield-first)
 
@@ -157,3 +153,43 @@ fires it. (Keeper is consistent with the settler that already advances rounds.)
 - Boosted-farms tab: per-pool APR/weight, wallet's pro-rata claimable, paused
   badge, "not eligible for nudges" note.
 - These pools must be **excluded** from any nudge/whitelist UI surface.
+
+## 9. Deploy checklist
+
+1. **Deploy `TimbBoostFarm(TIMBSToken, emissionWindow)`** — `emissionWindow` in
+   seconds, "a bit over 6 rounds": `6 × ROUND_DURATION + buffer` (read
+   `ROUND_DURATION()` off TimbPrize; e.g. +20% buffer). Owner-tunable later
+   via `setEmissionWindow`.
+2. `addPool(lp, weight)` per boosted pair (USDC/USDT etc.). Weights are
+   relative — the active set behaves as a scale of 1. **Never** add these LPs
+   to `EligibleTokenRegistry`, and the pairs stay out of nudge eligibility.
+3. `setRewardNotifier(<keeper wallet>, true)` on the BoostFarm.
+4. Add `TimbBoostFarm: "0x…"` to `ADDRESSES` in `config.js`. The keeper reads
+   it from there; until the key exists, `epoch.js` runs with the boost stream
+   disabled (epoch waterfall still settles farm + staking).
+5. **GitHub secrets/vars** for `.github/workflows/epoch.yml`:
+   - `EPOCH_PRIVATE_KEY` (secret) — **must be the TimbTreasury owner**
+     (`distributeToStaking` / `withdrawToken` are onlyOwner). Bigger key than
+     the settler's — scope it tightly.
+   - `EPOCH_GENESIS_BLOCK` (repo var) — block where epoch #1 starts measuring
+     (first run only; afterwards `scripts/epoch-state.json` is the cursor).
+   - Reuses `ARB_SEPOLIA_RPC`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+6. First run: `workflow_dispatch` with mode **dry-run** — verify the printed
+   `z/y/w`, grants, and boostBudget look sane before letting the cron run live.
+7. State file `scripts/epoch-state.json` is committed back by the workflow
+   with `[skip ci]` (doesn't trigger the site deploy). Don't hand-edit it —
+   it is the only record of the epoch cursor (a zero-grant epoch leaves no
+   on-chain marker).
+
+## 10. Keeper trust & failure notes
+
+- `epoch.js` fails LOUD (Telegram ops ping + non-zero exit) rather than
+  guessing; the waterfall math runs entirely from on-chain events, so a
+  re-run after a fix recomputes the same window deterministically **as long
+  as the state file wasn't advanced** (state saves only after settlement txs
+  succeed).
+- Solvency: `z` bounds the *budget*, but grants pay from the Treasury's whole
+  TIMBS balance; the keeper checks balance ≥ grants and aborts loudly if not.
+- Boost draws truncate at the remaining budget (never partial-over), then
+  stop until the next epoch — matching "if boosted clears out, that is all
+  until next cycle".
