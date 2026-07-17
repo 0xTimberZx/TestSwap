@@ -1,5 +1,15 @@
 -- Supabase RLS hardening — project ipyfodnidwsdvwqrcjrl
 -- ─────────────────────────────────────────────────────────────────────────────
+-- ✅ APPLIED 2026-07-17 as migration `enable_rls_readonly_anon_data_tables`.
+-- Verified: critical `rls_disabled` advisory cleared; all 10 tables RLS-on
+-- (8 with anon read-only SELECT, backtest_results + schema_migrations locked
+-- to owner/service only). Pre-flight confirmed SAFE: the data pipeline
+-- connects as the postgres OWNER via a direct DB connection (it runs its own
+-- `CREATE TABLE schema_migrations` DDL — visible in the Postgres logs — which
+-- anon/PostgREST cannot do), so it BYPASSES RLS and is unaffected. The repo's
+-- only anon-key writer is debughub_events (already had correct RLS). This file
+-- is kept as the record + rollback reference.
+-- ─────────────────────────────────────────────────────────────────────────────
 -- DRAFT — review before running (Supabase Studio → SQL editor, or ask the
 -- keeper to apply it as a migration).
 --
