@@ -54,6 +54,15 @@ contract BoostRewarder is Ownable, ReentrancyGuard {
     /// @notice Reward reserve — received minus paid (stray transfers inert).
     uint256 public rewardReserve;
 
+    /// @notice Accrued-but-unclaimed rewards across all stakers. Emission
+    ///         streams against the FREE reserve (reserve − owed); at 99%
+    ///         owed the rate retargets to zero and accrual stops until the
+    ///         next top-up — accrued rewards always stay payable.
+    uint256 public totalOwed;
+
+    /// @notice Accrual halts when totalOwed ≥ 99% of rewardReserve.
+    uint256 public constant SOLVENCY_STOP_BPS = 9_900;
+
     /// @notice Mirrored LP shares. Keyed (pid, user); attach ONE rewarder per
     ///         pool so totalShares stays a single pool's LP units.
     mapping(uint256 => mapping(address => uint256)) public shares;
@@ -112,7 +121,9 @@ contract BoostRewarder is Ownable, ReentrancyGuard {
         if (applicable > lastUpdateTime) {
             if (totalShares > 0) {
                 uint256 elapsed = applicable - lastUpdateTime;
-                accRewardPerShare += elapsed * rewardRatePerSecond * 1e18 / totalShares;
+                uint256 accrued = elapsed * rewardRatePerSecond;
+                accRewardPerShare += accrued * 1e18 / totalShares;
+                totalOwed += accrued;
             }
             lastUpdateTime = applicable;
         }
@@ -125,11 +136,15 @@ contract BoostRewarder is Ownable, ReentrancyGuard {
         }
     }
 
+    // Streams the FREE reserve (reserve − owed); zero rate at ≥99% owed —
+    // same solvency rule as TimbBoostFarm, accrued rewards stay payable.
     function _retarget() internal {
-        rewardRatePerSecond = rewardReserve / emissionWindow;
+        uint256 owedCap = rewardReserve * SOLVENCY_STOP_BPS / 10_000;
+        uint256 free    = totalOwed < owedCap ? rewardReserve - totalOwed : 0;
+        rewardRatePerSecond = free / emissionWindow;
         periodFinish        = block.timestamp + emissionWindow;
         lastUpdateTime      = block.timestamp;
-        emit RateRetargeted(rewardReserve, rewardRatePerSecond, periodFinish);
+        emit RateRetargeted(free, rewardRatePerSecond, periodFinish);
     }
 
     /**
@@ -189,6 +204,7 @@ contract BoostRewarder is Ownable, ReentrancyGuard {
         pending[pid][msg.sender]    = 0;
         rewardDebt[pid][msg.sender] = shares[pid][msg.sender] * accRewardPerShare / 1e18;
         rewardReserve              -= reward;
+        totalOwed = totalOwed > reward ? totalOwed - reward : 0;
 
         _retarget();
 
