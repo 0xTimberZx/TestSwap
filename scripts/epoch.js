@@ -39,7 +39,7 @@ const path = require("path");
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const RPC_URL     = process.env.ARB_SEPOLIA_RPC;
+const TX_RPC_URL  = process.env.ARB_SEPOLIA_RPC; // tx submission (may be a metered provider)
 const PRIVATE_KEY = process.env.EPOCH_PRIVATE_KEY;
 const TG_TOKEN    = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID  = process.env.TELEGRAM_CHAT_ID;
@@ -51,7 +51,7 @@ const FARM_SHARE_BPS   = 8_000;  // 0.80 × y
 const STAKE_BOOST_BPS  = 12_500; // 1.25 × w
 const STAKE_CAP_BPS    = 8_000;  // ≤ 0.80 × leftover
 const BOOST_DRAW_BPS   = 500;    // 5% of each farm claim
-const LOG_CHUNK        = 50_000; // getLogs block-range chunk
+const LOG_CHUNK        = Number(process.env.EPOCH_LOG_CHUNK || 40_000); // getLogs block-range chunk
 
 // Addresses from config.js — same single source of truth as the settler.
 function addrFromConfig(key, { optional = false } = {}) {
@@ -62,6 +62,19 @@ function addrFromConfig(key, { optional = false } = {}) {
     throw new Error(`Address "${key}" not found in config.js — refusing to start epoch keeper`);
   }
   return ethers.getAddress(m[1]);
+}
+
+// Canonical public RPC from config.js — used for ALL reads and event scans.
+// Metered providers (QuickNode/Alchemy free tiers) cap eth_getLogs to tiny
+// block ranges (observed live: 10 blocks), which makes epoch-wide scans
+// impossible; the canonical endpoint serves large ranges — the explore page
+// already scans it from browsers. The ARB_SEPOLIA_RPC secret is only used
+// to SEND transactions (falls back to the canonical RPC if unset).
+function rpcFromConfig() {
+  const src = fs.readFileSync(path.join(__dirname, "..", "config.js"), "utf8");
+  const m = src.match(/\bRPC_URL\s*=\s*"(https?:\/\/[^"]+)"/);
+  if (!m) throw new Error('RPC_URL not found in config.js — refusing to start epoch keeper');
+  return m[1];
 }
 
 const TIMBPRIZE_ADDR   = addrFromConfig("TimbPrize");
@@ -156,11 +169,13 @@ const fmt = (wei) => ethers.formatEther(wei);
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  if (!RPC_URL)     throw new Error("ARB_SEPOLIA_RPC not set");
   if (!PRIVATE_KEY && !DRY_RUN) throw new Error("EPOCH_PRIVATE_KEY not set (or use --dry-run)");
 
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const wallet   = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, provider) : null;
+  // Reads + event scans: canonical public RPC (large getLogs ranges).
+  // Transactions: the ARB_SEPOLIA_RPC secret if set, else the same endpoint.
+  const provider = new ethers.JsonRpcProvider(rpcFromConfig());
+  const txProv   = TX_RPC_URL ? new ethers.JsonRpcProvider(TX_RPC_URL) : provider;
+  const wallet   = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, txProv) : null;
 
   const prize    = new ethers.Contract(TIMBPRIZE_ADDR, PRIZE_ABI, provider);
   const treasury = new ethers.Contract(TREASURY_ADDR, TREASURY_ABI, wallet ?? provider);
