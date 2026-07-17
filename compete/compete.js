@@ -791,6 +791,32 @@ async function handleSubmitEntry() {
       }
     }
 
+    // Pre-flight the ETH side too: gas for submitEntry grows with extra
+    // rounds (observed live: 12 extra rounds needs >593k gas — a wallet
+    // holding 0.0013 ETH hit "gas required exceeds allowance" 10 times in a
+    // row because balance − entry value capped estimateGas below the real
+    // cost). Budget ~800k gas at the current fee and say exactly what's
+    // missing instead of letting estimateGas fail opaquely.
+    {
+      const ethBal   = await readProv().getBalance(userAddress);
+      const entryVal = (!replacing && useETH) ? entryCostETH_wei : ethers.BigNumber.from(0);
+      const feeData  = await readProv().getFeeData().catch(() => null);
+      const maxFee   = feeData && feeData.maxFeePerGas ? feeData.maxFeePerGas : ethers.utils.parseUnits("2", "gwei");
+      const gasBudget = maxFee.mul(800_000);
+      if (ethBal.lt(entryVal.add(gasBudget))) {
+        alert(
+          `Not enough ETH to cover gas for this entry.\n` +
+          `You have ${fmtETH(ethBal)} ETH; this needs about ` +
+          `${fmtETH(entryVal.add(gasBudget))} ETH` +
+          (useETH && !replacing ? ` (entry + gas)` : ` (gas)`) +
+          `. Entries with more extra rounds need more gas — top up ETH or ` +
+          `lower the extra-rounds count.`
+        );
+        btn.disabled = false; btn.textContent = resetLabel;
+        return;
+      }
+    }
+
     if (timbsNeeded.gt(0)) {
       const timbs = await writeContract(ADDRESSES.TIMBSToken, TIMBS_ABI);
       const allow = await timbs.allowance(userAddress, ADDRESSES.GameRegistry);
@@ -833,7 +859,17 @@ async function handleSubmitEntry() {
     if (sel) DebugHub.logError("handleSubmitEntry.revertSelector", new Error("selector " + sel));
     DebugHub.logError("handleSubmitEntry", err);
     DebugHub.logCheckpoint("Prize:Entry Failed", "fail");
-    if (ENTRY_REVERTS[sel]) alert(ENTRY_REVERTS[sel]);
+    if (ENTRY_REVERTS[sel]) {
+      alert(ENTRY_REVERTS[sel]);
+    } else if (/gas required exceeds allowance/i.test(err.message || "")) {
+      // estimateGas capped by the wallet's ETH balance — the pre-flight
+      // budget is an estimate, so this can still slip through on a fee spike.
+      alert(
+        "Not enough ETH to cover gas for this entry. " +
+        "Entries with more extra rounds need more gas — top up ETH or " +
+        "lower the extra-rounds count."
+      );
+    }
     btn.textContent = "Failed — try again";
     setTimeout(() => { btn.textContent = resetLabel; btn.disabled = false; }, 2500);
   }
