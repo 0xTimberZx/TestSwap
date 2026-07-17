@@ -129,7 +129,7 @@ async function handleStake(pool) {
 
   try {
     const amountWei = ethers.utils.parseUnits(amountStr, 18);
-    const tokenContract = new ethers.Contract(cfg.token, ERC20_ABI, signer);
+    const tokenContract = await writeContract(cfg.token, ERC20_ABI);
 
     // Read the allowance from the canonical public RPC, never the wallet's
     // in-app provider — mobile wallets sometimes answer eth_call from a node
@@ -151,7 +151,7 @@ async function handleStake(pool) {
 
     btn.textContent = "Staking…";
     DebugHub.logCheckpoint("Stake Requested", "pass");
-    const poolContract = new ethers.Contract(cfg.address, cfg.abi, signer);
+    const poolContract = await writeContract(cfg.address, cfg.abi);
     const gas = await getGasParams();
     const nonce = await getPendingNonce();
     const tx = await poolContract.stake(amountWei, { ...gas, nonce });
@@ -181,7 +181,7 @@ async function handleUnstake(pool) {
   const btn = document.getElementById(pool + "-unstake-btn");
 
   try {
-    const poolContract = new ethers.Contract(cfg.address, cfg.abi, signer);
+    const poolContract = await writeContract(cfg.address, cfg.abi);
     const amountStr = document.getElementById(pool + "-amount").value;
 
     let amountWei;
@@ -228,7 +228,7 @@ async function handleClaim(pool) {
     btn.disabled = true;
     btn.textContent = "Claiming…";
     DebugHub.logCheckpoint("Claim Requested", "pass");
-    const poolContract = new ethers.Contract(cfg.address, cfg.abi, signer);
+    const poolContract = await writeContract(cfg.address, cfg.abi);
     const gas = await getGasParams();
     const nonce = await getPendingNonce();
     const tx = await poolContract.claimRewards({ ...gas, nonce });

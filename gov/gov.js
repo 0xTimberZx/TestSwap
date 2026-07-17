@@ -106,7 +106,7 @@ async function handleDeposit() {
 
   try {
     // Approve if needed
-    const timbs = new ethers.Contract(ADDRESSES.TIMBSToken, TIMBS_ABI, signer);
+    const timbs = await writeContract(ADDRESSES.TIMBSToken, TIMBS_ABI);
     const allowance = await timbs.allowance(userAddress, ADDRESSES.TimbGovernance);
     if (allowance.lt(amt)) {
       btn.disabled = true;
@@ -122,7 +122,7 @@ async function handleDeposit() {
 
     btn.textContent = "Depositing…";
     DebugHub.logCheckpoint("Gov:Deposit Requested", "pass");
-    const gov   = new ethers.Contract(ADDRESSES.TimbGovernance, GOV_ABI, signer);
+    const gov   = await writeContract(ADDRESSES.TimbGovernance, GOV_ABI);
     const gas   = await getGasParams();
     const nonce = await getPendingNonce();
     const tx    = await gov.depositVotingPower(amt, { ...gas, nonce });
@@ -153,7 +153,7 @@ async function handleWithdraw() {
     btn.disabled = true;
     btn.textContent = "Withdrawing…";
     DebugHub.logCheckpoint("Gov:Withdraw Requested", "pass");
-    const gov   = new ethers.Contract(ADDRESSES.TimbGovernance, GOV_ABI, signer);
+    const gov   = await writeContract(ADDRESSES.TimbGovernance, GOV_ABI);
     const gas   = await getGasParams();
     const nonce = await getPendingNonce();
     const tx    = await gov.withdrawVotingPower(myVotingPower, { ...gas, nonce });
@@ -294,7 +294,7 @@ async function handleVote(proposalId, support) {
 
   try {
     DebugHub.logCheckpoint(`Gov:Vote ${label} Requested`, "pass");
-    const gov   = new ethers.Contract(ADDRESSES.TimbGovernance, GOV_ABI, signer);
+    const gov   = await writeContract(ADDRESSES.TimbGovernance, GOV_ABI);
     const gas   = await getGasParams();
     const nonce = await getPendingNonce();
     const tx    = await gov.castVote(proposalId, support, { ...gas, nonce });
@@ -315,7 +315,7 @@ async function handleVote(proposalId, support) {
 async function handleResolve(proposalId) {
   try {
     DebugHub.logCheckpoint("Gov:Resolve Requested", "pass");
-    const gov   = new ethers.Contract(ADDRESSES.TimbGovernance, GOV_ABI, signer);
+    const gov   = await writeContract(ADDRESSES.TimbGovernance, GOV_ABI);
     const gas   = await getGasParams();
     const nonce = await getPendingNonce();
     const tx    = await gov.resolveProposal(proposalId, { ...gas, nonce });

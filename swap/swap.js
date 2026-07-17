@@ -849,7 +849,7 @@ async function handleSwap() {
     // Native ETH never needs an ERC20 approval; wrap pairs skip it too since
     // WETH.deposit/withdraw act on the caller's own balance.
     if (!isNative(tokenIn) && !isWrapPair()) {
-      const tokenContract = new ethers.Contract(tokenIn.address, ERC20_ABI, signer);
+      const tokenContract = await writeContract(tokenIn.address, ERC20_ABI);
       const allowance = await tokenContract.allowance(userAddress, ADDRESSES.TimbSwapRouter);
       if (allowance.lt(amountInWei)) {
         btn.disabled = true;
@@ -870,7 +870,7 @@ async function handleSwap() {
     btn.textContent = "Swapping…";
     DebugHub.logCheckpoint("Swap Requested", "pass");
 
-    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
+    const router = await writeContract(ADDRESSES.TimbSwapRouter, ROUTER_ABI);
 
     // Re-quote from LIVE reserves at submit time. The on-screen quote can be
     // minutes stale, and a minOut derived from it reverts with
@@ -929,7 +929,7 @@ async function handleSwap() {
     }
 
     const target = isWrapPair()
-      ? new ethers.Contract(ADDRESSES.WETH, WETH_ABI, signer)
+      ? await writeContract(ADDRESSES.WETH, WETH_ABI)
       : router;
     if (isWrapPair()) btn.textContent = isNative(tokenIn) ? "Wrapping…" : "Unwrapping…";
 
@@ -1332,7 +1332,7 @@ async function handleAddLiquidity() {
 
     // Approve both tokens to the router if needed.
     for (const [tok, amt] of [[tokenIn, amtA], [tokenOut, amtB]]) {
-      const c = new ethers.Contract(tok.address, ERC20_ABI, signer);
+      const c = await writeContract(tok.address, ERC20_ABI);
       const allow = await c.allowance(userAddress, ADDRESSES.TimbSwapRouter);
       if (allow.lt(amt)) {
         btn.textContent = `Approving ${tok.symbol}…`;
@@ -1352,7 +1352,7 @@ async function handleAddLiquidity() {
     const SEL_INSUFF_B       = "0x51959667"; // InsufficientBAmount — ratio/slippage
 
 
-    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
+    const router = await writeContract(ADDRESSES.TimbSwapRouter, ROUTER_ABI);
     const sendAdd = async () => {
       const deadline = Math.floor(Date.now() / 1000) + 1200;
       const gas = await getGasParams(); const nonce = await getPendingNonce();
@@ -1383,7 +1383,7 @@ async function handleAddLiquidity() {
         // factory call, then retry the add once.
         btn.textContent = `Creating ${tokenIn.symbol}/${tokenOut.symbol} pair…`;
         DebugHub.logCheckpoint("Liquidity Pair Create Requested", "pass");
-        const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_ABI, signer);
+        const factory = await writeContract(ADDRESSES.TimbSwapFactory, FACTORY_ABI);
         const gasCp = await getGasParams(); const nonceCp = await getPendingNonce();
         await confirmTx(await factory.createPair(tokenIn.address, tokenOut.address, { ...gasCp, nonce: nonceCp }));
         DebugHub.logCheckpoint("Liquidity Pair Created", "pass");
@@ -1423,7 +1423,7 @@ async function handleRemoveLiquidity() {
     if (liquidity.isZero()) { updateLqButtons(); return; }
 
     // Approve the LP token to the router if needed.
-    const lp = new ethers.Contract(lpPairAddress, ERC20_ABI, signer);
+    const lp = await writeContract(lpPairAddress, ERC20_ABI);
     const allow = await lp.allowance(userAddress, ADDRESSES.TimbSwapRouter);
     if (allow.lt(liquidity)) {
       btn.textContent = "Approving LP…";
@@ -1434,7 +1434,7 @@ async function handleRemoveLiquidity() {
 
     btn.textContent = "Removing…";
     DebugHub.logCheckpoint("Liquidity Remove Requested", "pass");
-    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_ABI, signer);
+    const router = await writeContract(ADDRESSES.TimbSwapRouter, ROUTER_ABI);
     const deadline = Math.floor(Date.now() / 1000) + 1200;
     const gas = await getGasParams(); const nonce = await getPendingNonce();
     // amountAMin/amountBMin 0 — acceptable on testnet; the burn returns the pro-rata share.
