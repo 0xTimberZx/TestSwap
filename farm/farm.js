@@ -96,7 +96,296 @@ async function loadPool(pool) {
 }
 
 async function loadAllPools() {
-  await Promise.all([loadPool("staking"), loadPool("farm")]);
+  await Promise.all([loadPool("staking"), loadPool("farm"), loadBoost()]);
+}
+
+// ─── Boosted Farms (TimbBoostFarm — multi-pool, epoch-funded) ─────────────────
+// Extra-pair farms (USDT/LINK/DAPP…) competing by weight for one shared TIMBS
+// pool, funded by the epoch keeper's boost tier (5% of main-farm claims).
+// Not whitelisted, not nudge-eligible — deliberately outside the game loop.
+
+const BOOST_ABI = [
+  "function poolCount() external view returns (uint256)",
+  "function poolInfo(uint256) external view returns (address lpToken, uint256 weight, uint256 lastRewardTime, uint256 accRewardPerShare, uint256 totalStaked, bool paused)",
+  "function totalWeight() external view returns (uint256)",
+  "function rewardRatePerSecond() external view returns (uint256)",
+  "function rewardReserve() external view returns (uint256)",
+  "function totalOwed() external view returns (uint256)",
+  "function pendingReward(uint256 pid, address account) external view returns (uint256)",
+  "function userInfo(uint256, address) external view returns (uint256 amount, uint256 rewardDebt, uint256 pending)",
+  "function estimatedPoolAPR(uint256 pid) external view returns (uint256 aprBps)",
+  "function deposit(uint256 pid, uint256 amount) external",
+  "function withdraw(uint256 pid, uint256 amount) external",
+  "function claimRewards(uint256 pid) external"
+];
+const PAIR_META_ABI = [
+  "function token0() external view returns (address)",
+  "function token1() external view returns (address)"
+];
+const SYMBOL_ABI = ["function symbol() external view returns (string)"];
+
+function boostAddr() {
+  const a = ADDRESSES.TimbBoostFarm;
+  return (a && !/^0x0{40}$/.test(a.replace("0x", ""))) ? a : null;
+}
+
+// lp address -> "USDC/USDT" (resolved once, cached)
+const _pairNames = {};
+async function pairName(lp) {
+  if (_pairNames[lp]) return _pairNames[lp];
+  try {
+    const pair = new ethers.Contract(lp, PAIR_META_ABI, readProv());
+    const [t0, t1] = await Promise.all([pair.token0(), pair.token1()]);
+    const [s0, s1] = await Promise.all([
+      new ethers.Contract(t0, SYMBOL_ABI, readProv()).symbol().catch(() => "?"),
+      new ethers.Contract(t1, SYMBOL_ABI, readProv()).symbol().catch(() => "?")
+    ]);
+    _pairNames[lp] = s0 + "/" + s1;
+  } catch {
+    _pairNames[lp] = lp.slice(0, 6) + "…" + lp.slice(-4);
+  }
+  return _pairNames[lp];
+}
+
+async function loadBoost() {
+  const addr = boostAddr();
+  const section = document.getElementById("boost-section");
+  if (!addr || !section) { if (section) section.style.display = "none"; return; }
+  section.style.display = "";
+
+  const boost = new ethers.Contract(addr, BOOST_ABI, readProv());
+  const statusEl = document.getElementById("boost-status");
+  const poolsEl  = document.getElementById("boost-pools");
+
+  try {
+    const [count, reserve, owed, rate] = await Promise.all([
+      boost.poolCount(), boost.rewardReserve(), boost.totalOwed(), boost.rewardRatePerSecond()
+    ]);
+
+    // Emission state banner. rate 0 with a funded reserve = the contract's
+    // 99% solvency stop: accrual halted, everything accrued stays claimable,
+    // LP deposit/withdraw unaffected. Not an error state.
+    if (statusEl) {
+      if (reserve.isZero()) {
+        statusEl.textContent = "Awaiting epoch funding — pools open, emissions start with the first boost draw.";
+        statusEl.className = "boost-status";
+      } else if (rate.isZero()) {
+        statusEl.textContent = "Emissions paused — solvency stop (owed ≥ 99% of reserve). All accrued TIMBS stays claimable; deposits and withdrawals keep working.";
+        statusEl.className = "boost-status boost-status-stop";
+      } else {
+        statusEl.textContent = "Reserve: " + fmt(reserve, 18, 2) + " TIMBS · emitting " +
+          fmt(rate.mul(86400), 18, 0) + " TIMBS/day across pools";
+        statusEl.className = "boost-status boost-status-live";
+      }
+    }
+
+    const n = count.toNumber();
+    if (n === 0) {
+      poolsEl.innerHTML = '<div class="boost-empty">No boosted pools yet — pairs are added as promotions go live.</div>';
+      return;
+    }
+
+    // (Re)build rows only when the pool set changes; refresh numbers in place.
+    if (poolsEl.childElementCount !== n || poolsEl.dataset.built !== String(n)) {
+      let html = "";
+      for (let pid = 0; pid < n; pid++) html += boostPoolShell(pid);
+      poolsEl.innerHTML = html;
+      poolsEl.dataset.built = String(n);
+    }
+
+    const totalWeight = await boost.totalWeight();
+    await Promise.all(Array.from({ length: n }, (_, pid) => refreshBoostPool(boost, pid, totalWeight)));
+  } catch (e) {
+    console.warn("loadBoost:", e.message);
+  }
+}
+
+function boostPoolShell(pid) {
+  return `
+    <div class="pool-card pool-card-boost" id="boost-${pid}-card">
+      <div class="pool-card-head">
+        <div class="pool-icon">⇈</div>
+        <div>
+          <div class="pool-name" id="boost-${pid}-name">Pool #${pid}</div>
+          <div class="pool-type">Boosted LP · epoch-funded <span class="boost-paused-badge" id="boost-${pid}-paused" style="display:none">PAUSED</span></div>
+        </div>
+        <div class="pool-apr" id="boost-${pid}-apr">— APR</div>
+      </div>
+      <div class="pool-stats">
+        <div class="pool-stat"><span class="pool-stat-label">Weight</span><span class="pool-stat-val" id="boost-${pid}-weight">—</span></div>
+        <div class="pool-stat"><span class="pool-stat-label">Total Staked</span><span class="pool-stat-val" id="boost-${pid}-total">—</span></div>
+        <div class="pool-stat"><span class="pool-stat-label">Your Stake</span><span class="pool-stat-val" id="boost-${pid}-mine">—</span></div>
+        <div class="pool-stat"><span class="pool-stat-label">Pending</span><span class="pool-stat-val pool-stat-green" id="boost-${pid}-earned">—</span></div>
+      </div>
+      <div class="pool-input-row">
+        <input id="boost-${pid}-amount" class="pool-input" type="number" placeholder="0.0 LP" />
+        <button class="pool-max-btn" onclick="setBoostAmount(${pid}, 100)">MAX</button>
+        <button class="pool-max-btn" onclick="setBoostAmount(${pid}, 50)">50%</button>
+      </div>
+      <div class="pool-bal" id="boost-${pid}-wallet" onclick="setBoostAmount(${pid}, 100)" title="Use full balance">Balance: —</div>
+      <div class="pool-actions">
+        <button class="btn-pool btn-pool-primary" id="boost-${pid}-stake-btn" onclick="handleBoostStake(${pid})" disabled>Connect wallet</button>
+        <button class="btn-pool btn-pool-secondary" id="boost-${pid}-unstake-btn" onclick="handleBoostUnstake(${pid})" disabled>Withdraw</button>
+      </div>
+      <button class="btn-pool btn-pool-claim" id="boost-${pid}-claim-btn" onclick="handleBoostClaim(${pid})" disabled>Claim Rewards</button>
+    </div>`;
+}
+
+async function refreshBoostPool(boost, pid, totalWeight) {
+  try {
+    const info = await boost.poolInfo(pid);
+    const [name, apr] = await Promise.all([
+      pairName(info.lpToken),
+      boost.estimatedPoolAPR(pid).catch(() => ethers.BigNumber.from(0))
+    ]);
+
+    document.getElementById(`boost-${pid}-name`).textContent  = name + " LP";
+    document.getElementById(`boost-${pid}-apr`).textContent   = info.paused ? "paused" : formatApr(apr);
+    document.getElementById(`boost-${pid}-total`).textContent = fmt(info.totalStaked, 18, 2);
+    document.getElementById(`boost-${pid}-weight`).textContent = totalWeight.isZero() || info.paused
+      ? "—"
+      : (info.weight.mul(1000).div(totalWeight).toNumber() / 10).toFixed(1) + "%";
+    document.getElementById(`boost-${pid}-paused`).style.display = info.paused ? "" : "none";
+
+    // A paused pool stops EARNING, never exit — withdraw stays open.
+    const stakeBtn = document.getElementById(`boost-${pid}-stake-btn`);
+
+    if (userAddress) {
+      const lp = new ethers.Contract(info.lpToken, ERC20_ABI, readProv());
+      const [pos, pending, inWallet] = await Promise.all([
+        boost.userInfo(pid, userAddress),
+        boost.pendingReward(pid, userAddress),
+        lp.balanceOf(userAddress)
+      ]);
+      document.getElementById(`boost-${pid}-mine`).textContent   = fmt(pos.amount, 18, 4);
+      document.getElementById(`boost-${pid}-earned`).textContent = fmtTIMBS(pending, 4);
+      document.getElementById(`boost-${pid}-wallet`).textContent = "Balance: " + fmt(inWallet, 18, 4) + " LP";
+      stakeBtn.disabled = info.paused;
+      stakeBtn.textContent = info.paused ? "Pool paused" : "Stake";
+      document.getElementById(`boost-${pid}-unstake-btn`).disabled = pos.amount.eq(0);
+      document.getElementById(`boost-${pid}-claim-btn`).disabled   = pending.eq(0);
+    } else {
+      document.getElementById(`boost-${pid}-mine`).textContent   = "—";
+      document.getElementById(`boost-${pid}-earned`).textContent = "—";
+      document.getElementById(`boost-${pid}-wallet`).textContent = "Balance: —";
+    }
+  } catch (e) {
+    console.warn(`refreshBoostPool(${pid}):`, e.message);
+  }
+}
+
+async function setBoostAmount(pid, pct) {
+  if (!userAddress) return;
+  try {
+    const boost = new ethers.Contract(boostAddr(), BOOST_ABI, readProv());
+    const info  = await boost.poolInfo(pid);
+    const lp    = new ethers.Contract(info.lpToken, ERC20_ABI, readProv());
+    const bal   = await lp.balanceOf(userAddress);
+    document.getElementById(`boost-${pid}-amount`).value = ethers.utils.formatUnits(bal.mul(pct).div(100), 18);
+  } catch (e) {
+    console.warn("setBoostAmount:", e.message);
+  }
+}
+
+async function handleBoostStake(pid) {
+  if (!userAddress) return;
+  const amountStr = document.getElementById(`boost-${pid}-amount`).value;
+  if (!amountStr || parseFloat(amountStr) <= 0) return;
+  const btn = document.getElementById(`boost-${pid}-stake-btn`);
+  try {
+    const amountWei = ethers.utils.parseUnits(amountStr, 18);
+    const boostRead = new ethers.Contract(boostAddr(), BOOST_ABI, readProv());
+    const info      = await boostRead.poolInfo(pid);
+
+    const lpRead    = new ethers.Contract(info.lpToken, ERC20_ABI, readProv());
+    const allowance = await lpRead.allowance(userAddress, boostAddr());
+    if (allowance.lt(amountWei)) {
+      btn.disabled = true;
+      btn.textContent = "Approving…";
+      DebugHub.logCheckpoint("Boost:Approve Requested", "pass");
+      const lpWrite = await writeContract(info.lpToken, ERC20_ABI);
+      const gas = await getGasParams(); const nonce = await getPendingNonce();
+      await confirmTx(await lpWrite.approve(boostAddr(), ethers.constants.MaxUint256, { ...gas, nonce }));
+      DebugHub.logCheckpoint("Boost:Approve Confirmed", "pass");
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Staking…";
+    DebugHub.logCheckpoint("Boost:Stake Requested", "pass");
+    const boost = await writeContract(boostAddr(), BOOST_ABI);
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    await confirmTx(await boost.deposit(pid, amountWei, { ...gas, nonce }));
+    DebugHub.logCheckpoint("Boost:Stake Confirmed", "pass");
+
+    document.getElementById(`boost-${pid}-amount`).value = "";
+    btn.textContent = "Staked ✓";
+    await loadBoost();
+    setTimeout(() => { btn.textContent = "Stake"; btn.disabled = false; }, 1800);
+  } catch (err) {
+    console.error("Boost stake failed:", err.message);
+    DebugHub.logError("handleBoostStake", err);
+    DebugHub.logCheckpoint("Boost:Stake Failed", "fail");
+    btn.textContent = "Failed — try again";
+    setTimeout(() => { btn.textContent = "Stake"; btn.disabled = false; }, 2000);
+  }
+}
+
+async function handleBoostUnstake(pid) {
+  if (!userAddress) return;
+  const btn = document.getElementById(`boost-${pid}-unstake-btn`);
+  try {
+    const boost = await writeContract(boostAddr(), BOOST_ABI);
+    const amountStr = document.getElementById(`boost-${pid}-amount`).value;
+    let amountWei;
+    if (amountStr && parseFloat(amountStr) > 0) {
+      amountWei = ethers.utils.parseUnits(amountStr, 18);
+    } else {
+      const pos = await boost.userInfo(pid, userAddress);
+      amountWei = pos.amount;
+      if (amountWei.eq(0)) return;
+    }
+    btn.disabled = true;
+    btn.textContent = "Withdrawing…";
+    DebugHub.logCheckpoint("Boost:Unstake Requested", "pass");
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    await confirmTx(await boost.withdraw(pid, amountWei, { ...gas, nonce }));
+    DebugHub.logCheckpoint("Boost:Unstake Confirmed", "pass");
+
+    document.getElementById(`boost-${pid}-amount`).value = "";
+    btn.textContent = "Withdrawn ✓";
+    await loadBoost();
+    setTimeout(() => { btn.textContent = "Withdraw"; btn.disabled = false; }, 1800);
+  } catch (err) {
+    console.error("Boost unstake failed:", err.message);
+    DebugHub.logError("handleBoostUnstake", err);
+    DebugHub.logCheckpoint("Boost:Unstake Failed", "fail");
+    btn.textContent = "Failed — try again";
+    setTimeout(() => { btn.textContent = "Withdraw"; btn.disabled = false; }, 2000);
+  }
+}
+
+async function handleBoostClaim(pid) {
+  if (!userAddress) return;
+  const btn = document.getElementById(`boost-${pid}-claim-btn`);
+  try {
+    btn.disabled = true;
+    btn.textContent = "Claiming…";
+    DebugHub.logCheckpoint("Boost:Claim Requested", "pass");
+    const boost = await writeContract(boostAddr(), BOOST_ABI);
+    const gas = await getGasParams(); const nonce = await getPendingNonce();
+    await confirmTx(await boost.claimRewards(pid, { ...gas, nonce }));
+    DebugHub.logCheckpoint("Boost:Claim Confirmed", "pass");
+
+    btn.textContent = "Claimed ✓";
+    await loadBoost();
+    setTimeout(() => { btn.textContent = "Claim Rewards"; }, 1800);
+  } catch (err) {
+    console.error("Boost claim failed:", err.message);
+    DebugHub.logError("handleBoostClaim", err);
+    DebugHub.logCheckpoint("Boost:Claim Failed", "fail");
+    btn.textContent = "Failed — try again";
+    setTimeout(() => { btn.textContent = "Claim Rewards"; btn.disabled = false; }, 2000);
+  }
 }
 
 // ─── Max Button ───────────────────────────────────────────────────────────────

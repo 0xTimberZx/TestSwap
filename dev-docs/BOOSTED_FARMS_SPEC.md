@@ -236,6 +236,32 @@ TimbBoostFarm and BoostRewarder:
    it is the only record of the epoch cursor (a zero-grant epoch leaves no
    on-chain marker).
 
+## 9b. Seed plan (agreed Jul 17)
+
+`TimbBoostFarm` deployed: `0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35`.
+Seed ALL factory pairs except TIMBS/WETH (that LP belongs to the main farm —
+it must not compete against itself in boost). Weights are relative (scale of
+1); starting shape — majors/stables heavy, DAPP tail; retune anytime with
+`setPoolWeight`:
+
+| addPool(lp, weight) | pair | weight |
+|---|---|---|
+| `0x0Bc8…9965` | WETH/USDT | 25 |
+| `0xddB9…4940` | USDC/USDT | 20 |
+| `0xaF37…fb6E` | LINK/WETH | 15 |
+| `0xDb5F…E44E` | TIMBS/USDC | 15 |
+| `0xb227…AF0C` | LINK/USDC | 10 |
+| `0xbddc…4c28` | WETH/USDC | 10 |
+| `0xba27…056D` | DAPP/WETH | 5 |
+
+(Full addresses: copy from the explore page's Pair Address column or
+`factory.getPair` — the anti-phantom check will reject anything that isn't
+the genuine factory pair anyway.)
+
+Decision (Jul 17): the explore/V2-pools page STAYS wallet-free — on-chain
+data is public regardless (Arbiscan/RPC), and the page is top-of-funnel.
+No connect-gate.
+
 ## 10. Keeper trust & failure notes
 
 - `epoch.js` fails LOUD (Telegram ops ping + non-zero exit) rather than
