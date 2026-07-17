@@ -30,11 +30,13 @@ const GAME_REGISTRY_ABI = [
   "function replaceEntry(bytes6 newString6, uint256 extraRounds) external",
   "function claimRefund(uint256 ticketId) external",
   "function cancelEntry() external",
-  "function getRoundEntrants(uint256 round) external view returns (address[])"
+  "function getRoundEntrants(uint256 round) external view returns (address[])",
+  "function ticketAt(uint256 gen, address owner, uint256 round) external view returns (uint256)"
 ];
 
 const YIELD_VAULT_ABI = [
-  "function previewAccrued() external view returns (uint256)"
+  "function previewAccrued() external view returns (uint256)",
+  "function weightOf(uint256 ticketId) external view returns (uint256)"
 ];
 
 const TIMBS_ABI = [
@@ -329,9 +331,15 @@ async function pollRoundState() {
     document.getElementById("sub-pot").textContent = potSegs.join(" · ");
 
     // Entries playing THIS round — was a dead "— entries" placeholder.
+    // "N entries · M earning": the entrant list is append-only round history,
+    // while yield weight follows LIVE ticket status — a replaced/cancelled/
+    // expired ticket leaves the vault instantly but stays counted as an
+    // entrant. Showing both stops the "5 entries but 0.0004 weight" confusion.
     if (entrants) {
-      document.getElementById("sub-entries").textContent =
-        `${entrants.length} ${entrants.length === 1 ? "entry" : "entries"}`;
+      let txt = `${entrants.length} ${entrants.length === 1 ? "entry" : "entries"}`;
+      const earning = await earningCount(s.round.toNumber(), entrants).catch(() => null);
+      if (earning !== null && earning !== entrants.length) txt += ` · ${earning} earning`;
+      document.getElementById("sub-entries").textContent = txt;
     }
 
     const timerEl = document.getElementById("sub-timer");
@@ -706,6 +714,28 @@ function stringToBytes6(str) {
   let hex = "0x";
   for (let i = 0; i < 6; i++) hex += str.charCodeAt(i).toString(16).padStart(2, "0");
   return hex;
+}
+
+// ─── Earning count (entries vs live vault weight) ─────────────────────────────
+// Of the round's entrants, how many tickets still carry yield-vault weight.
+// Recomputed only when the round or entrant set changes — the 4s poll reuses
+// the cached answer, so this adds no steady-state RPC load.
+let _earningCache = { key: null, count: null };
+async function earningCount(round, entrants) {
+  const key = round + ":" + entrants.join(",");
+  if (_earningCache.key === key) return _earningCache.count;
+
+  const registry = contractRO(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI);
+  const vault    = contractRO(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI);
+  const gen      = await registry.generation();
+  const ids      = await Promise.all(entrants.map((a) => registry.ticketAt(gen, a, round)));
+  const weights  = await Promise.all(ids.map((id) => id.isZero()
+    ? ethers.constants.Zero
+    : vault.weightOf(id)));
+  const count = weights.filter((w) => !w.isZero()).length;
+
+  _earningCache = { key, count };
+  return count;
 }
 
 // ─── Replace warning (entries don't stack) ────────────────────────────────
