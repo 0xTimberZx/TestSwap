@@ -37,28 +37,45 @@ is about the **automatic** funding loop.
 At the epoch boundary:
 
 ```
-farmGrant  = 0.80 × y
-leftover   = z − farmGrant                 # = z − 0.80y
-stakeGrant = min( 1.25 × w , 0.80 × leftover )
+B = z                                       # one shared epoch budget
+
+farmGrant  = min( 0.80 × y , B )            # farm replenishes first
+B          = B − farmGrant
+
+stakeGrant = min( 1.25 × w , 0.80 × B )     # staking replenishes second
+B          = B − stakeGrant
+
+boostBudget = B                             # boost draws from what's left
 ```
 
-- **Main farm** funded with `farmGrant` over the epoch duration
-  (`TimbFarm.notifyRewardAmount(farmGrant, epochSeconds)`).
-- **Staking** funded with `stakeGrant`
-  (`TimbTreasury.distributeToStaking(stakeGrant, epochSeconds)` — already exists).
+**One shared epoch budget — strict waterfall (DECIDED).** All three sinks draw
+from the same pool `z`, in priority order **farm → staking → boost**:
 
-Reading of the rule: staking is *boosted* up to 1.25× what stakers actually
-claimed, but never more than 80% of what's left in this epoch's inflow **after
-the farm's cut** — so the farm has first call on `z`, staking gets a bounded
-slice of the remainder.
+1. **Farm** replenishes its calculated claims first
+   (`TimbFarm.notifyRewardAmount(farmGrant, epochSeconds)`). If the farm's
+   grant consumes the entire budget, **staking gets nothing and boost gets
+   nothing** this epoch.
+2. **Staking** replenishes second
+   (`TimbTreasury.distributeToStaking(stakeGrant, epochSeconds)` — already
+   exists) — up to 1.25× its claims, capped at 80% of what the farm left. If
+   staking cleans out the remainder, **boost cannot refill** this epoch.
+3. **Boost** gets whatever survives (`boostBudget`). Draws happen *while*
+   main-farm claims are made during the epoch (5% per claim, §3). When
+   `boostBudget` is exhausted, **that is all until the next cycle** — no
+   mid-epoch top-up, draws simply stop.
+
+Total epoch outflow can never exceed `z` — the Treasury never pays out more
+than it collected in the epoch, so reserves are never drawn down by this loop.
 
 ## 3. Boosted farms — continuous 5% stream
 
-Separate from the epoch settlement, running throughout the epoch:
+Runs throughout the epoch, drawing against `boostBudget` fixed at settlement:
 
 - On **every TIMB/ETH main-farm claim** of `c` TIMBS, draw `x = 0.05 × c` from
   the Treasury into the **shared boost pool**.
-- **Cap:** cumulative boost draws in an epoch **cannot exceed `0.80 × z`**.
+- **Cap:** cumulative boost draws in an epoch **cannot exceed `boostBudget`**
+  (the waterfall remainder from §2). A draw that would cross the cap is
+  truncated to the remaining budget; after that, draws stop until next epoch.
 - The boost pool is **shared**: all boosted sub-pools draw emissions from it.
 - **Competition / "scale of 1":** total pool weight = 1, split across the
   boosted pools. How much TIMBS accumulates in each pool is set by its weight;
@@ -80,21 +97,13 @@ Separate from the epoch settlement, running throughout the epoch:
 - **NOT nudge-eligible** — boosted activity contributes **nothing** to the prize
   meter (no swap-nudge influence). Kept entirely out of the game loop.
 
-## 5. ⚠ DECIDE — the three real forks
+## 5. Decision log + remaining forks
 
-### 5a. Budget composition (biggest one)
-Three independent ceilings are stated:
-- farm: `0.80y`
-- staking: `0.80 × (z − 0.80y)`
-- boost: cumulative `≤ 0.80z`
-
-Drawn naively from the same `z`, total outflow could approach
-`0.80y + 0.80(z−0.80y) + 0.80z` — which can exceed `z`, i.e. the Treasury pays
-out more than it took in this epoch (drawing down reserves). **Decide:** is
-there **one shared `0.80z` budget** that farm + staking + boost all draw from
-(a hard ceiling on total epoch outflow), or are these **three independent
-ceilings** (accepting reserve drawdown)? This doc currently encodes them as
-written (independent); a shared-budget waterfall is the safer default.
+### 5a. Budget composition — ✅ DECIDED (one shared waterfall)
+One shared epoch budget `z`, strict priority **farm → staking → boost** as
+encoded in §2. Farm cleaning out the budget starves staking and boost; staking
+cleaning out the remainder starves boost; boost exhausting its remainder ends
+draws until the next cycle. Total outflow ≤ `z`; no reserve drawdown.
 
 ### 5b. On-chain hook vs keeper
 The 5% boost draw reacts to **each main-farm claim**. Two ways:
