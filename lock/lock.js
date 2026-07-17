@@ -161,7 +161,7 @@ async function handleCreateLock() {
     // Approve if needed. Read the allowance from the public RPC (not the
     // wallet's in-app provider, which can return "header not found" mid-sync).
     const ercRead = new ethers.Contract(selectedToken.address, ERC20_ABI, readProv());
-    const erc = new ethers.Contract(selectedToken.address, ERC20_ABI, signer);
+    const erc = await writeContract(selectedToken.address, ERC20_ABI);
     const allowance = await ercRead.allowance(userAddress, ADDRESSES.TimbLockVault);
     if (allowance.lt(amountWei)) {
       btn.disabled = true;
@@ -177,7 +177,7 @@ async function handleCreateLock() {
 
     btn.textContent = "Locking…";
     DebugHub.logCheckpoint("Lock:Lock Requested", "pass");
-    const vault = new ethers.Contract(ADDRESSES.TimbLockVault, LOCKVAULT_ABI, signer);
+    const vault = await writeContract(ADDRESSES.TimbLockVault, LOCKVAULT_ABI);
     const gas = await getGasParams();
     const nonce = await getPendingNonce();
     const tx = await vault.lock(selectedToken.address, amountWei, durationSecs, { ...gas, nonce });
@@ -204,7 +204,7 @@ async function handleCreateLock() {
 async function handleWithdraw(lockId) {
   try {
     DebugHub.logCheckpoint("Lock:Withdraw Requested", "pass");
-    const vault = new ethers.Contract(ADDRESSES.TimbLockVault, LOCKVAULT_ABI, signer);
+    const vault = await writeContract(ADDRESSES.TimbLockVault, LOCKVAULT_ABI);
     const gas = await getGasParams();
     const nonce = await getPendingNonce();
     const tx = await vault.withdraw(lockId, { ...gas, nonce });

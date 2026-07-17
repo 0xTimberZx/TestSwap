@@ -742,7 +742,7 @@ async function handleSubmitEntry() {
 
   try {
     btn.disabled = true;
-    const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
+    const registry = await writeContract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI);
     const useETH   = selectedToken.isNative;
 
     // When replacing an existing entry, the original principal stays in escrow
@@ -777,7 +777,7 @@ async function handleSubmitEntry() {
     }
 
     if (timbsNeeded.gt(0)) {
-      const timbs = new ethers.Contract(ADDRESSES.TIMBSToken, TIMBS_ABI, signer);
+      const timbs = await writeContract(ADDRESSES.TIMBSToken, TIMBS_ABI);
       const allow = await timbs.allowance(userAddress, ADDRESSES.GameRegistry);
       if (allow.lt(timbsNeeded)) {
         btn.textContent = "Approving TIMBS…";
@@ -1054,7 +1054,7 @@ async function loadMyEntries() {
 async function handleClaimRefund(ticketId) {
   try {
     DebugHub.logCheckpoint("Prize:Refund Requested", "pass");
-    const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
+    const registry = await writeContract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
     await confirmTx(await registry.claimRefund(ticketId, { ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Refund Confirmed", "pass");
@@ -1073,7 +1073,7 @@ async function handleClaimRefund(ticketId) {
 async function handleReclaimPastGame(ticketId) {
   try {
     DebugHub.logCheckpoint("Prize:Reclaim Requested", "pass");
-    const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
+    const registry = await writeContract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
     await confirmTx(await registry.reclaimFromPastGame(ticketId, { ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Reclaim Confirmed", "pass");
@@ -1252,7 +1252,7 @@ async function handleSettleNow() {
   try {
     if (btn) { btn.disabled = true; btn.textContent = "Settling…"; }
     DebugHub.logCheckpoint("Prize:Settle Requested", "pass");
-    const prize = new ethers.Contract(ADDRESSES.TimbPrize, PRIZE_SETTLE_ABI, signer);
+    const prize = await writeContract(ADDRESSES.TimbPrize, PRIZE_SETTLE_ABI);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
     await confirmTx(await prize.settleSegment({ ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Settle Confirmed", "pass");
@@ -1284,7 +1284,7 @@ async function handleAdvance() {
   try {
     if (btn) { btn.disabled = true; btn.textContent = count > 1 ? `Advancing ×${count}…` : "Advancing…"; }
     DebugHub.logCheckpoint("Prize:Advance Requested", "pass");
-    const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_NUDGE_ABI, signer);
+    const router = await writeContract(ADDRESSES.TimbSwapRouter, ROUTER_NUDGE_ABI);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
     await confirmTx(await router.advanceScroll(count, { ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Advance Confirmed", "pass");
@@ -1306,7 +1306,7 @@ async function handleAdvance() {
 async function handleCancelEntry() {
   try {
     DebugHub.logCheckpoint("Prize:Cancel Requested", "pass");
-    const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, signer);
+    const registry = await writeContract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
     // v2: cancels the wallet's live Pending ticket (pre-round) — no args.
     await confirmTx(await registry.cancelEntry({ ...gas, nonce }));
@@ -1326,7 +1326,7 @@ async function handleClaimWinnings(round) {
   if (btn) { btn.disabled = true; btn.textContent = "Claiming…"; }
   try {
     DebugHub.logCheckpoint("Prize:Claim Requested", "pass");
-    const prize = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_ABI, signer);
+    const prize = await writeContract(ADDRESSES.TimbPrize, TIMBPRIZE_ABI);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
     await confirmTx(await prize.claimWinnings(round, { ...gas, nonce }));
     DebugHub.logCheckpoint("Prize:Claim Confirmed", "pass");

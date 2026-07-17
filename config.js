@@ -233,6 +233,18 @@ async function ensureSigner() {
   return !!(provider && signer);
 }
 
+// Build a signer-bound contract for a WRITE, guaranteeing the signer is live
+// FIRST. ensureSigner() may silently reconnect after a mobile provider drop,
+// which reassigns the global `signer`; a contract constructed *before* that ran
+// would stay bound to the stale/null signer even after reconnect (the
+// "null is not an object (evaluating 'provider.getTransactionCount')" crash
+// seen in the DebugHub logs). Always `await writeContract(addr, abi)` for
+// writes instead of `new ethers.Contract(addr, abi, signer)`.
+async function writeContract(address, abi) {
+  if (!(await ensureSigner())) throw new Error("Wallet disconnected — reconnect and try again.");
+  return new ethers.Contract(address, abi, signer);
+}
+
 async function getGasParams() {
   if (!(await ensureSigner())) throw new Error("Wallet disconnected — reconnect and try again.");
   const feeData = await provider.getFeeData();
@@ -431,7 +443,7 @@ async function _priceViaPair(prov, factory, token, quote, quoteUsd) {
   if (tokRes <= 0 || qRes <= 0) return null;
   return (qRes / tokRes) * quoteUsd; // (quote per token) × (USD per quote)
 }
-async function _ethUsd(prov, factory) {
+async function _oracleEthUsd(prov, factory) {
   return _priceViaPair(prov, factory, ADDRESSES.WETH, ADDRESSES.USDC, 1);
 }
 // USD per 1 whole token (number), or null if unpriceable. TTL-cached.
@@ -446,11 +458,11 @@ async function usdPriceOf(tokenAddr) {
     const prov    = _priceProvider();
     const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, _PRICE_FACTORY_ABI, prov);
     if (_isStableAddr(lc)) px = 1;
-    else if (lc === ADDRESSES.WETH.toLowerCase()) px = await _ethUsd(prov, factory);
+    else if (lc === ADDRESSES.WETH.toLowerCase()) px = await _oracleEthUsd(prov, factory);
     else {
       px = await _priceViaPair(prov, factory, tokenAddr, ADDRESSES.USDC, 1);
       if (px === null) {
-        const eth = await _ethUsd(prov, factory);
+        const eth = await _oracleEthUsd(prov, factory);
         px = await _priceViaPair(prov, factory, tokenAddr, ADDRESSES.WETH, eth);
       }
     }
