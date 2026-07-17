@@ -231,9 +231,12 @@ contract BoostRewarder is Ownable, ReentrancyGuard {
         emit RewardNotified(msg.sender, amount, rewardRatePerSecond);
     }
 
+    // Re-aims the rate over the new window immediately (see TimbBoostFarm note).
     function setEmissionWindow(uint256 windowSeconds) external onlyOwner {
         if (windowSeconds == 0) revert ZeroAmount();
+        _updateAcc();
         emissionWindow = windowSeconds;
+        _retarget();
         emit EmissionWindowSet(windowSeconds);
     }
 
