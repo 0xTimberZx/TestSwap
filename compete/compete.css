@@ -440,7 +440,25 @@
 /* ─── Past Rounds ────────────────────────────────────────────────────────── */
 .past-rounds-section { margin-top: 8px; }
 .section-title { font-size: 17px; font-weight: 600; margin-bottom: 14px; letter-spacing: -0.3px; }
-.past-rounds-list { display: flex; flex-direction: column; gap: 8px; }
+.past-rounds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Cap the height and scroll inside — a long history stays in a tidy panel
+     instead of pushing the page down. ~6 rows tall before it scrolls. */
+  max-height: 420px;
+  overflow-y: auto;
+  /* Room so rows don't sit flush against the scrollbar. */
+  padding-right: 4px;
+}
+/* Slim, on-theme scrollbar for the rounds panel. */
+.past-rounds-list::-webkit-scrollbar { width: 8px; }
+.past-rounds-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+.past-rounds-list::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+.past-rounds-list { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 
 .past-round-row {
   display: flex;
