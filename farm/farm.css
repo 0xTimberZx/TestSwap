@@ -123,6 +123,18 @@
 }
 .pool-stat-green { color: var(--green); }
 
+/* Boosted-pool Pending row: span the full 3-column grid, label left / value
+   right on one line (the top row keeps Weight · Total Staked · Your Stake). */
+.pool-stat-span {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+/* Weight is protocol-set (fixed by pool weight), so grey it slightly vs the
+   live figures next to it — signals "not something you change". */
+.pool-stat-fixed { color: var(--text-2); font-weight: 600; }
+
 .pool-input-row {
   display: flex;
   gap: 6px;
