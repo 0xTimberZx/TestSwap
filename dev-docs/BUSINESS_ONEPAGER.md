@@ -8,69 +8,79 @@
 
 TimbSwap is a **decentralized exchange with a prize-linked reward layer.** Traders swap
 tokens (the exchange); a portion of activity and idle-capital *yield* funds a recurring
-on-chain prize pot that active users compete for.
+on-chain prize pot that active traders compete for.
 
 The closest traditional analogue is a **prize-linked savings account** — UK Premium Bonds,
 or US "Save-to-Win" credit-union programs. Prizes are paid from **yield earned on capital**,
 not from new deposits. This is the single most important design decision: **it is structurally
-not a Ponzi.** No participant is paid with another's principal.
+not a Ponzi.** No participant is paid with another's principal. The token has a **fixed total
+supply.**
 
-### Why it lasts (perpetuity)
+### The game
 
-A self-reinforcing loop that, once seeded, runs unattended:
+Each round hides a **six-character combination** — think of it as a safe. Players don't buy
+tickets; they **earn a turn at the dials by trading.** Every eligible swap works the
+combination, and when a round settles, anyone whose combination matches the drawn one **cracks
+the safe and splits that round's pot.** Showing up and playing is the price of a shot — getting
+picked is like earning a spot on the roster, then being drafted into the winners at settlement.
 
-> **Swaps generate fees → fees + deposit yield fund the prize pot → the pot attracts players →
-> players swap and provide liquidity → more fees.**
+### The redistribution cycle
 
-Durability is enforced in code, not promised in a whitepaper:
+The protocol doesn't accumulate value for insiders — it **recirculates.**
 
-- **Hard-capped token.** 100,000,000 TIMBS maximum. No discretionary minting.
-- **Emissions cannot exceed reserves.** Rewards self-retarget to whatever the treasury has
-  actually collected, and a **solvency stop halts all accrual at 99% of obligations.** The
-  system mathematically cannot promise tokens it does not hold.
-- **Autonomous operation.** An on-chain keeper runs the reward cycle every 6 rounds with no
-  human in the loop — the flywheel turns without a standing team.
+> **Comes in:** trading fees + yield on pooled capital →
+> **held briefly:** collected by the treasury (backing visible on-chain) →
+> **goes back out:** winners split the pot, and the same sweep funds emissions to the people
+> who build the market — **liquidity providers, stakers, and boosted pools.**
 
-### Risk & controls
+The sweep runs **every six rounds, in a fixed priority order**, then restarts. Earnings in,
+earnings back out.
 
-| Vector | Control in place |
-|---|---|
-| **Over-emission / inflation** | Hard cap + self-retargeting rate + 99% solvency ledger. Rewards are funded, never printed. |
-| **Smart-contract failure** | Testnet-hardened, permissionless recovery/refund paths, live telemetry (every action logged and auditable). |
-| **Custody** | Non-custodial. Users hold their own keys; the protocol never takes discretionary control of funds. |
-| **Legal / regulatory** | The prize mechanic rewards *activity and skill* (you influence outcomes by trading), funded by yield — the prize-linked-savings precedent. **This is the open item: formal counsel and likely jurisdiction geofencing are required before any real-value launch.** We treat this as a gating condition, not an afterthought. |
+### Barriers — the house vs. the player
 
-### Capital: controls vs. incentives
+**On the game's side** (why it can't over-extend):
+- The pot is funded by **yield, never new deposits** — the safe only holds what's been earned.
+- A **solvency stop** halts payouts at 99% of what's owed; it never writes a check it can't cash.
+- Emissions **retarget to real revenue** — no printing to cover a shortfall.
+- **Fixed total supply: 100,000,000 tokens**, with no mint beyond it.
+- Core rewards are funded **before** speculative ones.
 
-- **Controls** — Prize funds sit in an on-chain escrow with **publicly visible backing.** Only
-  the rule-bound keeper moves reward capital, in a fixed priority order (core rewards funded
-  before speculative). Seeding is owner-gated; claim and refund windows are enforced by contract.
-- **Incentives** — Emissions reward exactly the behaviors that grow the protocol: trading,
-  providing liquidity, staking, and playing. Generous enough to bootstrap a community, but
-  hard-capped and solvency-gated so incentives **cannot outrun the capital backing them.**
+**On the player's side** (why a win is earned, not handed out):
+- **Skin in to sit at the table** — hold the token or provide liquidity to play.
+- **One dial per wallet** each round — no one buys the whole board.
+- Only **active trades** work the dials; passive holders don't get drafted.
+- Winners **claim inside a window** — collect, or the prize rolls back into the pot.
+
+### Risk & the open item
+
+Custody is **non-custodial**; contracts are testnet-hardened with permissionless refund/recovery
+paths and full audit telemetry; the barriers above make over-emission and dilution structurally
+impossible. **The one open item is legal/regulatory:** the yield-funded prize sits on the
+prize-linked-savings precedent, but classification is jurisdiction-specific — so **formal counsel
+and likely geofencing are treated as conditions to clear before mainnet, not afterthoughts.**
 
 ### Where we are
 
-- **Live and running on Arbitrum testnet.** Full loop working end-to-end: exchange, prize
-  rounds, staking, farming, and boosted-liquidity rewards.
-- **~20+ prize rounds have settled autonomously**, keeper proven in production.
-- **Community-building phase:** growing an active player base on testnet — real usage, at zero
-  monetary risk to participants — to prove *engagement* before real capital is deployed.
+- **Live on Arbitrum testnet** — full loop working end-to-end: exchange, prize rounds, staking,
+  farming, boosted-liquidity rewards.
+- **~20+ prize rounds have settled autonomously**; the keeper is proven in production.
+- **Community-building phase:** growing an active player base at zero monetary risk, to prove
+  *engagement* before real capital is deployed.
 
 ### The ask — seed for mainnet
 
-Testnet proves the machine *works*. Mainnet is where it earns. We are raising seed capital to:
+Testnet proves the machine *works*. Mainnet is where it earns. Seed capital covers:
 
-1. **Fund the initial mainnet prize pot** (the subsidy that makes early rounds worth playing
-   before organic fees + yield carry it), and
-2. **Cover the graduation runway** — audit, legal counsel, and deployment.
+1. **The initial mainnet prize pot** — the subsidy that makes early rounds worth playing before
+   organic fees + yield carry it, and
+2. **The graduation runway** — audit, legal counsel, deployment.
 
-**Graduation gate (testnet → mainnet):** we deploy to mainnet when we have sustained
-**[N] active wallets** across **[M] settled rounds** with **[repeat-play %]** returning and
-eligible swap volume tracking round activity — i.e., proof of *pull*, not just function.
+**Graduation gate (testnet → mainnet):** deploy when we have sustained **[N] active wallets**
+across **[M] settled rounds** with **[repeat-play %]** returning and eligible trade volume that
+tracks round activity — proof of *pull*, not just function.
 
-> *Seed budget:* **[$ amount]** → initial pot **[$X]** + audit **[$Y]** + legal **[$Z]** +
-> runway **[months]**. *(To be finalized from live engagement data.)*
+> *Seed budget:* initial pot **[$X]** + audit **[$Y]** + legal **[$Z]** = **[$ total]**,
+> plus **[months]** runway. *(To be finalized from live engagement data.)*
 
 ---
 
