@@ -1,188 +1,163 @@
 <title>TimbSwap — Seed Brief</title>
 <style>
   :root {
-    --paper:   #f4f1e8;
-    --card:    #fbf9f2;
-    --ink:     #15191b;
-    --ink-soft:#3f474e;
-    --muted:   #71776f;
-    --line:    #ded7c6;
-    --emerald: #17604a;
-    --emerald-bright: #1f8a63;
-    --brass:   #a1792b;
-    --shadow:  0 1px 2px rgba(20,25,28,.05), 0 8px 30px rgba(20,25,28,.06);
-    --maxw: 1080px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --paper:#0f1518; --card:#161d21; --ink:#edf1ea; --ink-soft:#b7bfb9; --muted:#868f88;
-      --line:#263230; --emerald:#3fae82; --emerald-bright:#58ca9b; --brass:#cba553;
-      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.34);
-    }
-  }
-  :root[data-theme="light"] {
     --paper:#f4f1e8; --card:#fbf9f2; --ink:#15191b; --ink-soft:#3f474e; --muted:#71776f;
     --line:#ded7c6; --emerald:#17604a; --emerald-bright:#1f8a63; --brass:#a1792b;
-    --shadow:0 1px 2px rgba(20,25,28,.05), 0 8px 30px rgba(20,25,28,.06);
+    --shadow:0 1px 2px rgba(20,25,28,.05), 0 8px 30px rgba(20,25,28,.06); --maxw:1080px;
   }
-  :root[data-theme="dark"] {
-    --paper:#0f1518; --card:#161d21; --ink:#edf1ea; --ink-soft:#b7bfb9; --muted:#868f88;
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#0f1518; --card:#161d21; --ink:#edf1ea; --ink-soft:#b7bfb9; --muted:#868f88;
+      --line:#263230; --emerald:#3fae82; --emerald-bright:#58ca9b; --brass:#cba553;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.34); }
+  }
+  :root[data-theme="light"] { --paper:#f4f1e8; --card:#fbf9f2; --ink:#15191b; --ink-soft:#3f474e; --muted:#71776f;
+    --line:#ded7c6; --emerald:#17604a; --emerald-bright:#1f8a63; --brass:#a1792b;
+    --shadow:0 1px 2px rgba(20,25,28,.05), 0 8px 30px rgba(20,25,28,.06); }
+  :root[data-theme="dark"] { --paper:#0f1518; --card:#161d21; --ink:#edf1ea; --ink-soft:#b7bfb9; --muted:#868f88;
     --line:#263230; --emerald:#3fae82; --emerald-bright:#58ca9b; --brass:#cba553;
-    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.34);
-  }
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.34); }
 
   * { box-sizing: border-box; }
   html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-  body {
-    margin: 0; background: var(--paper); color: var(--ink);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased; line-height: 1.5;
-  }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased; line-height:1.5; }
 
-  .slide {
-    scroll-snap-align: start; min-height: 100vh; display: flex; flex-direction: column;
-    justify-content: center; padding: clamp(28px, 6vh, 76px) clamp(22px, 6vw, 88px);
-    position: relative; border-bottom: 1px solid var(--line);
-  }
-  .inner { width: 100%; max-width: var(--maxw); margin: 0 auto; }
+  .slide { scroll-snap-align:start; min-height:100vh; display:flex; flex-direction:column; justify-content:center;
+    padding:clamp(28px,6vh,72px) clamp(22px,6vw,88px); position:relative; border-bottom:1px solid var(--line); }
+  .inner { width:100%; max-width:var(--maxw); margin:0 auto; }
 
-  .rise { opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s ease; }
-  .rise.in { opacity: 1; transform: none; }
-  @media (prefers-reduced-motion: reduce) { .rise { opacity: 1; transform: none; transition: none; } }
+  .rise { opacity:0; transform:translateY(14px); transition:opacity .7s ease, transform .7s ease; }
+  .rise.in { opacity:1; transform:none; }
+  @media (prefers-reduced-motion: reduce) { .rise { opacity:1; transform:none; transition:none; } }
 
-  .eyebrow { font-size: 12px; font-weight: 650; letter-spacing: .18em; text-transform: uppercase; color: var(--emerald); margin: 0 0 18px; }
-  .eyebrow.brass { color: var(--brass); }
+  .eyebrow { font-size:12px; font-weight:650; letter-spacing:.18em; text-transform:uppercase; color:var(--emerald); margin:0 0 18px; }
+  .eyebrow.brass { color:var(--brass); }
 
-  h1, h2 {
-    font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-    font-weight: 600; color: var(--ink); text-wrap: balance; margin: 0;
-    letter-spacing: -0.01em; line-height: 1.08;
-  }
-  h1 { font-size: clamp(46px, 8vw, 96px); }
-  h2 { font-size: clamp(29px, 4.4vw, 50px); }
+  h1,h2 { font-family:Georgia,"Iowan Old Style","Times New Roman",serif; font-weight:600; color:var(--ink); text-wrap:balance; margin:0; letter-spacing:-0.01em; line-height:1.08; }
+  h1 { font-size:clamp(44px,7.6vw,92px); }
+  h2 { font-size:clamp(28px,4.2vw,49px); }
 
-  p { color: var(--ink-soft); margin: 0; }
-  .lede { font-size: clamp(18px, 2.2vw, 23px); max-width: 60ch; margin-top: 22px; }
-  .body { font-size: clamp(15px, 1.5vw, 17px); max-width: 62ch; }
+  p { color:var(--ink-soft); margin:0; }
+  .lede { font-size:clamp(18px,2.2vw,23px); max-width:60ch; margin-top:22px; }
+  .body { font-size:clamp(15px,1.5vw,17px); max-width:62ch; }
 
-  .foot {
-    position: absolute; left: clamp(22px, 6vw, 88px); right: clamp(22px, 6vw, 88px);
-    bottom: clamp(20px, 3.5vh, 34px); display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 12px; letter-spacing: .04em; color: var(--muted); font-variant-numeric: tabular-nums;
-  }
-  .foot .n { font-weight: 650; color: var(--ink-soft); }
+  .foot { position:absolute; left:clamp(22px,6vw,88px); right:clamp(22px,6vw,88px); bottom:clamp(18px,3.2vh,32px);
+    display:flex; justify-content:space-between; align-items:baseline; font-size:12px; letter-spacing:.04em; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .foot .n { font-weight:650; color:var(--ink-soft); }
 
-  /* Title */
-  .brandmark { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 30px; font-size: 15px; letter-spacing: .02em; color: var(--ink-soft); font-weight: 600; }
-  .hex { width: 22px; height: 22px; color: var(--emerald); }
-  .title-sub { font-size: clamp(19px, 2.4vw, 26px); color: var(--ink-soft); max-width: 30ch; margin-top: 26px; line-height: 1.34; }
-  .title-sub b { color: var(--ink); font-weight: 600; }
-  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 40px; }
-  .chip { font-size: 12.5px; font-weight: 600; letter-spacing: .03em; padding: 7px 14px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-soft); background: var(--card); }
-  .chip .dot { color: var(--emerald-bright); }
+  .brandmark { display:inline-flex; align-items:center; gap:12px; margin-bottom:30px; font-size:15px; letter-spacing:.02em; color:var(--ink-soft); font-weight:600; }
+  .hex { width:22px; height:22px; color:var(--emerald); }
+  .title-sub { font-size:clamp(18px,2.3vw,25px); color:var(--ink-soft); max-width:32ch; margin-top:26px; line-height:1.34; }
+  .title-sub b { color:var(--ink); font-weight:600; }
+  .chips { display:flex; flex-wrap:wrap; gap:10px; margin-top:40px; }
+  .chip { font-size:12.5px; font-weight:600; letter-spacing:.03em; padding:7px 14px; border:1px solid var(--line); border-radius:999px; color:var(--ink-soft); background:var(--card); }
+  .chip .dot { color:var(--emerald-bright); }
 
-  /* concept split */
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 40px; }
-  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px 26px 28px; box-shadow: var(--shadow); }
-  .panel .k { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--emerald); margin: 0 0 10px; }
-  .panel h3 { font-family: Georgia, serif; font-weight: 600; font-size: 21px; margin: 0 0 8px; color: var(--ink); }
-  .panel p { font-size: 15px; }
-  .aside { margin-top: 30px; border-left: 3px solid var(--brass); padding: 4px 0 4px 20px; font-family: Georgia, serif; font-style: italic; font-size: clamp(17px, 2vw, 21px); color: var(--ink); max-width: 58ch; line-height: 1.4; }
-  .aside span { color: var(--muted); font-style: normal; font-family: system-ui, sans-serif; font-size: 13px; display: block; margin-top: 10px; letter-spacing: .04em; }
+  /* generic two-column */
+  .duo { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:38px; }
+  .duo .col { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px; box-shadow:var(--shadow); }
+  .duo .col h3 { font-family:Georgia,serif; font-size:21px; margin:0 0 4px; font-weight:600; color:var(--ink); }
+  .duo .col .cap { font-size:13px; color:var(--muted); margin:0 0 18px; }
+  .duo .col.house h3 { color:var(--emerald); }
+  .duo .col.player h3 { color:var(--brass); }
+  ul.clean { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:13px; }
+  ul.clean li { font-size:14.5px; color:var(--ink-soft); padding-left:20px; position:relative; line-height:1.42; }
+  ul.clean li::before { content:""; position:absolute; left:0; top:9px; width:7px; height:7px; border-radius:50%; background:var(--emerald); }
+  .duo .player ul.clean li::before { background:var(--brass); }
+  ul.clean li b { color:var(--ink); font-weight:600; }
+
+  /* concept/panels */
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:38px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px; box-shadow:var(--shadow); }
+  .panel .k { font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--emerald); margin:0 0 10px; }
+  .panel h3 { font-family:Georgia,serif; font-weight:600; font-size:20px; margin:0 0 8px; color:var(--ink); }
+  .panel p { font-size:14.5px; }
+
+  /* thesis statement */
+  .thesis { font-family:Georgia,serif; font-size:clamp(24px,3.6vw,42px); line-height:1.24; color:var(--ink); max-width:20ch; margin-top:10px; }
+  .thesis b { color:var(--emerald); font-weight:600; }
+  .thesis-note { margin-top:30px; font-size:clamp(15px,1.7vw,18px); color:var(--ink-soft); max-width:58ch; }
+  .thesis-note b { color:var(--ink); font-weight:600; }
 
   /* the game — dials */
-  .dials { display: flex; gap: clamp(8px, 1.4vw, 14px); margin-top: 40px; flex-wrap: wrap; }
-  .dial {
-    flex: 1 1 0; min-width: 62px; aspect-ratio: 3 / 4; background: var(--card); border: 1px solid var(--line);
-    border-radius: 12px; box-shadow: var(--shadow); display: grid; place-items: center; position: relative; overflow: hidden;
-  }
-  .dial::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 34%; background: linear-gradient(180deg, rgba(0,0,0,.05), transparent); }
-  @media (prefers-color-scheme: dark) { .dial::before { background: linear-gradient(180deg, rgba(255,255,255,.05), transparent); } }
-  .dial span {
-    font-family: "SF Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
-    font-size: clamp(26px, 4.6vw, 46px); font-weight: 600; color: var(--emerald); letter-spacing: .02em;
-  }
-  .dial.solved span { color: var(--brass); }
-  .dial.open { border-color: var(--brass); }
-  .gamecap { margin-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .gamecap p { font-size: 15px; max-width: 44ch; }
-  .gamecap b { color: var(--ink); font-weight: 600; }
-  .dial-lbl { display: flex; align-items: center; gap: 10px; margin-top: 16px; font-size: 12.5px; letter-spacing: .06em; color: var(--muted); }
-  .dial-lbl .lock { color: var(--brass); }
+  .dials { display:flex; gap:clamp(8px,1.4vw,14px); margin-top:36px; flex-wrap:wrap; }
+  .dial { flex:1 1 0; min-width:60px; aspect-ratio:3/4; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); display:grid; place-items:center; position:relative; overflow:hidden; }
+  .dial::before { content:""; position:absolute; inset:0 0 auto 0; height:34%; background:linear-gradient(180deg,rgba(0,0,0,.05),transparent); }
+  @media (prefers-color-scheme: dark) { .dial::before { background:linear-gradient(180deg,rgba(255,255,255,.05),transparent); } }
+  .dial span { font-family:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace; font-size:clamp(24px,4.4vw,44px); font-weight:600; color:var(--emerald); }
+  .dial.solved span { color:var(--brass); }
+  .dial.open { border-color:var(--brass); }
+  .dial-lbl { display:flex; align-items:center; gap:10px; margin-top:16px; font-size:12.5px; letter-spacing:.06em; color:var(--muted); }
+  .dial-lbl .lock { color:var(--brass); }
+  .gamecap { margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .gamecap p { font-size:15px; max-width:44ch; }
+  .gamecap b { color:var(--ink); font-weight:600; }
 
-  /* redistribution cycle */
-  .redist { display: flex; align-items: stretch; gap: 0; margin-top: 40px; flex-wrap: wrap; }
-  .node { flex: 1 1 190px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 18px; box-shadow: var(--shadow); }
-  .node .step { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
-  .node.in .step { color: var(--emerald); }
-  .node.pool .step { color: var(--ink-soft); }
-  .node.out .step { color: var(--brass); }
-  .node .lbl { font-family: Georgia, serif; font-size: 19px; color: var(--ink); margin-top: 7px; line-height: 1.15; }
-  .node .sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
-  .arrow { align-self: center; color: var(--emerald); font-size: 26px; padding: 0 10px; flex: 0 0 auto; }
-  @media (max-width: 760px) { .arrow { transform: rotate(90deg); padding: 6px 0; } .redist { flex-direction: column; } }
-  .loopnote { margin-top: 22px; text-align: center; font-size: 13.5px; color: var(--emerald); font-weight: 600; letter-spacing: .04em; }
-  .routed { margin-top: 12px; text-align: center; font-size: 13px; color: var(--muted); }
-  .routed b { color: var(--ink-soft); font-weight: 600; }
+  /* redistribution */
+  .redist { display:flex; align-items:stretch; gap:0; margin-top:38px; flex-wrap:wrap; }
+  .node { flex:1 1 190px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px 18px; box-shadow:var(--shadow); }
+  .node .step { font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+  .node.in .step { color:var(--emerald); } .node.pool .step { color:var(--ink-soft); } .node.out .step { color:var(--brass); }
+  .node .lbl { font-family:Georgia,serif; font-size:19px; color:var(--ink); margin-top:7px; line-height:1.15; }
+  .node .sub { font-size:13px; color:var(--muted); margin-top:6px; }
+  .arrow { align-self:center; color:var(--emerald); font-size:26px; padding:0 10px; flex:0 0 auto; }
+  @media (max-width:760px){ .arrow{ transform:rotate(90deg); padding:6px 0; } .redist{ flex-direction:column; } }
+  .loopnote { margin-top:22px; text-align:center; font-size:13.5px; color:var(--emerald); font-weight:600; letter-spacing:.04em; }
+  .routed { margin-top:12px; text-align:center; font-size:13px; color:var(--muted); }
+  .routed b { color:var(--ink-soft); font-weight:600; }
 
   /* stats */
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 42px; }
-  .stat { border-top: 2px solid var(--emerald); padding-top: 16px; }
-  .stat .v { font-family: Georgia, serif; font-size: clamp(32px, 4.2vw, 48px); color: var(--ink); line-height: 1; font-variant-numeric: tabular-nums; }
-  .stat .l { font-size: 13px; color: var(--muted); margin-top: 10px; max-width: 22ch; }
-
-  /* barriers duo */
-  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 38px; }
-  .duo .col { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px; box-shadow: var(--shadow); }
-  .duo .col h3 { font-family: Georgia, serif; font-size: 22px; margin: 0 0 4px; font-weight: 600; }
-  .duo .col .cap { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
-  .duo .col.house h3 { color: var(--emerald); }
-  .duo .col.player h3 { color: var(--brass); }
-  ul.clean { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
-  ul.clean li { font-size: 14.5px; color: var(--ink-soft); padding-left: 20px; position: relative; line-height: 1.42; }
-  ul.clean li::before { content: ""; position: absolute; left: 0; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); }
-  .duo .player ul.clean li::before { background: var(--brass); }
-  ul.clean li b { color: var(--ink); font-weight: 600; }
-  .balance { margin-top: 28px; font-family: Georgia, serif; font-style: italic; font-size: clamp(16px, 1.9vw, 20px); color: var(--ink); max-width: 62ch; line-height: 1.42; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-top:40px; }
+  .stat { border-top:2px solid var(--emerald); padding-top:16px; }
+  .stat .v { font-family:Georgia,serif; font-size:clamp(30px,4vw,46px); color:var(--ink); line-height:1; font-variant-numeric:tabular-nums; }
+  .stat .l { font-size:13px; color:var(--muted); margin-top:10px; max-width:22ch; }
 
   /* risk blocks */
-  .rblocks { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 38px; }
-  .rblock { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px; box-shadow: var(--shadow); }
-  .rblock.flag { border-color: var(--brass); }
-  .rblock h3 { font-family: Georgia, serif; font-weight: 600; font-size: 20px; margin: 0 0 12px; color: var(--ink); }
-  .rblock.flag h3 { color: var(--brass); }
-  .rblock .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--brass); border: 1px solid var(--brass); border-radius: 5px; padding: 1px 7px; margin-left: 8px; vertical-align: middle; }
-  .rblock p { font-size: 14.5px; }
-  .rblock p + p { margin-top: 12px; }
+  .rblocks { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:36px; }
+  .rblock { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px; box-shadow:var(--shadow); }
+  .rblock.flag { border-color:var(--brass); }
+  .rblock h3 { font-family:Georgia,serif; font-weight:600; font-size:20px; margin:0 0 12px; color:var(--ink); }
+  .rblock.flag h3 { color:var(--brass); }
+  .rblock .tag { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--brass); border:1px solid var(--brass); border-radius:5px; padding:1px 7px; margin-left:8px; vertical-align:middle; }
+  .rblock p { font-size:14.5px; } .rblock p + p { margin-top:12px; }
+  .rblock b { color:var(--ink); }
 
-  /* gate checklist */
-  .gate { display: flex; flex-direction: column; gap: 14px; margin-top: 36px; max-width: 66ch; }
-  .gate .row { display: flex; align-items: flex-start; gap: 16px; padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
-  .gate .mark { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--emerald); color: var(--emerald); display: grid; place-items: center; font-size: 13px; font-weight: 700; margin-top: 1px; }
-  .gate .txt { font-size: 15.5px; color: var(--ink); }
-  .gate .txt span { display: block; color: var(--muted); font-size: 13.5px; margin-top: 3px; }
+  /* gate */
+  .gate { display:flex; flex-direction:column; gap:13px; margin-top:34px; max-width:66ch; }
+  .gate .row { display:flex; align-items:flex-start; gap:16px; padding:16px 20px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); }
+  .gate .mark { flex:0 0 auto; width:24px; height:24px; border-radius:50%; border:2px solid var(--emerald); color:var(--emerald); display:grid; place-items:center; font-size:13px; font-weight:700; margin-top:1px; }
+  .gate .txt { font-size:15px; color:var(--ink); }
+  .gate .txt span { display:block; color:var(--muted); font-size:13.5px; margin-top:3px; }
 
-  /* ask / budget */
-  .budget { margin-top: 36px; display: flex; flex-direction: column; gap: 0; max-width: 62ch; }
-  .budget .line { display: flex; justify-content: space-between; align-items: baseline; padding: 16px 0; border-bottom: 1px solid var(--line); }
-  .budget .line .d { color: var(--ink); font-weight: 600; font-size: 16px; }
-  .budget .line .d small { display: block; color: var(--muted); font-weight: 400; font-size: 13px; margin-top: 3px; }
-  .budget .line .amt { font-family: Georgia, serif; font-size: 20px; color: var(--emerald); font-variant-numeric: tabular-nums; }
-  .budget .line.total .d { font-family: Georgia, serif; font-size: 19px; }
-  .budget .line.total .amt { color: var(--ink); font-size: 24px; }
-  .closing { margin-top: 34px; font-family: Georgia, serif; font-size: clamp(20px, 2.6vw, 30px); color: var(--ink); max-width: 24ch; line-height: 1.2; }
-  .disclaimer { margin-top: 26px; font-size: 11.5px; color: var(--muted); max-width: 70ch; line-height: 1.55; }
+  /* roadmap phases */
+  .phases { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:36px; }
+  .phase { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px 22px; box-shadow:var(--shadow); position:relative; }
+  .phase .ptag { font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; padding:3px 9px; border-radius:6px; display:inline-block; }
+  .phase.now .ptag { color:var(--emerald); border:1px solid var(--emerald); }
+  .phase.next .ptag { color:var(--ink-soft); border:1px solid var(--line); }
+  .phase.vision .ptag { color:var(--brass); border:1px solid var(--brass); }
+  .phase h3 { font-family:Georgia,serif; font-weight:600; font-size:19px; margin:14px 0 8px; color:var(--ink); }
+  .phase p { font-size:14px; }
+  .roadnote { margin-top:26px; font-family:Georgia,serif; font-style:italic; font-size:clamp(16px,1.9vw,20px); color:var(--ink); max-width:64ch; line-height:1.42; }
+  .roadnote b { font-style:normal; color:var(--emerald); font-weight:600; }
 
-  .placeholder { color: var(--brass); font-style: normal; border-bottom: 1px dashed var(--brass); }
+  /* ask */
+  .budget { margin-top:34px; display:flex; flex-direction:column; gap:0; max-width:62ch; }
+  .budget .line { display:flex; justify-content:space-between; align-items:baseline; padding:15px 0; border-bottom:1px solid var(--line); }
+  .budget .line .d { color:var(--ink); font-weight:600; font-size:16px; }
+  .budget .line .d small { display:block; color:var(--muted); font-weight:400; font-size:13px; margin-top:3px; }
+  .budget .line .amt { font-family:Georgia,serif; font-size:20px; color:var(--emerald); font-variant-numeric:tabular-nums; }
+  .budget .line.total .d { font-family:Georgia,serif; font-size:19px; }
+  .budget .line.total .amt { color:var(--ink); font-size:24px; }
+  .closing { margin-top:32px; font-family:Georgia,serif; font-size:clamp(20px,2.6vw,30px); color:var(--ink); max-width:24ch; line-height:1.2; }
+  .disclaimer { margin-top:24px; font-size:11.5px; color:var(--muted); max-width:70ch; line-height:1.55; }
 
-  @media (max-width: 720px) {
-    .split, .duo, .rblocks, .gamecap { grid-template-columns: 1fr; }
-    .stats { grid-template-columns: 1fr 1fr; }
-  }
+  .placeholder { color:var(--brass); font-style:normal; border-bottom:1px dashed var(--brass); }
+
+  @media (max-width:720px){ .split,.duo,.rblocks,.gamecap,.phases { grid-template-columns:1fr; } .stats { grid-template-columns:1fr 1fr; } }
 </style>
 
-<!-- ── 1 · TITLE ─────────────────────────────────────────────── -->
+<!-- ── 1 · TITLE ── -->
 <section class="slide">
   <div class="inner rise">
     <div class="brandmark">
@@ -190,70 +165,83 @@
       TimbSwap
     </div>
     <p class="eyebrow">Seed Brief · Confidential Draft</p>
-    <h1>A prize-linked<br>exchange.</h1>
-    <p class="title-sub">Prizes are paid from <b>yield</b> — never from principal. The exchange earns; the winners are drawn from the earnings.</p>
+    <h1>An economic engine,<br>not a token to trade.</h1>
+    <p class="title-sub">A prize-linked exchange where trading, liquidity, staking, and play <b>fund each other.</b> Prizes are paid from yield — never from principal.</p>
     <div class="chips">
       <span class="chip"><span class="dot">●</span> Live on Arbitrum testnet</span>
       <span class="chip">Fixed total supply</span>
       <span class="chip">Runs autonomously</span>
     </div>
   </div>
-  <div class="foot"><span>TimbSwap · Seed Brief</span><span class="n">01 / 09</span></div>
+  <div class="foot"><span>TimbSwap · Seed Brief</span><span class="n">01 / 11</span></div>
 </section>
 
-<!-- ── 2 · CONCEPT ───────────────────────────────────────────── -->
+<!-- ── 2 · THE PROBLEM ── -->
 <section class="slide">
   <div class="inner rise">
-    <p class="eyebrow">The Concept</p>
-    <h2>An exchange that pays a prize<br>for showing up.</h2>
-    <div class="split">
-      <div class="panel">
-        <p class="k">The Exchange</p>
-        <h3>Traders swap tokens</h3>
-        <p>A conventional automated exchange. Every trade pays a small fee, exactly as a market maker's spread does. This is the revenue engine.</p>
+    <p class="eyebrow">The Problem</p>
+    <h2>Most DeFi rents activity.<br>It doesn't earn it.</h2>
+    <div class="duo">
+      <div class="col house">
+        <h3>Speculation-only design</h3>
+        <p class="cap">The pattern that keeps failing</p>
+        <ul class="clean">
+          <li>Rewards are <b>printed</b>, not funded — emissions dilute holders to buy short-term activity.</li>
+          <li>When price stalls or emissions taper, <b>mercenary capital leaves</b> and usage collapses.</li>
+          <li>Incentives are <b>static</b>, disconnected from whether the protocol is actually healthy.</li>
+        </ul>
       </div>
-      <div class="panel">
-        <p class="k">The Prize Layer</p>
-        <h3>Activity earns a shot</h3>
-        <p>Fees and the yield on capital held in the protocol fund a recurring prize pot. Active traders compete for it, round after round.</p>
+      <div class="col player">
+        <h3>Why existing pieces don't fix it</h3>
+        <p class="cap">Each solves one slice, in isolation</p>
+        <ul class="clean">
+          <li>AMMs reward liquidity — but not <b>engagement.</b></li>
+          <li>Staking rewards holding — but is often <b>pure inflation.</b></li>
+          <li>Prize dapps drive attention — but are <b>detached from real yield.</b></li>
+          <li>Nobody ties them into one <b>self-funding loop.</b></li>
+        </ul>
       </div>
     </div>
-    <p class="aside">Think Premium Bonds, on rails: the prize is funded by the interest, so no one is ever paid out of another participant's deposit.
-      <span>A prize-linked-savings structure — a recognized, non-speculative model.</span>
-    </p>
   </div>
-  <div class="foot"><span>The Concept</span><span class="n">02 / 09</span></div>
+  <div class="foot"><span>The Problem</span><span class="n">02 / 11</span></div>
 </section>
 
-<!-- ── 3 · THE GAME ──────────────────────────────────────────── -->
+<!-- ── 3 · THE THESIS ── -->
 <section class="slide">
   <div class="inner rise">
-    <p class="eyebrow">The Game</p>
+    <p class="eyebrow">Our Thesis</p>
+    <p class="thesis">Treat the <b>incentive system</b> itself as the product — a closed loop that <b>recirculates</b> real earnings.</p>
+    <p class="thesis-note">The closest traditional analogue is a <b>prize-linked savings account</b> — Premium Bonds, Save-to-Win — where prizes come from interest, not deposits. TimbSwap generalizes that: every part of the protocol earns, and those earnings are routed back to the people who create them. <b>Not another exchange — a better economic engine.</b></p>
+  </div>
+  <div class="foot"><span>Our Thesis</span><span class="n">03 / 11</span></div>
+</section>
+
+<!-- ── 4 · THE GAME ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">The Product · The Game</p>
     <h2>Every round is a safe waiting<br>to be cracked.</h2>
     <p class="lede">Each round hides a six-character combination. Trading is how you work the dials.</p>
     <div class="dials" aria-hidden="true">
-      <div class="dial solved"><span>N</span></div>
-      <div class="dial solved"><span>9</span></div>
-      <div class="dial solved"><span>L</span></div>
-      <div class="dial"><span>H</span></div>
-      <div class="dial"><span>2</span></div>
-      <div class="dial open"><span>2</span></div>
+      <div class="dial solved"><span>N</span></div><div class="dial solved"><span>9</span></div>
+      <div class="dial solved"><span>L</span></div><div class="dial"><span>H</span></div>
+      <div class="dial"><span>2</span></div><div class="dial open"><span>2</span></div>
     </div>
     <div class="dial-lbl"><span class="lock">▮</span> The round's six-dial combination — nudged one turn at a time.</div>
     <div class="gamecap">
-      <p><b>You don't buy tickets — you earn your turn.</b> Every eligible trade nudges the dials. Your entry is your attempt at the combination.</p>
-      <p><b>When the round settles, matches win.</b> Anyone whose combination lands on the drawn one cracks the safe and splits the pot for that round.</p>
+      <p><b>You don't buy tickets — you earn your turn.</b> Every eligible trade works the dials. Your entry is your attempt at the combination.</p>
+      <p><b>When the round settles, matches win.</b> Anyone whose combination lands on the drawn one cracks the safe and splits that round's pot.</p>
     </div>
   </div>
-  <div class="foot"><span>The Game</span><span class="n">03 / 09</span></div>
+  <div class="foot"><span>The Product · The Game</span><span class="n">04 / 11</span></div>
 </section>
 
-<!-- ── 4 · REDISTRIBUTION CYCLE ──────────────────────────────── -->
+<!-- ── 5 · REDISTRIBUTION CYCLE ── -->
 <section class="slide">
   <div class="inner rise">
-    <p class="eyebrow">The Redistribution Cycle</p>
+    <p class="eyebrow">Economic Design · The Cycle</p>
     <h2>Value collected, value returned.</h2>
-    <p class="lede">The protocol doesn't accumulate for insiders. On a fixed cadence it sweeps what it has earned and routes it straight back to participants.</p>
+    <p class="lede">On a fixed cadence, the protocol sweeps what it has earned and routes it straight back to participants — it doesn't accumulate for insiders.</p>
     <div class="redist">
       <div class="node in"><div class="step">Comes in</div><div class="lbl">Fees + yield on pooled capital</div><div class="sub">Earnings, not deposits</div></div>
       <div class="arrow">→</div>
@@ -262,48 +250,69 @@
       <div class="node out"><div class="step">Goes back out</div><div class="lbl">Winners split the pot</div><div class="sub">The prize, every round</div></div>
     </div>
     <p class="loopnote">↺  Swept every six rounds, in a fixed priority order — then the cycle restarts.</p>
-    <p class="routed">The same sweep also funds emissions to the people who build the market: <b>liquidity providers, stakers, and boosted pools.</b></p>
+    <p class="routed">The same sweep funds emissions to the people who build the market: <b>liquidity providers, stakers, and boosted pools.</b></p>
   </div>
-  <div class="foot"><span>The Redistribution Cycle</span><span class="n">04 / 09</span></div>
+  <div class="foot"><span>Economic Design · The Cycle</span><span class="n">05 / 11</span></div>
 </section>
 
-<!-- ── 5 · BARRIERS ──────────────────────────────────────────── -->
+<!-- ── 6 · BARRIERS ── -->
 <section class="slide">
   <div class="inner rise">
-    <p class="eyebrow">Barriers, Both Sides</p>
+    <p class="eyebrow">Economic Design · Barriers</p>
     <h2>Guardrails for the house.<br>Skin in for the player.</h2>
     <div class="duo">
       <div class="col house">
         <h3>On the game's side</h3>
         <p class="cap">Why the house can't over-extend</p>
         <ul class="clean">
-          <li>The safe only holds what's been earned — the pot is funded by <b>yield, never new deposits.</b></li>
-          <li>A <b>solvency stop</b> freezes payouts at 99% of what's owed. It never writes a check it can't cash.</li>
+          <li>The pot is funded by <b>yield, never new deposits.</b></li>
+          <li>A <b>solvency stop</b> freezes payouts at 99% of what's owed — it never writes a check it can't cash.</li>
           <li>Emissions retarget to real revenue — <b>no printing your way out.</b></li>
           <li><b>Fixed total supply: 100,000,000 tokens</b>, with no mint beyond it.</li>
-          <li>Foundation before flourish: core rewards are funded before speculative ones.</li>
+          <li>Foundation before flourish: core rewards funded before speculative ones.</li>
         </ul>
       </div>
       <div class="col player">
         <h3>On the player's side</h3>
         <p class="cap">Why a win is earned, not handed out</p>
         <ul class="clean">
-          <li><b>Skin in to sit at the table</b> — you hold the token or provide liquidity to play.</li>
+          <li><b>Skin in to sit at the table</b> — hold the token or provide liquidity to play.</li>
           <li><b>One dial per wallet</b> each round — no one buys the whole board.</li>
-          <li>You have to show up: only <b>active trades</b> work the dials. Passive holders don't get drafted.</li>
-          <li>Winners <b>claim inside a window</b> — collect the trophy, or it rolls back into the pot.</li>
+          <li>Only <b>active trades</b> work the dials. Passive holders don't get drafted.</li>
+          <li>Winners <b>claim inside a window</b> — collect, or it rolls back into the pot.</li>
         </ul>
       </div>
     </div>
-    <p class="balance">Getting picked isn't pure luck — it's earning a spot on the roster by playing, then being drafted into the winners when the round settles.</p>
   </div>
-  <div class="foot"><span>Barriers, Both Sides</span><span class="n">05 / 09</span></div>
+  <div class="foot"><span>Economic Design · Barriers</span><span class="n">06 / 11</span></div>
 </section>
 
-<!-- ── 6 · TRACTION ──────────────────────────────────────────── -->
+<!-- ── 7 · RISK & OPEN ITEM ── -->
 <section class="slide">
   <div class="inner rise">
-    <p class="eyebrow">Where We Are</p>
+    <p class="eyebrow">Risk &amp; the Open Item</p>
+    <h2>What we've closed — and what's still open.</h2>
+    <div class="rblocks">
+      <div class="rblock">
+        <h3>Closed by design</h3>
+        <p><b>Custody:</b> non-custodial. Users hold their own keys; the protocol never takes discretionary control of funds.</p>
+        <p><b>Contracts:</b> testnet-hardened, with permissionless refund and recovery paths and every action logged to live telemetry for audit.</p>
+        <p><b>Solvency:</b> the barriers on the prior page make over-emission and dilution structurally impossible.</p>
+      </div>
+      <div class="rblock flag">
+        <h3>The open item <span class="tag">GATING</span></h3>
+        <p><b>Legal &amp; regulatory.</b> A yield-funded prize sits on the prize-linked-savings precedent — but the classification is jurisdiction-specific.</p>
+        <p>Formal counsel and likely geofencing are treated as <b>conditions to clear before mainnet</b>, not afterthoughts. We'd rather name it plainly than have you find it.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Risk &amp; the Open Item</span><span class="n">07 / 11</span></div>
+</section>
+
+<!-- ── 8 · TRACTION ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Current Progress</p>
     <h2>The machine already runs.</h2>
     <p class="lede">Deployed and operating on Arbitrum testnet — the full loop, end to end, at zero monetary risk to participants.</p>
     <div class="stats">
@@ -312,53 +321,59 @@
       <div class="stat"><div class="v">24/7</div><div class="l">unattended keeper running the cycle</div></div>
       <div class="stat"><div class="v">Full</div><div class="l">loop live: trade · stake · farm · play · pay out</div></div>
     </div>
-    <p class="body" style="margin-top:36px">Testnet proves the system <b style="color:var(--ink)">works</b>. This phase exists to prove it is <b style="color:var(--ink)">engaging</b> — repeat play and trade volume that tracks the rounds — before real capital is deployed.</p>
+    <p class="body" style="margin-top:34px">Testnet proves the system <b style="color:var(--ink)">works</b>. This phase proves it is <b style="color:var(--ink)">engaging</b> — repeat play and trade volume that tracks the rounds — before real capital is deployed.</p>
   </div>
-  <div class="foot"><span>Where We Are</span><span class="n">06 / 09</span></div>
+  <div class="foot"><span>Current Progress</span><span class="n">08 / 11</span></div>
 </section>
 
-<!-- ── 7 · RISK & OPEN ITEM ──────────────────────────────────── -->
+<!-- ── 9 · PATH TO MAINNET ── -->
 <section class="slide">
   <div class="inner rise">
-    <p class="eyebrow">Risk &amp; the Open Item</p>
-    <h2>What we've closed — and what's still open.</h2>
-    <div class="rblocks">
-      <div class="rblock">
-        <h3>Closed by design</h3>
-        <p><b style="color:var(--ink)">Custody:</b> non-custodial. Users hold their own keys; the protocol never takes discretionary control of funds.</p>
-        <p><b style="color:var(--ink)">Contracts:</b> testnet-hardened, with permissionless refund and recovery paths and every action logged to live telemetry for audit.</p>
-        <p><b style="color:var(--ink)">Solvency:</b> the barriers on the prior page make over-emission and dilution structurally impossible.</p>
-      </div>
-      <div class="rblock flag">
-        <h3>The open item <span class="tag">GATING</span></h3>
-        <p><b style="color:var(--ink)">Legal &amp; regulatory.</b> A prize mechanic funded by yield sits on the prize-linked-savings precedent — but the classification is jurisdiction-specific.</p>
-        <p>Formal counsel and likely geofencing are treated as <b style="color:var(--ink)">conditions to clear before mainnet</b>, not afterthoughts. We'd rather name it plainly than have you find it.</p>
-      </div>
-    </div>
-  </div>
-  <div class="foot"><span>Risk &amp; the Open Item</span><span class="n">07 / 09</span></div>
-</section>
-
-<!-- ── 8 · GRADUATION GATE ───────────────────────────────────── -->
-<section class="slide">
-  <div class="inner rise">
-    <p class="eyebrow brass">Testnet → Mainnet</p>
+    <p class="eyebrow brass">Go-to-Market · Path to Mainnet</p>
     <h2>We deploy when engagement is proven — not before.</h2>
-    <p class="lede">Mainnet is a calculated step gated on evidence, so the milestone is measured, not felt.</p>
+    <p class="lede">Grow the community on testnet; graduate to mainnet on evidence, so the milestone is measured, not felt.</p>
     <div class="gate">
-      <div class="row"><div class="mark">1</div><div class="txt"><b>Sustained active base</b> — <span class="placeholder">[N]</span> wallets holding across <span class="placeholder">[M]</span> settled rounds.<span>Depth of play, not a one-time spike.</span></div></div>
-      <div class="row"><div class="mark">2</div><div class="txt"><b>Repeat participation</b> — <span class="placeholder">[X%]</span> of players return for another round.<span>The single strongest signal of pull.</span></div></div>
-      <div class="row"><div class="mark">3</div><div class="txt"><b>Attributable volume</b> — eligible trade volume that visibly tracks round activity.<span>Proof the game drives the exchange.</span></div></div>
-      <div class="row"><div class="mark">4</div><div class="txt"><b>Cleared gating conditions</b> — completed audit and legal counsel sign-off.<span>Non-negotiable before real value.</span></div></div>
+      <div class="row"><div class="mark">1</div><div class="txt"><b>Sustained active base</b> — <span class="placeholder">[N]</span> wallets across <span class="placeholder">[M]</span> settled rounds.<span>Depth of play, not a one-time spike.</span></div></div>
+      <div class="row"><div class="mark">2</div><div class="txt"><b>Repeat participation</b> — <span class="placeholder">[X%]</span> of players return.<span>The single strongest signal of pull.</span></div></div>
+      <div class="row"><div class="mark">3</div><div class="txt"><b>Attributable volume</b> — eligible trade volume that tracks round activity.<span>Proof the game drives the exchange.</span></div></div>
+      <div class="row"><div class="mark">4</div><div class="txt"><b>Cleared gating conditions</b> — completed audit and legal sign-off.<span>Non-negotiable before real value.</span></div></div>
     </div>
   </div>
-  <div class="foot"><span>Testnet → Mainnet</span><span class="n">08 / 09</span></div>
+  <div class="foot"><span>Go-to-Market</span><span class="n">09 / 11</span></div>
 </section>
 
-<!-- ── 9 · THE ASK ───────────────────────────────────────────── -->
+<!-- ── 10 · ROADMAP / VISION ── -->
 <section class="slide">
   <div class="inner rise">
-    <p class="eyebrow brass">The Ask</p>
+    <p class="eyebrow brass">Long-Term Vision · Roadmap</p>
+    <h2>From fixed rules to adaptive incentives.</h2>
+    <p class="lede">Where the engine is headed — stated as roadmap, not as a capability we claim today.</p>
+    <div class="phases">
+      <div class="phase now">
+        <span class="ptag">Now · Live</span>
+        <h3>Rule-based allocation</h3>
+        <p>The reward cycle is deterministic and solvency-bounded — a fixed priority waterfall. Predictable and auditable by design.</p>
+      </div>
+      <div class="phase next">
+        <span class="ptag">Next</span>
+        <h3>Instrumented signals</h3>
+        <p>The protocol already emits rich telemetry — liquidity depth, swaps, staking, treasury health. Next is turning that into live signals and dashboards.</p>
+      </div>
+      <div class="phase vision">
+        <span class="ptag">Vision</span>
+        <h3>Adaptive policy</h3>
+        <p>An allocation policy that tunes incentives to observed protocol health — still on-chain, still transparent, still solvency-bounded.</p>
+      </div>
+    </div>
+    <p class="roadnote">The same telemetry that proves solvency today is the substrate for adaptive incentives tomorrow. <b>Every phase keeps the identical guardrails</b> — fixed supply, the solvency stop, non-custodial. The ambition grows; the discipline doesn't move.</p>
+  </div>
+  <div class="foot"><span>Long-Term Vision</span><span class="n">10 / 11</span></div>
+</section>
+
+<!-- ── 11 · THE ASK ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow brass">Capital Strategy · The Ask</p>
     <h2>Seed the first mainnet pot.</h2>
     <p class="lede">Capital does two things: subsidizes early rounds until fees and yield carry them, and funds the graduation runway.</p>
     <div class="budget">
@@ -370,17 +385,17 @@
     <p class="closing">Testnet proves it works. Seed proves it earns.</p>
     <p class="disclaimer">Bracketed figures are placeholders to be finalized from live on-chain engagement data. This brief describes a software project; it is not an offer of securities or investment, nor legal advice. The regulatory item requires qualified counsel before any real-value deployment.</p>
   </div>
-  <div class="foot"><span>The Ask</span><span class="n">09 / 09</span></div>
+  <div class="foot"><span>Capital Strategy · The Ask</span><span class="n">11 / 11</span></div>
 </section>
 
 <script>
   (function () {
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     var els = document.querySelectorAll(".rise");
-    if (reduce || !("IntersectionObserver" in window)) { els.forEach(function (e) { e.classList.add("in"); }); return; }
+    if (reduce || !("IntersectionObserver" in window)) { els.forEach(function (e){ e.classList.add("in"); }); return; }
     var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
-    }, { threshold: 0.25 });
-    els.forEach(function (e) { io.observe(e); });
+      entries.forEach(function (en){ if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+    }, { threshold: 0.2 });
+    els.forEach(function (e){ io.observe(e); });
   })();
 </script>

@@ -16,6 +16,13 @@ not from new deposits. This is the single most important design decision: **it i
 not a Ponzi.** No participant is paid with another's principal. The token has a **fixed total
 supply.**
 
+### The thesis
+
+Most DeFi *rents* activity — it prints rewards to buy short-term usage, and when emissions
+taper the capital leaves. TimbSwap treats the **incentive system itself as the product**: a
+closed loop that recirculates *real* earnings, where trading, liquidity, staking, treasury, and
+play reinforce one another. **Not another exchange — a better economic engine.**
+
 ### The game
 
 Each round hides a **six-character combination** — think of it as a safe. Players don't buy
@@ -66,6 +73,15 @@ and likely geofencing are treated as conditions to clear before mainnet, not aft
 - **~20+ prize rounds have settled autonomously**; the keeper is proven in production.
 - **Community-building phase:** growing an active player base at zero monetary risk, to prove
   *engagement* before real capital is deployed.
+
+### Long-term vision (roadmap, not a current claim)
+
+Today the allocation cycle is **deliberately rule-based and solvency-bounded** — predictable and
+auditable. But the protocol already emits rich telemetry (liquidity depth, swaps, staking,
+treasury health). That is the substrate for a future **adaptive incentive policy** — incentives
+that tune to observed protocol health, still on-chain, still transparent, still solvency-bounded.
+Stated plainly as the roadmap: *the ambition grows; the guardrails don't move.* This is where it
+is headed, not a capability claimed today.
 
 ### The ask — seed for mainnet
 
