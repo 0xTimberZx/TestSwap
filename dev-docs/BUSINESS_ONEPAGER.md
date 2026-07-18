@@ -23,6 +23,23 @@ taper the capital leaves. TimbSwap treats the **incentive system itself as the p
 closed loop that recirculates *real* earnings, where trading, liquidity, staking, treasury, and
 play reinforce one another. **Not another exchange — a better economic engine.**
 
+### Precedent — proven in the real world, unclaimed on-chain
+
+The model is not speculative; it is proven at enormous scale off-chain:
+
+- **Premium Bonds (UK)** — prize-linked savings since 1956, well over £100B held by tens of
+  millions, prizes paid from interest. *Our exact model, at national scale.*
+- **Loyalty as infrastructure** — airline miles and card points, where the reward layer grew
+  worth *more than the airline running it*: proof an incentive system can become the primary asset.
+- **Tokenized real-world yield (RWAs)** — real yield is arriving on-chain, but today's RWAs stop
+  at *wrapping* it; none pairs it with an engagement engine.
+
+Against the extractive analogues — lotteries and casinos take the player's money; we pay from
+yield and recirculate. **The claim:** these models are proven, durable, and vast in the real
+world, yet *nothing in crypto has ascended to a comparable share of its own space.* On-chain
+prize-linked savings peaked in the low hundreds of millions and faded. Relative to the size of
+crypto, **the seat is still empty** — and that is the seat we're building for.
+
 ### The game
 
 Each round hides a **six-character combination** — think of it as a safe. Players don't buy

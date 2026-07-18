@@ -154,6 +154,13 @@
 
   .placeholder { color:var(--brass); font-style:normal; border-bottom:1px dashed var(--brass); }
 
+  /* comparables claim band */
+  .claimband { margin-top:26px; background:var(--card); border:1px solid var(--line); border-left:3px solid var(--brass); border-radius:12px; padding:20px 24px; box-shadow:var(--shadow); }
+  .claimband .k { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--brass); font-weight:700; margin:0 0 10px; }
+  .claimband p { font-family:Georgia,serif; font-size:clamp(16px,1.9vw,21px); color:var(--ink); line-height:1.38; max-width:70ch; }
+  .claimband p b { color:var(--brass); font-weight:600; }
+  .compare-src { font-size:12px; color:var(--muted); margin-top:3px; }
+
   @media (max-width:720px){ .split,.duo,.rblocks,.gamecap,.phases { grid-template-columns:1fr; } .stats { grid-template-columns:1fr 1fr; } }
 </style>
 
@@ -173,7 +180,7 @@
       <span class="chip">Runs autonomously</span>
     </div>
   </div>
-  <div class="foot"><span>TimbSwap · Seed Brief</span><span class="n">01 / 11</span></div>
+  <div class="foot"><span>TimbSwap · Seed Brief</span><span class="n">01 / 12</span></div>
 </section>
 
 <!-- ── 2 · THE PROBLEM ── -->
@@ -203,7 +210,7 @@
       </div>
     </div>
   </div>
-  <div class="foot"><span>The Problem</span><span class="n">02 / 11</span></div>
+  <div class="foot"><span>The Problem</span><span class="n">02 / 12</span></div>
 </section>
 
 <!-- ── 3 · THE THESIS ── -->
@@ -213,7 +220,40 @@
     <p class="thesis">Treat the <b>incentive system</b> itself as the product — a closed loop that <b>recirculates</b> real earnings.</p>
     <p class="thesis-note">The closest traditional analogue is a <b>prize-linked savings account</b> — Premium Bonds, Save-to-Win — where prizes come from interest, not deposits. TimbSwap generalizes that: every part of the protocol earns, and those earnings are routed back to the people who create them. <b>Not another exchange — a better economic engine.</b></p>
   </div>
-  <div class="foot"><span>Our Thesis</span><span class="n">03 / 11</span></div>
+  <div class="foot"><span>Our Thesis</span><span class="n">03 / 12</span></div>
+</section>
+
+<!-- ── PRECEDENT ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Precedent &amp; the Open Frontier</p>
+    <h2>Proven in the real world.<br>Unclaimed on-chain.</h2>
+    <div class="duo">
+      <div class="col house">
+        <h3>Proven at scale — our model</h3>
+        <p class="cap">Boring, durable, enormous</p>
+        <ul class="clean">
+          <li><b>Premium Bonds (UK).</b> Prize-linked savings since 1956 — well over £100B held by tens of millions. Prizes from interest; principal intact. <em>Our exact model, at national scale.</em></li>
+          <li><b>Loyalty as infrastructure.</b> Airline miles and card points — the reward layer grew worth <b>more than the airline running it.</b> Proof an incentive system can become the primary asset.</li>
+          <li><b>Tokenized real-world yield (RWAs).</b> Real yield is arriving on-chain — but today's RWAs stop at <em>wrapping</em> it. None pairs it with an engagement engine.</li>
+        </ul>
+      </div>
+      <div class="col player">
+        <h3>The extractive analogues</h3>
+        <p class="cap">Huge — but they take from the player</p>
+        <ul class="clean">
+          <li><b>Lotteries &amp; national games.</b> Hundreds of billions in annual play — but the house keeps the take. We pay from yield and recirculate.</li>
+          <li><b>Casinos — "the house."</b> Always solvent, by keeping the player's money. We stay solvent <b>without touching principal.</b></li>
+          <li><b>Speculative token farms.</b> Loud, then gone — printed rewards with no earnings underneath.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="claimband">
+      <p class="k">The open seat</p>
+      <p>These models are proven, durable, and vast in the real world — yet <b>nothing in crypto has ascended to a comparable share of its own space.</b> On-chain prize-linked savings peaked in the low hundreds of millions and faded; no incentive layer has become the asset the way loyalty did in aviation. Relative to the size of crypto, the seat is still empty — and that is the seat we're building for.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Precedent &amp; the Open Frontier</span><span class="n">04 / 12</span></div>
 </section>
 
 <!-- ── 4 · THE GAME ── -->
@@ -233,7 +273,7 @@
       <p><b>When the round settles, matches win.</b> Anyone whose combination lands on the drawn one cracks the safe and splits that round's pot.</p>
     </div>
   </div>
-  <div class="foot"><span>The Product · The Game</span><span class="n">04 / 11</span></div>
+  <div class="foot"><span>The Product · The Game</span><span class="n">05 / 12</span></div>
 </section>
 
 <!-- ── 5 · REDISTRIBUTION CYCLE ── -->
@@ -252,7 +292,7 @@
     <p class="loopnote">↺  Swept every six rounds, in a fixed priority order — then the cycle restarts.</p>
     <p class="routed">The same sweep funds emissions to the people who build the market: <b>liquidity providers, stakers, and boosted pools.</b></p>
   </div>
-  <div class="foot"><span>Economic Design · The Cycle</span><span class="n">05 / 11</span></div>
+  <div class="foot"><span>Economic Design · The Cycle</span><span class="n">06 / 12</span></div>
 </section>
 
 <!-- ── 6 · BARRIERS ── -->
@@ -284,7 +324,7 @@
       </div>
     </div>
   </div>
-  <div class="foot"><span>Economic Design · Barriers</span><span class="n">06 / 11</span></div>
+  <div class="foot"><span>Economic Design · Barriers</span><span class="n">07 / 12</span></div>
 </section>
 
 <!-- ── 7 · RISK & OPEN ITEM ── -->
@@ -306,7 +346,7 @@
       </div>
     </div>
   </div>
-  <div class="foot"><span>Risk &amp; the Open Item</span><span class="n">07 / 11</span></div>
+  <div class="foot"><span>Risk &amp; the Open Item</span><span class="n">08 / 12</span></div>
 </section>
 
 <!-- ── 8 · TRACTION ── -->
@@ -323,7 +363,7 @@
     </div>
     <p class="body" style="margin-top:34px">Testnet proves the system <b style="color:var(--ink)">works</b>. This phase proves it is <b style="color:var(--ink)">engaging</b> — repeat play and trade volume that tracks the rounds — before real capital is deployed.</p>
   </div>
-  <div class="foot"><span>Current Progress</span><span class="n">08 / 11</span></div>
+  <div class="foot"><span>Current Progress</span><span class="n">09 / 12</span></div>
 </section>
 
 <!-- ── 9 · PATH TO MAINNET ── -->
@@ -339,7 +379,7 @@
       <div class="row"><div class="mark">4</div><div class="txt"><b>Cleared gating conditions</b> — completed audit and legal sign-off.<span>Non-negotiable before real value.</span></div></div>
     </div>
   </div>
-  <div class="foot"><span>Go-to-Market</span><span class="n">09 / 11</span></div>
+  <div class="foot"><span>Go-to-Market</span><span class="n">10 / 12</span></div>
 </section>
 
 <!-- ── 10 · ROADMAP / VISION ── -->
@@ -367,7 +407,7 @@
     </div>
     <p class="roadnote">The same telemetry that proves solvency today is the substrate for adaptive incentives tomorrow. <b>Every phase keeps the identical guardrails</b> — fixed supply, the solvency stop, non-custodial. The ambition grows; the discipline doesn't move.</p>
   </div>
-  <div class="foot"><span>Long-Term Vision</span><span class="n">10 / 11</span></div>
+  <div class="foot"><span>Long-Term Vision</span><span class="n">11 / 12</span></div>
 </section>
 
 <!-- ── 11 · THE ASK ── -->
@@ -385,7 +425,7 @@
     <p class="closing">Testnet proves it works. Seed proves it earns.</p>
     <p class="disclaimer">Bracketed figures are placeholders to be finalized from live on-chain engagement data. This brief describes a software project; it is not an offer of securities or investment, nor legal advice. The regulatory item requires qualified counsel before any real-value deployment.</p>
   </div>
-  <div class="foot"><span>Capital Strategy · The Ask</span><span class="n">11 / 11</span></div>
+  <div class="foot"><span>Capital Strategy · The Ask</span><span class="n">12 / 12</span></div>
 </section>
 
 <script>
