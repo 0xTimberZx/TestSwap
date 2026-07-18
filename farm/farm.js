@@ -214,10 +214,10 @@ function boostPoolShell(pid) {
         <div class="pool-apr" id="boost-${pid}-apr">— APR</div>
       </div>
       <div class="pool-stats">
-        <div class="pool-stat"><span class="pool-stat-label">Weight</span><span class="pool-stat-val" id="boost-${pid}-weight">—</span></div>
+        <div class="pool-stat"><span class="pool-stat-label">Weight</span><span class="pool-stat-val pool-stat-fixed" id="boost-${pid}-weight" title="Protocol-set — fixed by pool weight">—</span></div>
         <div class="pool-stat"><span class="pool-stat-label">Total Staked</span><span class="pool-stat-val" id="boost-${pid}-total">—</span></div>
         <div class="pool-stat"><span class="pool-stat-label">Your Stake</span><span class="pool-stat-val" id="boost-${pid}-mine">—</span></div>
-        <div class="pool-stat"><span class="pool-stat-label">Pending</span><span class="pool-stat-val pool-stat-green" id="boost-${pid}-earned">—</span></div>
+        <div class="pool-stat pool-stat-span"><span class="pool-stat-label">Pending</span><span class="pool-stat-val pool-stat-green" id="boost-${pid}-earned">—</span></div>
       </div>
       <div class="pool-input-row">
         <input id="boost-${pid}-amount" class="pool-input" type="number" placeholder="0.0 LP" />
