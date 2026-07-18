@@ -316,6 +316,7 @@ async function pollRoundState() {
     // The three secondary reads (escrow backing, accruing yield, round
     // entrants) are independent — fire them together instead of three serial
     // round-trips on every 4s poll. Each resolves to null on read failure.
+    let activeEntries = null; // entrants that still carry live vault weight
     const hasVault = ADDRESSES.TimbYieldVault && !/^0x0{40}$/.test(ADDRESSES.TimbYieldVault.replace("0x",""));
     const [escrowBal, accrued, entrants] = await Promise.all([
       ADDRESSES.PrizeEscrow ? readProv().getBalance(ADDRESSES.PrizeEscrow).catch(() => null) : null,
@@ -330,16 +331,19 @@ async function pollRoundState() {
     if (accrued && !accrued.isZero()) potSegs.push(`yield accruing ${fmt(accrued)} ETH`);
     document.getElementById("sub-pot").textContent = potSegs.join(" · ");
 
-    // Entries playing THIS round — was a dead "— entries" placeholder.
-    // "N entries · M earning": the entrant list is append-only round history,
-    // while yield weight follows LIVE ticket status — a replaced/cancelled/
-    // expired ticket leaves the vault instantly but stays counted as an
-    // entrant. Showing both stops the "5 entries but 0.0004 weight" confusion.
+    // Entries playing THIS round. getRoundEntrants() is append-only history —
+    // it keeps a wallet forever, even after that ticket is replaced/cancelled/
+    // expired and stops earning. So we don't trust the raw list length: an
+    // "entry" counts only if its ticket still carries LIVE vault weight
+    // (earningCount checks weightOf per entrant). This makes the entries number
+    // reconcile with the pot's yield weight by construction — no footnote, no
+    // "5 entries but 4 weight" gap to explain. Falls back to the raw count only
+    // if the vault read fails.
     if (entrants) {
-      let txt = `${entrants.length} ${entrants.length === 1 ? "entry" : "entries"}`;
-      const earning = await earningCount(s.round.toNumber(), entrants).catch(() => null);
-      if (earning !== null && earning !== entrants.length) txt += ` · ${earning} earning`;
-      document.getElementById("sub-entries").textContent = txt;
+      const active = await earningCount(s.round.toNumber(), entrants).catch(() => null);
+      activeEntries = active !== null ? active : entrants.length;
+      document.getElementById("sub-entries").textContent =
+        `${activeEntries} ${activeEntries === 1 ? "entry" : "entries"}`;
     }
 
     const timerEl = document.getElementById("sub-timer");
@@ -395,7 +399,8 @@ async function pollRoundState() {
           ? `$${(ethFloat * px).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ON THE LINE`
           : `${fmt(combined)} ETH ON THE LINE`;
         const stats = [`ROUND #${currentRoundNum}`, line];
-        if (entrants) stats.push(`${entrants.length} ${entrants.length === 1 ? "PLAYER" : "PLAYERS"} IN`);
+        const players = activeEntries != null ? activeEntries : (entrants ? entrants.length : null);
+        if (players != null) stats.push(`${players} ${players === 1 ? "PLAYER" : "PLAYERS"} IN`);
         const st = document.getElementById("nc-stats");
         if (st) st.textContent = stats.join("  ·  ");
       }
