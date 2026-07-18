@@ -96,7 +96,10 @@ let lastSegment = null;
 // at a FIXED real ETH rate (config ETH_USD_PRICE) — testnet ETH has no market
 // price, so a testnet pool ratio would be meaningless.
 function fmtUsd(v) {
-  const dp = v >= 100 ? 0 : v >= 1 ? 2 : 4;
+  // Always show cents at/above $1 — the pot includes accruing yield, so a
+  // $300.03 pot must not read as a flat "$300" (dropping the yield the deposit
+  // is earning). Sub-dollar keeps 4 dp so tiny early pots still move.
+  const dp = v >= 1 ? 2 : 4;
   return "$" + v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 

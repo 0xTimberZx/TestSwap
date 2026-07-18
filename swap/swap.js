@@ -44,6 +44,19 @@ let mode          = "swap"; // "swap" | "liquidity"
 let removePct     = 0;      // selected % for remove-liquidity
 let lpPairAddress = null;   // cached LP pair address for the current pair
 let lpBalanceWei  = null;   // cached LP balance for the connected wallet
+
+// LP tokens are 18-decimal, but a pair with a 6-decimal token (USDC/USDT)
+// mints LP on the order of 1e-7, so a fixed 6-dp format renders a REAL
+// position as "0.000000". Show adaptive precision: normal amounts get up to
+// 6 dp; sub-1 amounts get enough decimals to surface the value, trailing
+// zeros trimmed — so a tiny-but-real LP balance is visible, never a
+// misleading zero. (The Withdrawable row shows the position in token terms.)
+function fmtLp(wei) {
+  if (!wei || wei.isZero()) return "0";
+  const f = parseFloat(ethers.utils.formatUnits(wei, 18));
+  if (f >= 1) return f.toLocaleString("en-US", { maximumFractionDigits: 6 });
+  return f.toFixed(12).replace(/0+$/, "").replace(/\.$/, "");
+}
 // Cached pool state for the remove-liquidity preview so dragging the slider
 // recomputes the payout instantly, with no per-move network call.
 let lpReserveA    = null;
@@ -1134,7 +1147,7 @@ async function refreshLiquidity() {
       if (pairExists && userAddress) {
         const lp = new ethers.Contract(lpPairAddress, ERC20_ABI, read);
         lpBalanceWei = await lp.balanceOf(userAddress);
-        const s = fmt(lpBalanceWei, 18, 6);
+        const s = fmtLp(lpBalanceWei);
         lpEl.textContent = s;
         lpRemoveEl.textContent = "LP: " + s;
         if (wdEl) {
@@ -1260,7 +1273,7 @@ function renderRemovePreview() {
   if (!el) return;
   if (!lpBalanceWei || lpBalanceWei.isZero() || !lpReserveA || !lpTotalSupply || lpTotalSupply.isZero() || removePct <= 0 || !tokenIn || !tokenOut) {
     el.textContent = "";
-    if (lpEl) lpEl.textContent = "LP: " + (lpBalanceWei ? fmt(lpBalanceWei, 18, 6) : "—");
+    if (lpEl) lpEl.textContent = "LP: " + (lpBalanceWei ? fmtLp(lpBalanceWei) : "—");
     return;
   }
   const liq  = lpBalanceWei.mul(removePct).div(100);
@@ -1270,7 +1283,7 @@ function renderRemovePreview() {
     `You receive ≈ ${fmt(outA, tokenIn.decimals, 4)} ${tokenIn.symbol} + ` +
     `${fmt(outB, tokenOut.decimals, 4)} ${tokenOut.symbol}`;
   // Also show the LP amount being burned next to the "LP:" label.
-  if (lpEl) lpEl.textContent = `Burn ${fmt(liq, 18, 6)} of ${fmt(lpBalanceWei, 18, 6)} LP`;
+  if (lpEl) lpEl.textContent = `Burn ${fmtLp(liq)} of ${fmtLp(lpBalanceWei)} LP`;
 
   // Append the total USD of the withdrawal (async; guarded so a later drag that
   // rewrote the preview isn't clobbered by a stale price resolution).
