@@ -444,9 +444,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* Cap the height and scroll inside — a long history stays in a tidy panel
-     instead of pushing the page down. ~6 rows tall before it scrolls. */
-  max-height: 420px;
+  /* Compact panel: ~5 rows tall, then scroll through the rest of the 8 —
+     keeps the history tidy instead of pushing the page down. */
+  max-height: 300px;
   overflow-y: auto;
   /* Room so rows don't sit flush against the scrollbar. */
   padding-right: 4px;
