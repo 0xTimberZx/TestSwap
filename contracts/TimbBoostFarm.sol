@@ -700,12 +700,17 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Set the emission window ("a bit over 6 rounds", in seconds).
-     *         Takes effect at the next retarget (claim or top-up).
+     * @notice Set the emission window ("a bit over 6 rounds", in seconds) and
+     *         immediately re-aim the current reserve over it. Without the
+     *         inline retarget the rate keeps the OLD window until the next
+     *         claim/top-up — the footgun that stranded a mis-scaled deploy
+     *         emitting ~0/day even after the window was corrected.
      */
     function setEmissionWindow(uint256 windowSeconds) external onlyOwner {
         if (windowSeconds == 0) revert ZeroAmount();
+        _updateAllPools();          // settle accrual at the old rate first
         emissionWindow = windowSeconds;
+        _retarget();                // re-aim reserve/free over the new window now
         emit EmissionWindowSet(windowSeconds);
     }
 

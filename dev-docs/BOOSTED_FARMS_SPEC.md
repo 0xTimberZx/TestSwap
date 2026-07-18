@@ -236,6 +236,20 @@ TimbBoostFarm and BoostRewarder:
    it is the only record of the epoch cursor (a zero-grant epoch leaves no
    on-chain marker).
 
+## 9c. ⚠ Live-contract emission-window note (0x551D…Bd35)
+
+The deployed boost farm `0x551D…Bd35` was created with an **over-scaled
+`emissionWindow` (2e15 seconds)**, so its first seed set `rate = 100e18 / 2e15
+= 50000 wei/s` (≈0 TIMBS/day). `setEmissionWindow(129600)` fixed the variable
+but — in the deployed version — did **not** re-aim the rate (only a
+claim/`notifyRewardAmount` retargets). One-time fix for the LIVE contract:
+approve TIMBS, then `notifyRewardAmount(1e18)` → retargets `~101e18 / 129600 ≈
+7.8e14 wei/s ≈ 67 TIMBS/day`.
+
+The source now retargets inside `setEmissionWindow` (both TimbBoostFarm and
+BoostRewarder) so a **future redeploy** won't need the notify follow-up. The
+live contract predates that and keeps the workaround above.
+
 ## 9b. Seed plan (agreed Jul 17)
 
 `TimbBoostFarm` deployed: `0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35`.
