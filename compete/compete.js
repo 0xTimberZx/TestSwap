@@ -1427,10 +1427,10 @@ async function handleClaimWinnings(round) {
 
 // ─── Past Rounds ──────────────────────────────────────────────────────────────
 
-// Recent Rounds — the last N settled rounds, newest first. The list panel is
-// height-capped and scrolls internally (compete.css), so a deeper history
-// stays tidy instead of stretching the page.
-const PAST_ROUNDS_MAX = 25;
+// Recent Rounds — the last 8 settled rounds, newest first. The list panel is
+// height-capped and scrolls internally (compete.css), so the 8 sit in a
+// compact scrollable panel instead of stretching the page.
+const PAST_ROUNDS_MAX = 8;
 async function loadPastRounds() {
   const list = document.getElementById("past-rounds-list");
   const hasRows = () => !!list.querySelector(".past-round-row");
