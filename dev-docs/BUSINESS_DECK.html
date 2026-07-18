@@ -79,19 +79,33 @@
   .thesis-note { margin-top:30px; font-size:clamp(15px,1.7vw,18px); color:var(--ink-soft); max-width:58ch; }
   .thesis-note b { color:var(--ink); font-weight:600; }
 
-  /* the game — dials */
-  .dials { display:flex; gap:clamp(8px,1.4vw,14px); margin-top:36px; flex-wrap:wrap; }
-  .dial { flex:1 1 0; min-width:60px; aspect-ratio:3/4; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); display:grid; place-items:center; position:relative; overflow:hidden; }
-  .dial::before { content:""; position:absolute; inset:0 0 auto 0; height:34%; background:linear-gradient(180deg,rgba(0,0,0,.05),transparent); }
-  @media (prefers-color-scheme: dark) { .dial::before { background:linear-gradient(180deg,rgba(255,255,255,.05),transparent); } }
-  .dial span { font-family:"SF Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace; font-size:clamp(24px,4.4vw,44px); font-weight:600; color:var(--emerald); }
-  .dial.solved span { color:var(--brass); }
-  .dial.open { border-color:var(--brass); }
-  .dial-lbl { display:flex; align-items:center; gap:10px; margin-top:16px; font-size:12.5px; letter-spacing:.06em; color:var(--muted); }
-  .dial-lbl .lock { color:var(--brass); }
+  /* the game — faithful capture of the live round meter.
+     Fixed dark palette (mirrors the app), theme-independent, so the artwork
+     never drifts between deck revisions — it is a 1:1 of the real component. */
+  .appframe { margin-top:34px; background:#0b1017; border:1px solid #1c2630; border-radius:16px; box-shadow:0 18px 50px rgba(0,0,0,.28); overflow:hidden; max-width:840px; }
+  .appbar { display:flex; align-items:center; padding:11px 16px; border-bottom:1px solid #161f28; }
+  .appbar .dots { display:flex; gap:6px; }
+  .appbar .dots i { width:10px; height:10px; border-radius:50%; background:#2a3742; display:block; }
+  .appbar .url { margin-left:14px; font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:12px; color:#5f6b76; letter-spacing:.02em; }
+  .meter { display:flex; align-items:center; gap:18px; padding:22px 22px 20px; flex-wrap:wrap; }
+  .meter-side { display:flex; flex-direction:column; gap:4px; }
+  .meter-side .lab { font-size:10.5px; letter-spacing:.18em; color:#6a7580; font-weight:600; }
+  .meter-side .big { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:26px; font-weight:700; color:#eaf0f0; letter-spacing:.02em; }
+  .meter-side.right { margin-left:auto; text-align:right; align-items:flex-end; }
+  .meter-side.right .big .b { color:#3e9bff; }
+  .cells { display:flex; gap:10px; }
+  .cell { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .cell .sq { width:clamp(46px,6.4vw,64px); aspect-ratio:1; border-radius:12px; background:#10161d; border:1px solid #232e38; display:grid; place-items:center;
+    font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:clamp(22px,3.4vw,30px); font-weight:700; color:#8a949e; }
+  .cell .seg { font-size:9.5px; letter-spacing:.12em; color:#5c6670; font-weight:600; }
+  .cell.locked .sq { border-color:#e6b23e; color:#e6b23e; box-shadow:0 0 0 1px rgba(230,178,62,.35), 0 0 18px rgba(230,178,62,.12); }
+  .cell.active .sq { border-color:#3e9bff; color:#cfe3ff; box-shadow:0 0 0 1px rgba(62,155,255,.4); }
+  .cell.active .seg { color:#3e9bff; }
+  .appcap { margin-top:12px; font-size:12.5px; color:var(--muted); letter-spacing:.02em; }
   .gamecap { margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
   .gamecap p { font-size:15px; max-width:44ch; }
   .gamecap b { color:var(--ink); font-weight:600; }
+  @media (max-width:600px){ .cell .sq { width:44px; } .cells { gap:7px; } }
 
   /* redistribution */
   .redist { display:flex; align-items:stretch; gap:0; margin-top:38px; flex-wrap:wrap; }
@@ -260,17 +274,27 @@
 <section class="slide">
   <div class="inner rise">
     <p class="eyebrow">The Product · The Game</p>
-    <h2>Every round is a safe waiting<br>to be cracked.</h2>
-    <p class="lede">Each round hides a six-character combination. Trading is how you work the dials.</p>
-    <div class="dials" aria-hidden="true">
-      <div class="dial solved"><span>N</span></div><div class="dial solved"><span>9</span></div>
-      <div class="dial solved"><span>L</span></div><div class="dial"><span>H</span></div>
-      <div class="dial"><span>2</span></div><div class="dial open"><span>2</span></div>
+    <h2>Every round is a safe,<br>assembled one dial at a time.</h2>
+    <p class="lede">A six-character combination locks into place over the round. Your ticket is your guess at it.</p>
+    <div class="appframe" role="img" aria-label="TimbSwap live round meter: Round 22, segment 2 of 6, characters M 9 L H 2 2 with segment 1 locked and segment 2 active.">
+      <div class="appbar"><span class="dots"><i></i><i></i><i></i></span><span class="url">timbswap.xyz/compete</span></div>
+      <div class="meter">
+        <div class="meter-side"><span class="lab">ROUND</span><span class="big">#22</span></div>
+        <div class="cells">
+          <div class="cell locked"><div class="sq">M</div><span class="seg">SEG 1</span></div>
+          <div class="cell active"><div class="sq">9</div><span class="seg">SEG 2</span></div>
+          <div class="cell"><div class="sq">L</div><span class="seg">SEG 3</span></div>
+          <div class="cell"><div class="sq">H</div><span class="seg">SEG 4</span></div>
+          <div class="cell"><div class="sq">2</div><span class="seg">SEG 5</span></div>
+          <div class="cell"><div class="sq">2</div><span class="seg">SEG 6</span></div>
+        </div>
+        <div class="meter-side right"><span class="lab">SEGMENT</span><span class="big"><span class="b">2</span>/6</span></div>
+      </div>
     </div>
-    <div class="dial-lbl"><span class="lock">▮</span> The round's six-dial combination — nudged one turn at a time.</div>
+    <p class="appcap">The live round meter — segment 1 locked (gold), segment 2 active (blue), the rest still forming.</p>
     <div class="gamecap">
-      <p><b>You don't buy tickets — you earn your turn.</b> Every eligible trade works the dials. Your entry is your attempt at the combination.</p>
-      <p><b>When the round settles, matches win.</b> Anyone whose combination lands on the drawn one cracks the safe and splits that round's pot.</p>
+      <p><b>You set a six-character string before the round</b> — your guess at the combination it will lock into.</p>
+      <p><b>Segments lock one by one as eligible swaps run.</b> Match all six locked characters and you split that round's pot.</p>
     </div>
   </div>
   <div class="foot"><span>The Product · The Game</span><span class="n">05 / 12</span></div>
