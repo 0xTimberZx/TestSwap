@@ -1427,13 +1427,27 @@ async function handleClaimWinnings(round) {
 
 // ─── Past Rounds ──────────────────────────────────────────────────────────────
 
-// Recent Rounds — the last 8 settled rounds, newest first. The list panel is
-// height-capped and scrolls internally (compete.css), so the 8 sit in a
-// compact scrollable panel instead of stretching the page.
-const PAST_ROUNDS_MAX = 8;
+// Recent Rounds — settled rounds newest-first, shown 8 to a table. The table
+// flips (no internal scroll): page 0 is the newest 8, and the pager walks back
+// up to 128 rounds. pastRoundsPage is the current table index (0 = newest).
+const PAST_ROUNDS_PER_PAGE = 8;
+const PAST_ROUNDS_LOOKBACK = 128;
+let pastRoundsPage = 0;
+
+// Flip a table. dir -1 = newer (toward page 0), +1 = older. Clamped in
+// loadPastRounds against how many rounds actually exist.
+function pastRoundsFlip(dir) {
+  const next = pastRoundsPage + dir;
+  if (next < 0) return;
+  pastRoundsPage = next;
+  loadPastRounds();
+}
+
 async function loadPastRounds() {
   const list = document.getElementById("past-rounds-list");
+  const pager = document.getElementById("past-rounds-pager");
   const hasRows = () => !!list.querySelector(".past-round-row");
+  const hidePager = () => pager && pager.classList.add("hidden");
   try {
     const prize = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_ABI, readProv());
 
@@ -1444,12 +1458,23 @@ async function loadPastRounds() {
     if (!round) { try { round = (await prize.getRoundState()).round.toNumber(); } catch {} }
     if (!round || round <= 1) {
       if (!hasRows()) list.innerHTML = '<div class="empty-state">No completed rounds yet</div>';
+      hidePager();
       return;
     }
 
-    // Fetch up to the last 8 rounds concurrently (was serial per-round).
+    // Round-id window: newest settled candidate down to at most 128 rounds back.
+    const newest = round - 1;
+    const oldest = Math.max(1, round - PAST_ROUNDS_LOOKBACK);
+    const totalPages = Math.max(1, Math.ceil((newest - oldest + 1) / PAST_ROUNDS_PER_PAGE));
+    // Clamp the page in case rounds have advanced/settled since the last flip.
+    if (pastRoundsPage > totalPages - 1) pastRoundsPage = totalPages - 1;
+    if (pastRoundsPage < 0) pastRoundsPage = 0;
+
+    // Round ids for the current table (up to 8), newest-first.
+    const pageTop = newest - pastRoundsPage * PAST_ROUNDS_PER_PAGE;
+    const pageBottom = Math.max(oldest, pageTop - PAST_ROUNDS_PER_PAGE + 1);
     const ids = [];
-    for (let r = round - 1; r >= Math.max(1, round - PAST_ROUNDS_MAX); r--) ids.push(r);
+    for (let r = pageTop; r >= pageBottom; r--) ids.push(r);
     const results = await Promise.all(ids.map(r =>
       prize.getRoundResult(r).then(res => ({ r, res })).catch(() => null)
     ));
@@ -1478,8 +1503,23 @@ async function loadPastRounds() {
       }));
     }
 
+    // Show/enable the pager once there's more than one table's worth of history.
+    const renderPager = () => {
+      if (!pager) return;
+      if (totalPages <= 1) { pager.classList.add("hidden"); return; }
+      pager.classList.remove("hidden");
+      document.getElementById("past-page-label").textContent = `Page ${pastRoundsPage + 1} / ${totalPages}`;
+      document.getElementById("past-newer-btn").disabled = pastRoundsPage <= 0;
+      document.getElementById("past-older-btn").disabled = pastRoundsPage >= totalPages - 1;
+    };
+
     if (!settled.length) {
-      if (!hasRows()) list.innerHTML = '<div class="empty-state">No completed rounds yet</div>';
+      // A newer page with nothing settled shouldn't wipe an already-shown table,
+      // but page 0 with no settled rounds genuinely means no history yet.
+      if (!hasRows() || pastRoundsPage === 0) {
+        list.innerHTML = '<div class="empty-state">No completed rounds on this page</div>';
+      }
+      renderPager();
       return;
     }
 
@@ -1511,6 +1551,7 @@ async function loadPastRounds() {
           </div>
         </div>`;
     }).join("");
+    renderPager();
   } catch (e) {
     DebugHub.logError("loadPastRounds", e); // keep whatever's shown on a transient failure
   }

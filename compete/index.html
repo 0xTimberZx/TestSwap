@@ -34,7 +34,7 @@
     }
   </script>
   <link rel="stylesheet" href="../style.css?v=20260757k" />
-  <link rel="stylesheet" href="compete.css?v=20260718h" />
+  <link rel="stylesheet" href="compete.css?v=20260718i" />
 </head>
 <body>
 
@@ -295,6 +295,11 @@
       <div id="past-rounds-list" class="past-rounds-list">
         <div class="empty-state">Loading…</div>
       </div>
+      <div id="past-rounds-pager" class="past-rounds-pager hidden">
+        <button id="past-newer-btn" class="pager-btn" onclick="pastRoundsFlip(-1)">‹ Newer</button>
+        <span id="past-page-label" class="pager-label">Page 1</span>
+        <button id="past-older-btn" class="pager-btn" onclick="pastRoundsFlip(1)">Older ›</button>
+      </div>
     </div>
 
   </div>
@@ -333,7 +338,7 @@
   </footer>
 
   <script src="../config.js?v=20260718c"></script>
-  <script src="compete.js?v=20260718h"></script>
+  <script src="compete.js?v=20260718i"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
