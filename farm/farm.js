@@ -129,7 +129,9 @@ function boostAddr() {
   return (a && !/^0x0{40}$/.test(a.replace("0x", ""))) ? a : null;
 }
 
-// lp address -> "USDC/USDT" (resolved once, cached)
+// lp address -> "BASE/QUOTE" using the shared base/quote convention in
+// config.js (pairLabelFor: stables > native > others as the quote), so a pair
+// reads identically here, on explore, and on analytics. Resolved once, cached.
 const _pairNames = {};
 async function pairName(lp) {
   if (_pairNames[lp]) return _pairNames[lp];
@@ -140,7 +142,7 @@ async function pairName(lp) {
       new ethers.Contract(t0, SYMBOL_ABI, readProv()).symbol().catch(() => "?"),
       new ethers.Contract(t1, SYMBOL_ABI, readProv()).symbol().catch(() => "?")
     ]);
-    _pairNames[lp] = s0 + "/" + s1;
+    _pairNames[lp] = pairLabelFor(t0, s0, t1, s1);
   } catch {
     _pairNames[lp] = lp.slice(0, 6) + "…" + lp.slice(-4);
   }

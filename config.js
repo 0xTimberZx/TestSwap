@@ -404,6 +404,33 @@ function fmtTIMBS(wei, dp = 2) {
   return fmt(wei, 18, dp) + " TIMBS";
 }
 
+// ─── Shared pair labeling (base/quote orientation) ────────────────────────────
+// Single source of truth for how a pair reads: the higher-priority token is the
+// QUOTE (denominator), shown second — stables > native (WETH) > everything else.
+// So every pair reads consistently (X/USDC, X/WETH) instead of in arbitrary
+// factory token0/token1 order. Used by explore, analytics, and the farm's
+// boosted pools so the SAME pair labels the same way everywhere.
+function pairQuoteRank(addr) {
+  const a = (addr || "").toLowerCase();
+  const is = (k) => ADDRESSES[k] && a === ADDRESSES[k].toLowerCase();
+  if (is("USDC") || is("USDT")) return 3; // stables quote first
+  if (is("WETH")) return 2;               // then native
+  return 1;                               // then whitelisted / others
+}
+// Order two tokens base/quote by that priority (higher rank = quote, shown 2nd).
+// Equal priority keeps the given order. Returns {base, quote} of {addr, sym}.
+function orientPair(t0, sym0, t1, sym1) {
+  const flip = pairQuoteRank(t0) > pairQuoteRank(t1);
+  return flip
+    ? { base: { addr: t1, sym: sym1 }, quote: { addr: t0, sym: sym0 } }
+    : { base: { addr: t0, sym: sym0 }, quote: { addr: t1, sym: sym1 } };
+}
+// "BASE/QUOTE" label from token addresses + symbols.
+function pairLabelFor(t0, sym0, t1, sym1) {
+  const o = orientPair(t0, sym0, t1, sym1);
+  return `${o.base.sym}/${o.quote.sym}`;
+}
+
 // ─── Shared USD price oracle ──────────────────────────────────────────────────
 // Prices any listed token in USD off the live V2 pools, so any page can show an
 // "≈ $" estimate. Stables = $1; WETH via the USDC/WETH pool; anything else via

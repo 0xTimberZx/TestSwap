@@ -235,25 +235,17 @@ async function loadPools() {
   }
 }
 
-// Quote-token priority: stables > native (WETH) > everything else. The higher-
-// priority token becomes the QUOTE (denominator), shown second — so every pair
-// reads consistently (X/USDC, X/WETH) instead of in arbitrary factory address
-// order. Equal priority keeps the pool's own token0/token1 order.
-function quoteRank(addr) {
-  const a = (addr || "").toLowerCase();
-  const is = (k) => ADDRESSES[k] && a === ADDRESSES[k].toLowerCase();
-  if (is("USDC") || is("USDT")) return 3; // stables quote first
-  if (is("WETH")) return 2;               // then native
-  return 1;                                // then whitelisted / others
-}
-// Orient a pool as base/quote by that priority (higher rank = quote, shown 2nd).
+// Base/quote orientation uses the SHARED convention in config.js
+// (pairQuoteRank: stables > native > others → quote shown second), so pair
+// labels match the farm and analytics pages exactly. orient() also carries the
+// reserves so pricing follows the same base/quote choice.
 function orient(p) {
-  const flip = quoteRank(p.t0) > quoteRank(p.t1); // t0 outranks t1 → t0 is quote
+  const flip = pairQuoteRank(p.t0) > pairQuoteRank(p.t1); // t0 outranks t1 → t0 is quote
   return flip
     ? { baseSym: p.sym1, quoteSym: p.sym0, baseR: p.r1, quoteR: p.r0 }
     : { baseSym: p.sym0, quoteSym: p.sym1, baseR: p.r0, quoteR: p.r1 };
 }
-function pairLabel(p) { const o = orient(p); return `${o.baseSym}/${o.quoteSym}`; }
+function pairLabel(p) { return pairLabelFor(p.t0, p.sym0, p.t1, p.sym1); }
 
 function renderPools() {
   const tbody = document.getElementById("pools-tbody");
