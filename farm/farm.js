@@ -81,8 +81,18 @@ async function loadPool(pool) {
       document.getElementById(pool + "-wallet").textContent =
         "Balance: " + fmt(inWallet, 18, 4) + (pool === "staking" ? " TIMBS" : " LP");
 
-      document.getElementById(pool + "-stake-btn").disabled = false;
-      document.getElementById(pool + "-stake-btn").textContent = "Stake";
+      // Nothing to stake with? Turn the (otherwise dead) green Stake button
+      // into a live "Buy TIMBS" / "Get LP" that routes to Swap, instead of an
+      // active-looking button that does nothing.
+      const stakeBtn = document.getElementById(pool + "-stake-btn");
+      stakeBtn.disabled = false;
+      if (inWallet.isZero()) {
+        stakeBtn.dataset.action  = "get";
+        stakeBtn.textContent     = pool === "staking" ? "Buy TIMBS" : "Get LP";
+      } else {
+        stakeBtn.dataset.action  = "";
+        stakeBtn.textContent     = "Stake";
+      }
       document.getElementById(pool + "-unstake-btn").disabled = mine.eq(0);
       document.getElementById(pool + "-claim-btn").disabled = earned.eq(0);
     } else {
@@ -262,8 +272,15 @@ async function refreshBoostPool(boost, pid, totalWeight) {
       document.getElementById(`boost-${pid}-mine`).textContent   = fmt(pos.amount, 18, 4);
       document.getElementById(`boost-${pid}-earned`).textContent = fmtTIMBS(pending, 4);
       document.getElementById(`boost-${pid}-wallet`).textContent = "Balance: " + fmt(inWallet, 18, 4) + " LP";
-      stakeBtn.disabled = info.paused;
-      stakeBtn.textContent = info.paused ? "Pool paused" : "Stake";
+      // No LP in wallet → live "Get LP" routing to Swap (unless the pool is
+      // paused, which takes precedence and disables staking entirely).
+      if (info.paused) {
+        stakeBtn.disabled = true;  stakeBtn.dataset.action = "";      stakeBtn.textContent = "Pool paused";
+      } else if (inWallet.isZero()) {
+        stakeBtn.disabled = false; stakeBtn.dataset.action = "get";   stakeBtn.textContent = "Get LP";
+      } else {
+        stakeBtn.disabled = false; stakeBtn.dataset.action = "";      stakeBtn.textContent = "Stake";
+      }
       document.getElementById(`boost-${pid}-unstake-btn`).disabled = pos.amount.eq(0);
       document.getElementById(`boost-${pid}-claim-btn`).disabled   = pending.eq(0);
     } else {
@@ -291,9 +308,11 @@ async function setBoostAmount(pid, pct) {
 
 async function handleBoostStake(pid) {
   if (!userAddress) return;
+  const btn = document.getElementById(`boost-${pid}-stake-btn`);
+  // Zero-LP state: the button reads "Get LP" → open Swap's Add-liquidity tab.
+  if (btn && btn.dataset.action === "get") { window.location.href = "../swap/#liquidity"; return; }
   const amountStr = document.getElementById(`boost-${pid}-amount`).value;
   if (!amountStr || parseFloat(amountStr) <= 0) return;
-  const btn = document.getElementById(`boost-${pid}-stake-btn`);
   try {
     const amountWei = ethers.utils.parseUnits(amountStr, 18);
     const boostRead = new ethers.Contract(boostAddr(), BOOST_ABI, readProv());
@@ -412,6 +431,9 @@ async function setMaxAmount(pool) { return setAmount(pool, 100); }
 
 async function handleStake(pool) {
   if (!userAddress) return;
+  // Zero-balance state: the button reads "Buy TIMBS" / "Get LP" → go to Swap.
+  const sBtn = document.getElementById(pool + "-stake-btn");
+  if (sBtn && sBtn.dataset.action === "get") { window.location.href = "../swap/"; return; }
   const amountStr = document.getElementById(pool + "-amount").value;
   if (!amountStr || parseFloat(amountStr) <= 0) return;
 

@@ -1523,6 +1523,10 @@ function handleDisconnect() {
   checkEligibility();
   recalcQuote();
 
+  // Deep-link: the farm page sends "Get LP" here with #liquidity so a user with
+  // no LP lands straight on the Add-liquidity tab instead of the Swap tab.
+  if (window.location.hash === "#liquidity") setMode("liquidity");
+
   // Auto-reconnect if wallet was connected before navigation
     DebugHub.logCheckpoint("Swap:Page Loaded", "pass");
   const _reconnected = await autoReconnect();
