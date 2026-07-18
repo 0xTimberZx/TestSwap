@@ -147,6 +147,17 @@
   .stat .v { font-family:Georgia,serif; font-size:clamp(30px,4vw,46px); color:var(--ink); line-height:1; font-variant-numeric:tabular-nums; }
   .stat .l { font-size:13px; color:var(--muted); margin-top:10px; max-width:22ch; }
 
+  /* participant tier grid */
+  .tiergrid-wrap { margin-top:34px; overflow-x:auto; }
+  .tiergrid { width:100%; border-collapse:collapse; min-width:720px; }
+  .tiergrid th { text-align:left; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700; padding:0 16px 12px 0; border-bottom:1px solid var(--line); }
+  .tiergrid td { padding:16px 16px 16px 0; border-bottom:1px solid var(--line); vertical-align:top; font-size:14px; color:var(--ink-soft); line-height:1.45; }
+  .tiergrid td.tier { font-family:Georgia,serif; font-size:17px; font-weight:600; color:var(--ink); white-space:nowrap; padding-right:22px; }
+  .tiergrid td.tier small { display:block; font-family:system-ui,sans-serif; font-size:12px; font-weight:400; color:var(--muted); margin-top:4px; white-space:normal; }
+  .tiergrid td b { color:var(--ink); font-weight:600; }
+  .tiergrid .sec { color:var(--emerald); font-weight:600; }
+  .tiernote { margin-top:24px; font-family:Georgia,serif; font-style:italic; font-size:clamp(15px,1.8vw,19px); color:var(--ink); max-width:64ch; line-height:1.42; }
+
   /* risk blocks */
   .rblocks { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:36px; }
   .rblock { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px; box-shadow:var(--shadow); }
@@ -215,7 +226,7 @@
       <span class="chip">Runs autonomously</span>
     </div>
   </div>
-  <div class="foot"><span>TimbSwap · Seed Brief</span><span class="n">01 / 12</span></div>
+  <div class="foot"><span>TimbSwap · Seed Brief</span><span class="n">01 / 13</span></div>
 </section>
 
 <!-- ── 2 · THE PROBLEM ── -->
@@ -245,7 +256,7 @@
       </div>
     </div>
   </div>
-  <div class="foot"><span>The Problem</span><span class="n">02 / 12</span></div>
+  <div class="foot"><span>The Problem</span><span class="n">02 / 13</span></div>
 </section>
 
 <!-- ── 3 · THE THESIS ── -->
@@ -255,7 +266,7 @@
     <p class="thesis">Treat the <b>incentive system</b> itself as the product — a closed loop that <b>recirculates</b> real earnings.</p>
     <p class="thesis-note">The closest traditional analogue is a <b>prize-linked savings account</b> — Premium Bonds, Save-to-Win — where prizes come from interest, not deposits. TimbSwap generalizes that: every part of the protocol earns, and those earnings are routed back to the people who create them. <b>Not another exchange — a better economic engine.</b></p>
   </div>
-  <div class="foot"><span>Our Thesis</span><span class="n">03 / 12</span></div>
+  <div class="foot"><span>Our Thesis</span><span class="n">03 / 13</span></div>
 </section>
 
 <!-- ── PRECEDENT ── -->
@@ -288,7 +299,7 @@
       <p>These models are proven, durable, and vast in the real world — yet <b>nothing in crypto has ascended to a comparable share of its own space.</b> On-chain prize-linked savings peaked in the low hundreds of millions and faded; no incentive layer has become the asset the way loyalty did in aviation. Relative to the size of crypto, the seat is still empty — and that is the seat we're building for.</p>
     </div>
   </div>
-  <div class="foot"><span>Precedent &amp; the Open Frontier</span><span class="n">04 / 12</span></div>
+  <div class="foot"><span>Precedent &amp; the Open Frontier</span><span class="n">04 / 13</span></div>
 </section>
 
 <!-- ── 4 · THE GAME ── -->
@@ -342,7 +353,7 @@
       </div>
     </div>
   </div>
-  <div class="foot"><span>The Product · The Game</span><span class="n">05 / 12</span></div>
+  <div class="foot"><span>The Product · The Game</span><span class="n">05 / 13</span></div>
 </section>
 
 <!-- ── 5 · REDISTRIBUTION CYCLE ── -->
@@ -361,7 +372,7 @@
     <p class="loopnote">↺  Swept every six rounds, in a fixed priority order — then the cycle restarts.</p>
     <p class="routed">The same sweep funds emissions to the people who build the market: <b>liquidity providers, stakers, and boosted pools.</b></p>
   </div>
-  <div class="foot"><span>Economic Design · The Cycle</span><span class="n">06 / 12</span></div>
+  <div class="foot"><span>Economic Design · The Cycle</span><span class="n">06 / 13</span></div>
 </section>
 
 <!-- ── 6 · BARRIERS ── -->
@@ -393,7 +404,54 @@
       </div>
     </div>
   </div>
-  <div class="foot"><span>Economic Design · Barriers</span><span class="n">07 / 12</span></div>
+  <div class="foot"><span>Economic Design · Barriers</span><span class="n">07 / 13</span></div>
+</section>
+
+<!-- ── PARTICIPANT TIERS ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Economic Design · Participants</p>
+    <h2>Every seat at the table<br>earns its keep.</h2>
+    <div class="tiergrid-wrap">
+      <table class="tiergrid">
+        <thead>
+          <tr><th>Tier</th><th>Puts in</th><th>Risks</th><th>Earns</th><th>Security added</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="tier">Player<small>prize game</small></td>
+            <td>A small ETH deposit per ticket — <b>principal stays withdrawable.</b></td>
+            <td>Gas and time. If the ticket never matches, the deposit comes back; only the shot is spent.</td>
+            <td>A claim on the <b>round pot</b> when the combination matches.</td>
+            <td><span class="sec">Deepens the pot.</span> Every active ticket's deposit earns yield for the prize pool, and play drives eligible volume.</td>
+          </tr>
+          <tr>
+            <td class="tier">Staker<small>single-asset TIMBS</small></td>
+            <td>TIMBS locked in the staking pool.</td>
+            <td><b>Token price exposure</b> while staked.</td>
+            <td>A share of <b>epoch-funded TIMBS emissions</b> — replenished from real treasury inflow, never printed.</td>
+            <td><span class="sec">Tightens the float.</span> Staked supply is off the market, dampening volatility and aligning holders long-term.</td>
+          </tr>
+          <tr>
+            <td class="tier">Farmer<small>core LP</small></td>
+            <td>Paired capital (TIMBS/WETH liquidity).</td>
+            <td><b>Impermanent loss</b> plus price exposure on both sides.</td>
+            <td>Trading fees on every swap <b>plus</b> emissions — the first claim in the epoch waterfall.</td>
+            <td><span class="sec">Builds the market.</span> Depth lowers slippage, steadies price, and makes manipulation expensive.</td>
+          </tr>
+          <tr>
+            <td class="tier">Boosted farmer<small>extra pairs</small></td>
+            <td>Liquidity in secondary pairs (stables, WETH crosses).</td>
+            <td>Impermanent loss on thinner pairs — the highest-risk seat.</td>
+            <td>Boosted, epoch-funded emissions — <b>last in the waterfall</b>, funded only after core rewards are covered.</td>
+            <td><span class="sec">Broadens the venue.</span> More live pairs, more routes, more eligible swaps feeding the engine.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="tiernote">Reward tracks risk, and both track contribution — the more security a seat adds to the system, the stronger its claim on what the system earns.</p>
+  </div>
+  <div class="foot"><span>Economic Design · Participants</span><span class="n">08 / 13</span></div>
 </section>
 
 <!-- ── 7 · RISK & OPEN ITEM ── -->
@@ -415,7 +473,7 @@
       </div>
     </div>
   </div>
-  <div class="foot"><span>Risk &amp; the Open Item</span><span class="n">08 / 12</span></div>
+  <div class="foot"><span>Risk &amp; the Open Item</span><span class="n">09 / 13</span></div>
 </section>
 
 <!-- ── 8 · TRACTION ── -->
@@ -432,7 +490,7 @@
     </div>
     <p class="body" style="margin-top:34px">Testnet proves the system <b style="color:var(--ink)">works</b>. This phase proves it is <b style="color:var(--ink)">engaging</b> — repeat play and trade volume that tracks the rounds — before real capital is deployed.</p>
   </div>
-  <div class="foot"><span>Current Progress</span><span class="n">09 / 12</span></div>
+  <div class="foot"><span>Current Progress</span><span class="n">10 / 13</span></div>
 </section>
 
 <!-- ── 9 · PATH TO MAINNET ── -->
@@ -448,7 +506,7 @@
       <div class="row"><div class="mark">4</div><div class="txt"><b>Cleared gating conditions</b> — completed audit and legal sign-off.<span>Non-negotiable before real value.</span></div></div>
     </div>
   </div>
-  <div class="foot"><span>Go-to-Market</span><span class="n">10 / 12</span></div>
+  <div class="foot"><span>Go-to-Market</span><span class="n">11 / 13</span></div>
 </section>
 
 <!-- ── 10 · ROADMAP / VISION ── -->
@@ -476,7 +534,7 @@
     </div>
     <p class="roadnote">The same telemetry that proves solvency today is the substrate for adaptive incentives tomorrow. <b>Every phase keeps the identical guardrails</b> — fixed supply, the solvency stop, non-custodial. The ambition grows; the discipline doesn't move.</p>
   </div>
-  <div class="foot"><span>Long-Term Vision</span><span class="n">11 / 12</span></div>
+  <div class="foot"><span>Long-Term Vision</span><span class="n">12 / 13</span></div>
 </section>
 
 <!-- ── 11 · THE ASK ── -->
@@ -494,7 +552,7 @@
     <p class="closing">Testnet proves it works. Seed proves it earns.</p>
     <p class="disclaimer">Bracketed figures are placeholders to be finalized from live on-chain engagement data. This brief describes a software project; it is not an offer of securities or investment, nor legal advice. The regulatory item requires qualified counsel before any real-value deployment.</p>
   </div>
-  <div class="foot"><span>Capital Strategy · The Ask</span><span class="n">12 / 12</span></div>
+  <div class="foot"><span>Capital Strategy · The Ask</span><span class="n">13 / 13</span></div>
 </section>
 
 <script>
