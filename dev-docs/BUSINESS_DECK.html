@@ -98,10 +98,20 @@
   .cell .sq { width:clamp(46px,6.4vw,64px); aspect-ratio:1; border-radius:12px; background:#10161d; border:1px solid #232e38; display:grid; place-items:center;
     font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:clamp(22px,3.4vw,30px); font-weight:700; color:#8a949e; }
   .cell .seg { font-size:9.5px; letter-spacing:.12em; color:#5c6670; font-weight:600; }
-  .cell.locked .sq { border-color:#e6b23e; color:#e6b23e; box-shadow:0 0 0 1px rgba(230,178,62,.35), 0 0 18px rgba(230,178,62,.12); }
+  .cell.locked .sq { border-color:#45d488; color:#45d488; box-shadow:0 0 0 1px rgba(69,212,136,.35), 0 0 18px rgba(69,212,136,.12); }
   .cell.active .sq { border-color:#3e9bff; color:#cfe3ff; box-shadow:0 0 0 1px rgba(62,155,255,.4); }
   .cell.active .seg { color:#3e9bff; }
   .appcap { margin-top:12px; font-size:12.5px; color:var(--muted); letter-spacing:.02em; }
+  /* compact secondary capture */
+  .appframe.mini { max-width:560px; margin-top:22px; }
+  .appframe.mini .appbar { display:none; }
+  .appframe.mini .meter { padding:16px 18px; gap:14px; }
+  .appframe.mini .meter-side .big { font-size:20px; }
+  .appframe.mini .meter-side .lab { font-size:9.5px; }
+  .appframe.mini .cell .sq { width:clamp(34px,4.6vw,44px); font-size:clamp(17px,2.4vw,21px); border-radius:10px; }
+  .appframe.mini .cell .seg { font-size:8px; }
+  .appframe.mini .cells { gap:8px; }
+  .minicap { margin-top:12px; font-size:12px; color:var(--muted); letter-spacing:.04em; }
   .gamecap { margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
   .gamecap p { font-size:15px; max-width:44ch; }
   .gamecap b { color:var(--ink); font-weight:600; }
@@ -276,8 +286,27 @@
     <p class="eyebrow">The Product · The Game</p>
     <h2>Every round is a safe,<br>assembled one dial at a time.</h2>
     <p class="lede">A six-character combination locks into place over the round. Your ticket is your guess at it.</p>
-    <div class="appframe" role="img" aria-label="TimbSwap live round meter: Round 22, segment 2 of 6, characters M 9 L H 2 2 with segment 1 locked and segment 2 active.">
+    <div class="appframe" role="img" aria-label="TimbSwap live round meter: Round 19, segment 2 of 6, characters X 8 0 Z 9 4 with segment 1 locked and segment 2 active.">
       <div class="appbar"><span class="dots"><i></i><i></i><i></i></span><span class="url">timbswap.xyz/compete</span></div>
+      <div class="meter">
+        <div class="meter-side"><span class="lab">ROUND</span><span class="big">#19</span></div>
+        <div class="cells">
+          <div class="cell locked"><div class="sq">X</div><span class="seg">SEG 1</span></div>
+          <div class="cell active"><div class="sq">8</div><span class="seg">SEG 2</span></div>
+          <div class="cell"><div class="sq">0</div><span class="seg">SEG 3</span></div>
+          <div class="cell"><div class="sq">Z</div><span class="seg">SEG 4</span></div>
+          <div class="cell"><div class="sq">9</div><span class="seg">SEG 5</span></div>
+          <div class="cell"><div class="sq">4</div><span class="seg">SEG 6</span></div>
+        </div>
+        <div class="meter-side right"><span class="lab">SEGMENT</span><span class="big"><span class="b">2</span>/6</span></div>
+      </div>
+    </div>
+    <p class="appcap">The live round meter — segment 1 locked (green), segment 2 active (blue), the rest still forming.</p>
+    <div class="gamecap">
+      <p><b>You set a six-character string before the round</b> — your guess at the combination it will lock into.</p>
+      <p><b>Segments lock one by one as eligible swaps run.</b> Match all six locked characters and you split that round's pot.</p>
+    </div>
+    <div class="appframe mini" role="img" aria-label="TimbSwap round meter: Round 22, segment 2 of 6, characters M 9 L H 2 2.">
       <div class="meter">
         <div class="meter-side"><span class="lab">ROUND</span><span class="big">#22</span></div>
         <div class="cells">
@@ -291,11 +320,7 @@
         <div class="meter-side right"><span class="lab">SEGMENT</span><span class="big"><span class="b">2</span>/6</span></div>
       </div>
     </div>
-    <p class="appcap">The live round meter — segment 1 locked (gold), segment 2 active (blue), the rest still forming.</p>
-    <div class="gamecap">
-      <p><b>You set a six-character string before the round</b> — your guess at the combination it will lock into.</p>
-      <p><b>Segments lock one by one as eligible swaps run.</b> Match all six locked characters and you split that round's pot.</p>
-    </div>
+    <p class="minicap">Round #22, later that day — the same meter, every cycle.</p>
   </div>
   <div class="foot"><span>The Product · The Game</span><span class="n">05 / 12</span></div>
 </section>
