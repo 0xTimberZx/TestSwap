@@ -34,7 +34,7 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="../style.css?v=20260757k" />
+  <link rel="stylesheet" href="../style.css?v=20260760a" />
   <link rel="stylesheet" href="docs.css?v=20260739a" />
 </head>
 <body>
@@ -114,6 +114,7 @@
       <div class="docs-toc-label">DOCUMENTATION</div>
       <nav>
         <a href="#overview" class="toc-link">Overview</a>
+        <a href="#architecture" class="toc-link">Architecture</a>
         <a href="#start" class="toc-link">Getting started</a>
         <a href="#swap" class="toc-link">Swapping</a>
         <a href="#liquidity" class="toc-link">Liquidity &amp; V2 Pools</a>
@@ -123,6 +124,8 @@
         <a href="#gov" class="toc-link">Governance</a>
         <a href="#analytics" class="toc-link">Analytics</a>
         <a href="#timbs" class="toc-link">TIMBS token</a>
+        <a href="#tokenomics" class="toc-link">Tokenomics &amp; emissions</a>
+        <a href="#risks" class="toc-link">Risks</a>
         <a href="#authenticity" class="toc-link">Verify authenticity</a>
         <a href="#privacy" class="toc-link">Privacy &amp; data</a>
         <a href="#disclaimer" class="toc-link">Disclaimer</a>
@@ -155,6 +158,19 @@
           <li><strong>Governance</strong> — deposit TIMBS for voting power on proposals.</li>
           <li><strong>Analytics</strong> — protocol metrics and settled round history.</li>
         </ul>
+      </section>
+
+      <!-- Architecture -->
+      <section id="architecture" class="docs-section">
+        <h2>Architecture — the incentive engine</h2>
+        <p>The surfaces above are modules; the product is the loop that connects them. Value moves in one direction, on a fixed cadence:</p>
+        <ol>
+          <li><strong>Trade.</strong> Swaps pay a 0.3% fee — 0.25% to liquidity providers, 0.05% to the protocol treasury. Eligible swaps also advance the prize meter.</li>
+          <li><strong>Collect.</strong> The treasury accumulates fee inflow; ticket deposits sit in a yield vault whose accrual grows the prize pot. All backing is visible on-chain.</li>
+          <li><strong>Reward.</strong> Every six rounds an autonomous keeper sweeps what was collected and replenishes the reward pools — prize pot, farm, staking, then boosted farms — in that fixed priority order.</li>
+          <li><strong>Return.</strong> Winners claim, stakers and farmers compound, players re-enter — feeding step one again.</li>
+        </ol>
+        <p>The contract layout mirrors the loop: the <strong>AMM core</strong> (Factory, Router, Pairs) generates fees; the <strong>game layer</strong> (TimbPrize, GameRegistry, YieldVault, PrizeEscrow) runs rounds and holds the pot's backing; the <strong>emissions layer</strong> (Staking, Farm, BoostFarm, Treasury) distributes rewards under the solvency rules described below. The frontend is a static site — every number you see is read live from chain, and the keeper runs unattended.</p>
       </section>
 
       <!-- Getting started -->
@@ -232,6 +248,32 @@
       <section id="timbs" class="docs-section">
         <h2>TIMBS token</h2>
         <p>TIMBS is the protocol's native test token. New supply is minted only as <strong>emissions</strong> to the staking and farm pools (and by the owner), and is bounded by a hard cap. Emissions fund farm rewards; the reward rate is set by governance/owner actions, which is what moves farm APR over time.</p>
+      </section>
+
+      <!-- Tokenomics -->
+      <section id="tokenomics" class="docs-section">
+        <h2>Tokenomics &amp; emissions</h2>
+        <ul>
+          <li><strong>Fixed supply.</strong> TIMBS is hard-capped at <strong>100,000,000</strong>. There is no mechanism to mint beyond the cap.</li>
+          <li><strong>Fee split.</strong> Every swap's 0.3% fee splits 0.25% to LPs and 0.05% to the treasury, which funds buybacks and the reward cycle.</li>
+          <li><strong>The epoch waterfall.</strong> Every 6 rounds the keeper measures what was actually claimed from the farm and staking pools and what the treasury actually collected, then refills in priority order: the <em>farm</em> first (capped at 80% of its claims), <em>staking</em> next (up to 1.25× its claims, but no more than 80% of what remains), and <em>boosted farms</em> receive only the remainder. If inflow runs short, the tail of the waterfall goes unfunded — nothing is printed to cover the gap.</li>
+          <li><strong>Solvency stop.</strong> Reward contracts track every wallet's accrued-but-unclaimed balance as an explicit liability. When total obligations reach <strong>99% of reserves</strong>, accrual halts until the next refill — the system cannot promise tokens it does not hold.</li>
+          <li><strong>Self-retargeting rates.</strong> Emission rates are recomputed from free (unowed) reserves over the emission window, so a shrinking reserve slows emissions instead of over-committing.</li>
+        </ul>
+      </section>
+
+      <!-- Risks -->
+      <section id="risks" class="docs-section">
+        <h2>Risks</h2>
+        <p>Plainly stated — these apply on testnet today and would apply with real value on mainnet:</p>
+        <ul>
+          <li><strong>Smart-contract risk.</strong> The contracts are testnet-hardened but <strong>unaudited</strong>. An independent audit is a gating condition for any mainnet deployment. Permissionless refund and recovery paths exist so funds are not trapped behind an operator.</li>
+          <li><strong>Impermanent loss.</strong> Providing liquidity carries standard AMM impermanent-loss risk, larger on thin or volatile pairs (the boosted farms are the highest-risk seat).</li>
+          <li><strong>Game randomness.</strong> Locked characters are jittered with the settling block's hash. You can aim a position's <em>class</em> (letter vs digit) but not the exact character — treat the game as chance-weighted, not skill-guaranteed.</li>
+          <li><strong>Emissions variance.</strong> APR figures move with the epoch waterfall and total staked; a testnet APR is illustrative, never a promise of yield.</li>
+          <li><strong>Regulatory.</strong> Prize mechanics are classified differently by jurisdiction. On testnet nothing has monetary value; before any real-value launch, formal legal review (and likely geofencing) is a gating condition.</li>
+          <li><strong>Testnet impermanence.</strong> Test networks can be reset or halted at any time; assume all testnet state is disposable.</li>
+        </ul>
       </section>
 
       <!-- Authenticity -->
