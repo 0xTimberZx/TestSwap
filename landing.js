@@ -24,7 +24,6 @@ const TIMBPRIZE_ABI   = [
 const TIMBS_ABI       = ["function totalSupply() external view returns (uint256)"];
 const STAKING_ABI     = ["function totalStaked() external view returns (uint256)"];
 const FARM_ABI        = ["function totalStaked() external view returns (uint256)"];
-const LOCKVAULT_ABI   = ["function totalLocks() external view returns (uint256)"];
 const ESCROW_ABI      = ["function balance() external view returns (uint256)"];
 const VAULT_ABI       = ["function previewAccrued() external view returns (uint256)"];
 
@@ -182,18 +181,16 @@ async function updateScroll() {
 
 async function loadStats() {
   try {
-    const [supply, staked, lpStaked, locks] = await Promise.all([
+    const [supply, staked, lpStaked] = await Promise.all([
       readContract("TIMBSToken", TIMBS_ABI).totalSupply(),
       readContract("TimbStaking", STAKING_ABI).totalStaked(),
       readContract("TimbFarm", FARM_ABI).totalStaked(),
-      readContract("TimbLockVault", LOCKVAULT_ABI).totalLocks(),
     ]);
 
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     set("stat-supply", fmtTIMBS(supply, 0));
     set("stat-staked", fmtTIMBS(staked, 2));
     set("stat-lp",     fmt(lpStaked, 18, 4) + " LP");
-    set("stat-locks",  locks.toString());
   } catch (e) {
     console.warn("loadStats:", e.message);
   }

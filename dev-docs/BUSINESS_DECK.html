@@ -1,0 +1,568 @@
+<title>TimbSwap — Seed Brief</title>
+<style>
+  :root {
+    --paper:#f4f1e8; --card:#fbf9f2; --ink:#15191b; --ink-soft:#3f474e; --muted:#71776f;
+    --line:#ded7c6; --emerald:#17604a; --emerald-bright:#1f8a63; --brass:#a1792b;
+    --shadow:0 1px 2px rgba(20,25,28,.05), 0 8px 30px rgba(20,25,28,.06); --maxw:1080px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#0f1518; --card:#161d21; --ink:#edf1ea; --ink-soft:#b7bfb9; --muted:#868f88;
+      --line:#263230; --emerald:#3fae82; --emerald-bright:#58ca9b; --brass:#cba553;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.34); }
+  }
+  :root[data-theme="light"] { --paper:#f4f1e8; --card:#fbf9f2; --ink:#15191b; --ink-soft:#3f474e; --muted:#71776f;
+    --line:#ded7c6; --emerald:#17604a; --emerald-bright:#1f8a63; --brass:#a1792b;
+    --shadow:0 1px 2px rgba(20,25,28,.05), 0 8px 30px rgba(20,25,28,.06); }
+  :root[data-theme="dark"] { --paper:#0f1518; --card:#161d21; --ink:#edf1ea; --ink-soft:#b7bfb9; --muted:#868f88;
+    --line:#263230; --emerald:#3fae82; --emerald-bright:#58ca9b; --brass:#cba553;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.34); }
+
+  * { box-sizing: border-box; }
+  html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased; line-height:1.5; }
+
+  .slide { scroll-snap-align:start; min-height:100vh; display:flex; flex-direction:column; justify-content:center;
+    padding:clamp(28px,6vh,72px) clamp(22px,6vw,88px); position:relative; border-bottom:1px solid var(--line); }
+  .inner { width:100%; max-width:var(--maxw); margin:0 auto; }
+
+  .rise { opacity:0; transform:translateY(14px); transition:opacity .7s ease, transform .7s ease; }
+  .rise.in { opacity:1; transform:none; }
+  @media (prefers-reduced-motion: reduce) { .rise { opacity:1; transform:none; transition:none; } }
+
+  .eyebrow { font-size:12px; font-weight:650; letter-spacing:.18em; text-transform:uppercase; color:var(--emerald); margin:0 0 18px; }
+  .eyebrow.brass { color:var(--brass); }
+
+  h1,h2 { font-family:Georgia,"Iowan Old Style","Times New Roman",serif; font-weight:600; color:var(--ink); text-wrap:balance; margin:0; letter-spacing:-0.01em; line-height:1.08; }
+  h1 { font-size:clamp(44px,7.6vw,92px); }
+  h2 { font-size:clamp(28px,4.2vw,49px); }
+
+  p { color:var(--ink-soft); margin:0; }
+  .lede { font-size:clamp(18px,2.2vw,23px); max-width:60ch; margin-top:22px; }
+  .body { font-size:clamp(15px,1.5vw,17px); max-width:62ch; }
+
+  .foot { position:absolute; left:clamp(22px,6vw,88px); right:clamp(22px,6vw,88px); bottom:clamp(18px,3.2vh,32px);
+    display:flex; justify-content:space-between; align-items:baseline; font-size:12px; letter-spacing:.04em; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .foot .n { font-weight:650; color:var(--ink-soft); }
+
+  .brandmark { display:inline-flex; align-items:center; gap:12px; margin-bottom:30px; font-size:15px; letter-spacing:.02em; color:var(--ink-soft); font-weight:600; }
+  .hex { width:22px; height:22px; color:var(--emerald); }
+  .title-sub { font-size:clamp(18px,2.3vw,25px); color:var(--ink-soft); max-width:32ch; margin-top:26px; line-height:1.34; }
+  .title-sub b { color:var(--ink); font-weight:600; }
+  .chips { display:flex; flex-wrap:wrap; gap:10px; margin-top:40px; }
+  .chip { font-size:12.5px; font-weight:600; letter-spacing:.03em; padding:7px 14px; border:1px solid var(--line); border-radius:999px; color:var(--ink-soft); background:var(--card); }
+  .chip .dot { color:var(--emerald-bright); }
+
+  /* generic two-column */
+  .duo { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:38px; }
+  .duo .col { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px; box-shadow:var(--shadow); }
+  .duo .col h3 { font-family:Georgia,serif; font-size:21px; margin:0 0 4px; font-weight:600; color:var(--ink); }
+  .duo .col .cap { font-size:13px; color:var(--muted); margin:0 0 18px; }
+  .duo .col.house h3 { color:var(--emerald); }
+  .duo .col.player h3 { color:var(--brass); }
+  ul.clean { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:13px; }
+  ul.clean li { font-size:14.5px; color:var(--ink-soft); padding-left:20px; position:relative; line-height:1.42; }
+  ul.clean li::before { content:""; position:absolute; left:0; top:9px; width:7px; height:7px; border-radius:50%; background:var(--emerald); }
+  .duo .player ul.clean li::before { background:var(--brass); }
+  ul.clean li b { color:var(--ink); font-weight:600; }
+
+  /* concept/panels */
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:38px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px; box-shadow:var(--shadow); }
+  .panel .k { font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--emerald); margin:0 0 10px; }
+  .panel h3 { font-family:Georgia,serif; font-weight:600; font-size:20px; margin:0 0 8px; color:var(--ink); }
+  .panel p { font-size:14.5px; }
+
+  /* thesis statement */
+  .thesis { font-family:Georgia,serif; font-size:clamp(24px,3.6vw,42px); line-height:1.24; color:var(--ink); max-width:20ch; margin-top:10px; }
+  .thesis b { color:var(--emerald); font-weight:600; }
+  .thesis-note { margin-top:30px; font-size:clamp(15px,1.7vw,18px); color:var(--ink-soft); max-width:58ch; }
+  .thesis-note b { color:var(--ink); font-weight:600; }
+
+  /* the game — faithful capture of the live round meter.
+     Fixed dark palette (mirrors the app), theme-independent, so the artwork
+     never drifts between deck revisions — it is a 1:1 of the real component. */
+  .appframe { margin-top:34px; background:#0b1017; border:1px solid #1c2630; border-radius:16px; box-shadow:0 18px 50px rgba(0,0,0,.28); overflow:hidden; max-width:840px; }
+  .appbar { display:flex; align-items:center; padding:11px 16px; border-bottom:1px solid #161f28; }
+  .appbar .dots { display:flex; gap:6px; }
+  .appbar .dots i { width:10px; height:10px; border-radius:50%; background:#2a3742; display:block; }
+  .appbar .url { margin-left:14px; font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:12px; color:#5f6b76; letter-spacing:.02em; }
+  .meter { display:flex; align-items:center; gap:18px; padding:22px 22px 20px; flex-wrap:wrap; }
+  .meter-side { display:flex; flex-direction:column; gap:4px; }
+  .meter-side .lab { font-size:10.5px; letter-spacing:.18em; color:#6a7580; font-weight:600; }
+  .meter-side .big { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:26px; font-weight:700; color:#eaf0f0; letter-spacing:.02em; }
+  .meter-side.right { margin-left:auto; text-align:right; align-items:flex-end; }
+  .meter-side.right .big .b { color:#3e9bff; }
+  .cells { display:flex; gap:10px; }
+  .cell { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .cell .sq { width:clamp(46px,6.4vw,64px); aspect-ratio:1; border-radius:12px; background:#10161d; border:1px solid #232e38; display:grid; place-items:center;
+    font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:clamp(22px,3.4vw,30px); font-weight:700; color:#8a949e; }
+  .cell .seg { font-size:9.5px; letter-spacing:.12em; color:#5c6670; font-weight:600; }
+  .cell.locked .sq { border-color:#45d488; color:#45d488; box-shadow:0 0 0 1px rgba(69,212,136,.35), 0 0 18px rgba(69,212,136,.12); }
+  .cell.active .sq { border-color:#3e9bff; color:#cfe3ff; box-shadow:0 0 0 1px rgba(62,155,255,.4); }
+  .cell.active .seg { color:#3e9bff; }
+  .appcap { margin-top:12px; font-size:12.5px; color:var(--muted); letter-spacing:.02em; }
+  /* compact secondary capture — the round #22 meter (locked = gold) */
+  .appframe.mini { max-width:560px; margin-top:22px; }
+  .appframe.mini .appbar { display:none; }
+  .appframe.mini .meter { padding:16px 18px; gap:14px; }
+  .appframe.mini .meter-side .big { font-size:20px; }
+  .appframe.mini .meter-side .lab { font-size:9.5px; }
+  .appframe.mini .cell .sq { width:clamp(34px,4.6vw,44px); font-size:clamp(17px,2.4vw,21px); border-radius:10px; }
+  .appframe.mini .cell .seg { font-size:8px; }
+  .appframe.mini .cells { gap:8px; }
+  .appframe.mini .cell.locked .sq { border-color:#e6b23e; color:#e6b23e; box-shadow:0 0 0 1px rgba(230,178,62,.35), 0 0 16px rgba(230,178,62,.1); }
+  /* example tickets — the app's My Tickets card, faithfully */
+  .ticketwrap { margin-top:20px; max-width:520px; }
+  .ticketwrap .tkhead { font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700; margin-bottom:12px; }
+  .ticketlist { display:flex; flex-direction:column; gap:12px; }
+  .ticketcard { position:relative; background:#0e141b; border:1px solid #1e2932; border-radius:14px; padding:20px 22px; box-shadow:0 12px 34px rgba(0,0,0,.24); }
+  .ticketcard .tkname { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:clamp(21px,2.8vw,26px); font-weight:700; color:#e8eef0; letter-spacing:.14em; }
+  .ticketcard .tkname .g { color:#e6b23e; }
+  .ticketcard .tkname .b { color:#3e9bff; }
+  .ticketcard .tkmeta { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:13px; color:#5f6b76; line-height:1.55; margin-top:11px; max-width:40ch; }
+  .ticketcard .tkpill { position:absolute; top:18px; right:18px; font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:12px; font-weight:700; color:#45d488; background:rgba(69,212,136,.13); border-radius:999px; padding:5px 13px; letter-spacing:.02em; white-space:nowrap; }
+  .ticketcard .tkpill.gold { color:#e6b23e; background:rgba(230,178,62,.13); }
+  .gamecap { margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .gamecap p { font-size:15px; max-width:44ch; }
+  .gamecap b { color:var(--ink); font-weight:600; }
+  @media (max-width:600px){ .cell .sq { width:44px; } .cells { gap:7px; } }
+
+  /* redistribution */
+  .redist { display:flex; align-items:stretch; gap:0; margin-top:38px; flex-wrap:wrap; }
+  .node { flex:1 1 190px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px 18px; box-shadow:var(--shadow); }
+  .node .step { font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+  .node.in .step { color:var(--emerald); } .node.pool .step { color:var(--ink-soft); } .node.out .step { color:var(--brass); }
+  .node .lbl { font-family:Georgia,serif; font-size:19px; color:var(--ink); margin-top:7px; line-height:1.15; }
+  .node .sub { font-size:13px; color:var(--muted); margin-top:6px; }
+  .arrow { align-self:center; color:var(--emerald); font-size:26px; padding:0 10px; flex:0 0 auto; }
+  @media (max-width:760px){ .arrow{ transform:rotate(90deg); padding:6px 0; } .redist{ flex-direction:column; } }
+  .loopnote { margin-top:22px; text-align:center; font-size:13.5px; color:var(--emerald); font-weight:600; letter-spacing:.04em; }
+  .routed { margin-top:12px; text-align:center; font-size:13px; color:var(--muted); }
+  .routed b { color:var(--ink-soft); font-weight:600; }
+
+  /* stats */
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-top:40px; }
+  .stat { border-top:2px solid var(--emerald); padding-top:16px; }
+  .stat .v { font-family:Georgia,serif; font-size:clamp(30px,4vw,46px); color:var(--ink); line-height:1; font-variant-numeric:tabular-nums; }
+  .stat .l { font-size:13px; color:var(--muted); margin-top:10px; max-width:22ch; }
+
+  /* participant tier grid */
+  .tiergrid-wrap { margin-top:34px; overflow-x:auto; }
+  .tiergrid { width:100%; border-collapse:collapse; min-width:720px; }
+  .tiergrid th { text-align:left; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700; padding:0 16px 12px 0; border-bottom:1px solid var(--line); }
+  .tiergrid td { padding:16px 16px 16px 0; border-bottom:1px solid var(--line); vertical-align:top; font-size:14px; color:var(--ink-soft); line-height:1.45; }
+  .tiergrid td.tier { font-family:Georgia,serif; font-size:17px; font-weight:600; color:var(--ink); white-space:nowrap; padding-right:22px; }
+  .tiergrid td.tier small { display:block; font-family:system-ui,sans-serif; font-size:12px; font-weight:400; color:var(--muted); margin-top:4px; white-space:normal; }
+  .tiergrid td b { color:var(--ink); font-weight:600; }
+  .tiergrid .sec { color:var(--emerald); font-weight:600; }
+  .tiernote { margin-top:24px; font-family:Georgia,serif; font-style:italic; font-size:clamp(15px,1.8vw,19px); color:var(--ink); max-width:64ch; line-height:1.42; }
+
+  /* risk blocks */
+  .rblocks { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:36px; }
+  .rblock { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px; box-shadow:var(--shadow); }
+  .rblock.flag { border-color:var(--brass); }
+  .rblock h3 { font-family:Georgia,serif; font-weight:600; font-size:20px; margin:0 0 12px; color:var(--ink); }
+  .rblock.flag h3 { color:var(--brass); }
+  .rblock .tag { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--brass); border:1px solid var(--brass); border-radius:5px; padding:1px 7px; margin-left:8px; vertical-align:middle; }
+  .rblock p { font-size:14.5px; } .rblock p + p { margin-top:12px; }
+  .rblock b { color:var(--ink); }
+
+  /* gate */
+  .gate { display:flex; flex-direction:column; gap:13px; margin-top:34px; max-width:66ch; }
+  .gate .row { display:flex; align-items:flex-start; gap:16px; padding:16px 20px; background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); }
+  .gate .mark { flex:0 0 auto; width:24px; height:24px; border-radius:50%; border:2px solid var(--emerald); color:var(--emerald); display:grid; place-items:center; font-size:13px; font-weight:700; margin-top:1px; }
+  .gate .txt { font-size:15px; color:var(--ink); }
+  .gate .txt span { display:block; color:var(--muted); font-size:13.5px; margin-top:3px; }
+
+  /* roadmap phases */
+  .phases { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:36px; }
+  .phase { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px 22px; box-shadow:var(--shadow); position:relative; }
+  .phase .ptag { font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; padding:3px 9px; border-radius:6px; display:inline-block; }
+  .phase.now .ptag { color:var(--emerald); border:1px solid var(--emerald); }
+  .phase.next .ptag { color:var(--ink-soft); border:1px solid var(--line); }
+  .phase.vision .ptag { color:var(--brass); border:1px solid var(--brass); }
+  .phase h3 { font-family:Georgia,serif; font-weight:600; font-size:19px; margin:14px 0 8px; color:var(--ink); }
+  .phase p { font-size:14px; }
+  .roadnote { margin-top:26px; font-family:Georgia,serif; font-style:italic; font-size:clamp(16px,1.9vw,20px); color:var(--ink); max-width:64ch; line-height:1.42; }
+  .roadnote b { font-style:normal; color:var(--emerald); font-weight:600; }
+
+  /* ask */
+  .budget { margin-top:34px; display:flex; flex-direction:column; gap:0; max-width:62ch; }
+  .budget .line { display:flex; justify-content:space-between; align-items:baseline; padding:15px 0; border-bottom:1px solid var(--line); }
+  .budget .line .d { color:var(--ink); font-weight:600; font-size:16px; }
+  .budget .line .d small { display:block; color:var(--muted); font-weight:400; font-size:13px; margin-top:3px; }
+  .budget .line .amt { font-family:Georgia,serif; font-size:20px; color:var(--emerald); font-variant-numeric:tabular-nums; }
+  .budget .line.total .d { font-family:Georgia,serif; font-size:19px; }
+  .budget .line.total .amt { color:var(--ink); font-size:24px; }
+  .closing { margin-top:32px; font-family:Georgia,serif; font-size:clamp(20px,2.6vw,30px); color:var(--ink); max-width:24ch; line-height:1.2; }
+  .disclaimer { margin-top:24px; font-size:11.5px; color:var(--muted); max-width:70ch; line-height:1.55; }
+
+  .placeholder { color:var(--brass); font-style:normal; border-bottom:1px dashed var(--brass); }
+
+  /* comparables claim band */
+  .claimband { margin-top:26px; background:var(--card); border:1px solid var(--line); border-left:3px solid var(--brass); border-radius:12px; padding:20px 24px; box-shadow:var(--shadow); }
+  .claimband .k { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--brass); font-weight:700; margin:0 0 10px; }
+  .claimband p { font-family:Georgia,serif; font-size:clamp(16px,1.9vw,21px); color:var(--ink); line-height:1.38; max-width:70ch; }
+  .claimband p b { color:var(--brass); font-weight:600; }
+  .compare-src { font-size:12px; color:var(--muted); margin-top:3px; }
+
+  @media (max-width:720px){ .split,.duo,.rblocks,.gamecap,.phases { grid-template-columns:1fr; } .stats { grid-template-columns:1fr 1fr; } }
+</style>
+
+<!-- ── 1 · TITLE ── -->
+<section class="slide">
+  <div class="inner rise">
+    <div class="brandmark">
+      <svg class="hex" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l8.66 5v10L12 22l-8.66-5V7L12 2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      TimbSwap
+    </div>
+    <p class="eyebrow">Seed Brief · Confidential Draft</p>
+    <h1>An economic engine,<br>not a token to trade.</h1>
+    <p class="title-sub">A prize-linked exchange where trading, liquidity, staking, and play <b>fund each other.</b> Prizes are paid from yield — never from principal.</p>
+    <div class="chips">
+      <span class="chip"><span class="dot">●</span> Live on Arbitrum testnet</span>
+      <span class="chip">Fixed total supply</span>
+      <span class="chip">Runs autonomously</span>
+    </div>
+  </div>
+  <div class="foot"><span>TimbSwap · Seed Brief</span><span class="n">01 / 13</span></div>
+</section>
+
+<!-- ── 2 · THE PROBLEM ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">The Problem</p>
+    <h2>Most DeFi rents activity.<br>It doesn't earn it.</h2>
+    <div class="duo">
+      <div class="col house">
+        <h3>Speculation-only design</h3>
+        <p class="cap">The pattern that keeps failing</p>
+        <ul class="clean">
+          <li>Rewards are <b>printed</b>, not funded — emissions dilute holders to buy short-term activity.</li>
+          <li>When price stalls or emissions taper, <b>mercenary capital leaves</b> and usage collapses.</li>
+          <li>Incentives are <b>static</b>, disconnected from whether the protocol is actually healthy.</li>
+        </ul>
+      </div>
+      <div class="col player">
+        <h3>Why existing pieces don't fix it</h3>
+        <p class="cap">Each solves one slice, in isolation</p>
+        <ul class="clean">
+          <li>AMMs reward liquidity — but not <b>engagement.</b></li>
+          <li>Staking rewards holding — but is often <b>pure inflation.</b></li>
+          <li>Prize dapps drive attention — but are <b>detached from real yield.</b></li>
+          <li>Nobody ties them into one <b>self-funding loop.</b></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>The Problem</span><span class="n">02 / 13</span></div>
+</section>
+
+<!-- ── 3 · THE THESIS ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Our Thesis</p>
+    <p class="thesis">Treat the <b>incentive system</b> itself as the product — a closed loop that <b>recirculates</b> real earnings.</p>
+    <p class="thesis-note">The closest traditional analogue is a <b>prize-linked savings account</b> — Premium Bonds, Save-to-Win — where prizes come from interest, not deposits. TimbSwap generalizes that: every part of the protocol earns, and those earnings are routed back to the people who create them. <b>Not another exchange — a better economic engine.</b></p>
+  </div>
+  <div class="foot"><span>Our Thesis</span><span class="n">03 / 13</span></div>
+</section>
+
+<!-- ── PRECEDENT ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Precedent &amp; the Open Frontier</p>
+    <h2>Proven in the real world.<br>Unclaimed on-chain.</h2>
+    <div class="duo">
+      <div class="col house">
+        <h3>Proven at scale — our model</h3>
+        <p class="cap">Boring, durable, enormous</p>
+        <ul class="clean">
+          <li><b>Premium Bonds (UK).</b> Prize-linked savings since 1956 — well over £100B held by tens of millions. Prizes from interest; principal intact. <em>Our exact model, at national scale.</em></li>
+          <li><b>Loyalty as infrastructure.</b> Airline miles and card points — the reward layer grew worth <b>more than the airline running it.</b> Proof an incentive system can become the primary asset.</li>
+          <li><b>Tokenized real-world yield (RWAs).</b> Real yield is arriving on-chain — but today's RWAs stop at <em>wrapping</em> it. None pairs it with an engagement engine.</li>
+        </ul>
+      </div>
+      <div class="col player">
+        <h3>The extractive analogues</h3>
+        <p class="cap">Huge — but they take from the player</p>
+        <ul class="clean">
+          <li><b>Lotteries &amp; national games.</b> Hundreds of billions in annual play — but the house keeps the take. We pay from yield and recirculate.</li>
+          <li><b>Casinos — "the house."</b> Always solvent, by keeping the player's money. We stay solvent <b>without touching principal.</b></li>
+          <li><b>Speculative token farms.</b> Loud, then gone — printed rewards with no earnings underneath.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="claimband">
+      <p class="k">The open seat</p>
+      <p>These models are proven, durable, and vast in the real world — yet <b>nothing in crypto has ascended to a comparable share of its own space.</b> On-chain prize-linked savings peaked in the low hundreds of millions and faded; no incentive layer has become the asset the way loyalty did in aviation. Relative to the size of crypto, the seat is still empty — and that is the seat we're building for.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Precedent &amp; the Open Frontier</span><span class="n">04 / 13</span></div>
+</section>
+
+<!-- ── 4 · THE GAME ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">The Product · The Game</p>
+    <h2>Every round is a safe,<br>assembled one dial at a time.</h2>
+    <p class="lede">A six-character combination locks into place over the round. Your ticket is your guess at it.</p>
+    <div class="appframe" role="img" aria-label="TimbSwap live round meter: Round 19, segment 2 of 6, characters X 8 0 Z 9 4 with segment 1 locked and segment 2 active.">
+      <div class="appbar"><span class="dots"><i></i><i></i><i></i></span><span class="url">timbswap.xyz/compete</span></div>
+      <div class="meter">
+        <div class="meter-side"><span class="lab">ROUND</span><span class="big">#19</span></div>
+        <div class="cells">
+          <div class="cell locked"><div class="sq">X</div><span class="seg">SEG 1</span></div>
+          <div class="cell active"><div class="sq">8</div><span class="seg">SEG 2</span></div>
+          <div class="cell"><div class="sq">0</div><span class="seg">SEG 3</span></div>
+          <div class="cell"><div class="sq">Z</div><span class="seg">SEG 4</span></div>
+          <div class="cell"><div class="sq">9</div><span class="seg">SEG 5</span></div>
+          <div class="cell"><div class="sq">4</div><span class="seg">SEG 6</span></div>
+        </div>
+        <div class="meter-side right"><span class="lab">SEGMENT</span><span class="big"><span class="b">2</span>/6</span></div>
+      </div>
+    </div>
+    <p class="appcap">The live round meter — segment 1 locked (green), segment 2 active (blue), the rest still forming.</p>
+    <div class="gamecap">
+      <p><b>You set a six-character string before the round</b> — your guess at the combination it will lock into.</p>
+      <p><b>Segments lock one by one as eligible swaps run.</b> Match all six locked characters and you split that round's pot.</p>
+    </div>
+    <div class="appframe mini" role="img" aria-label="TimbSwap round meter: Round 22, segment 4 of 6. Segments 1 to 3 locked to M 9 L, segment 4 active.">
+      <div class="meter">
+        <div class="meter-side"><span class="lab">ROUND</span><span class="big">#22</span></div>
+        <div class="cells">
+          <div class="cell locked"><div class="sq">M</div><span class="seg">SEG 1</span></div>
+          <div class="cell locked"><div class="sq">9</div><span class="seg">SEG 2</span></div>
+          <div class="cell locked"><div class="sq">L</div><span class="seg">SEG 3</span></div>
+          <div class="cell active"><div class="sq">H</div><span class="seg">SEG 4</span></div>
+          <div class="cell"><div class="sq">2</div><span class="seg">SEG 5</span></div>
+          <div class="cell"><div class="sq">2</div><span class="seg">SEG 6</span></div>
+        </div>
+        <div class="meter-side right"><span class="lab">SEGMENT</span><span class="big"><span class="b">4</span>/6</span></div>
+      </div>
+    </div>
+    <div class="ticketwrap">
+      <div class="tkhead">My Tickets</div>
+      <div class="ticketlist">
+        <div class="ticketcard" role="img" aria-label="Ticket M9LH53, ticket number 9, plays rounds 14 to 26, 0.0001 ETH, earning yield for the pool, active.">
+          <div class="tkname">M9LH53</div>
+          <div class="tkmeta">Ticket #9 · plays R14–R26 · 0.0001 ETH · earning yield for the pool</div>
+          <span class="tkpill">Active</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>The Product · The Game</span><span class="n">05 / 13</span></div>
+</section>
+
+<!-- ── 5 · REDISTRIBUTION CYCLE ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Economic Design · The Cycle</p>
+    <h2>Value collected, value returned.</h2>
+    <p class="lede">On a fixed cadence, the protocol sweeps what it has earned and routes it straight back to participants — it doesn't accumulate for insiders.</p>
+    <div class="redist">
+      <div class="node in"><div class="step">Comes in</div><div class="lbl">Fees + yield on pooled capital</div><div class="sub">Earnings, not deposits</div></div>
+      <div class="arrow">→</div>
+      <div class="node pool"><div class="step">Held briefly</div><div class="lbl">Collected by the treasury</div><div class="sub">Backing visible on-chain</div></div>
+      <div class="arrow">→</div>
+      <div class="node out"><div class="step">Goes back out</div><div class="lbl">Winners split the pot</div><div class="sub">The prize, every round</div></div>
+    </div>
+    <p class="loopnote">↺  Swept every six rounds, in a fixed priority order — then the cycle restarts.</p>
+    <p class="routed">The same sweep funds emissions to the people who build the market: <b>liquidity providers, stakers, and boosted pools.</b></p>
+  </div>
+  <div class="foot"><span>Economic Design · The Cycle</span><span class="n">06 / 13</span></div>
+</section>
+
+<!-- ── 6 · BARRIERS ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Economic Design · Barriers</p>
+    <h2>Guardrails for the house.<br>Skin in for the player.</h2>
+    <div class="duo">
+      <div class="col house">
+        <h3>On the game's side</h3>
+        <p class="cap">Why the house can't over-extend</p>
+        <ul class="clean">
+          <li>The pot is funded by <b>yield, never new deposits.</b></li>
+          <li>A <b>solvency stop</b> freezes payouts at 99% of what's owed — it never writes a check it can't cash.</li>
+          <li>Emissions retarget to real revenue — <b>no printing your way out.</b></li>
+          <li><b>Fixed total supply: 100,000,000 tokens</b>, with no mint beyond it.</li>
+          <li>Foundation before flourish: core rewards funded before speculative ones.</li>
+        </ul>
+      </div>
+      <div class="col player">
+        <h3>On the player's side</h3>
+        <p class="cap">Why a win is earned, not handed out</p>
+        <ul class="clean">
+          <li><b>Skin in to sit at the table</b> — hold the token or provide liquidity to play.</li>
+          <li><b>One dial per wallet</b> each round — no one buys the whole board.</li>
+          <li>Only <b>active trades</b> work the dials. Passive holders don't get drafted.</li>
+          <li>Winners <b>claim inside a window</b> — collect, or it rolls back into the pot.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Economic Design · Barriers</span><span class="n">07 / 13</span></div>
+</section>
+
+<!-- ── PARTICIPANT TIERS ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Economic Design · Participants</p>
+    <h2>Every seat at the table<br>earns its keep.</h2>
+    <div class="tiergrid-wrap">
+      <table class="tiergrid">
+        <thead>
+          <tr><th>Tier</th><th>Puts in</th><th>Risks</th><th>Earns</th><th>Security added</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="tier">Player<small>prize game</small></td>
+            <td>A small ETH deposit per ticket — <b>principal stays withdrawable.</b></td>
+            <td>Gas and time. If the ticket never matches, the deposit comes back; only the shot is spent.</td>
+            <td>A claim on the <b>round pot</b> when the combination matches.</td>
+            <td><span class="sec">Deepens the pot.</span> Every active ticket's deposit earns yield for the prize pool, and play drives eligible volume.</td>
+          </tr>
+          <tr>
+            <td class="tier">Staker<small>single-asset TIMBS</small></td>
+            <td>TIMBS locked in the staking pool.</td>
+            <td><b>Token price exposure</b> while staked.</td>
+            <td>A share of <b>epoch-funded TIMBS emissions</b> — replenished from real treasury inflow, never printed.</td>
+            <td><span class="sec">Tightens the float.</span> Staked supply is off the market, dampening volatility and aligning holders long-term.</td>
+          </tr>
+          <tr>
+            <td class="tier">Farmer<small>core LP</small></td>
+            <td>Paired capital (TIMBS/WETH liquidity).</td>
+            <td><b>Impermanent loss</b> plus price exposure on both sides.</td>
+            <td>Trading fees on every swap <b>plus</b> emissions — the first claim in the epoch waterfall.</td>
+            <td><span class="sec">Builds the market.</span> Depth lowers slippage, steadies price, and makes manipulation expensive.</td>
+          </tr>
+          <tr>
+            <td class="tier">Boosted farmer<small>extra pairs</small></td>
+            <td>Liquidity in secondary pairs (stables, WETH crosses).</td>
+            <td>Impermanent loss on thinner pairs — the highest-risk seat.</td>
+            <td>Boosted, epoch-funded emissions — <b>last in the waterfall</b>, funded only after core rewards are covered.</td>
+            <td><span class="sec">Broadens the venue.</span> More live pairs, more routes, more eligible swaps feeding the engine.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="tiernote">Reward tracks risk, and both track contribution — the more security a seat adds to the system, the stronger its claim on what the system earns.</p>
+  </div>
+  <div class="foot"><span>Economic Design · Participants</span><span class="n">08 / 13</span></div>
+</section>
+
+<!-- ── 7 · RISK & OPEN ITEM ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Risk &amp; the Open Item</p>
+    <h2>What we've closed — and what's still open.</h2>
+    <div class="rblocks">
+      <div class="rblock">
+        <h3>Closed by design</h3>
+        <p><b>Custody:</b> non-custodial. Users hold their own keys; the protocol never takes discretionary control of funds.</p>
+        <p><b>Contracts:</b> testnet-hardened, with permissionless refund and recovery paths and every action logged to live telemetry for audit.</p>
+        <p><b>Solvency:</b> the barriers on the prior page make over-emission and dilution structurally impossible.</p>
+      </div>
+      <div class="rblock flag">
+        <h3>The open item <span class="tag">GATING</span></h3>
+        <p><b>Legal &amp; regulatory.</b> A yield-funded prize sits on the prize-linked-savings precedent — but the classification is jurisdiction-specific.</p>
+        <p>Formal counsel and likely geofencing are treated as <b>conditions to clear before mainnet</b>, not afterthoughts. We'd rather name it plainly than have you find it.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Risk &amp; the Open Item</span><span class="n">09 / 13</span></div>
+</section>
+
+<!-- ── 8 · TRACTION ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow">Current Progress</p>
+    <h2>The machine already runs.</h2>
+    <p class="lede">Deployed and operating on Arbitrum testnet — the full loop, end to end, at zero monetary risk to participants.</p>
+    <div class="stats">
+      <div class="stat"><div class="v">20+</div><div class="l">prize rounds settled autonomously</div></div>
+      <div class="stat"><div class="v"><span class="placeholder">N</span></div><div class="l">active wallets in the current cohort</div></div>
+      <div class="stat"><div class="v">24/7</div><div class="l">unattended keeper running the cycle</div></div>
+      <div class="stat"><div class="v">Full</div><div class="l">loop live: trade · stake · farm · play · pay out</div></div>
+    </div>
+    <p class="body" style="margin-top:34px">Testnet proves the system <b style="color:var(--ink)">works</b>. This phase proves it is <b style="color:var(--ink)">engaging</b> — repeat play and trade volume that tracks the rounds — before real capital is deployed.</p>
+  </div>
+  <div class="foot"><span>Current Progress</span><span class="n">10 / 13</span></div>
+</section>
+
+<!-- ── 9 · PATH TO MAINNET ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow brass">Go-to-Market · Path to Mainnet</p>
+    <h2>We deploy when engagement is proven — not before.</h2>
+    <p class="lede">Grow the community on testnet; graduate to mainnet on evidence, so the milestone is measured, not felt.</p>
+    <div class="gate">
+      <div class="row"><div class="mark">1</div><div class="txt"><b>Sustained active base</b> — <span class="placeholder">[N]</span> wallets across <span class="placeholder">[M]</span> settled rounds.<span>Depth of play, not a one-time spike.</span></div></div>
+      <div class="row"><div class="mark">2</div><div class="txt"><b>Repeat participation</b> — <span class="placeholder">[X%]</span> of players return.<span>The single strongest signal of pull.</span></div></div>
+      <div class="row"><div class="mark">3</div><div class="txt"><b>Attributable volume</b> — eligible trade volume that tracks round activity.<span>Proof the game drives the exchange.</span></div></div>
+      <div class="row"><div class="mark">4</div><div class="txt"><b>Cleared gating conditions</b> — completed audit and legal sign-off.<span>Non-negotiable before real value.</span></div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Go-to-Market</span><span class="n">11 / 13</span></div>
+</section>
+
+<!-- ── 10 · ROADMAP / VISION ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow brass">Long-Term Vision · Roadmap</p>
+    <h2>From fixed rules to adaptive incentives.</h2>
+    <p class="lede">Where the engine is headed — stated as roadmap, not as a capability we claim today.</p>
+    <div class="phases">
+      <div class="phase now">
+        <span class="ptag">Now · Live</span>
+        <h3>Rule-based allocation</h3>
+        <p>The reward cycle is deterministic and solvency-bounded — a fixed priority waterfall. Predictable and auditable by design.</p>
+      </div>
+      <div class="phase next">
+        <span class="ptag">Next</span>
+        <h3>Instrumented signals</h3>
+        <p>The protocol already emits rich telemetry — liquidity depth, swaps, staking, treasury health. Next is turning that into live signals and dashboards.</p>
+      </div>
+      <div class="phase vision">
+        <span class="ptag">Vision</span>
+        <h3>Adaptive policy</h3>
+        <p>An allocation policy that tunes incentives to observed protocol health — still on-chain, still transparent, still solvency-bounded.</p>
+      </div>
+    </div>
+    <p class="roadnote">The same telemetry that proves solvency today is the substrate for adaptive incentives tomorrow. <b>Every phase keeps the identical guardrails</b> — fixed supply, the solvency stop, non-custodial. The ambition grows; the discipline doesn't move.</p>
+  </div>
+  <div class="foot"><span>Long-Term Vision</span><span class="n">12 / 13</span></div>
+</section>
+
+<!-- ── 11 · THE ASK ── -->
+<section class="slide">
+  <div class="inner rise">
+    <p class="eyebrow brass">Capital Strategy · The Ask</p>
+    <h2>Seed the first mainnet pot.</h2>
+    <p class="lede">Capital does two things: subsidizes early rounds until fees and yield carry them, and funds the graduation runway.</p>
+    <div class="budget">
+      <div class="line"><div class="d">Initial mainnet prize pot <small>The subsidy that makes early rounds worth playing</small></div><div class="amt">$<span class="placeholder">X</span></div></div>
+      <div class="line"><div class="d">Security audit <small>Independent contract review before launch</small></div><div class="amt">$<span class="placeholder">Y</span></div></div>
+      <div class="line"><div class="d">Legal counsel <small>Structure &amp; jurisdiction review — the open item</small></div><div class="amt">$<span class="placeholder">Z</span></div></div>
+      <div class="line total"><div class="d">Seed total</div><div class="amt">$<span class="placeholder">—</span></div></div>
+    </div>
+    <p class="closing">Testnet proves it works. Seed proves it earns.</p>
+    <p class="disclaimer">Bracketed figures are placeholders to be finalized from live on-chain engagement data. This brief describes a software project; it is not an offer of securities or investment, nor legal advice. The regulatory item requires qualified counsel before any real-value deployment.</p>
+  </div>
+  <div class="foot"><span>Capital Strategy · The Ask</span><span class="n">13 / 13</span></div>
+</section>
+
+<script>
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var els = document.querySelectorAll(".rise");
+    if (reduce || !("IntersectionObserver" in window)) { els.forEach(function (e){ e.classList.add("in"); }); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en){ if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+    }, { threshold: 0.2 });
+    els.forEach(function (e){ io.observe(e); });
+  })();
+</script>
