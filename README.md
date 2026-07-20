@@ -15,7 +15,8 @@ and payouts need no privileged operator, and you always hold your own keys.
 **Live:** [timbswap.xyz](https://timbswap.xyz/)  
 **Network:** Arbitrum Sepolia (Chain ID: 421614)  
 **GitHub:** [github.com/0xTimberZx/TimbSwap](https://github.com/0xTimberZx/TimbSwap)  
-**DebugHub:** [0xtimberzx.github.io/MyDapp/debughub](https://0xtimberzx.github.io/MyDapp/debughub/)
+**DebugHub:** [0xtimberzx.github.io/MyDapp/debughub](https://0xtimberzx.github.io/MyDapp/debughub/)  
+**Litepaper:** [timbswap.xyz/litepaper](https://timbswap.xyz/litepaper/)
 
 > **Status:** live on Arbitrum **Sepolia testnet** — all tokens are test assets with no
 > monetary value. Unaudited; an independent audit is a gating condition for any mainnet launch.
