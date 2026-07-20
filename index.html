@@ -125,8 +125,8 @@
         <strong class="hero-sub-punch">Free to try — your deposit comes&nbsp;back.</strong>
       </p>
       <div class="hero-actions">
-        <a href="/compete/" class="btn-primary">Play the Scroll</a>
-        <a href="/swap/" class="btn-secondary">Start Swapping</a>
+        <a href="/compete/" class="btn-primary" onclick="return goGated(event, '/compete/')">Enter Your Ticket</a>
+        <a href="/swap/" class="btn-secondary" onclick="return goGated(event, '/swap/')">Make a Swap</a>
       </div>
       <!-- At-a-glance credentials — the words a DeFi native scans for. -->
       <div class="hero-creds" aria-label="What TimbSwap is">
@@ -391,7 +391,7 @@
   </footer>
 
   <script src="config.js?v=20260718c"></script>
-<script src="landing.js?v=20260760a"></script>
+<script src="landing.js?v=20260760b"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
