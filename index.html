@@ -33,7 +33,7 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260760b" />
+  <link rel="stylesheet" href="style.css?v=20260760d" />
 </head>
 <body>
 
@@ -72,6 +72,7 @@
     </div>
 
     <div class="nav-actions">
+      <div class="testnet-badge" title="Live on Arbitrum Sepolia testnet">Testnet</div>
       <div id="network-badge" class="network-badge hidden">Arb Sepolia</div>
       <button id="connect-btn" class="btn-connect" onclick="handleConnect()">Connect Wallet</button>
       <div id="wallet-info" class="wallet-info hidden">
@@ -295,14 +296,15 @@
         <div class="cycle-step"><span class="cs-n">03</span><div><div class="cs-t">Stake it back</div><div class="cs-d">Staked TIMBS and LP compound your claim on the next sweep.</div></div></div>
         <div class="cycle-step"><span class="cs-n">04</span><div><div class="cs-t">Better odds, bigger share</div><div class="cs-d">Eligible trades push the meter — skin in the game is your ticket to the pot.</div></div></div>
       </div>
-      <div class="cascade" role="img" aria-label="The waterfall: one inflow fills the farm basin first, then staking, then boost — when the tide comes in, every basin rises.">
+      <div class="cascade" role="img" aria-label="The waterfall: the treasury's collected inflow fills the farm basin first, then staking, then boost — when the tide comes in, every basin rises.">
         <div class="cascade-title">THE WATERFALL</div>
+        <div class="cascade-src">SOURCE · TREASURY — swap fees + buybacks pooled, then poured</div>
         <div class="basins">
           <div class="basin b1"><div class="basin-cup"><div class="basin-fill"></div></div><span class="basin-name">FARM</span><span class="basin-ord">poured first</span></div>
           <div class="basin b2"><div class="basin-cup"><div class="basin-fill"></div></div><span class="basin-name">STAKING</span><span class="basin-ord">poured second</span></div>
           <div class="basin b3"><div class="basin-cup"><div class="basin-fill"></div></div><span class="basin-name">BOOST</span><span class="basin-ord">poured last</span></div>
         </div>
-        <p class="cascade-cap">One inflow, poured in order. When the tide comes in, <strong>every basin rises</strong> — and none can be promised more than the water that arrived.</p>
+        <p class="cascade-cap">One inflow — swap fees and buybacks pooled by the <strong>treasury</strong> — poured in fixed order. When the tide comes in, <strong>every basin rises</strong>; none can be promised more than the water that arrived.</p>
       </div>
     </div>
   </section>
@@ -328,6 +330,31 @@
         </svg>
         <p>Rewarded volume, funded emissions, and prize odds — an edge that <strong>resets every six rounds</strong>, open to anyone, not just the fastest machine.</p>
       </div>
+    </div>
+
+    <div class="edge-lower">
+      <div class="edge-panel gen">
+        <div class="ep-tag">EVEN ON A FLAT DAY</div>
+        <h3>The edge is generated, not discovered.</h3>
+        <p class="edge-lead">Classic arbitrage needs a dislocation — it only exists when volume or volatility opens a gap. TimbSwap's edge runs on the <strong>protocol's clock, not the market's</strong>, so opportunity persists when the tape is quiet.</p>
+        <ul class="edge-list">
+          <li><strong>Emissions still flow.</strong> The epoch sweep runs every six rounds regardless of volume — LP and staking rewards don't need volatility to appear.</li>
+          <li><strong>The round still turns.</strong> Segments lock on a timer; on a slow day, fewer players nudge the meter, so the ones who show up face <strong>better odds</strong> on the pot.</li>
+          <li><strong>The pot still grows.</strong> Deposited capital earns yield in the vault whether or not anyone trades, so the prize accrues on flat days too.</li>
+          <li><strong>Thin volume still compounds.</strong> Whatever trading does happen routes through your liquidity and refills the treasury that feeds the waterfall.</li>
+        </ul>
+      </div>
+      <aside class="edge-panel risk">
+        <div class="ep-tag">THE RISKS</div>
+        <h3>What you're taking on.</h3>
+        <ul class="edge-list">
+          <li><strong>Impermanent loss.</strong> Providing liquidity carries IL — larger on thin or volatile pairs (boosted farms are the highest-risk seat).</li>
+          <li><strong>Emissions vary.</strong> The rate moves with the waterfall and total staked; if inflow runs short the tail (boost) can go unfunded. Testnet APR is illustrative, not a promise.</li>
+          <li><strong>The game is chance-weighted.</strong> You aim a segment's class, not the exact character — the pot is never guaranteed.</li>
+          <li><strong>Token &amp; liquidity exposure.</strong> TIMBS rewards carry TIMBS price risk; staked positions are locked while staked.</li>
+          <li><strong>Unaudited testnet.</strong> Contracts are unaudited and every asset is test-only, with no monetary value.</li>
+        </ul>
+      </aside>
     </div>
   </section>
 
