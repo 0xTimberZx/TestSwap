@@ -23,3 +23,7 @@ Thumbs.db
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 *.log
+
+# ─── Remix / build artifacts (regenerable — keep out of the repo) ─────────────
+.deps/
+artifacts/

@@ -1,11 +1,48 @@
 # TimbSwap
 
-A full-stack DeFi protocol on Arbitrum Sepolia — AMM DEX, prize game, LP farming, single-asset staking, token locking, and on-chain governance, all centered around the native TIMBS token.
+**An exchange with a prize game built in — and one incentive engine underneath both.**
+
+TimbSwap is a decentralized exchange whose swap fees and idle-capital yield fund a recurring,
+on-chain prize game. The swap, the staking, the farming, and the game are not separate products
+— they are modules of a single self-funding loop. What the protocol earns is swept back to the
+people who generate it, on a fixed cadence, under hard solvency limits. Rewards are funded by
+real inflow, never printed.
 
 **Live:** [timbswap.xyz](https://timbswap.xyz/)  
 **Network:** Arbitrum Sepolia (Chain ID: 421614)  
 **GitHub:** [github.com/0xTimberZx/TimbSwap](https://github.com/0xTimberZx/TimbSwap)  
 **DebugHub:** [0xtimberzx.github.io/MyDapp/debughub](https://0xtimberzx.github.io/MyDapp/debughub/)
+
+> **Status:** live on Arbitrum **Sepolia testnet** — all tokens are test assets with no
+> monetary value. Unaudited; an independent audit is a gating condition for any mainnet launch.
+> See [Roadmap](./ROADMAP.md) and the [Risks](https://timbswap.xyz/docs/#risks) section.
+
+---
+
+## The incentive engine
+
+One inflow drives every module. Value moves in one direction, on a fixed cadence:
+
+```
+        ┌──────────────────────── the loop repeats every 6 rounds ───────────────────────┐
+        │                                                                                 │
+   ①  TRADE ───▶  ②  COLLECT ───▶  ③  REWARD ───────────────▶  ④  RETURN ────────────────┘
+   swaps pay a     fees + yield      the epoch sweep refills, in fixed order:               players & LPs
+   0.30% fee       on pooled         pot → farm → staking → boost                           come back;
+   (0.25% LP /     capital feed      (each capped; boost gets only the remainder)           deeper pools,
+    0.05% treas.)  the treasury      accrual halts at 99% of obligations                    more volume
+```
+
+- **Funded, never printed.** Emissions retarget to what the treasury actually collected; a
+  **solvency stop** freezes accrual at 99% of outstanding obligations. The system cannot promise
+  tokens it does not hold.
+- **Fixed supply.** 100,000,000 TIMBS, hard-capped. No mint beyond it.
+- **Prize-linked, not extractive.** The pot is paid from *yield on deposited capital* (the
+  `TimbYieldVault`), so a player's principal stays theirs and refundable — closer to a
+  prize-linked savings account than a lottery.
+
+The "modules" below (swap, farm, staking, game, treasury, governance) are the parts of this one
+machine — read them as gears, not a product menu.
 
 ---
 
@@ -54,7 +91,9 @@ Everything runs on **Arbitrum Sepolia (Chain ID 421614)**. Grab gas and stables 
 
 ---
 
-## Features
+## The modules
+
+Each is a gear in the engine above, not a standalone feature.
 
 **AMM Swap** — Uniswap v2-style. 0.3% fee split 0.25% to LPs / 0.05% to treasury. Supports `addLiquidity`, `addLiquidityETH`, `removeLiquidity`, `removeLiquidityETH`.
 
@@ -94,7 +133,9 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   └── package.json
 ├── .github/workflows/
 │   └── settler.yml      ← GitHub Actions cron (10 min + daily health)
+├── abi/                 ← hand-kept contract ABIs (for integrators)
 ├── SPECS.md             ← Full technical specs + addresses
+├── ROADMAP.md           ← Shipped / next / vision + the mainnet graduation gate
 ├── CLAUDE.md            ← Agent rules for Claude Code
 └── foundry.toml
 ```
