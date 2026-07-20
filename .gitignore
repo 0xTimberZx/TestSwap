@@ -27,3 +27,6 @@ Thumbs.db
 # ─── Remix / build artifacts (regenerable — keep out of the repo) ─────────────
 .deps/
 artifacts/
+
+# ─── Local scratch / generated exports (not part of the site) ─────────────────
+scratchpad/
