@@ -34,6 +34,15 @@ function xConfigured() {
   return !!(X_API_KEY && X_API_SECRET && X_ACCESS_TOKEN && X_ACCESS_TOKEN_SECRET);
 }
 
+// The game alphabet contains BOTH the letter "O" and the digit "0", so a raw
+// winning string can be misread in X's UI font. In post TEXT, render each zero
+// as a slashed zero (digit 0 + U+0338 combining long solidus overlay) so it can
+// never be mistaken for the letter O. (The card image marks zeros with a center
+// dot drawn over the glyph — there's no text equivalent, hence the slash here.)
+function slashZeros(s) {
+  return String(s == null ? "" : s).replace(/0/g, "0̸");
+}
+
 // ─── Hashtags ──────────────────────────────────────────────────────────────────
 
 // Normalize one group string ("#a, b  c") → "#a #b #c": add a leading "#" where
@@ -190,6 +199,20 @@ function renderRoundCard({ round, string6, entries, potEth, winners }) {
     ctx.font = `62px ${font}`;
     ctx.textBaseline = "middle";
     ctx.fillText(chars[i], cx, rowY + 4);
+    // Dot a digit zero (center dot punched out of the glyph) so it can't read
+    // as the letter O — both are valid characters in the alphabet.
+    if (chars[i] === "0") {
+      ctx.save();
+      ctx.fillStyle = C.bg; // knock a hole so the dot reads even over the stroke
+      ctx.beginPath();
+      ctx.arc(cx, rowY + 4, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = tile;
+      ctx.beginPath();
+      ctx.arc(cx, rowY + 4, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.textBaseline = "alphabetic";
   }
 
@@ -258,10 +281,10 @@ async function postRoundToX(result) {
   const won = result.winners > 0;
   const baseText = won
     ? `🏆 Round #${result.round} SETTLED — we have ${result.winners === 1 ? "a winner" : result.winners + " winners"}!\n\n` +
-      `Winning string: ${result.string6}\n${result.entries} entries · ${result.potEth} ETH paid out\n\n` +
+      `Winning string: ${slashZeros(result.string6)}\n${result.entries} entries · ${result.potEth} ETH paid out\n\n` +
       `A new round is already live → timbswap.xyz/compete`
     : `📜 Round #${result.round} settled\n\n` +
-      `Winning string: ${result.string6} · ${result.entries} entries · pot snowballs\n\n` +
+      `Winning string: ${slashZeros(result.string6)} · ${result.entries} entries · pot snowballs\n\n` +
       `Enter the next round → timbswap.xyz/compete`;
   const text = appendHashtags(baseText, hashtagLine(result.round, won));
 

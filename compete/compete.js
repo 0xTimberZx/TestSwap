@@ -704,7 +704,10 @@ function insufficientEntryLabel() {
 
 function updateEntryButton() {
   const btn = document.getElementById("entry-btn");
-  if (!userAddress) { btn.textContent = "Connect wallet to enter"; btn.disabled = true; return; }
+  // No wallet: the entry button stays live and doubles as a connect trigger —
+  // clicking it pops the wallet manager (see handleSubmitEntry) rather than
+  // sitting greyed and dead.
+  if (!userAddress) { btn.textContent = "Connect wallet to enter"; btn.disabled = false; return; }
   if (!isEntryValid()) { btn.textContent = "Enter a valid 6-character string"; btn.disabled = true; return; }
   const short = insufficientEntryLabel();
   if (short) { btn.textContent = short; btn.disabled = true; return; }
@@ -777,7 +780,10 @@ function dismissReplaceWarning(e) {
 }
 
 async function handleSubmitEntry() {
-  if (!userAddress || !isEntryValid()) return;
+  // No wallet yet → this button pops the wallet manager to connect instead of
+  // submitting; updateEntryButton then re-labels it to Submit/Update Entry.
+  if (!userAddress) { handleConnect(); return; }
+  if (!isEntryValid()) return;
   const btn      = document.getElementById("entry-btn");
   const entryStr = document.getElementById("entry-string").value;
   const string6  = stringToBytes6(entryStr);
@@ -1630,6 +1636,8 @@ function handleDisconnect() {
     // banner immediately (its live stats fill in when the poll lands).
     startGateMask();
     document.getElementById("newcomer-banner")?.classList.remove("hidden");
+    // Make the entry button live as a connect trigger right away.
+    updateEntryButton();
   }
 
   // These five loaders hit the RPC independently — fire them in parallel so
