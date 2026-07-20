@@ -33,7 +33,7 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=20260760d" />
+  <link rel="stylesheet" href="style.css?v=20260760e" />
 </head>
 <body>
 
@@ -127,6 +127,14 @@
       <div class="hero-actions">
         <a href="/compete/" class="btn-primary">Play the Scroll</a>
         <a href="/swap/" class="btn-secondary">Start Swapping</a>
+      </div>
+      <!-- At-a-glance credentials — the words a DeFi native scans for. -->
+      <div class="hero-creds" aria-label="What TimbSwap is">
+        <span class="hero-cred">Open-source</span>
+        <span class="hero-cred">Decentralized</span>
+        <span class="hero-cred">Permissionless</span>
+        <span class="hero-cred">Non-custodial</span>
+        <span class="hero-cred">Solidity smart contracts</span>
       </div>
     </div>
 
@@ -268,7 +276,7 @@
     <div class="why-grid">
       <div class="why-card">
         <h3>A proven AMM at the <span class="w-green">core</span></h3>
-        <p>Under the hood it's a Uniswap-V2-style constant-product exchange — battle-tested pool mechanics, nothing exotic where your liquidity lives.</p>
+        <p>Under the hood it's a Uniswap-V2-style constant-product exchange — battle-tested pool mechanics in open-source Solidity, verified on-chain, nothing exotic where your liquidity lives.</p>
       </div>
       <div class="why-card">
         <h3>Trades do more than <span class="w-green">trade</span></h3>
@@ -361,7 +369,7 @@
 
   <!-- Trust bar: verify-don't-trust links in one strip. -->
   <div class="trust-bar" aria-label="Verify TimbSwap">
-    <div class="trust-item"><span class="t-label">SOURCE</span><a href="https://github.com/0xTimberZx/TimbSwap" target="_blank" rel="noopener">Open on GitHub ↗︎</a></div>
+    <div class="trust-item"><span class="t-label">SOURCE</span><a href="https://github.com/0xTimberZx/TimbSwap" target="_blank" rel="noopener">Open-source on GitHub ↗︎</a></div>
     <div class="trust-item"><span class="t-label">CONTRACTS</span><a href="/docs/#authenticity">Address table in Docs</a></div>
     <div class="trust-item"><span class="t-label">EXPLORER</span><a href="https://sepolia.arbiscan.io/address/0xCCd6d3f0A86042d2B7056eDd381d367126628AF5" target="_blank" rel="noopener">Factory on Arbiscan ↗︎</a></div>
     <div class="trust-item"><span class="t-label">AUDIT</span><span class="t-muted">Independent audit gates mainnet — testnet today</span></div>
