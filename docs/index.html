@@ -34,7 +34,7 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
-  <link rel="stylesheet" href="../style.css?v=20260760d" />
+  <link rel="stylesheet" href="../style.css?v=20260760e" />
   <link rel="stylesheet" href="docs.css?v=20260739a" />
 </head>
 <body>
@@ -148,7 +148,7 @@
       <!-- Overview -->
       <section id="overview" class="docs-section">
         <h2>Overview</h2>
-        <p>TimbSwap is a constant-product (Uniswap-V2-style) automated market maker paired with a set of on-chain incentive games. All state is read live from the chain — the frontend is static and hosts no backend. You interact by connecting an EVM wallet (MetaMask, Rabby, or a mobile in-app wallet) set to Arbitrum Sepolia.</p>
+        <p>TimbSwap is a constant-product (Uniswap-V2-style) automated market maker paired with a set of on-chain incentive games. It is <strong>open-source, decentralized, permissionless, and non-custodial</strong>: the protocol is a set of <strong>Solidity smart contracts</strong> on Arbitrum — anyone can call them directly, no one can pause your funds, and you always hold your own keys. All state is read live from the chain — the frontend is static and hosts no backend. You interact by connecting an EVM wallet (MetaMask, Rabby, or a mobile in-app wallet) set to Arbitrum Sepolia.</p>
         <p>The core surfaces are:</p>
         <ul>
           <li><strong>Swap</strong> — trade tokens against AMM pools.</li>
@@ -171,7 +171,7 @@
           <li><strong>Reward.</strong> Every six rounds an autonomous keeper sweeps what was collected and replenishes the reward pools — prize pot, farm, staking, then boosted farms — in that fixed priority order.</li>
           <li><strong>Return.</strong> Winners claim, stakers and farmers compound, players re-enter — feeding step one again.</li>
         </ol>
-        <p>The contract layout mirrors the loop: the <strong>AMM core</strong> (Factory, Router, Pairs) generates fees; the <strong>game layer</strong> (TimbPrize, GameRegistry, YieldVault, PrizeEscrow) runs rounds and holds the pot's backing; the <strong>emissions layer</strong> (Staking, Farm, BoostFarm, Treasury) distributes rewards under the solvency rules described below. The frontend is a static site — every number you see is read live from chain, and the keeper runs unattended.</p>
+        <p>The whole protocol is <strong>Solidity smart contracts</strong> (0.8.24), open-source and verified on <a href="https://repo.sourcify.dev/421614/" target="_blank" rel="noopener">Sourcify</a> so anyone can read the exact deployed code. The layout mirrors the loop: the <strong>AMM core</strong> (Factory, Router, Pairs) generates fees; the <strong>game layer</strong> (TimbPrize, GameRegistry, YieldVault, PrizeEscrow) runs rounds and holds the pot's backing; the <strong>emissions layer</strong> (Staking, Farm, BoostFarm, Treasury) distributes rewards under the solvency rules described below. Settlement and payouts are <strong>permissionless</strong> — anyone can call them, no privileged operator required. The frontend is a static site — every number you see is read live from chain, and the keeper runs unattended.</p>
       </section>
 
       <!-- Getting started -->

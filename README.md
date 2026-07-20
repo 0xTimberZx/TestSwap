@@ -8,6 +8,10 @@ on-chain prize game. The swap, the staking, the farming, and the game are not se
 people who generate it, on a fixed cadence, under hard solvency limits. Rewards are funded by
 real inflow, never printed.
 
+It is **open-source, permissionless, and non-custodial**: the protocol is a set of **Solidity
+smart contracts** on Arbitrum, verified on Sourcify, that anyone can call directly — settlement
+and payouts need no privileged operator, and you always hold your own keys.
+
 **Live:** [timbswap.xyz](https://timbswap.xyz/)  
 **Network:** Arbitrum Sepolia (Chain ID: 421614)  
 **GitHub:** [github.com/0xTimberZx/TimbSwap](https://github.com/0xTimberZx/TimbSwap)  
