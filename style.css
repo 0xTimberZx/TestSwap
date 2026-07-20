@@ -682,6 +682,7 @@ body { padding-top: 60px; }
   }
   .hero-sub { max-width: 100%; }
   .hero-actions { justify-content: center; }
+  .hero-creds { justify-content: center; }
   .scroll-display { min-width: unset; width: 100%; }
   .features { grid-template-columns: repeat(2, 1fr); }
   .nav-links { display: none; }
