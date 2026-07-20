@@ -812,6 +812,7 @@ body { padding-top: 60px; }
 .basin-ord { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-align: center; }
 .cascade-cap { font-size: 13px; color: var(--text-2); margin-top: 16px; line-height: 1.5; }
 .cascade-cap strong { color: var(--green); font-weight: 700; }
+.cascade-src { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; color: var(--text-3); margin-bottom: 14px; }
 @keyframes tide-sweep { 0% { background-position: 120% 0; } 60%, 100% { background-position: -120% 0; } }
 @media (prefers-reduced-motion: reduce) { .basin-fill::after { animation: none; } }
 @media (max-width: 860px) { .cycle-grid { grid-template-columns: 1fr; } }
@@ -831,3 +832,19 @@ body { padding-top: 60px; }
 .edge-line.hot { stroke: var(--green); }
 .edge-dash { stroke-dasharray: 5 6; }
 @media (max-width: 860px) { .edge-grid { grid-template-columns: 1fr; } }
+
+/* Wider-arbitrage lower row: how the edge is generated on quiet days, + risks. */
+.edge-lower { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-top: 20px; }
+.edge-panel { background: var(--bg2); border: var(--bw) solid var(--border); border-radius: var(--radius-lg); padding: 24px 22px; }
+.edge-panel .ep-tag { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; margin-bottom: 6px; }
+.edge-panel.gen .ep-tag { color: var(--green); }
+.edge-panel.risk .ep-tag { color: #e0a52e; }
+.edge-panel h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; margin-bottom: 14px; }
+.edge-lead { font-size: 14.5px; color: var(--text-2); line-height: 1.55; margin-bottom: 16px; }
+.edge-lead strong { color: var(--text); font-weight: 600; }
+.edge-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.edge-list li { font-size: 14px; color: var(--text-2); line-height: 1.5; padding-left: 18px; position: relative; }
+.edge-list li strong { color: var(--text); font-weight: 600; }
+.edge-list li::before { content: ""; position: absolute; left: 0; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.edge-panel.risk .edge-list li::before { background: #e0a52e; border-radius: 1px; }
+@media (max-width: 860px) { .edge-lower { grid-template-columns: 1fr; } }
