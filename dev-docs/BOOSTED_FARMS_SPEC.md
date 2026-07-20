@@ -210,6 +210,10 @@ TimbBoostFarm and BoostRewarder:
    buffer` (read `ROUND_DURATION()` off TimbPrize; e.g. +20% buffer).
    Owner-tunable later via `setEmissionWindow`. The factory arg arms the
    anti-phantom pair check from block one.
+   *Operational note:* the live window was later stretched to **14 rounds
+   (302,400s)** via `scripts/set-boost-window.js` (Admin — Set Boost Emission
+   Window workflow) to slow the boost drip so each epoch's budget lasts
+   longer between refills.
 1b. **Per secondary token (optional, e.g. WETH):** deploy
    `BoostRewarder(boostFarm, weth, emissionWindow)`, then
    `boostFarm.addPoolHook(pid, rewarder)` and fund via
