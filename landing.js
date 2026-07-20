@@ -198,6 +198,21 @@ async function loadStats() {
 
 // ─── Wallet connect ──────────────────────────────────────────────────────────
 
+// Dashboard CTAs ("Enter Your Ticket", "Make a Swap") are wallet-gated: with no
+// wallet connected, clicking pops the wallet manager instead of navigating, and
+// only proceeds to the destination once a connection lands. The folded hamburger
+// nav is intentionally NOT gated — it's the deliberate bypass for browsing
+// without connecting. When a wallet drops mid-session the app lands back on the
+// dashboard, so this is the connect prompt that lets the user reconnect.
+function goGated(e, dest) {
+  if (userAddress) return true;              // already connected → follow the link
+  if (e) e.preventDefault();
+  handleConnect().then(() => {
+    if (userAddress) window.location.href = dest;  // connected via the popup → proceed
+  });
+  return false;
+}
+
 async function handleConnect() {
   DebugHub.logCheckpoint("Wallet Connect Requested", "pass");
   const ok = await connectWallet();

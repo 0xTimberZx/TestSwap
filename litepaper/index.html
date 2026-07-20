@@ -204,7 +204,7 @@
       <section id="tokenomics" class="docs-section">
         <h2><span class="lp-num">4</span>Tokenomics &amp; emissions</h2>
         <ul>
-          <li><strong>Fixed supply.</strong> TIMBS is hard-capped at <strong>100,000,000</strong>, with no mint beyond the cap. (~500k sits at an unreachable phantom-pair address — a permanent burn.)</li>
+          <li><strong>Fixed supply.</strong> TIMBS is hard-capped at <strong>100,000,000</strong>, with no mint beyond the cap — a fixed schedule finalized at mainnet launch.</li>
           <li><strong>Fee split.</strong> Each swap's 0.3% fee splits 0.25% to LPs and 0.05% to the treasury, which funds buybacks (50% burned, 50% to stakers) and the reward cycle.</li>
           <li><strong>The epoch waterfall.</strong> Every 6 rounds the keeper measures what was actually claimed from farm and staking and what the treasury collected, then refills in priority: <em>farm</em> first (≤80% of its claims), <em>staking</em> next (≤1.25× its claims, capped at 80% of the remainder), and <em>boosted farms</em> receive only what's left. If inflow runs short, the tail goes unfunded — nothing is printed to cover it.</li>
           <li><strong>Solvency stop.</strong> Reward contracts track every wallet's accrued-but-unclaimed balance as an explicit liability. When obligations reach <strong>99% of reserves</strong>, accrual halts until the next refill. The system cannot promise tokens it does not hold.</li>

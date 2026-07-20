@@ -679,6 +679,14 @@
   background: var(--green);
   cursor: pointer;
 }
+
+/* No LP position for the selected pair: bar sits at 0, greyed and inert. */
+.lq-remove--empty .lq-remove-slider { cursor: not-allowed; opacity: 0.55; }
+.lq-remove--empty .lq-remove-slider::-webkit-slider-thumb { background: var(--text-3); cursor: not-allowed; }
+.lq-remove--empty .lq-remove-slider::-moz-range-thumb { background: var(--text-3); cursor: not-allowed; }
+.lq-remove--empty .lq-remove-pct { color: var(--text-3); }
+.lq-pct-row .slip-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.lq-pct-row .slip-btn:disabled:hover { border-color: var(--border); color: var(--text-3); }
 .lq-remove-pct {
   font-family: var(--mono);
   font-size: 13px;

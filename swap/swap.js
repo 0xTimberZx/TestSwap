@@ -1249,6 +1249,30 @@ function updateLqButtons() {
   const hasLp = lpBalanceWei && !lpBalanceWei.isZero();
   remBtn.disabled = !userAddress || !hasLp || removePct <= 0;
   remBtn.textContent = (hasLp && removePct > 0) ? `Remove ${removePct}%` : "Remove liquidity";
+
+  // No LP position for the current pair (none owned, wallet disconnected, or
+  // the selected asset pair changed to one you're not in): snap the bar back to
+  // 0, grey it, and lock the quick-% buttons. This runs on every keystroke and
+  // after refreshLiquidity, so the remove control heals its own state as the
+  // token pair / asset list changes — no separate listener needed.
+  const slider  = document.getElementById("lq-remove-slider");
+  const remWrap = document.querySelector(".lq-remove");
+  const pctBtns = document.querySelectorAll(".lq-pct-row .slip-btn");
+  if (!hasLp) {
+    if (removePct !== 0) {
+      removePct = 0;
+      const lbl = document.getElementById("lq-remove-pct");
+      if (lbl) lbl.textContent = "0%";
+      renderRemovePreview();
+    }
+    if (slider) { slider.value = 0; slider.disabled = true; }
+    pctBtns.forEach(b => { b.disabled = true; b.classList.remove("slip-active"); });
+    if (remWrap) remWrap.classList.add("lq-remove--empty");
+  } else {
+    if (slider) slider.disabled = false;
+    pctBtns.forEach(b => { b.disabled = false; });
+    if (remWrap) remWrap.classList.remove("lq-remove--empty");
+  }
 }
 
 function setRemovePct(pct) {
