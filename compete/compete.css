@@ -895,3 +895,14 @@
   transition: border-color 0.15s, background 0.15s;
 }
 .comp-week-chip:hover { border-color: #ffd75e; background: rgba(255, 215, 94, 0.06); }
+
+/* Trust footnote under How It Works — the guarantee behind the steps. */
+.how-note {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: var(--bw) solid var(--border);
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.how-note strong { color: var(--green); font-weight: 600; }
