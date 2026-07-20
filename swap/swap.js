@@ -745,7 +745,12 @@ function setSlippage(pct) {
   recalcQuote();
 }
 
-const MAX_SLIPPAGE_PCT = 2.5; // hard ceiling — protects against fat-finger slippage on thin pools
+// Thin testnet pools move fast (small reserves + the game constantly nudging
+// them), so a $20 trade can show ~10% price impact and the pool can shift more
+// than a few % between the submit-time re-quote and mining. A 2.5% ceiling made
+// those swaps unclearable — every attempt reverted InsufficientOutputAmount.
+// 15% gives real headroom on testnet while still capping a fat-finger.
+const MAX_SLIPPAGE_PCT = 15;
 document.getElementById("slip-custom")?.addEventListener("input", (e) => {
   let val = parseFloat(e.target.value);
   if (val > 0) {
@@ -984,8 +989,14 @@ async function handleSwap() {
     const msg = err?.reason || err?.message || String(err);
     console.error("Swap failed:", msg);
     const sel = revertSel(err);
+    // Log a FLAT, always-serializable summary first — a raw ethers error is a
+    // deep object with circular refs (err.transaction/err.error), and the
+    // DebugHub SDK dropped it silently when it couldn't serialize, so swap
+    // failures never reached the dashboard. This plain-string line always does.
+    const _sum = `code=${err?.code ?? "-"} sel=${sel ?? "-"} reason=${(msg || "").slice(0, 180)}`;
+    DebugHub.logError("handleSwap.summary", new Error(_sum));
     if (sel) DebugHub.logError("handleSwap.revertSelector", new Error("selector " + sel));
-    DebugHub.logError("handleSwap", err);
+    try { DebugHub.logError("handleSwap", err); } catch (_) { /* raw err unserializable — summary already logged */ }
     DebugHub.logCheckpoint("Swap Failed", "fail");
     const code = err?.code;
     const userRejected = code === 4001 || code === "ACTION_REJECTED";
@@ -1010,7 +1021,7 @@ async function handleSwap() {
       alert(diagnosed ||
         "The swap reached the chain but reverted — the pool price moved between " +
         "the quote and execution (slippage on a thin, fast-moving pool). Raise " +
-        "the slippage tolerance (max 2.5%) or reduce the size, then try again. Quote refreshed."
+        "the slippage tolerance (⚙, up to 15%) or reduce the size, then try again. Quote refreshed."
       );
       onAmountInChange();
     } else if (simulatedOk) {

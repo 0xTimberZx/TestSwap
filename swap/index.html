@@ -126,10 +126,10 @@
         <div id="settings-panel" class="settings-panel hidden">
           <div class="settings-label">Slippage Tolerance</div>
           <div class="slippage-options">
-            <button class="slip-btn" onclick="setSlippage(0.5)">0.5%</button>
             <button class="slip-btn slip-active" onclick="setSlippage(1)">1%</button>
-            <button class="slip-btn" onclick="setSlippage(2.5)">2.5%</button>
-            <input id="slip-custom" class="slip-input" type="number" placeholder="Custom (≤2.5%)" min="0.1" max="2.5" step="0.1" />
+            <button class="slip-btn" onclick="setSlippage(5)">5%</button>
+            <button class="slip-btn" onclick="setSlippage(15)">15%</button>
+            <input id="slip-custom" class="slip-input" type="number" placeholder="Custom (≤15%)" min="0.1" max="15" step="0.1" />
           </div>
         </div>
 
@@ -318,7 +318,7 @@
   </footer>
 
   <script src="../config.js?v=20260720b"></script> 
-  <script src="swap.js?v=20260720a"></script>
+  <script src="swap.js?v=20260720b"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="influence.js?v=20260714a"></script>
