@@ -37,8 +37,8 @@ function xConfigured() {
 // The game alphabet contains BOTH the letter "O" and the digit "0", so a raw
 // winning string can be misread in X's UI font. In post TEXT, render each zero
 // as a slashed zero (digit 0 + U+0338 combining long solidus overlay) so it can
-// never be mistaken for the letter O. (The card image slashes zeros by drawing;
-// see renderRoundCard.)
+// never be mistaken for the letter O. (The card image marks zeros with a center
+// dot drawn over the glyph — there's no text equivalent, hence the slash here.)
 function slashZeros(s) {
   return String(s == null ? "" : s).replace(/0/g, "0̸");
 }
@@ -199,16 +199,18 @@ function renderRoundCard({ round, string6, entries, potEth, winners }) {
     ctx.font = `62px ${font}`;
     ctx.textBaseline = "middle";
     ctx.fillText(chars[i], cx, rowY + 4);
-    // Slash a digit zero so it can't read as the letter O (both are valid chars).
+    // Dot a digit zero (center dot punched out of the glyph) so it can't read
+    // as the letter O — both are valid characters in the alphabet.
     if (chars[i] === "0") {
       ctx.save();
-      ctx.strokeStyle = tile;
-      ctx.lineWidth   = 5;
-      ctx.lineCap     = "round";
+      ctx.fillStyle = C.bg; // knock a hole so the dot reads even over the stroke
       ctx.beginPath();
-      ctx.moveTo(cx + 15, rowY - 18);
-      ctx.lineTo(cx - 15, rowY + 26);
-      ctx.stroke();
+      ctx.arc(cx, rowY + 4, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = tile;
+      ctx.beginPath();
+      ctx.arc(cx, rowY + 4, 4.5, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
     ctx.textBaseline = "alphabetic";
