@@ -248,11 +248,26 @@ async function writeContract(address, abi) {
 
 async function getGasParams() {
   if (!(await ensureSigner())) throw new Error("Wallet disconnected — reconnect and try again.");
-  const feeData = await provider.getFeeData();
-  return {
-    maxFeePerGas:         feeData.maxFeePerGas.mul(130).div(100),
-    maxPriorityFeePerGas: feeData.maxPriorityFeePerGas.mul(130).div(100),
-  };
+  // getFeeData() from a mobile in-app wallet's injected node can return null
+  // for maxPriorityFeePerGas (Arbitrum's tip is ~0) or even maxFeePerGas.
+  // Calling .mul() on null threw "null is not an object" for EVERY write —
+  // swap, advance, entry — before the wallet was ever asked to sign. Tolerate
+  // the gaps: prefer EIP-1559 when a maxFeePerGas is reported (priority 0 is
+  // valid on Arbitrum), fall back to legacy gasPrice, and finally let the
+  // wallet fill fees itself rather than crash.
+  let feeData;
+  try { feeData = await provider.getFeeData(); }
+  catch { return {}; }
+
+  const bump = (v) => (v && v.mul) ? v.mul(130).div(100) : null;
+  const maxFee = bump(feeData.maxFeePerGas);
+  if (maxFee) {
+    const prio = bump(feeData.maxPriorityFeePerGas);
+    return { maxFeePerGas: maxFee, maxPriorityFeePerGas: prio || ethers.constants.Zero };
+  }
+  const gasPrice = bump(feeData.gasPrice);
+  if (gasPrice) return { gasPrice };
+  return {}; // nothing usable → wallet estimates its own fees
 }
 
 // Let the WALLET assign the nonce. Forcing a manual nonce (from a "pending"
