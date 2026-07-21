@@ -346,7 +346,7 @@ async function selectToken(token) {
     (a.address || "").toLowerCase() === (b.address || "").toLowerCase();
   const setSym = (id, t) => {
     const el = document.getElementById(id);
-    if (el) el.textContent = t ? t.symbol : "Select";
+    if (el) el.textContent = t ? t.symbol : "--";
   };
   if (pickerTarget === "in") {
     if (sameAddr(token, tokenOut)) { tokenOut = tokenIn; setSym("token-out-symbol", tokenOut); }
@@ -371,8 +371,8 @@ async function selectToken(token) {
 
 function flipTokens() {
   [tokenIn, tokenOut] = [tokenOut, tokenIn];
-  document.getElementById("token-in-symbol").textContent  = tokenIn  ? tokenIn.symbol  : "Select";
-  document.getElementById("token-out-symbol").textContent = tokenOut ? tokenOut.symbol : "Select";
+  document.getElementById("token-in-symbol").textContent  = tokenIn  ? tokenIn.symbol  : "--";
+  document.getElementById("token-out-symbol").textContent = tokenOut ? tokenOut.symbol : "--";
   updateAddOutWalletChip();
   const inputIn  = document.getElementById("amount-in");
   const inputOut = document.getElementById("amount-out");
@@ -1085,8 +1085,8 @@ function setMode(m) {
     // changed the pair while we were away, so re-sync the swap labels to the
     // shared truth (otherwise the buttons show a stale pair while the quote,
     // fee, and balances run on the real one) and re-quote.
-    document.getElementById("token-in-symbol").textContent  = tokenIn  ? tokenIn.symbol  : "Select";
-    document.getElementById("token-out-symbol").textContent = tokenOut ? tokenOut.symbol : "Select";
+    document.getElementById("token-in-symbol").textContent  = tokenIn  ? tokenIn.symbol  : "--";
+    document.getElementById("token-out-symbol").textContent = tokenOut ? tokenOut.symbol : "--";
     updateAddOutWalletChip();
     checkEligibility();
     refreshBalances();
@@ -1097,8 +1097,8 @@ function setMode(m) {
 function syncLiquidityLabels() {
   const a = document.getElementById("lq-symbol-a");
   const b = document.getElementById("lq-symbol-b");
-  if (a) a.textContent = tokenIn  ? tokenIn.symbol  : "Select";
-  if (b) b.textContent = tokenOut ? tokenOut.symbol : "Select";
+  if (a) a.textContent = tokenIn  ? tokenIn.symbol  : "--";
+  if (b) b.textContent = tokenOut ? tokenOut.symbol : "--";
 }
 
 async function refreshLiquidity() {
@@ -1549,14 +1549,15 @@ function handleDisconnect() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 (async () => {
-  // Default to TIMBS in / WETH out
-  tokenIn  = DEFAULT_TOKENS.find(t => t.symbol === "TIMBS");
-  tokenOut = DEFAULT_TOKENS.find(t => t.symbol === "WETH");
-  document.getElementById("token-in-symbol").textContent  = tokenIn.symbol;
-  document.getElementById("token-out-symbol").textContent = tokenOut.symbol;
+  // No default pair — both selectors open unselected ("--") so the user
+  // consciously picks. tokenIn/tokenOut stay null; every downstream path
+  // (quote, eligibility, buttons, liquidity labels) already handles null.
+  document.getElementById("token-in-symbol").textContent  = "--";
+  document.getElementById("token-out-symbol").textContent = "--";
   updateAddOutWalletChip();
   checkEligibility();
   recalcQuote();
+  updateSwapButton("Select tokens");
 
   // Deep-link: the farm page sends "Get LP" here with #liquidity so a user with
   // no LP lands straight on the Add-liquidity tab instead of the Swap tab.
