@@ -166,24 +166,45 @@ async function _ensureChain() {
   }
 }
 
+// De-dupe concurrent connect attempts. A mobile wallet rejects a SECOND
+// eth_requestAccounts with -32002 ("Already processing. Please wait.") while
+// its first popup is still open, so every impatient re-tap logged a bogus
+// "Wallet Connect Failed" (the tight Requested→Failed loop seen in DebugHub)
+// even though the original request was still live. While one attempt is in
+// flight, hand every caller the SAME promise instead of firing a new request.
+let _connectInFlight = null;
+
 async function connectWallet() {
   if (!window.ethereum) {
     alert("No wallet detected. Please use MetaMask or Brave Wallet.");
     return false;
   }
-  try {
-    // Request account authorization FIRST. _initProvider() calls signer.getAddress(),
-    // which throws "unknown account #0" in ethers v5 before any account is authorized —
-    // silently failing the whole connect even though the wallet popup succeeded.
-    await injectedProvider().request({ method: "eth_requestAccounts" });
-    await _initProvider();
-    await _ensureChain();
-    _saveSession(userAddress);
-    return true;
-  } catch (err) {
-    console.error("connectWallet failed:", err);
-    return false;
-  }
+  if (_connectInFlight) return _connectInFlight;
+
+  _connectInFlight = (async () => {
+    try {
+      // Request account authorization FIRST. _initProvider() calls signer.getAddress(),
+      // which throws "unknown account #0" in ethers v5 before any account is authorized —
+      // silently failing the whole connect even though the wallet popup succeeded.
+      await injectedProvider().request({ method: "eth_requestAccounts" });
+      await _initProvider();
+      await _ensureChain();
+      _saveSession(userAddress);
+      return true;
+    } catch (err) {
+      // -32002 = a request is already pending in the wallet. Not a real
+      // failure — the user just needs to finish the popup that's already open.
+      if (err && (err.code === -32002 || /already processing/i.test(err.message || ""))) {
+        console.warn("connectWallet: a connect request is already pending in the wallet");
+      } else {
+        console.error("connectWallet failed:", err);
+      }
+      return false;
+    } finally {
+      _connectInFlight = null;
+    }
+  })();
+  return _connectInFlight;
 }
 
 /**
