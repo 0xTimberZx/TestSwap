@@ -522,6 +522,12 @@
   border-radius: 4px;
   padding: 2px 7px;
 }
+.won-note {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--gold, #ffd75e);
+  align-self: center;
+}
 .expired-badge {
   font-size: 10px;
   font-family: var(--mono);
