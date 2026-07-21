@@ -34,6 +34,10 @@ Gated on evidence and safety, not a calendar.
    playing before organic fees and yield carry them.
 5. **Instrumentation** — turn the existing telemetry (liquidity depth, swaps, staking, treasury
    health) into live signals and dashboards.
+6. **Ticket-cost equilibrium** — finalize the late-game structure so ticket costs settle at a
+   market equilibrium: priced high enough to fund a meaningful pot and deter spam, low enough that
+   late-round entry stays rational as the pot and odds shift. Tune against observed testnet play
+   before mainnet locks it in.
 
 ## Vision — adaptive incentives
 
