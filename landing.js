@@ -102,7 +102,7 @@ function fmtUsd(v) {
   return "$" + v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 
-let _potEth = "loading…", _potUsd = null, _showUsd = false, _potRotTimer = null;
+let _potEth = "reading the pot…", _potUsd = null, _showUsd = false, _potRotTimer = null;
 
 // Render the current phase on both targets. withFade animates the ETH⇄USD swap;
 // a plain refresh (same phase) updates the number in place, no blink.

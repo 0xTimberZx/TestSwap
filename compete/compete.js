@@ -1030,7 +1030,7 @@ async function loadMyEntries() {
   hasPlayEntry = false;
   if (!userAddress) {
     myActiveTicketStr = null;
-    list.innerHTML = '<div class="empty-state">Connect wallet to view entries</div>';
+    list.innerHTML = '<div class="empty-state">Your tickets live here once you connect.</div>';
     updateEntryButton();
     return;
   }
@@ -1052,7 +1052,7 @@ async function loadMyEntries() {
     const displays   = res.displayStatuses ?? res[1];
     DebugHub.logCheckpoint("Compete:Tickets Loaded", "pass");
     if (!ticketList.length) {
-      list.innerHTML = '<div class="empty-state">No tickets yet</div>';
+      list.innerHTML = '<div class="empty-state">No tickets yet. Pick your six and you\'re in.</div>';
       updateEntryButton();
       return;
     }
@@ -1538,7 +1538,7 @@ async function loadPastRounds() {
         // old +1 grace) — claimable while currentRound <= settledRound + 2.
         const inWindow = round <= r + 2;
         if (!claimed[r] && inWindow) {
-          claimHtml = `<button id="claim-btn-${r}" class="btn-claim-round" onclick="handleClaimWinnings(${r})">Claim ${fmt(res.perWinner)} ETH</button>`;
+          claimHtml = `<span class="won-note">You called it.</span><button id="claim-btn-${r}" class="btn-claim-round" onclick="handleClaimWinnings(${r})">Claim your cut · ${fmt(res.perWinner)} ETH</button>`;
         } else if (claimed[r]) {
           claimHtml = `<span class="claimed-badge">Claimed ✓</span>`;
         } else {

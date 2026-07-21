@@ -1181,7 +1181,7 @@ async function refreshLiquidity() {
       } else {
         lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —";
         lpReserveA = lpReserveB = lpTotalSupply = null;
-        if (wdEl) wdEl.textContent = !pairExists ? "No pool yet" : "Connect wallet";
+        if (wdEl) wdEl.textContent = !pairExists ? "No pool here yet — be the first." : "Connect wallet";
       }
     } catch {
       lpBalanceWei = null; lpEl.textContent = "—"; lpRemoveEl.textContent = "LP: —";
