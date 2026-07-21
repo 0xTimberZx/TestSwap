@@ -20,13 +20,29 @@
 
 /* ─── Meter card + shadow timer banner (two-in-one) ─────────────────────── */
 .meter-stack { position: relative; margin-bottom: 12px; }
-/* Bolder, more pronounced border on the meter card itself. */
+/* Bolder, more pronounced border on the meter card itself, with a slow, faint
+   glimmer — same spirit as the active digit's pulse but gentler and in the
+   card's own blue-grey hue (no hue shift). */
 .meter-stack .round-header {
   margin-bottom: 0;
   position: relative;
   z-index: 2;
   border-width: 2px;
   border-color: color-mix(in srgb, var(--border) 55%, var(--text-2) 45%);
+  animation: meter-glimmer 7s ease-in-out infinite;
+}
+@keyframes meter-glimmer {
+  0%, 100% {
+    border-color: color-mix(in srgb, var(--border) 55%, var(--text-2) 45%);
+    box-shadow: 0 0 0 0 rgba(120, 150, 180, 0);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--border) 32%, var(--text-2) 68%);
+    box-shadow: 0 0 16px 1px rgba(120, 150, 180, 0.10);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .meter-stack .round-header { animation: none; }
 }
 
 /* A green-outlined base tucked behind the card and peeking below it: same
