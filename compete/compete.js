@@ -346,15 +346,14 @@ async function pollRoundState() {
         `${activeEntries} ${activeEntries === 1 ? "entry" : "entries"}`;
     }
 
-    const timerEl = document.getElementById("sub-timer");
     if (s.inSettlement) {
-      timerEl.textContent = "Intermission — calculating…";
+      setBannerTimer("Intermission — calculating…");
     } else {
       const elapsed    = Math.floor(Date.now() / 1000) - s.segmentStart.toNumber();
       const remaining  = Math.max(0, (59 * 60 + 45) - elapsed);
       const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
       const ss = String(remaining % 60).padStart(2, "0");
-      timerEl.textContent = `${mm}:${ss} left in segment`;
+      setBannerTimer(`${mm}:${ss} left in segment`);
     }
 
     // Flash active digit on counter change
@@ -700,6 +699,66 @@ function insufficientEntryLabel() {
     }
   }
   return null;
+}
+
+// ─── Segment-timer banner + rotating "How to play" ─────────────────────────
+// The banner tucked under the meter card shows the live segment timer and,
+// every HOWTO_EVERY_MS, rotates to a tappable "How to play" for HOWTO_FOR_MS.
+// The TEXT is the button that opens the popup — not the banner. Rotation is
+// user-toggleable (persisted). The timer value lives in _liveTimerText so the
+// display can flip to "How to play" and back without losing the countdown.
+let _liveTimerText = "Loading…";
+let _bannerMode    = "timer";            // "timer" | "howto"
+const HOWTO_EVERY_MS   = 16000;          // rotate in every 16s…
+const HOWTO_FOR_MS     = 3000;           // …for 3s
+const HOWTO_ROTATE_KEY = "timbswap_howto_rotate";
+let _rotateEnabled = true;
+try { _rotateEnabled = localStorage.getItem(HOWTO_ROTATE_KEY) !== "0"; } catch {}
+let _rotTimer = null, _rotBackTimer = null;
+
+function renderBanner() {
+  const el = document.getElementById("banner-text");
+  if (el) el.textContent = (_bannerMode === "howto") ? "How to play" : _liveTimerText;
+}
+function setBannerTimer(text) {          // called by the timer writers
+  _liveTimerText = text;
+  if (_bannerMode === "timer") renderBanner();
+}
+function startBannerRotation() {
+  stopBannerRotation();
+  if (!_rotateEnabled) return;
+  _rotTimer = setInterval(() => {
+    _bannerMode = "howto"; renderBanner();
+    _rotBackTimer = setTimeout(() => { _bannerMode = "timer"; renderBanner(); }, HOWTO_FOR_MS);
+  }, HOWTO_EVERY_MS);
+}
+function stopBannerRotation() {
+  if (_rotTimer)     { clearInterval(_rotTimer);   _rotTimer = null; }
+  if (_rotBackTimer) { clearTimeout(_rotBackTimer); _rotBackTimer = null; }
+  _bannerMode = "timer"; renderBanner();
+}
+function isHowtoRotateOn() { return _rotateEnabled; }
+function setHowtoRotate(on) {
+  _rotateEnabled = !!on;
+  try { localStorage.setItem(HOWTO_ROTATE_KEY, _rotateEnabled ? "1" : "0"); } catch {}
+  const t = document.getElementById("howto-rotate-toggle");
+  if (t) { t.classList.toggle("on", _rotateEnabled); t.setAttribute("aria-checked", String(_rotateEnabled)); }
+  if (_rotateEnabled) startBannerRotation(); else stopBannerRotation();
+}
+function openHowTo() {
+  const ov = document.getElementById("howto-overlay");
+  if (ov) ov.classList.remove("hidden");
+}
+function closeHowTo(e) {
+  if (e && e.currentTarget && e.target !== e.currentTarget) return; // backdrop / ✕ only
+  const ov = document.getElementById("howto-overlay");
+  if (ov) ov.classList.add("hidden");
+}
+function initBannerRotation() {          // called once from init
+  const t = document.getElementById("howto-rotate-toggle");
+  if (t) { t.classList.toggle("on", _rotateEnabled); t.setAttribute("aria-checked", String(_rotateEnabled)); }
+  renderBanner();
+  startBannerRotation();
 }
 
 function updateEntryButton() {
@@ -1608,6 +1667,7 @@ function handleDisconnect() {
 
 (async () => {
   DebugHub.logCheckpoint("Compete:Page Loaded", "pass");
+  initBannerRotation();
 
   const _reconnected = await autoReconnect();
   if (_reconnected) {
@@ -1653,17 +1713,17 @@ function handleDisconnect() {
   refreshEntryBalance(); // show the entry-token balance on load, not just after a tap
 
   // Timer tick every second, full state every 4s
-  setInterval(async () => {
-    const timerEl = document.getElementById("sub-timer");
-    if (timerEl && timerEl.textContent.includes(":")) {
-      const [mm, ss] = timerEl.textContent.split(":").map(p => parseInt(p));
+  setInterval(() => {
+    // Decrement the cached timer value (not the DOM) so the countdown keeps
+    // ticking even while the banner is showing "How to play".
+    if (_liveTimerText.includes(":")) {
+      const [mm, ss] = _liveTimerText.split(":").map(p => parseInt(p));
       if (!isNaN(mm) && !isNaN(ss)) {
         const total = mm * 60 + ss;
         if (total > 0) {
           const nm = String(Math.floor((total-1)/60)).padStart(2,"0");
           const ns = String((total-1) % 60).padStart(2,"0");
-          const updatedText = `${nm}:${ns} left in segment`;
-          timerEl.textContent = updatedText;
+          setBannerTimer(`${nm}:${ns} left in segment`);
         }
       }
     }

@@ -34,7 +34,7 @@
     }
   </script>
   <link rel="stylesheet" href="../style.css?v=20260760f" />
-  <link rel="stylesheet" href="compete.css?v=20260720b" />
+  <link rel="stylesheet" href="compete.css?v=20260721a" />
 </head>
 <body>
 
@@ -110,6 +110,7 @@
   <div class="compete-page">
 
     <!-- ─── Round Header ─────────────────────────────────────────────────── -->
+    <div class="meter-stack">
     <div class="round-header">
       <div class="round-meta">
         <span class="round-label">ROUND</span>
@@ -150,10 +151,16 @@
       </div>
     </div>
 
-    <!-- Segment timer + pot -->
+      <!-- Shadow banner tucked under the card: shows the segment timer, and
+           rotates to a tappable "How To Play" every 16s for 3s. The TEXT
+           (not the banner) opens the how-to popup. -->
+      <div class="meter-timerbar">
+        <button id="banner-text" class="banner-text" type="button" onclick="openHowTo()">Loading…</button>
+      </div>
+    </div><!-- /meter-stack -->
+
+    <!-- Pot / entries (timer moved into the banner above) -->
     <div class="round-substats">
-      <span id="sub-timer">Loading…</span>
-      <span class="dot-sep">·</span>
       <span id="sub-pot">Pot: —</span>
       <span class="dot-sep">·</span>
       <span id="sub-entries">— entries</span>
@@ -325,6 +332,55 @@
     </div>
   </div>
 
+  <!-- ─── How to play (opened from the banner text) ─────────────────────── -->
+  <div id="howto-overlay" class="howto-overlay hidden" onclick="closeHowTo(event)">
+    <div class="howto-card" onclick="event.stopPropagation()">
+      <button class="howto-close" type="button" onclick="closeHowTo()" aria-label="Close">✕</button>
+      <h3 class="howto-title">How to play</h3>
+      <p class="howto-sub">Four steps. A couple of minutes.</p>
+
+      <div class="howto-steps">
+        <div class="howto-step">
+          <span class="howto-n">1</span>
+          <span class="howto-txt">Connect your wallet.</span>
+          <span class="howto-icons">
+            <img src="assets/wallets/metamask.png" alt="MetaMask" />
+            <img src="assets/wallets/brave.png" alt="Brave" />
+            <img src="assets/wallets/okx.png" alt="OKX" />
+            <img src="assets/wallets/rabby.png" alt="Rabby" />
+          </span>
+        </div>
+        <div class="howto-step">
+          <span class="howto-n">2</span>
+          <span class="howto-txt">Grab test tokens — free from the faucet.</span>
+          <span class="howto-icons">
+            <img src="assets/faucet/usdc.png" alt="USDC" />
+            <img src="assets/faucet/link.png" alt="Chainlink" />
+            <img src="assets/faucet/quicknode.png" alt="QuickNode" />
+            <img src="assets/faucet/alchemy.jpeg" alt="Alchemy" />
+          </span>
+        </div>
+        <div class="howto-step">
+          <span class="howto-n">3</span>
+          <span class="howto-txt">Set your six characters. That's your ticket.</span>
+          <span class="howto-emoji">🎟️</span>
+        </div>
+        <div class="howto-step">
+          <span class="howto-n">4</span>
+          <span class="howto-txt">Trade to nudge the meter. Match all six, split the pot.</span>
+          <span class="howto-emoji">🏆📜</span>
+        </div>
+      </div>
+
+      <div class="howto-foot">Free to play. <strong>What you put in stays yours.</strong></div>
+
+      <label class="howto-rotate">
+        <span>Rotate “How to play” in the banner</span>
+        <button id="howto-rotate-toggle" class="howto-switch" type="button" role="switch" onclick="setHowtoRotate(!isHowtoRotateOn())" aria-label="Toggle banner rotation"></button>
+      </label>
+    </div>
+  </div>
+
   <footer class="footer">
     <div class="footer-left">
       <span class="nav-logo-mark">⬡</span> TimbSwap — Arbitrum Sepolia Testnet
@@ -340,7 +396,7 @@
   </footer>
 
   <script src="../config.js?v=20260720c"></script>
-  <script src="compete.js?v=20260720b"></script>
+  <script src="compete.js?v=20260721a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
