@@ -488,7 +488,10 @@
   font-family: var(--mono);
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 5px;
+  /* Balance the leading edge against the trailing letter-spacing gap so the
+     six characters read as evenly spaced. */
+  padding-left: 5px;
   color: var(--green);
 }
 .past-round-meta { font-size: 11px; color: var(--text-2); }
