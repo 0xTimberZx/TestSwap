@@ -69,9 +69,13 @@
   // the UI still shows something.
   function fetchRemote(appKey, cb) {
     if (!SUPABASE_URL || !SUPABASE_KEY) { _remoteLoaded[appKey] = true; cb && cb(); return; }
+    // Newest 1000 events, not the oldest. With event_ts.asc the dashboard
+    // fetched the FIRST 1000 rows ever recorded, so once the table passed 1000
+    // rows it froze on ancient data and never showed recent activity. desc =
+    // most-recent window; the renderers already sort by timestamp for display.
     var url = SUPABASE_URL.replace(/\/+$/, "") +
       "/rest/v1/debughub_events?app=eq." + encodeURIComponent(appKey) +
-      "&order=event_ts.asc&limit=1000";
+      "&order=event_ts.desc&limit=1000";
     fetch(url, { headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY } })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (rows) {
