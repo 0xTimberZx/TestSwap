@@ -37,8 +37,8 @@
     box-shadow: 0 0 0 0 rgba(120, 150, 180, 0);
   }
   50% {
-    border-color: color-mix(in srgb, var(--border) 32%, var(--text-2) 68%);
-    box-shadow: 0 0 16px 1px rgba(120, 150, 180, 0.10);
+    border-color: color-mix(in srgb, var(--border) 30%, var(--text-2) 70%);
+    box-shadow: 0 0 20px 1px rgba(130, 165, 200, 0.18);
   }
 }
 @media (prefers-reduced-motion: reduce) {

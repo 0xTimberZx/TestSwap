@@ -379,6 +379,16 @@ body { padding-top: 60px; }
   padding: 32px;
   min-width: 300px;
   text-align: center;
+  /* Same slow breathing glow as the compete meter card — glow only, the
+     border is left untouched. In the card's blue-grey hue. */
+  animation: bar-glow 7s ease-in-out infinite;
+}
+@keyframes bar-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(130, 165, 200, 0); }
+  50%      { box-shadow: 0 0 20px 1px rgba(130, 165, 200, 0.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-display { animation: none; }
 }
 
 .scroll-label {
