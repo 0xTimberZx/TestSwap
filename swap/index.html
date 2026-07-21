@@ -142,7 +142,7 @@
           <div class="token-box-row">
             <input id="amount-in" class="amount-input" type="number" placeholder="0.0" oninput="onAmountInChange()" />
             <button class="token-picker-btn" id="token-in-btn" onclick="openTokenPicker('in')">
-              <span id="token-in-symbol">Select</span>
+              <span id="token-in-symbol">--</span>
               <span class="picker-caret">▾</span>
             </button>
           </div>
@@ -161,7 +161,7 @@
           <div class="token-box-row">
             <input id="amount-out" class="amount-input" type="number" placeholder="0.0" oninput="onAmountOutChange()" />
             <button class="token-picker-btn" id="token-out-btn" onclick="openTokenPicker('out')">
-              <span id="token-out-symbol">Select</span>
+              <span id="token-out-symbol">--</span>
               <span class="picker-caret">▾</span>
             </button>
           </div>
@@ -217,7 +217,7 @@
             <div class="token-box-row">
               <input id="lq-amount-a" class="amount-input" type="number" placeholder="0.0" oninput="onLqAmountA()" />
               <button class="token-picker-btn" onclick="openTokenPicker('in')">
-                <span id="lq-symbol-a">TIMBS</span><span class="picker-caret">▾</span>
+                <span id="lq-symbol-a">--</span><span class="picker-caret">▾</span>
               </button>
             </div>
             <div class="amount-usd" id="lq-usd-a"></div>
@@ -233,7 +233,7 @@
             <div class="token-box-row">
               <input id="lq-amount-b" class="amount-input" type="number" placeholder="0.0" oninput="onLqAmountB()" />
               <button class="token-picker-btn" onclick="openTokenPicker('out')">
-                <span id="lq-symbol-b">WETH</span><span class="picker-caret">▾</span>
+                <span id="lq-symbol-b">--</span><span class="picker-caret">▾</span>
               </button>
             </div>
             <div class="amount-usd" id="lq-usd-b"></div>
@@ -318,7 +318,7 @@
   </footer>
 
   <script src="../config.js?v=20260720c"></script> 
-  <script src="swap.js?v=20260720c"></script>
+  <script src="swap.js?v=20260720d"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="influence.js?v=20260714a"></script>
