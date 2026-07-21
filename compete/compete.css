@@ -20,7 +20,14 @@
 
 /* ─── Meter card + shadow timer banner (two-in-one) ─────────────────────── */
 .meter-stack { position: relative; margin-bottom: 12px; }
-.meter-stack .round-header { margin-bottom: 0; position: relative; z-index: 2; }
+/* Bolder, more pronounced border on the meter card itself. */
+.meter-stack .round-header {
+  margin-bottom: 0;
+  position: relative;
+  z-index: 2;
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--border) 55%, var(--text-2) 45%);
+}
 
 /* A green-outlined base tucked behind the card and peeking below it: same
    corner curve, inset a touch so it reads as a shadow. Square top corners so
@@ -29,7 +36,7 @@
   position: relative;
   z-index: 1;
   margin: -16px 14px 0;
-  padding: 24px 0 22px;
+  padding: 22px 0 16px;
   background: var(--bg2);
   border: var(--bw) solid rgba(20, 241, 149, 0.42);
   border-top: none;
