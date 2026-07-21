@@ -95,7 +95,7 @@ const CLAIM_EVENT_ABI = [
   "event RewardsClaimed(address indexed user, uint256 amount)",
 ];
 const TREASURY_ABI = [
-  "event BuybackExecuted(uint256 ethSpent, uint256 timbsBought, uint256 timbsBurned, uint256 timbsToStaking)",
+  "event BuybackExecuted(uint256 ethSpent, uint256 timbsBought, uint256 timbsBurned, uint256 timbsToWaterfall, uint256 timbsReserved)",
   "function distributeToStaking(uint256 timbsAmount, uint256 duration) external",
   "function withdrawToken(address token, address to, uint256 amount) external",
 ];
@@ -205,10 +205,12 @@ async function main() {
       fromBlock, nowBlock, (a) => a.amount);
     const w = await sumEvents(provider, TIMBSTAKING_ADDR, claimsIface, "RewardsClaimed",
       fromBlock, nowBlock, (a) => a.amount);
-    // z = TIMBS that stayed in the Treasury from buybacks (bought − burned −
-    // routed straight to staking at buyback time).
+    // z = the buyback "waterfall slice" retained in the Treasury this epoch —
+    // the amount the Treasury explicitly earmarks for farm/staking/boost. The
+    // contract emits it directly (received − burn − reserve); the reserve slice
+    // stays in the balance but is deliberately NOT counted here so it stacks.
     const z = await sumEvents(provider, TREASURY_ADDR, treasuryIface, "BuybackExecuted",
-      fromBlock, nowBlock, (a) => a.timbsBought - a.timbsBurned - a.timbsToStaking);
+      fromBlock, nowBlock, (a) => a.timbsToWaterfall);
 
     // Waterfall — farm → staking → boost, one shared budget, never exceeds z.
     let B = z;

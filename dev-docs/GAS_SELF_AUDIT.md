@@ -13,6 +13,61 @@ a scope of findings we can act on ourselves and measure. Findings reference
 
 ---
 
+## ⚠ Critical — buyback residual never reached the reward waterfall  *(FIXED in code, needs redeploy)*
+
+Not a gas issue — a **liveness / economic defect** surfaced while auditing why
+the epoch keeper funded nothing. Kept here because it's the most consequential
+finding in this pass.
+
+**Symptom.** Every epoch settlement since the keeper went live (epochs 4, 5, 6 —
+07-18 → 07-21) reported `z=0.0` and granted **0** to farm / staking / boost,
+while farm+staking demand grew into the tens of thousands of TIMBS. `boostBudget`
+has been pinned at `"0"` in `epoch-state.json` since the first settlement.
+
+**Two stacked root causes.**
+
+1. **No buyback ever ran.** `TimbTreasury.executeBuyback` is `onlyOwner` and is
+   called by *nothing* in the repo — no keeper step, no swap hook, no schedule.
+   The 0.05% protocol fee accrues as ETH in the treasury and just sits there.
+
+2. **Even if it ran, `z` was structurally zero.** The keeper computes the
+   waterfall budget as `z = Σ(timbsBought − timbsBurned − timbsToStaking)` over
+   `BuybackExecuted`. But the old `executeBuyback` split the purchase **100%**
+   between burn and staking (`toStaking = received − toBurn`), so
+   `bought − burned − toStaking ≡ 0` for every event, at any burn ratio. The
+   treasury retained nothing; the keeper's funding variable could never be
+   non-zero. The `z` formula wasn't wrong — the contract simply never produced a
+   residual for it to measure.
+
+**Fix (this change).** `executeBuyback` now splits **three** ways —
+`burn / reserve / waterfall` — via `buybackBurnRatio` + `buybackReserveRatio`
+(remainder = waterfall). Only the burn leaves the treasury; `reserve` and
+`waterfall` both stay in the balance. The event emits `timbsToWaterfall`
+explicitly (`= received − burn − reserve`), and the keeper now reads that field
+directly as `z`. The direct-staking leg is removed — staking is funded through
+the waterfall's `stakeGrant`, so no double-funding.
+
+- Contract: `TimbTreasury.sol` — new `buybackReserveRatio`, three-way split,
+  `BuybackExecuted(ethSpent, timbsBought, timbsBurned, timbsToWaterfall,
+  timbsReserved)`, `setBuybackReserveRatio`, lifetime counters.
+- Keeper: `epoch.js` — event ABI + `z = a.timbsToWaterfall`. No logic change.
+- **Testnet split chosen:** burn **5%** / reserve **20%** / waterfall **75%**.
+  Reserve is a solvency buffer that stacks sweep over sweep; both ratios are
+  owner-tunable (`setBuybackBurnRatio` / `setBuybackReserveRatio`, capped so
+  `burn + reserve ≤ 100`).
+
+**Still open (trigger).** The split fix makes buybacks *fundable*; it does not
+make them *fire*. `executeBuyback` remains manual. Decide separately whether to
+automate it in the keeper (call when treasury ETH crosses a threshold) or keep
+triggering by hand — until then the waterfall stays empty because no buyback
+runs. See §5.
+
+**Verify after redeploy:** run one buyback, confirm the `BuybackExecuted` event
+carries a non-zero `timbsToWaterfall`, then confirm the next `EPOCH SETTLE`
+prints `z > 0` and non-zero `farmGrant` / `stakeGrant` / `boostBudget`.
+
+---
+
 ## 0. The chain question comes first
 
 On **Arbitrum / any L2 rollup**, the dominant tx cost is **posting calldata to
@@ -137,7 +192,15 @@ Notes:
 - `TimbBoostFarm` / `TimbStaking` reward-accrual loops.
 
 ## 5. Next actions
-1. **Decide mainnet chain** (Arbitrum One vs L1) — gates Finding 1 and Finding 4.
-2. Run `forge test --gas-report` + `forge snapshot` to baseline real numbers.
-3. If L1: implement Finding 1 behind a re-tested PR, confirm with
+1. **Redeploy `TimbTreasury`** with the three-way buyback split (Critical
+   finding). Update `config.js` `TimbTreasury` address, re-authorise fee senders
+   (router + TimbPrize), reset the pair/escrow/staking wiring, then reset the
+   epoch keeper genesis so `z` scans start from the new deploy. Verify one
+   buyback → non-zero `timbsToWaterfall` → non-zero grants at the next settle.
+2. **Decide the buyback trigger** — automate `executeBuyback` in the keeper
+   (fire when treasury ETH crosses a threshold) or keep it manual. Until this is
+   resolved the waterfall stays empty regardless of the split fix.
+3. **Decide mainnet chain** (Arbitrum One vs L1) — gates Finding 1 and Finding 4.
+4. Run `forge test --gas-report` + `forge snapshot` to baseline real numbers.
+5. If L1: implement Finding 1 behind a re-tested PR, confirm with
    `forge snapshot --diff`.
