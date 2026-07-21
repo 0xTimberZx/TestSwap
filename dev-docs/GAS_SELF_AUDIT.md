@@ -56,11 +56,15 @@ the waterfall's `stakeGrant`, so no double-funding.
   owner-tunable (`setBuybackBurnRatio` / `setBuybackReserveRatio`, capped so
   `burn + reserve ≤ 100`).
 
-**Still open (trigger).** The split fix makes buybacks *fundable*; it does not
-make them *fire*. `executeBuyback` remains manual. Decide separately whether to
-automate it in the keeper (call when treasury ETH crosses a threshold) or keep
-triggering by hand — until then the waterfall stays empty because no buyback
-runs. See §5.
+**Trigger (now automated).** The split fix makes buybacks *fundable*; a second
+change makes them *fire*. The epoch keeper (`epoch.js`) now runs a **section 0**
+on every invocation: it unwraps any WETH fee revenue, then spends the Treasury's
+accrued ETH on `executeBuyback` with a computed `minTimbsOut` (constant-product
+math, 15% default slippage floor for thin testnet pools). The keeper wallet is
+already the Treasury owner, so `onlyOwner` authorises. Buybacks now accrue `z`
+steadily across the epoch; settlement distributes it. Knobs (all optional, with
+defaults): `BUYBACK_ENABLED`, `BUYBACK_MIN_ETH`, `BUYBACK_SPEND_BPS`,
+`BUYBACK_SLIPPAGE_BPS`.
 
 **Verify after redeploy:** run one buyback, confirm the `BuybackExecuted` event
 carries a non-zero `timbsToWaterfall`, then confirm the next `EPOCH SETTLE`
@@ -197,9 +201,11 @@ Notes:
    (router + TimbPrize), reset the pair/escrow/staking wiring, then reset the
    epoch keeper genesis so `z` scans start from the new deploy. Verify one
    buyback → non-zero `timbsToWaterfall` → non-zero grants at the next settle.
-2. **Decide the buyback trigger** — automate `executeBuyback` in the keeper
-   (fire when treasury ETH crosses a threshold) or keep it manual. Until this is
-   resolved the waterfall stays empty regardless of the split fix.
+2. **Buyback trigger — done.** Automated in `epoch.js` section 0 (unwrap WETH →
+   spend accrued ETH via `executeBuyback` with slippage floor). Watch the first
+   few live runs: confirm a `BUYBACK` line with non-zero `expectedOut`, then a
+   later `EPOCH SETTLE` with `z > 0`. Tune `BUYBACK_SPEND_BPS` / slippage if the
+   thin pool moves too much per buy.
 3. **Decide mainnet chain** (Arbitrum One vs L1) — gates Finding 1 and Finding 4.
 4. Run `forge test --gas-report` + `forge snapshot` to baseline real numbers.
 5. If L1: implement Finding 1 behind a re-tested PR, confirm with
