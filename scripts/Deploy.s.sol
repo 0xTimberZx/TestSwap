@@ -160,7 +160,8 @@ contract Deploy is Script {
             address(timbs),
             address(staking),
             address(prizeEscrow),
-            address(0) // pair — set after
+            address(0), // pair — set after
+            weth
         );
         console.log("TimbTreasury:       ", address(treasury));
 
@@ -233,7 +234,8 @@ contract Deploy is Script {
         // TimbTreasury
         treasury.setTimbsEthPair(timbsEthPair);
         treasury.setTimbStaking(address(staking));
-        console.log("TimbTreasury: pair + staking set");
+        treasury.setRouter(address(router)); // enables protocol-owned liquidity
+        console.log("TimbTreasury: pair + staking + router set");
 
         // EligibleRegistry
         eligibleRegistry.registerConsumer(address(router));

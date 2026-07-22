@@ -197,10 +197,14 @@ Notes:
 
 ## 5. Next actions
 1. **Redeploy `TimbTreasury`** with the three-way buyback split (Critical
-   finding). Update `config.js` `TimbTreasury` address, re-authorise fee senders
-   (router + TimbPrize), reset the pair/escrow/staking wiring, then reset the
-   epoch keeper genesis so `z` scans start from the new deploy. Verify one
-   buyback → non-zero `timbsToWaterfall` → non-zero grants at the next settle.
+   finding) + protocol-owned liquidity. Update `config.js` `TimbTreasury`
+   address, re-authorise fee senders (router + TimbPrize), reset the
+   pair/escrow/staking wiring, **call `setRouter`** (enables
+   `provideLiquidity` / `provideLiquidityETH` — LP held by the treasury), then
+   reset the epoch keeper genesis so `z` scans start from the new deploy. Verify
+   one buyback → non-zero `timbsToWaterfall` → non-zero grants at the next
+   settle. `Deploy.s.sol` already wires `setRouter` and uses the 5-arg
+   constructor.
 2. **Buyback trigger — done.** Automated in `epoch.js` section 0 (unwrap WETH →
    spend accrued ETH via `executeBuyback` with slippage floor). Watch the first
    few live runs: confirm a `BUYBACK` line with non-zero `expectedOut`, then a
