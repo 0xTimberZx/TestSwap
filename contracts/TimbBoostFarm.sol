@@ -38,7 +38,7 @@ interface ITimbFactoryLike {
  * @title TimbBoostFarm
  * @notice Multi-pool "boosted farms" — extra LP pairs (stables, boosted extra
  *         pairs, etc.) competing for ONE shared TIMBS reward pool.
- *
+ *arbi
  * Model (see dev-docs/BOOSTED_FARMS_SPEC.md):
  *   - Funded by the epoch keeper: 5% of every main-farm (TIMB/ETH) claim is
  *     drawn from the Treasury into this contract, batched at keeper cadence,
