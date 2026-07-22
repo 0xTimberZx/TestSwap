@@ -34,10 +34,10 @@ const ADDRESSES = {
   TimbPrize:            "0x35976f4D2260127848a6274D2eC89ee054412432", // built against registry v4; startGame bumps the generation
   TimbStaking:          "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   TimbFarm:             "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
-  TimbBoostFarm:        "0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35", // boosted extra-pair farms (USDT/LINK/DAPP…), epoch-keeper boost tier
+  TimbBoostFarm:        "0x2fd810b9Ce48536118Faa45fcE0D37F76b3bf331", // boosted extra-pair farms (USDT/LINK/DAPP…), epoch-keeper boost tier
   TimbLockVault:        "0x0157086E7670D1eFb15DC6b5158eE78279927a41",
   TimbYieldVault:       "0x43D833e828e2AF951527C2b573Eb70c358FfEB0B", // fresh deploy — clears stranded/colliding weight
-  TimbTreasury:         "0x05D47F639F8E76BD12Cfc9647F6CcaCe21C10A33", // v3 — WETH-wrapped buyback + ERC20 fee exits
+  TimbTreasury:         "0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c", // v4 — three-way buyback split (burn/reserve/waterfall) + protocol-owned liquidity
   TimbGovernance:       "0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061",
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
