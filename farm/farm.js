@@ -119,6 +119,7 @@ const BOOST_ABI = [
   "function poolInfo(uint256) external view returns (address lpToken, uint256 weight, uint256 lastRewardTime, uint256 accRewardPerShare, uint256 totalStaked, bool paused)",
   "function totalWeight() external view returns (uint256)",
   "function rewardRatePerSecond() external view returns (uint256)",
+  "function periodFinish() external view returns (uint256)",
   "function rewardReserve() external view returns (uint256)",
   "function totalOwed() external view returns (uint256)",
   "function pendingReward(uint256 pid, address account) external view returns (uint256)",
@@ -170,9 +171,17 @@ async function loadBoost() {
   const poolsEl  = document.getElementById("boost-pools");
 
   try {
-    const [count, reserve, owed, rate] = await Promise.all([
-      boost.poolCount(), boost.rewardReserve(), boost.totalOwed(), boost.rewardRatePerSecond()
+    const [count, reserve, owed, rate, periodFinish] = await Promise.all([
+      boost.poolCount(), boost.rewardReserve(), boost.totalOwed(),
+      boost.rewardRatePerSecond(), boost.periodFinish()
     ]);
+
+    // The contract clamps accrual at periodFinish (lastTimeRewardApplicable),
+    // but rewardRatePerSecond() keeps returning the last stored rate after the
+    // window lapses — so rate>0 alone doesn't mean anything is still emitting.
+    // Gate the "emitting" banner on the window actually being open.
+    const nowSec = Math.floor(Date.now() / 1000);
+    const windowOpen = periodFinish.gt(nowSec);
 
     // Emission state banner. rate 0 with a funded reserve = the contract's
     // 99% solvency stop: accrual halted, everything accrued stays claimable,
@@ -183,6 +192,10 @@ async function loadBoost() {
         statusEl.className = "boost-status";
       } else if (rate.isZero()) {
         statusEl.textContent = "Emissions paused — solvency stop (owed ≥ 99% of reserve). All accrued TIMBS stays claimable; deposits and withdrawals keep working.";
+        statusEl.className = "boost-status boost-status-stop";
+      } else if (!windowOpen) {
+        statusEl.textContent = "Emission window ended — " + fmt(reserve, 18, 2) +
+          " TIMBS reserve idle, awaiting the next epoch boost draw to retarget. Accrued TIMBS stays claimable.";
         statusEl.className = "boost-status boost-status-stop";
       } else {
         statusEl.textContent = "Reserve: " + fmt(reserve, 18, 2) + " TIMBS · emitting " +
@@ -206,7 +219,7 @@ async function loadBoost() {
     }
 
     const totalWeight = await boost.totalWeight();
-    await Promise.all(Array.from({ length: n }, (_, pid) => refreshBoostPool(boost, pid, totalWeight)));
+    await Promise.all(Array.from({ length: n }, (_, pid) => refreshBoostPool(boost, pid, totalWeight, windowOpen)));
   } catch (e) {
     console.warn("loadBoost:", e.message);
   }
@@ -243,7 +256,7 @@ function boostPoolShell(pid) {
     </div>`;
 }
 
-async function refreshBoostPool(boost, pid, totalWeight) {
+async function refreshBoostPool(boost, pid, totalWeight, windowOpen = true) {
   try {
     const info = await boost.poolInfo(pid);
     const [name, apr] = await Promise.all([
@@ -252,7 +265,7 @@ async function refreshBoostPool(boost, pid, totalWeight) {
     ]);
 
     document.getElementById(`boost-${pid}-name`).textContent  = name + " LP";
-    document.getElementById(`boost-${pid}-apr`).textContent   = info.paused ? "paused" : formatApr(apr);
+    document.getElementById(`boost-${pid}-apr`).textContent   = info.paused ? "paused" : (windowOpen ? formatApr(apr) : "idle");
     document.getElementById(`boost-${pid}-total`).textContent = fmt(info.totalStaked, 18, 2);
     document.getElementById(`boost-${pid}-weight`).textContent = totalWeight.isZero() || info.paused
       ? "—"
