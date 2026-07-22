@@ -70,8 +70,13 @@ async function main() {
     } catch { /* no pair */ }
   }
 
+  // Belt-and-suspenders: any token address the dropdown shows that the
+  // curated list + factory derivation might miss can be force-added here.
+  const extra = (process.env.EXTRA_TOKENS || "")
+    .split(",").map((s) => s.trim()).filter(Boolean).map((a) => ethers.getAddress(a));
+
   // Full candidate set (dedup), each checked for a non-zero treasury balance.
-  const candidates = [...new Set([TIMBS, ...quotes, ...pairs].map((a) => a.toLowerCase()))]
+  const candidates = [...new Set([TIMBS, ...quotes, ...pairs, ...extra].map((a) => a.toLowerCase()))]
     .map((a) => ethers.getAddress(a));
 
   const recipient = process.env.SWEEP_TO
