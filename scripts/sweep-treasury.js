@@ -46,7 +46,11 @@ const ERC20_ABI = [
   "function symbol() view returns (string)",
   "function decimals() view returns (uint8)",
 ];
-const FACTORY_ABI = ["function getPairAddress(address a, address b) view returns (address)"];
+const FACTORY_ABI = [
+  "function getPairAddress(address a, address b) view returns (address)",
+  "function allPairsLength() view returns (uint256)",
+  "function allPairs(uint256) view returns (address)",
+];
 
 async function main() {
   const src = fs.readFileSync(path.join(__dirname, "..", "config.js"), "utf8");
@@ -60,14 +64,23 @@ async function main() {
   const quoteKeys = ["WETH", "USDC", "LINK", "USDT", "DAPP"];
   const quotes = quoteKeys.map((k) => cfg(src, k, { optional: true })).filter(Boolean);
 
-  // LP tokens = the TIMBS/<quote> pair addresses. Derive via the factory.
+  // LP tokens: enumerate EVERY pair the factory ever created and check each,
+  // so no LP is missed regardless of which tokens it pairs. Falls back to the
+  // curated TIMBS/<quote> derivation if enumeration isn't available.
   const factory = new ethers.Contract(FACTORY, FACTORY_ABI, provider);
   const pairs = [];
-  for (const q of quotes) {
-    try {
-      const p = await factory.getPairAddress(TIMBS, q);
-      if (p && p !== ethers.ZeroAddress) pairs.push(p);
-    } catch { /* no pair */ }
+  try {
+    const n = Number(await factory.allPairsLength());
+    for (let i = 0; i < n; i++) {
+      try { pairs.push(await factory.allPairs(i)); } catch {}
+    }
+  } catch {
+    for (const q of quotes) {
+      try {
+        const p = await factory.getPairAddress(TIMBS, q);
+        if (p && p !== ethers.ZeroAddress) pairs.push(p);
+      } catch {}
+    }
   }
 
   // Belt-and-suspenders: any token address the dropdown shows that the
