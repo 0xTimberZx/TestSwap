@@ -52,8 +52,9 @@ function formatApr(aprBps) {
 // small stakes keep their precision and big ones don't sprawl. e.g.
 // 1000.0000 → 1000.00, 246.6133 → 246.61, 10.1613 → 10.1613, 4.10 → 4.1000.
 function fmtStake(wei, decimals = 18) {
-  if (!wei) return "0";
+  if (!wei) return "0.0";
   const n = parseFloat(ethers.utils.formatUnits(wei, decimals));
+  if (n === 0) return "0.0"; // truly zero reads clean, not 0.0000
   return n.toFixed(Math.abs(n) >= 100 ? 2 : 4);
 }
 
