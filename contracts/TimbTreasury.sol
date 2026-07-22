@@ -34,6 +34,28 @@ using SafeERC20 for IERC20;
         function deposit() external payable;
     }
 
+    interface ITimbSwapRouter {
+        function addLiquidity(
+            address tokenA,
+            address tokenB,
+            uint256 amountADesired,
+            uint256 amountBDesired,
+            uint256 amountAMin,
+            uint256 amountBMin,
+            address to,
+            uint256 deadline
+        ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
+
+        function addLiquidityETH(
+            address token,
+            uint256 amountTokenDesired,
+            uint256 amountTokenMin,
+            uint256 amountETHMin,
+            address to,
+            uint256 deadline
+        ) external payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
+    }
+
 /**
  * @title TimbTreasury
  * @notice Protocol fee routing, buyback execution, and revenue distribution.
@@ -55,6 +77,7 @@ using SafeERC20 for IERC20;
  *                                  boost. A buyback moves out only the burn.
  *   - Prize pot top-up → PrizeEscrow
  *   - Staking reward top-up → TimbStaking.notifyRewardAmount()
+ *   - Protocol-owned liquidity → Router.addLiquidity[ETH] (LP held here)
  *   - Operations → owner wallet (manual)
  *
  * Security:
@@ -87,6 +110,11 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
 
     /// @notice TIMBS/ETH AMM pair — used for buyback execution.
     address public timbsEthPair;
+
+    /// @notice TimbSwapRouter — used to deploy treasury-held tokens as
+    ///         protocol-owned liquidity. LP tokens are minted back to the
+    ///         treasury (`to = address(this)`). Re-wireable via `setRouter`.
+    address public router;
 
     /// @notice WETH — the pair holds WETH, not native ETH. Buyback ETH is
     ///         wrapped here before being paid into the pair.
@@ -149,6 +177,14 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         uint256 timbsReserved
     );
     event PotFunded(uint256 amount);
+    event RouterSet(address indexed router);
+    event LiquidityProvided(
+        address indexed tokenA,
+        address indexed tokenB,
+        uint256 amountA,
+        uint256 amountB,
+        uint256 liquidity
+    );
     event StakingFunded(uint256 timbsAmount, uint256 duration);
     event BuybackBurnRatioSet(uint256 ratio);
     event BuybackReserveRatioSet(uint256 ratio);
@@ -354,6 +390,89 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         emit StakingFunded(timbsAmount, duration);
     }
 
+    // ─── Protocol-owned liquidity ───────────────────────────────────────────────
+
+    /**
+     * @notice Deploy two treasury-held ERC20s as liquidity. LP tokens are
+     *         minted back to the treasury — protocol-owned, not the owner's.
+     * @dev Both tokens must already sit in this contract (e.g. TIMBS from the
+     *      buyback reserve/waterfall + a stable transferred in). The router
+     *      pulls only what's needed at the pool ratio; any un-deposited dust
+     *      stays here. If the pair doesn't exist, the factory creates it.
+     * @param tokenA          First token.
+     * @param tokenB          Second token.
+     * @param amountADesired  Max tokenA to deposit.
+     * @param amountBDesired  Max tokenB to deposit.
+     * @param amountAMin      Slippage floor on tokenA actually deposited.
+     * @param amountBMin      Slippage floor on tokenB actually deposited.
+     */
+    function provideLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 amountADesired,
+        uint256 amountBDesired,
+        uint256 amountAMin,
+        uint256 amountBMin
+    ) external nonReentrant onlyOwner {
+        if (router == address(0))                    revert ZeroAddress();
+        if (tokenA == address(0) || tokenB == address(0)) revert ZeroAddress();
+        if (amountADesired == 0 || amountBDesired == 0)   revert ZeroAmount();
+
+        IERC20(tokenA).forceApprove(router, amountADesired);
+        IERC20(tokenB).forceApprove(router, amountBDesired);
+
+        (uint256 amountA, uint256 amountB, uint256 liquidity) =
+            ITimbSwapRouter(router).addLiquidity(
+                tokenA, tokenB,
+                amountADesired, amountBDesired,
+                amountAMin, amountBMin,
+                address(this), block.timestamp
+            );
+
+        // Drop any residual allowance the router didn't consume.
+        IERC20(tokenA).forceApprove(router, 0);
+        IERC20(tokenB).forceApprove(router, 0);
+
+        emit LiquidityProvided(tokenA, tokenB, amountA, amountB, liquidity);
+    }
+
+    /**
+     * @notice Deploy treasury-held TIMBS (or any token) + treasury ETH as
+     *         liquidity. LP tokens are minted back to the treasury.
+     * @dev Uses native ETH held here (unwrap WETH fee revenue first via
+     *      `unwrapWeth` if needed). Router refunds any excess ETH to the
+     *      treasury. Pairs against WETH under the hood.
+     * @param token               Token to pair with ETH.
+     * @param amountTokenDesired  Max token to deposit.
+     * @param ethAmount           ETH to deposit (≤ treasury balance).
+     * @param amountTokenMin      Slippage floor on token deposited.
+     * @param amountETHMin        Slippage floor on ETH deposited.
+     */
+    function provideLiquidityETH(
+        address token,
+        uint256 amountTokenDesired,
+        uint256 ethAmount,
+        uint256 amountTokenMin,
+        uint256 amountETHMin
+    ) external nonReentrant onlyOwner {
+        if (router == address(0))            revert ZeroAddress();
+        if (token == address(0))             revert ZeroAddress();
+        if (amountTokenDesired == 0 || ethAmount == 0) revert ZeroAmount();
+        if (ethAmount > address(this).balance) revert InsufficientETH(ethAmount, address(this).balance);
+
+        IERC20(token).forceApprove(router, amountTokenDesired);
+
+        (uint256 amountToken, uint256 amountETH, uint256 liquidity) =
+            ITimbSwapRouter(router).addLiquidityETH{value: ethAmount}(
+                token, amountTokenDesired, amountTokenMin, amountETHMin,
+                address(this), block.timestamp
+            );
+
+        IERC20(token).forceApprove(router, 0);
+
+        emit LiquidityProvided(token, weth, amountToken, amountETH, liquidity);
+    }
+
     /**
      * @notice Withdraw any ERC20 held by the treasury (owner only).
      * @dev Protocol swap fees arrive as the swap's INPUT token (TIMBS, WETH,
@@ -440,6 +559,12 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         if (_pair == address(0)) revert ZeroAddress();
         timbsEthPair = _pair;
         emit PairSet(_pair);
+    }
+
+    function setRouter(address _router) external onlyOwner {
+        if (_router == address(0)) revert ZeroAddress();
+        router = _router;
+        emit RouterSet(_router);
     }
 
     function setWeth(address _weth) external onlyOwner {
