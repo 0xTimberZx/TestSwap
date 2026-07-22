@@ -265,11 +265,18 @@ async function refreshBoostPool(boost, pid, totalWeight, windowOpen = true) {
     ]);
 
     document.getElementById(`boost-${pid}-name`).textContent  = name + " LP";
-    document.getElementById(`boost-${pid}-apr`).textContent   = info.paused ? "paused" : (windowOpen ? formatApr(apr) : "idle");
+    // When the emission window is closed, boost emissions are 0 — so the APR
+    // shown is the pool's trading-fee return (≈0.0% on a quiet testnet pair),
+    // NOT the phantom emission rate. The "idle" marker moves to the Weight
+    // slot (emission share is meaningless while nothing's emitting).
+    document.getElementById(`boost-${pid}-apr`).textContent   = info.paused
+      ? "paused"
+      : (windowOpen ? formatApr(apr) : "0.0% APR");
     document.getElementById(`boost-${pid}-total`).textContent = fmt(info.totalStaked, 18, 2);
-    document.getElementById(`boost-${pid}-weight`).textContent = totalWeight.isZero() || info.paused
+    document.getElementById(`boost-${pid}-weight`).textContent = info.paused
       ? "—"
-      : (info.weight.mul(1000).div(totalWeight).toNumber() / 10).toFixed(1) + "%";
+      : (!windowOpen ? "idle"
+        : (totalWeight.isZero() ? "—" : (info.weight.mul(1000).div(totalWeight).toNumber() / 10).toFixed(1) + "%"));
     document.getElementById(`boost-${pid}-paused`).style.display = info.paused ? "" : "none";
 
     // A paused pool stops EARNING, never exit — withdraw stays open.
