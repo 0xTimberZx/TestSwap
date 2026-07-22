@@ -53,6 +53,15 @@ const STAKE_CAP_BPS    = 8_000;  // ≤ 0.80 × leftover
 const BOOST_DRAW_BPS   = 500;    // 5% of each farm claim
 const LOG_CHUNK        = Number(process.env.EPOCH_LOG_CHUNK || 40_000); // getLogs block-range chunk
 
+// ── Buyback automation (section 0) ──────────────────────────────────────────
+// Each run converts accrued protocol-fee ETH in the Treasury into TIMBS via
+// executeBuyback, whose burn/reserve/waterfall split is what ultimately funds
+// the epoch grants. All knobs have defaults — no new required secrets.
+const BUYBACK_ENABLED  = (process.env.BUYBACK_ENABLED ?? "true") !== "false";
+const BUYBACK_MIN_ETH  = ethers.parseEther(process.env.BUYBACK_MIN_ETH || "0.001"); // skip dust
+const BUYBACK_SPEND_BPS = BigInt(process.env.BUYBACK_SPEND_BPS || "10000"); // % of available ETH (100%)
+const BUYBACK_SLIP_BPS  = BigInt(process.env.BUYBACK_SLIPPAGE_BPS || "1500"); // 15% — thin testnet pools
+
 // Addresses from config.js — same single source of truth as the settler.
 function addrFromConfig(key, { optional = false } = {}) {
   const src = fs.readFileSync(path.join(__dirname, "..", "config.js"), "utf8");
@@ -95,9 +104,18 @@ const CLAIM_EVENT_ABI = [
   "event RewardsClaimed(address indexed user, uint256 amount)",
 ];
 const TREASURY_ABI = [
-  "event BuybackExecuted(uint256 ethSpent, uint256 timbsBought, uint256 timbsBurned, uint256 timbsToStaking)",
+  "event BuybackExecuted(uint256 ethSpent, uint256 timbsBought, uint256 timbsBurned, uint256 timbsToWaterfall, uint256 timbsReserved)",
   "function distributeToStaking(uint256 timbsAmount, uint256 duration) external",
   "function withdrawToken(address token, address to, uint256 amount) external",
+  "function executeBuyback(uint256 ethAmount, uint256 minTimbsOut) external",
+  "function unwrapWeth(uint256 amount) external",
+  "function ethBalance() view returns (uint256)",
+  "function timbsEthPair() view returns (address)",
+  "function weth() view returns (address)",
+];
+const PAIR_ABI = [
+  "function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+  "function token0() view returns (address)",
 ];
 const FARM_ABI = [
   "function notifyRewardAmount(uint256 amount, uint256 duration) external",
@@ -193,6 +211,66 @@ async function main() {
 
   console.log(`round=${round} epoch=${epochOf(round)} lastEpochRound=${state.lastEpochRound} block=${nowBlock}`);
 
+  // ── 0. Buyback — convert accrued protocol-fee ETH into TIMBS every run ────
+  // Fees land in the Treasury (native ETH, plus WETH from token-in swaps).
+  // executeBuyback splits the purchase burn/reserve/waterfall; the waterfall
+  // slice is what later funds the epoch grants. Running this each invocation
+  // (not only at settlement) lets z accrue steadily across the epoch. The
+  // buyback here mines after `nowBlock`, so it's counted at the NEXT epoch's
+  // z-scan — never this run's — which avoids any double-count.
+  if (BUYBACK_ENABLED) {
+    const pairAddr = await treasury.timbsEthPair();
+    const wethAddr = await treasury.weth();
+
+    // Unwrap any WETH-denominated fee revenue first — executeBuyback spends
+    // native ETH, so WETH sitting in the Treasury is otherwise unreachable.
+    if (wethAddr && wethAddr !== ethers.ZeroAddress) {
+      const weth = new ethers.Contract(wethAddr, ERC20_ABI, wallet ?? provider);
+      const wethBal = await weth.balanceOf(TREASURY_ADDR);
+      if (wethBal > 0n) {
+        console.log(`BUYBACK  unwrapping ${fmt(wethBal)} WETH → ETH`);
+        if (!DRY_RUN) await (await treasury.unwrapWeth(wethBal)).wait();
+      }
+    }
+
+    const ethBal    = await treasury.ethBalance();
+    const spendable = (ethBal * BUYBACK_SPEND_BPS) / 10_000n;
+
+    if (ethBal < BUYBACK_MIN_ETH || spendable === 0n) {
+      console.log(`BUYBACK  skip — treasury ETH ${fmt(ethBal)} < min ${fmt(BUYBACK_MIN_ETH)}`);
+    } else if (!pairAddr || pairAddr === ethers.ZeroAddress) {
+      console.log("BUYBACK  skip — no TIMBS/ETH pair configured");
+    } else {
+      const pair = new ethers.Contract(pairAddr, PAIR_ABI, provider);
+      const [r0, r1] = await pair.getReserves();
+      const t0 = await pair.token0();
+      const timbsIsT0  = t0.toLowerCase() === TIMBS_ADDR.toLowerCase();
+      const reserveIn  = timbsIsT0 ? BigInt(r1) : BigInt(r0); // ETH reserve
+      const reserveOut = timbsIsT0 ? BigInt(r0) : BigInt(r1); // TIMBS reserve
+
+      if (reserveIn === 0n || reserveOut === 0n) {
+        console.log("BUYBACK  skip — pair has no liquidity");
+      } else {
+        // Same constant-product math the pair uses (0.3% pair fee), so minOut
+        // is a true floor around the expected fill.
+        const amountInWithFee = spendable * 997n;
+        const expectedOut = (amountInWithFee * reserveOut) / (reserveIn * 1_000n + amountInWithFee);
+        const minOut = (expectedOut * (10_000n - BUYBACK_SLIP_BPS)) / 10_000n;
+
+        console.log(`BUYBACK  spend=${fmt(spendable)} ETH expectedOut=${fmt(expectedOut)} minOut=${fmt(minOut)} TIMBS`);
+        if (expectedOut === 0n) {
+          console.log("BUYBACK  skip — expected out rounds to zero");
+        } else if (!DRY_RUN) {
+          await (await treasury.executeBuyback(spendable, minOut)).wait();
+          console.log("  buyback executed ✓");
+          await tg(`💸 Buyback ${fmt(spendable)} ETH → ~${fmt(expectedOut)} TIMBS (burn/reserve/waterfall split)`);
+        }
+      }
+    }
+  } else {
+    console.log("BUYBACK  disabled (BUYBACK_ENABLED=false)");
+  }
+
   // ── 1. Epoch settlement — beginning of each 6-round block ────────────────
   const due = state.lastEpochRound === 0
     ? round > ROUNDS_PER_EPOCH               // let the first full epoch elapse
@@ -205,10 +283,12 @@ async function main() {
       fromBlock, nowBlock, (a) => a.amount);
     const w = await sumEvents(provider, TIMBSTAKING_ADDR, claimsIface, "RewardsClaimed",
       fromBlock, nowBlock, (a) => a.amount);
-    // z = TIMBS that stayed in the Treasury from buybacks (bought − burned −
-    // routed straight to staking at buyback time).
+    // z = the buyback "waterfall slice" retained in the Treasury this epoch —
+    // the amount the Treasury explicitly earmarks for farm/staking/boost. The
+    // contract emits it directly (received − burn − reserve); the reserve slice
+    // stays in the balance but is deliberately NOT counted here so it stacks.
     const z = await sumEvents(provider, TREASURY_ADDR, treasuryIface, "BuybackExecuted",
-      fromBlock, nowBlock, (a) => a.timbsBought - a.timbsBurned - a.timbsToStaking);
+      fromBlock, nowBlock, (a) => a.timbsToWaterfall);
 
     // Waterfall — farm → staking → boost, one shared budget, never exceeds z.
     let B = z;

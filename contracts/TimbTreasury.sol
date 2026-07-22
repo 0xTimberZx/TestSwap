@@ -45,9 +45,14 @@ using SafeERC20 for IERC20;
  *   - Direct owner deposits (operations, grants)
  *
  * Revenue outflows:
- *   - Buyback: uses ETH to purchase TIMBS from TIMBS/ETH pair
- *       └── buybackBurnRatio% of purchased TIMBS → burned
- *       └── (100 - buybackBurnRatio)% → TimbStaking distributions
+ *   - Buyback: uses ETH to purchase TIMBS from TIMBS/ETH pair, split 3 ways
+ *       └── buybackBurnRatio%    of purchased TIMBS → burned
+ *       └── buybackReserveRatio% → kept as standing reserve (stacks, never
+ *                                  auto-distributed)
+ *       └── remainder            → waterfall slice: stays in the treasury but
+ *                                  emitted as timbsToWaterfall so the epoch
+ *                                  keeper distributes it to farm / staking /
+ *                                  boost. A buyback moves out only the burn.
  *   - Prize pot top-up → PrizeEscrow
  *   - Staking reward top-up → TimbStaking.notifyRewardAmount()
  *   - Operations → owner wallet (manual)
@@ -87,11 +92,26 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     ///         wrapped here before being paid into the pair.
     address public weth;
 
-    /// @notice % of purchased TIMBS that gets burned (0–100).
-    ///         Remainder distributed to TimbStaking.
+    /// @notice % of purchased TIMBS burned on each buyback (0–100).
+    ///         Deflationary sink. `burn + reserve` must stay ≤ 100; the
+    ///         remainder is the waterfall slice (see `buybackReserveRatio`).
     uint256 public buybackBurnRatio;
 
-    /// @notice Default staking distribution period when topping up staking.
+    /// @notice % of purchased TIMBS kept back in the treasury as a standing
+    ///         reserve on each buyback (0–100). Never auto-distributed — it
+    ///         stacks sweep over sweep as a solvency buffer. `burn + reserve`
+    ///         must stay ≤ 100.
+    ///
+    ///         The rest — `100 − burn − reserve` — is the **waterfall slice**:
+    ///         it also stays in the treasury's TIMBS balance, but is emitted as
+    ///         `timbsToWaterfall` so the epoch keeper can measure it as the
+    ///         per-epoch budget (`z`) it distributes to farm / staking / boost.
+    ///         Staking is funded through that waterfall, NOT a direct transfer
+    ///         here — a buyback moves no TIMBS out except the burn.
+    uint256 public buybackReserveRatio;
+
+    /// @notice Default staking distribution period when topping up staking
+    ///         via the manual `distributeToStaking` path.
     uint256 public stakingDistributionPeriod;
 
     /// @notice Authorised callers for receiveFees() (Router, TimbPrize).
@@ -103,8 +123,17 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     /// @notice Total TIMBS burned via buybacks (lifetime).
     uint256 public totalTimbsBurned;
 
-    /// @notice Total TIMBS distributed to stakers via buybacks (lifetime).
+    /// @notice Total TIMBS distributed to stakers via the manual
+    ///         `distributeToStaking` path (lifetime).
     uint256 public totalTimbsDistributed;
+
+    /// @notice Total TIMBS routed to the epoch waterfall via buybacks
+    ///         (lifetime) — the retained slice the keeper measures as `z`.
+    uint256 public totalTimbsToWaterfall;
+
+    /// @notice Total TIMBS held back as standing reserve via buybacks
+    ///         (lifetime). Stays in the treasury balance; stacks over time.
+    uint256 public totalTimbsReserved;
 
     /// @notice Total ETH sent to prize pot (lifetime).
     uint256 public totalPotFunded;
@@ -116,11 +145,13 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         uint256 ethSpent,
         uint256 timbsBought,
         uint256 timbsBurned,
-        uint256 timbsToStaking
+        uint256 timbsToWaterfall,
+        uint256 timbsReserved
     );
     event PotFunded(uint256 amount);
     event StakingFunded(uint256 timbsAmount, uint256 duration);
     event BuybackBurnRatioSet(uint256 ratio);
+    event BuybackReserveRatioSet(uint256 ratio);
     event StakingSet(address indexed staking);
     event PrizeEscrowSet(address indexed escrow);
     event PairSet(address indexed pair);
@@ -161,7 +192,8 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         prizeEscrow             = _prizeEscrow;
         timbsEthPair            = _timbsEthPair;
         weth                    = _weth;
-        buybackBurnRatio        = 50; // 50% burn, 50% to staking
+        buybackBurnRatio        = 5;  // 5% burned
+        buybackReserveRatio     = 20; // 20% held as reserve; 75% → waterfall
         stakingDistributionPeriod = 30 days;
 
         authorisedFeeSenders[msg.sender] = true;
@@ -184,9 +216,11 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
 
     /**
      * @notice Execute a TIMBS buyback using ETH held in treasury.
-     * @dev Buys TIMBS from TIMBS/ETH pair directly.
-     *      Splits purchased TIMBS: buybackBurnRatio% burned, rest to staking.
-     *      Slippage protected via minTimbsOut.
+     * @dev Buys TIMBS from TIMBS/ETH pair directly. Splits the purchase three
+     *      ways — buybackBurnRatio% burned, buybackReserveRatio% kept as
+     *      reserve, remainder retained as the waterfall slice for the epoch
+     *      keeper. Only the burn leaves the treasury. Slippage protected via
+     *      minTimbsOut.
      *
      * @param ethAmount    ETH to spend on buyback.
      * @param minTimbsOut  Minimum TIMBS to receive (slippage protection).
@@ -252,26 +286,27 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
         uint256 received = timbsToken.balanceOf(address(this)) - balBefore;
         if (received < minTimbsOut) revert SlippageExceeded(received, minTimbsOut);
 
-        // Split: burn % + distribute %
-        uint256 toBurn     = (received * buybackBurnRatio) / 100;
-        uint256 toStaking  = received - toBurn;
+        // Three-way split: burn / reserve / waterfall. Only the burn leaves
+        // the treasury — `reserve` and `waterfall` both stay in this contract's
+        // TIMBS balance. The split is pure accounting: `waterfall` is emitted so
+        // the epoch keeper can measure it as the per-epoch budget it hands to
+        // farm / staking / boost; `reserve` is the residual that stacks as a
+        // solvency buffer. `waterfall = received − burn − reserve`, so the
+        // event's (bought − burned − reserved) equals exactly the waterfall
+        // slice the keeper distributes.
+        uint256 toBurn      = (received * buybackBurnRatio) / 100;
+        uint256 toReserve   = (received * buybackReserveRatio) / 100;
+        uint256 toWaterfall = received - toBurn - toReserve;
 
         if (toBurn > 0) {
             timbsToken.burn(toBurn);
             totalTimbsBurned += toBurn;
         }
 
-        if (toStaking > 0 && timbStaking != address(0)) {
-            IERC20(address(timbsToken)).safeTransfer(timbStaking, toStaking);
-            // Notify staking pool of new reward allocation
-            ITimbStaking(timbStaking).notifyRewardAmount(
-                toStaking,
-                stakingDistributionPeriod
-            );
-            totalTimbsDistributed += toStaking;
-        }
+        totalTimbsToWaterfall += toWaterfall;
+        totalTimbsReserved    += toReserve;
 
-        emit BuybackExecuted(ethAmount, received, toBurn, toStaking);
+        emit BuybackExecuted(ethAmount, received, toBurn, toWaterfall, toReserve);
     }
 
     // ─── Distribution ─────────────────────────────────────────────────────────
@@ -369,13 +404,24 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     // ─── Owner: Config ────────────────────────────────────────────────────────
 
     /**
-     * @notice Set buyback burn ratio (0–100).
-     *         0 = all to staking, 100 = all burned.
+     * @notice Set buyback burn ratio (0–100). `burn + reserve` must stay ≤ 100;
+     *         the remainder is the waterfall slice.
      */
     function setBuybackBurnRatio(uint256 _ratio) external onlyOwner {
-        if (_ratio > 100) revert InvalidRatio(_ratio);
+        if (_ratio > 100 || _ratio + buybackReserveRatio > 100) revert InvalidRatio(_ratio);
         buybackBurnRatio = _ratio;
         emit BuybackBurnRatioSet(_ratio);
+    }
+
+    /**
+     * @notice Set buyback reserve ratio (0–100) — the slice kept back as a
+     *         standing buffer. `burn + reserve` must stay ≤ 100; the remainder
+     *         is the waterfall slice the epoch keeper distributes.
+     */
+    function setBuybackReserveRatio(uint256 _ratio) external onlyOwner {
+        if (_ratio > 100 || buybackBurnRatio + _ratio > 100) revert InvalidRatio(_ratio);
+        buybackReserveRatio = _ratio;
+        emit BuybackReserveRatioSet(_ratio);
     }
 
     function setTimbStaking(address _staking) external onlyOwner {
