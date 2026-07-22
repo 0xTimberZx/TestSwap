@@ -47,6 +47,16 @@ function formatApr(aprBps) {
   return pct.toLocaleString("en-US", { maximumFractionDigits: 1 }) + "% APR";
 }
 
+// Farm amount formatting: keep columns narrow but readable. A triple-digit
+// (or larger) whole part shows 2 decimals; anything smaller shows up to 4, so
+// small stakes keep their precision and big ones don't sprawl. e.g.
+// 1000.0000 → 1000.00, 246.6133 → 246.61, 10.1613 → 10.1613, 4.10 → 4.1000.
+function fmtStake(wei, decimals = 18) {
+  if (!wei) return "0";
+  const n = parseFloat(ethers.utils.formatUnits(wei, decimals));
+  return n.toFixed(Math.abs(n) >= 100 ? 2 : 4);
+}
+
 // pool = "staking" | "farm"
 function poolConfig(pool) {
   return pool === "staking"
@@ -66,7 +76,7 @@ async function loadPool(pool) {
       contract[cfg.aprFn]().catch(() => ethers.BigNumber.from(0))
     ]);
 
-    document.getElementById(pool + "-total").textContent = fmt(total, 18, 2);
+    document.getElementById(pool + "-total").textContent = fmtStake(total);
     document.getElementById(pool + "-apr").textContent = formatApr(apr);
 
     if (userAddress) {
@@ -76,10 +86,10 @@ async function loadPool(pool) {
         contract.earned(userAddress),
         wallet.balanceOf(userAddress)
       ]);
-      document.getElementById(pool + "-mine").textContent = fmt(mine, 18, 4);
-      document.getElementById(pool + "-earned").textContent = fmtTIMBS(earned, 4);
+      document.getElementById(pool + "-mine").textContent = fmtStake(mine);
+      document.getElementById(pool + "-earned").textContent = fmtStake(earned) + " TIMBS";
       document.getElementById(pool + "-wallet").textContent =
-        "Balance: " + fmt(inWallet, 18, 4) + (pool === "staking" ? " TIMBS" : " LP");
+        "Balance: " + fmtStake(inWallet) + (pool === "staking" ? " TIMBS" : " LP");
 
       // Nothing to stake with? Turn the (otherwise dead) green Stake button
       // into a live "Buy TIMBS" / "Get LP" that routes to Swap, instead of an
@@ -272,7 +282,7 @@ async function refreshBoostPool(boost, pid, totalWeight, windowOpen = true) {
     document.getElementById(`boost-${pid}-apr`).textContent   = info.paused
       ? "paused"
       : (windowOpen ? formatApr(apr) : "0.0% APR");
-    document.getElementById(`boost-${pid}-total`).textContent = fmt(info.totalStaked, 18, 2);
+    document.getElementById(`boost-${pid}-total`).textContent = fmtStake(info.totalStaked);
     document.getElementById(`boost-${pid}-weight`).textContent = info.paused
       ? "—"
       : (!windowOpen ? "idle"
@@ -289,9 +299,9 @@ async function refreshBoostPool(boost, pid, totalWeight, windowOpen = true) {
         boost.pendingReward(pid, userAddress),
         lp.balanceOf(userAddress)
       ]);
-      document.getElementById(`boost-${pid}-mine`).textContent   = fmt(pos.amount, 18, 4);
-      document.getElementById(`boost-${pid}-earned`).textContent = fmtTIMBS(pending, 4);
-      document.getElementById(`boost-${pid}-wallet`).textContent = "Balance: " + fmt(inWallet, 18, 4) + " LP";
+      document.getElementById(`boost-${pid}-mine`).textContent   = fmtStake(pos.amount);
+      document.getElementById(`boost-${pid}-earned`).textContent = fmtStake(pending) + " TIMBS";
+      document.getElementById(`boost-${pid}-wallet`).textContent = "Balance: " + fmtStake(inWallet) + " LP";
       // No LP in wallet → live "Get LP" routing to Swap (unless the pool is
       // paused, which takes precedence and disables staking entirely).
       if (info.paused) {
