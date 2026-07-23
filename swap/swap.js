@@ -142,7 +142,12 @@ async function tokenBalance(t) {
 async function fillMaxIn() {
   if (!userAddress || !tokenIn) return;
   try {
-    const bal = await tokenBalance(tokenIn);
+    let bal = await tokenBalance(tokenIn);
+    // The 0.05% protocol fee is pulled ON TOP of amountIn for every non-wrap
+    // swap (see router _collectProtocolFee), so a full-balance MAX would revert
+    // on the fee transfer ("transfer amount exceeds balance"). Reserve the fee:
+    // largest amountIn with amountIn + 0.05% ≤ balance is balance × 10000/10005.
+    if (!isWrapPair()) bal = bal.mul(10000).div(10005);
     document.getElementById("amount-in").value =
       trimAmount(ethers.utils.formatUnits(bal, tokenIn.decimals));
     lastEditedSide = "in";
@@ -468,19 +473,18 @@ async function refreshBalances() {
   }
 }
 
-// "Insufficient <SYM> balance" when the typed pay amount exceeds the cached
-// wallet balance; null otherwise. Mirrors the handleSwap() pre-flight: the
-// 0.05% protocol fee is added on top only for native-ETH sells, where
-// msg.value must cover input + fee. For ERC20 sells the fee is taken out of
-// the input, so the wallet needs exactly amountIn (an exact-balance MAX must
-// pass). Unknown balance (still loading) never blocks.
+// "Insufficient <SYM> balance" when the typed pay amount PLUS the 0.05%
+// protocol fee exceeds the cached wallet balance; null otherwise. The fee is
+// pulled ON TOP of amountIn for every non-wrap swap — native AND ERC20 — via
+// the router's _collectProtocolFee (a separate transferFrom to the treasury),
+// so the wallet needs amountIn + fee. Unknown balance (still loading) never blocks.
 function overBalanceLabel() {
   if (!userAddress || !tokenIn || _balInWei === null) return null;
   const amt = document.getElementById("amount-in")?.value;
   if (!amt || parseFloat(amt) <= 0) return null;
   let needIn;
   try { needIn = ethers.utils.parseUnits(amt, tokenIn.decimals); } catch { return null; }
-  if (isNative(tokenIn) && !isWrapPair()) needIn = needIn.add(needIn.mul(5).div(10000)); // + protocol fee
+  if (!isWrapPair()) needIn = needIn.add(needIn.mul(5).div(10000)); // + 0.05% protocol fee (on top)
   return _balInWei.lt(needIn) ? `Insufficient ${tokenIn.symbol} balance` : null;
 }
 
@@ -806,6 +810,13 @@ const SWAP_REVERTS = {
 // tried to estimate on the error — replay it as a raw eth_call through the
 // PUBLIC RPC, which returns the revert data uncensored, and decode it.
 async function diagnoseRevert(err) {
+  // Fast path: some wallets/nodes strip the revert DATA but still surface the
+  // reason as a plain string. Catch the common balance case here so it isn't
+  // mislabeled as a price move (the 0.05% fee is charged on top of amountIn).
+  const reason = (err?.reason || err?.error?.message || err?.data?.message || "").toLowerCase();
+  if (reason.includes("exceeds balance")) {
+    return `Not enough ${tokenIn?.symbol || "input token"} — this amount plus the 0.05% fee is more than your balance. Lower it (or tap Max).`;
+  }
   const tx = err?.transaction;
   if (!tx || !tx.to || !tx.data) return null;
   try {
@@ -849,8 +860,8 @@ async function handleSwap() {
     // Wallets mask balance reverts as opaque -32603 / empty-data estimation
     // failures (observed live: 'swap 2000 ETH' and an ERC20-WETH swap with
     // zero WETH). Check here and say it in a sentence instead.
-    const needIn = isNative(tokenIn) && !isWrapPair()
-      ? amountInWei.add(amountInWei.mul(5).div(10000)) // + 0.05% protocol fee
+    const needIn = !isWrapPair()
+      ? amountInWei.add(amountInWei.mul(5).div(10000)) // + 0.05% protocol fee (on top, native + ERC20)
       : amountInWei;
     const balIn = await tokenBalance(tokenIn);
     if (balIn.lt(needIn)) {
