@@ -40,10 +40,14 @@ function readProv() {
 // the on-chain number is unchanged; this is presentation only.
 const APR_DISPLAY_CAP_PCT = 10000; // show ">10,000%" above this
 function formatApr(aprBps) {
-  const pct = aprBps.toNumber() / 100;
-  if (pct >= APR_DISPLAY_CAP_PCT) {
+  // A near-zero-TVL pool makes aprBps astronomically large — bigger than a JS
+  // Number can hold — so aprBps.toNumber() would THROW and blank the whole
+  // card. Test the display cap on the BigNumber first, before converting.
+  const capBps = ethers.BigNumber.from(APR_DISPLAY_CAP_PCT * 100); // 10,000% = 1,000,000 bps
+  if (aprBps.gte(capBps)) {
     return ">" + APR_DISPLAY_CAP_PCT.toLocaleString("en-US") + "% APR";
   }
+  const pct = aprBps.toNumber() / 100;
   return pct.toLocaleString("en-US", { maximumFractionDigits: 1 }) + "% APR";
 }
 
