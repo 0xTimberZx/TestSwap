@@ -240,7 +240,13 @@ async function loadLiveMetrics() {
       activeCount = valid.filter(Boolean).length;
     } catch {}
     set("m-entries",      `${activeCount} ticket${activeCount === 1 ? "" : "s"}`);
-    if (earningWeight) set("m-entries-sub", `${fmt(earningWeight, 18, 4)} ETH-eq earning yield`);
+    // Entries (valid, can win) vs backings still yielding for the round — a
+    // conceded-but-in-range ticket honors its committed rounds, so it keeps
+    // yield-farming even though it's no longer a live entry. The two counts
+    // are meant to differ; frame them plainly.
+    const yielding = entrants.length;
+    set("m-entries-sub", `${yielding} yield farming`
+      + (earningWeight ? ` · ${fmt(earningWeight, 18, 4)} ETH-eq` : ""));
 
     DebugHub.logCheckpoint("Analytics:Metrics Loaded", "pass");
   } catch (e) {
