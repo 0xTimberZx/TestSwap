@@ -240,7 +240,12 @@ async function loadLiveMetrics() {
       activeCount = valid.filter(Boolean).length;
     } catch {}
     set("m-entries",      `${activeCount} ticket${activeCount === 1 ? "" : "s"}`);
-    if (earningWeight) set("m-entries-sub", `${fmt(earningWeight, 18, 4)} ETH-eq earning yield`);
+    // Yield-farming = the vault's live registrations (ETH-eq weight), the
+    // authoritative measure — NOT the round-entrant count. A conceded ticket
+    // stops yielding (its vault registration is removed), but its principal
+    // carries onto the replacement and keeps farming there, so there's always
+    // exactly one yielding principal per wallet.
+    if (earningWeight) set("m-entries-sub", `${fmt(earningWeight, 18, 4)} ETH-eq yield farming`);
 
     DebugHub.logCheckpoint("Analytics:Metrics Loaded", "pass");
   } catch (e) {
