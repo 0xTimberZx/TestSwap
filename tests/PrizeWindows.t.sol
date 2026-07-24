@@ -71,13 +71,29 @@ contract PrizeWindowsTest is Test {
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    /// @dev Mirror of TimbPrize._lockCurrentSegment for untouched (0) counters.
-    ///      Class-preserving jitter (§13.2): with counter 0 the live char is a
-    ///      letter (index 0 < 26), so the locked char stays in the letter class
-    ///      — ALPHABET[mix % 26], NOT mix % 36.
+    /// @dev The seed counter for (round, segment). Round 1 starts at 0 (startGame),
+    ///      and every rollover seeds the next round's counter to the index of the
+    ///      just-locked jittered char (TimbPrize line 506). No swaps run in these
+    ///      tests, so the counter is never nudged mid-round and — starting from a
+    ///      letter (index 0) — stays in the letter class every round, so each
+    ///      locked-char index is `mix % 26`, which becomes the next round's seed.
+    function counterAt(uint256 round, uint256 segment) internal view returns (uint256 c) {
+        c = 0; // round 1
+        for (uint256 r = 1; r < round; r++) {
+            uint256 mix = uint256(keccak256(abi.encodePacked(
+                blockhash(block.number - 1), c, r, segment
+            )));
+            c = mix % 26; // locked-char index (letter class) = next round's seed
+        }
+    }
+
+    /// @dev Mirror of TimbPrize._lockCurrentSegment. Class-preserving jitter
+    ///      (§13.2): the live char stays in the letter class here, so the locked
+    ///      char is ALPHABET[mix % 26] with the round's carried-over counter.
     function expectedChar(uint256 round, uint256 segment) internal view returns (bytes1) {
+        uint256 c = counterAt(round, segment);
         uint256 mix = uint256(keccak256(abi.encodePacked(
-            blockhash(block.number - 1), uint256(0), round, segment
+            blockhash(block.number - 1), c, round, segment
         )));
         return ALPHABET[mix % 26];
     }
