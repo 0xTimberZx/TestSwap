@@ -267,9 +267,13 @@ contract PrizeWindowsTest is Test {
         // T+5 is PAST the old flat LER+4 window — under v5 it must still refund
         // because the claim right (T+1..T+2) delayed the forfeiture countdown.
         runUntilRound(T + 5);
+        // Resolve the id BEFORE the prank — _ticketId makes an external ticketAt
+        // staticcall, which would otherwise consume the prank and leave claimRefund
+        // running as the test contract (NotTicketOwner).
+        uint256 id = _ticketId(T);
         uint256 balBefore = player.balance;
         vm.prank(player);
-        registry.claimRefund(_ticketId(T));
+        registry.claimRefund(id);
         assertEq(player.balance, balBefore + ENTRY_ETH, "extended refund window not honored");
     }
 
