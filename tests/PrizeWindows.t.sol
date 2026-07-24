@@ -49,7 +49,9 @@ contract PrizeWindowsTest is Test {
     address player = address(0xA11CE);
     address rando  = address(0xF00D);
 
-    uint256 constant ENTRY_ETH = 0.0001 ether;
+    // v5 dynamic pricing: ETH entries sit on the floor here (escrow never nears
+    // the 1.1 ETH threshold in these windows tests).
+    uint256 constant ENTRY_ETH = 0.001 ether; // ETH_ENTRY_FLOOR
 
     function setUp() public {
         timbs    = new MockTIMBS();
@@ -58,7 +60,7 @@ contract PrizeWindowsTest is Test {
         prize    = new TimbPrize(address(escrow), address(registry), address(this));
 
         registry.setTimbPrize(address(prize));
-        registry.setEntryCosts(100e18, ENTRY_ETH);
+        // Entry costs are dynamic in v5 — no setter.
         escrow.setTimbPrize(address(prize));
 
         prize.startGame();
