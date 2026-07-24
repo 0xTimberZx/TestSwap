@@ -66,7 +66,6 @@ machine — read them as gears, not a product menu.
 | TimbStaking | `0xe776c7b700B190ED8248741F9b518B08d8733C8F` |
 | TimbFarm | `0xE319E2206F71A5cD8dd2c411C6F29712935f9011` |
 | TimbBoostFarm | `0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35` |
-| BoostRewarder | `0x2fd810b9Ce48536118Faa45fcE0D37F76b3bf331` |
 | TimbLockVault | `0x0157086E7670D1eFb15DC6b5158eE78279927a41` |
 | TimbTreasury v4 | `0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c` |
 | TimbGovernance | `0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061` |
