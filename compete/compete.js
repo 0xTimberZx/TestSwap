@@ -496,9 +496,15 @@ async function updateCostDisplay() {
 
   const noteEl = document.getElementById("extra-cost-note");
   if (extraRounds > 0 && noteEl) {
+    // Capture the count this call is pricing — the additionalRoundCost read is
+    // async, and a rapid stepper change (or a post-submit reset to 0) can land
+    // first, so bail if extraRounds moved on before the RPC resolves. Prevents a
+    // stale "+N TIMBS" note surviving after the count changed.
+    const forRounds = extraRounds;
     try {
       const registry = new ethers.Contract(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI, readProv());
-      const extra = await registry.additionalRoundCost(extraRounds);
+      const extra = await registry.additionalRoundCost(forRounds);
+      if (forRounds !== extraRounds) return; // count changed mid-flight — stale
       extraCostWei = extra;
       noteEl.textContent = `+ ${fmtTIMBS(extra)} · non-refundable`;
       noteEl.classList.remove("hidden");
@@ -970,6 +976,8 @@ async function handleSubmitEntry() {
     document.getElementById("entry-string").value = "";
     extraRounds = 0;
     document.getElementById("extra-rounds-val").textContent = "0";
+    renderPlaysRound(currentRoundNum);
+    updateCostDisplay();  // clear the stale "+N TIMBS" extra-rounds note
     await loadMyEntries();
     setTimeout(() => { updateEntryButton(); }, 2000);
 
