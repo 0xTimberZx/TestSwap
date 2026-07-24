@@ -949,7 +949,17 @@ async function handleSubmitEntry() {
       // the principal carries over, so no ETH value (non-payable in v2).
       tx = await registry.replaceEntry(string6, extraRounds, { ...gas, nonce });
     } else {
-      const value = useETH ? entryCostETH_wei : ethers.BigNumber.from(0);
+      let value = ethers.BigNumber.from(0);
+      if (useETH) {
+        // v5 entry cost is dynamic and fixed per round, so it can move between
+        // the quoted price and this tx (e.g. a round rolled over). Re-read the
+        // live cost right before sending and add a small buffer — submitEntry
+        // refunds any overpayment, so the buffer is free insurance against
+        // WrongEscrowAmount from intra-flight price drift.
+        let liveCost = entryCostETH_wei;
+        try { liveCost = await registry.entryCostETH(); } catch {}
+        value = liveCost.mul(102).div(100); // +2%, refunded on-chain
+      }
       tx = await registry.submitEntry(string6, useETH, extraRounds, { ...gas, nonce, value });
     }
     DebugHub.logCheckpoint("Prize:Entry Submitted", "pass");
@@ -1379,6 +1389,12 @@ const ENTRY_REVERTS = {
   "0x4cbc5815": "Too many extra rounds — the maximum is 12. Lower the extra-rounds count and try again.", // TooManyExtraRounds(uint256,uint256)
   "0xe450d38c": "Not enough TIMBS for this entry (extra rounds cost TIMBS). Reduce extra rounds or top up TIMBS.", // ERC20InsufficientBalance
   "0xfb8f41b2": "TIMBS spending isn't approved for the full amount — approve, then retry.",                 // ERC20InsufficientAllowance
+  // v5 dynamic pricing: the entry cost is computed on-chain and fixed per round,
+  // so it can move between the quote you saw and your transaction landing.
+  "0x0ee6446f": "The entry price just moved — it's dynamic and floats each round. Refresh the page for the current cost, then re-enter.", // WrongEscrowAmount(uint256,uint256)
+  "0x045a8fa9": "You already have a live ticket this round. Use “Update entry” to change it, or wait for it to finish.",           // ActiveTicketExists(uint256)
+  "0xf024641d": "No live ticket to act on — submit a fresh entry instead.",                                  // NoLiveTicket(address)
+  "0xab35696f": "Entries are paused right now — try again once the game is unpaused.",                       // ContractPaused()
 };
 
 const ADVANCE_REVERTS = {
