@@ -8,7 +8,7 @@ on-chain prize game. The swap, the staking, the farming, and the game are not se
 people who generate it, on a fixed cadence, under hard solvency limits. Rewards are funded by
 real inflow, never printed.
 
-It is **open-source, permissionless, and non-custodial**: the protocol is a set of **Solidity
+It is **source-available, permissionless, and non-custodial**: the protocol is a set of **Solidity
 smart contracts** on Arbitrum, verified on Sourcify, that anyone can call directly — settlement
 and payouts need no privileged operator, and you always hold your own keys.
 
@@ -59,7 +59,7 @@ machine — read them as gears, not a product menu.
 | TimbSwapFactory | `0xCCd6d3f0A86042d2B7056eDd381d367126628AF5` |
 | TimbSwapRouter v8 | `0x40C7Caf90817C9891D278Ec1400B9deb180911f1` |
 | EligibleTokenRegistry | `0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04` |
-| GameRegistry (generations) | `0xfca8C2A107298273508BE8C5f469344b0Fc8B5B4` |
+| GameRegistry (v5, dynamic pricing) | `0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530` |
 | TimbPrize (generations) | `0x35976f4D2260127848a6274D2eC89ee054412432` |
 | TimbYieldVault | `0x43D833e828e2AF951527C2b573Eb70c358FfEB0B` |
 | PrizeEscrow | `0x865C50d933e63BbE388EEAFa017AE634B0A6fB6D` |
@@ -216,3 +216,17 @@ forge script scripts/Deploy.s.sol \
 
 Part of the 0xTimberZx ecosystem alongside BlockpotDAO, MessageBoard, and 0xFaucet.  
 All four share the [DebugHub](https://0xtimberzx.github.io/MyDapp/debughub/) dashboard. 
+
+---
+
+## License
+
+TimbSwap is **source-available** under the [Business Source License 1.1](./LICENSE).
+You may read, audit, fork, and use the code for **non-production** purposes
+(development, testing, research, security review). Production and commercial use
+is not granted until the **Change Date (2029-07-25)**, on which the license
+automatically converts to **MIT**.
+
+The **TimbSwap** name, logo, and branding are trademarks of the project and are
+**not** licensed — you may fork the code, but may not present a deployment as
+"TimbSwap".
