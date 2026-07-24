@@ -1,21 +1,21 @@
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.24;
 
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 
-import "../src/TIMBSToken.sol";
-import "../src/PrizeEscrow.sol";
-import "../src/TimbSwapFactory.sol";
-import "../src/TimbSwapRouter.sol";
-import "../src/EligibleTokenRegistry.sol";
-import "../src/GameRegistry.sol";
-import "../src/TimbPrize.sol";
-import "../src/TimbStaking.sol";
-import "../src/TimbFarm.sol";
-import "../src/TimbLockVault.sol";
-import "../src/TimbTreasury.sol";
-import "../src/TimbGovernance.sol";
+import "../contracts/TIMBSToken.sol";
+import "../contracts/PrizeEscrow.sol";
+import "../contracts/TimbSwapFactory.sol";
+import "../contracts/TimbSwapRouter.sol";
+import "../contracts/EligibleTokenRegistry.sol";
+import "../contracts/GameRegistry.sol";
+import "../contracts/TimbPrize.sol";
+import "../contracts/TimbStaking.sol";
+import "../contracts/TimbFarm.sol";
+import "../contracts/TimbLockVault.sol";
+import "../contracts/TimbTreasury.sol";
+import "../contracts/TimbGovernance.sol";
 
 /**
  * @title Deploy
