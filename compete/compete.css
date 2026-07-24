@@ -303,6 +303,7 @@
 .cost-left { display: flex; flex-direction: column; gap: 2px; }
 .cost-label { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
 .cost-val { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text); }
+.cost-hint { font-family: var(--mono); font-size: 10px; color: var(--text-3); opacity: 0.85; }
 
 /* ─── Token Selector ─────────────────────────────────────────────────────── */
 .token-select-wrap { position: relative; }
