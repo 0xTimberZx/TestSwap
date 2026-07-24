@@ -72,11 +72,14 @@ contract PrizeWindowsTest is Test {
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     /// @dev Mirror of TimbPrize._lockCurrentSegment for untouched (0) counters.
+    ///      Class-preserving jitter (§13.2): with counter 0 the live char is a
+    ///      letter (index 0 < 26), so the locked char stays in the letter class
+    ///      — ALPHABET[mix % 26], NOT mix % 36.
     function expectedChar(uint256 round, uint256 segment) internal view returns (bytes1) {
         uint256 mix = uint256(keccak256(abi.encodePacked(
             blockhash(block.number - 1), uint256(0), round, segment
         )));
-        return ALPHABET[mix % 36];
+        return ALPHABET[mix % 26];
     }
 
     function expectedString(uint256 round) internal view returns (bytes6) {
