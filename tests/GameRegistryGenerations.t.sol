@@ -35,8 +35,10 @@ contract GameRegistryGenerationsTest is Test {
     address sink   = address(0xBEEF);
     address player = address(0xA11CE);
 
-    uint256 constant ENTRY_ETH   = 0.0001 ether;
-    uint256 constant ENTRY_TIMBS = 100e18;
+    // v5 dynamic pricing floors — this test does a single entry per generation,
+    // so escrow stays on the floor (ETH < 1.1 ETH threshold, one TIMBS seat).
+    uint256 constant ENTRY_ETH   = 0.001 ether; // ETH_ENTRY_FLOOR
+    uint256 constant ENTRY_TIMBS = 2e18;         // TIMBS_ENTRY_FLOOR
     bytes6  constant STR_A = bytes6("ABCDEF");
     bytes6  constant STR_B = bytes6("GHIJKL");
 
@@ -44,7 +46,7 @@ contract GameRegistryGenerationsTest is Test {
         timbs    = new MockTimbsGen();
         // This test contract is the timbPrize — lets us call onGameStarted etc.
         registry = new GameRegistry(address(timbs), sink, address(this));
-        registry.setEntryCosts(ENTRY_TIMBS, ENTRY_ETH);
+        // Entry costs are dynamic in v5 — no setter; they compute from live state.
         registry.onGameStarted();          // first game: generation stays 1, round 1
 
         vm.deal(player, 1 ether);

@@ -36,8 +36,8 @@ import "../src/TimbGovernance.sol";
  *   WETH_ADDRESS           — WETH address on Arbitrum Sepolia
  *   DAPP_TOKEN_ADDRESS     — existing DAPP token address (for eligible registry)
  *   LINK_TOKEN_ADDRESS     — LINK token address (for lock vault whitelist)
- *   ENTRY_COST_TIMBS       — initial prize entry cost in TIMBS (18 dec)
- *   ENTRY_COST_ETH         — initial prize entry cost in ETH wei
+ *   ENTRY_COST_TIMBS       — TIMBSToken constructor param (18 dec); prize entry
+ *                            costs themselves are dynamic on-chain (no config)
  *   INITIAL_SUPPLY         — TIMBS initial mint amount (18 dec)
  *   REWARD_RATE_PER_SEC    — TIMBS staking reward rate (wei/sec)
  *   FARM_REWARD_RATE       — TIMBS farm reward rate (wei/sec)
@@ -76,8 +76,7 @@ contract Deploy is Script {
         address dapp            = vm.envAddress("DAPP_TOKEN_ADDRESS");
         address link            = vm.envAddress("LINK_TOKEN_ADDRESS");
 
-        uint256 entryCostTIMBS  = vm.envUint("ENTRY_COST_TIMBS");
-        uint256 entryCostETH    = vm.envUint("ENTRY_COST_ETH");
+        uint256 entryCostTIMBS  = vm.envUint("ENTRY_COST_TIMBS"); // TIMBSToken faucet/mint param
         uint256 initialSupply   = vm.envUint("INITIAL_SUPPLY");
         uint256 rewardRateSec   = vm.envUint("REWARD_RATE_PER_SEC");
         uint256 farmRateSec     = vm.envUint("FARM_REWARD_RATE");
@@ -200,10 +199,9 @@ contract Deploy is Script {
         router.setTimbPrize(address(timbPrize));
         console.log("Router: eligibleRegistry + timbPrize set");
 
-        // GameRegistry
+        // GameRegistry — entry costs are dynamic in v5 (no setter).
         gameRegistry.setTimbPrize(address(timbPrize));
-        gameRegistry.setEntryCosts(entryCostTIMBS, entryCostETH);
-        console.log("GameRegistry: timbPrize + entry costs set");
+        console.log("GameRegistry: timbPrize set");
 
         // PrizeEscrow
         prizeEscrow.setTimbPrize(address(timbPrize));
