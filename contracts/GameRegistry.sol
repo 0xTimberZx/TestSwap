@@ -59,9 +59,9 @@ interface ITimbYieldVaultRegistry {
  *
  * Deployment:
  *   1. Deploy GameRegistry(timbsToken, protocolSink, timbPrize?)
- *   2. setEntryCosts(1000e18, 0.0001e18)
- *   3. setYieldVault(vault); vault.setGameRegistry(this)
- *   4. timbPrize.setGameRegistry(this)
+ *   2. setYieldVault(vault); vault.setGameRegistry(this)
+ *   3. timbPrize.setGameRegistry(this)
+ *   (Entry costs are dynamic — computed on-chain, no setup call.)
  */
 contract GameRegistry is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -126,11 +126,49 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     /// @notice TimbYieldVault — receives active-escrow weight updates.
     address public yieldVault;
 
-    /// @notice Entry cost in TIMBS (governance-set).
-    uint256 public entryCostTIMBS;
+    // ─── Dynamic entry pricing (v5) ────────────────────────────────────────────
+    // Entry costs are no longer static. Both are computed from live protocol
+    // state, FIXED per round (predictable — what you see is what you pay), and
+    // float both ways round to round:
+    //
+    //   ETH   = escrow ≤ 1.1 ETH → 0.001 ETH floor; else escrow / 1000
+    //           (escrow = totalEthEscrow, the pot's ETH backing).
+    //   TIMBS = 2 + activeTimbEntries whole TIMBS, re-fixed only when the active
+    //           TIMBS-entry count drifts ≥ 2 from the last fix (±2 deadband).
+    //
+    // Vault weight per entry is a CONSTANT unit (VAULT_WEIGHT_UNIT) — decoupled
+    // from the variable cost, so yield accounting stays uniform per ticket.
 
-    /// @notice Entry cost in ETH wei (governance-set).
-    uint256 public entryCostETH;
+    uint256 public constant ETH_ENTRY_FLOOR      = 0.001 ether; // min ETH entry cost
+    uint256 public constant ETH_ESCROW_THRESHOLD = 1.1 ether;   // ≤ this → floor
+    uint256 public constant ETH_SCALE_DIVISOR    = 1000;        // > threshold → escrow/1000
+    uint256 public constant TIMBS_ENTRY_FLOOR    = 2e18;        // 2 TIMBS floor
+    uint256 public constant TIMBS_STEP           = 1e18;        // +1 TIMBS per active entry
+    uint256 public constant TIMBS_DEADBAND       = 2;           // re-fix only on ≥2 entry move
+    // Constant ETH-denominated vault weight per active ticket. Registered as
+    // ETH (address(0)) for BOTH entry tokens so every ticket carries the same
+    // yield weight regardless of what it paid — decoupling yield share from the
+    // variable entry cost. 1e14 wei = 0.0001 ETH matches the vault's existing
+    // per-ticket parity weight, so the vault's pot-rate tuning is unchanged.
+    uint256 public constant VAULT_WEIGHT_UNIT    = 1e14;
+
+    /// @notice Live TIMBS-paid tickets in the current generation — drives the
+    ///         TIMBS congestion price. Maintained at every entry/exit.
+    uint256 public activeTimbEntries;
+
+    /// @notice Sum of live ETH ticket backings (the pot's ETH escrow) — drives
+    ///         the ETH price. Maintained at every ETH entry/exit.
+    uint256 public totalEthEscrow;
+
+    /// @notice Entry costs FIXED for `pricedForRound`. Held the whole round.
+    uint256 public fixedEthCost;
+    uint256 public fixedTimbsCost;
+
+    /// @notice The round `fixedEthCost` / `fixedTimbsCost` apply to.
+    uint256 public pricedForRound;
+
+    /// @notice activeTimbEntries captured at the last TIMBS re-fix (deadband ref).
+    uint256 public timbsPriceRefCount;
 
     /// @notice Current active round number (pushed by TimbPrize).
     uint256 public currentRound;
@@ -198,7 +236,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     event TicketIneligible(uint256 indexed ticketId, uint256 absorbedAmount, address escrowToken);
     event TicketForfeitExtended(uint256 indexed ticketId, uint256 indexed wonRound, uint256 newForfeitRound);
     event ExtraRoundsSunk(address indexed player, uint256 indexed ticketId, uint256 timbsAmount);
-    event EntryCostUpdated(uint256 timbsCost, uint256 ethCost);
+    event PricesFixed(uint256 indexed round, uint256 ethCost, uint256 timbsCost);
     event CurrentRoundUpdated(uint256 round);
     event GenerationStarted(uint256 indexed generation);
     event TicketReclaimed(uint256 indexed ticketId, uint256 amount, address escrowToken);
@@ -360,14 +398,79 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         }
     }
 
+    // ─── Internal: Dynamic Entry Pricing (v5) ────────────────────────────────
+
+    /// @dev ETH cost as a pure function of the pot's ETH escrow. Floats both
+    ///      ways: at or below the threshold it sits on the floor; above it,
+    ///      the ticket costs 1/1000 of the escrow (2 ETH escrow → 0.002 ETH).
+    function _computeEthCost(uint256 escrow) internal pure returns (uint256) {
+        if (escrow <= ETH_ESCROW_THRESHOLD) return ETH_ENTRY_FLOOR;
+        return escrow / ETH_SCALE_DIVISOR;
+    }
+
+    /// @dev TIMBS cost as a pure function of the live TIMBS-entry count:
+    ///      floor + 1 TIMBS per active TIMBS entry (2 TIMBS at zero entries).
+    function _computeTimbsCost(uint256 active) internal pure returns (uint256) {
+        return TIMBS_ENTRY_FLOOR + active * TIMBS_STEP;
+    }
+
+    /// @dev Fix both entry costs for the round now being entered. Called on the
+    ///      first entry of each play round. ETH re-prices every round off the
+    ///      live escrow; TIMBS re-prices only when the active TIMBS-entry count
+    ///      has drifted at least TIMBS_DEADBAND from the last fix — the deadband
+    ///      keeps the TIMBS cost predictable, moving in steps, not on every seat.
+    function _fixPricesForRound() internal {
+        uint256 playRound = currentRound + 1;
+        if (pricedForRound == playRound) return; // already fixed this round
+
+        // ETH: always re-priced off the live escrow.
+        fixedEthCost = _computeEthCost(totalEthEscrow);
+
+        // TIMBS: re-price only outside the deadband (first fix always sets it).
+        uint256 active = activeTimbEntries;
+        uint256 drift  = active > timbsPriceRefCount
+            ? active - timbsPriceRefCount
+            : timbsPriceRefCount - active;
+        if (fixedTimbsCost == 0 || drift >= TIMBS_DEADBAND) {
+            fixedTimbsCost     = _computeTimbsCost(active);
+            timbsPriceRefCount = active;
+        }
+
+        pricedForRound = playRound;
+        emit PricesFixed(playRound, fixedEthCost, fixedTimbsCost);
+    }
+
+    /// @dev A live ticket reaches a terminal disposal (cancel / refund / forfeit
+    ///      / admin-ineligible) and its seat leaves the pricing meter. Each
+    ///      current-generation ticket increments the meter once at submitEntry
+    ///      and reaches exactly one terminal disposal, so this decrements once —
+    ///      no per-ticket flag needed. Concession (replaceEntry) carries the seat
+    ///      to the replacement and must NOT call this; expiry is not terminal
+    ///      (the ETH is still escrowed through the refund window). Prior-
+    ///      generation tickets are skipped — onGameStarted already zeroed the
+    ///      meters, so their disposal must not touch the current game's price.
+    ///      Must be called BEFORE the ticket's escrowAmount is zeroed.
+    function _onTicketDeactivated(Ticket storage t) internal {
+        if (t.generation != generation) return;
+        if (t.escrowToken == address(0)) {
+            uint256 amount = t.escrowAmount;
+            totalEthEscrow = amount >= totalEthEscrow ? 0 : totalEthEscrow - amount;
+        } else if (activeTimbEntries > 0) {
+            activeTimbEntries -= 1;
+        }
+    }
+
     // ─── Submit Entry (mint ticket) ──────────────────────────────────────────
 
     /**
      * @notice Mint a ticket for the next round.
      * @dev One eligible live ticket per wallet — enforced across rounds, not
-     *      just per-round. ETH entries: msg.value >= entryCostETH (excess
-     *      refunded). TIMBS entries: approve entryCostTIMBS first. Extra
-     *      rounds: TIMBS only, forfeited to the protocol sink, non-refundable.
+     *      just per-round. Prices are fixed for the round on the first entry:
+     *      ETH entries send msg.value >= the fixed ETH cost (excess refunded);
+     *      TIMBS entries approve the fixed TIMBS cost first. Read the live cost
+     *      via entryCostETH() / entryCostTIMBS() / nextRoundPrices() before
+     *      calling. Extra rounds: TIMBS only, forfeited to the protocol sink,
+     *      non-refundable.
      * @param string6     6-char entry string (A-Z / 0-9, no repeats).
      * @param useETH      True = principal in ETH, false = TIMBS.
      * @param extraRounds Rounds beyond the first (≤ MAX_EXTRA_ROUNDS).
@@ -394,29 +497,36 @@ contract GameRegistry is Ownable, ReentrancyGuard {
 
         _validateString(string6);
 
+        // Fix this round's prices off live protocol state before charging.
+        _fixPricesForRound();
+
         uint256 playRound = currentRound + 1;
         uint256 escrowAmount;
         address escrowToken;
 
         if (useETH) {
+            uint256 ethCost = fixedEthCost;
             // `<` alone also covers the free-entry (cost 0) case correctly.
-            if (msg.value < entryCostETH) {
-                revert WrongEscrowAmount(msg.value, entryCostETH);
+            if (msg.value < ethCost) {
+                revert WrongEscrowAmount(msg.value, ethCost);
             }
-            escrowAmount = entryCostETH;
+            escrowAmount = ethCost;
             escrowToken  = address(0);
-            if (msg.value > entryCostETH) {
-                (bool ok,) = payable(msg.sender).call{value: msg.value - entryCostETH}("");
+            if (msg.value > ethCost) {
+                (bool ok,) = payable(msg.sender).call{value: msg.value - ethCost}("");
                 if (!ok) revert EthTransferFailed();
             }
+            totalEthEscrow += ethCost;
         } else {
             if (msg.value > 0) {
                 (bool ok,) = payable(msg.sender).call{value: msg.value}("");
                 if (!ok) revert EthTransferFailed();
             }
-            escrowAmount = entryCostTIMBS;
+            uint256 timbsCost = fixedTimbsCost;
+            escrowAmount = timbsCost;
             escrowToken  = address(timbsToken);
-            timbsToken.safeTransferFrom(msg.sender, address(this), entryCostTIMBS);
+            timbsToken.safeTransferFrom(msg.sender, address(this), timbsCost);
+            activeTimbEntries += 1;
         }
 
         uint256 id = _mintTicket(
@@ -424,8 +534,9 @@ contract GameRegistry is Ownable, ReentrancyGuard {
             escrowAmount, escrowToken, 0
         );
 
-        // Extra rounds — TIMBS only, straight to the protocol sink.
-        uint256 additionalCost = extraRounds * entryCostTIMBS;
+        // Extra rounds — TIMBS only, priced at this round's fixed TIMBS cost,
+        // straight to the protocol sink (forfeited, non-refundable).
+        uint256 additionalCost = extraRounds * fixedTimbsCost;
         if (additionalCost > 0) {
             timbsToken.safeTransferFrom(msg.sender, protocolSink, additionalCost);
             emit ExtraRoundsSunk(msg.sender, id, additionalCost);
@@ -459,8 +570,14 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         }
         _validateString(newString6);
 
+        // Fix this round's prices so extra rounds bill at the current TIMBS cost.
+        // The replacement carries the senior ticket's principal unchanged, so the
+        // pricing meters (totalEthEscrow / activeTimbEntries) are net-neutral —
+        // the concession removes and the mint re-adds the same live seat.
+        _fixPricesForRound();
+
         // Pre-flight the extra-round TIMBS pull before any state changes.
-        uint256 additionalCost = extraRounds * entryCostTIMBS;
+        uint256 additionalCost = extraRounds * fixedTimbsCost;
         if (additionalCost > 0) {
             uint256 allowance_ = timbsToken.allowance(msg.sender, address(this));
             if (allowance_ < additionalCost) {
@@ -510,6 +627,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
 
         uint256 amount = t.escrowAmount;
         address token  = t.escrowToken;
+        _onTicketDeactivated(t);
         t.status       = TicketStatus.Cancelled;
         t.escrowAmount = 0;
         activeTicketOf[msg.sender] = 0;
@@ -545,6 +663,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
 
         uint256 amount = t.escrowAmount;
         address token  = t.escrowToken;
+        _onTicketDeactivated(t);
         t.status       = TicketStatus.Closed;
         t.escrowAmount = 0;
         _vaultRemove(ticketId);
@@ -602,7 +721,9 @@ contract GameRegistry is Ownable, ReentrancyGuard {
             Ticket storage t = tickets[id];
             if (t.status == TicketStatus.Pending && t.playRound <= round) {
                 t.status = TicketStatus.Active;
-                _vaultRegister(id, t.escrowToken, t.escrowAmount);
+                // Constant, ETH-denominated weight for every ticket — uniform
+                // yield share decoupled from the variable entry cost.
+                _vaultRegister(id, address(0), VAULT_WEIGHT_UNIT);
                 emit TicketActivated(id, round);
             }
         }
@@ -660,6 +781,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
 
             uint256 amount = t.escrowAmount;
             address token  = t.escrowToken;
+            _onTicketDeactivated(t);
             t.status = TicketStatus.Ineligible;
             _vaultRemove(id);
             if (activeTicketOf[t.owner] == id) activeTicketOf[t.owner] = 0;
@@ -715,6 +837,17 @@ contract GameRegistry is Ownable, ReentrancyGuard {
             _firstGameStarted = true;
         }
         currentRound = 1;
+
+        // Reset the dynamic-pricing meters for the fresh generation. Prior-game
+        // seats belong to the retired generation and no longer back the price;
+        // _onTicketDeactivated skips them, so clearing here can't underflow.
+        activeTimbEntries  = 0;
+        totalEthEscrow     = 0;
+        timbsPriceRefCount = 0;
+        fixedTimbsCost     = 0;
+        fixedEthCost       = 0;
+        pricedForRound     = 0;
+
         emit GenerationStarted(generation);
         emit CurrentRoundUpdated(1);
     }
@@ -829,20 +962,55 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         return stringEntrants[generation][currentRound + 1][string6].length;
     }
 
-    /// @notice Extra-round cost helper.
+    /// @notice Extra-round cost helper — priced at the next round's TIMBS cost.
     function additionalRoundCost(uint256 extraRounds) external view returns (uint256) {
-        return extraRounds * entryCostTIMBS;
+        (, uint256 timbsCost) = _previewPrices();
+        return extraRounds * timbsCost;
+    }
+
+    // ─── Views: Dynamic Entry Pricing (v5) ───────────────────────────────────
+
+    /// @dev What the next entry would pay. If this round's prices are already
+    ///      locked (first entry has fixed them), returns the locked pair;
+    ///      otherwise previews the fix off live state — mirrors
+    ///      _fixPricesForRound exactly, without mutating.
+    function _previewPrices() internal view returns (uint256 ethCost, uint256 timbsCost) {
+        if (pricedForRound == currentRound + 1) {
+            return (fixedEthCost, fixedTimbsCost);
+        }
+        ethCost = _computeEthCost(totalEthEscrow);
+        uint256 active = activeTimbEntries;
+        uint256 drift  = active > timbsPriceRefCount
+            ? active - timbsPriceRefCount
+            : timbsPriceRefCount - active;
+        timbsCost = (fixedTimbsCost == 0 || drift >= TIMBS_DEADBAND)
+            ? _computeTimbsCost(active)
+            : fixedTimbsCost;
+    }
+
+    /// @notice Current ETH entry cost (what the next entry pays). Preserves the
+    ///         pre-v5 ABI so any caller reading entryCostETH() keeps working.
+    function entryCostETH() external view returns (uint256 ethCost) {
+        (ethCost, ) = _previewPrices();
+    }
+
+    /// @notice Current TIMBS entry cost (what the next entry pays). ABI-
+    ///         compatible with the pre-v5 public getter.
+    function entryCostTIMBS() external view returns (uint256 timbsCost) {
+        (, timbsCost) = _previewPrices();
+    }
+
+    /// @notice Telegraph both next-round entry costs in one call, so the UI can
+    ///         show players exactly what they'll pay before they commit.
+    function nextRoundPrices() external view returns (uint256 ethCost, uint256 timbsCost) {
+        return _previewPrices();
     }
 
     // ─── Owner: Config ───────────────────────────────────────────────────────
 
-    /// @notice Governance-driven entry costs (per eligible token).
-    function setEntryCosts(uint256 _timbsCost, uint256 _ethCost) external onlyOwner {
-        if (_timbsCost == 0 || _ethCost == 0) revert ZeroAmount();
-        entryCostTIMBS = _timbsCost;
-        entryCostETH   = _ethCost;
-        emit EntryCostUpdated(_timbsCost, _ethCost);
-    }
+    // Entry costs are fully dynamic in v5 (computed from live protocol state and
+    // fixed per round) — there is no governance setter. The pricing constants
+    // (floors, threshold, divisor, deadband) are compile-time and immutable.
 
     function setTimbPrize(address _timbPrize) external onlyOwner {
         if (_timbPrize == address(0)) revert ZeroAddress();
@@ -868,6 +1036,12 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     function adminMarkIneligible(uint256 ticketId) external onlyOwner {
         Ticket storage t = tickets[ticketId];
         if (t.id == 0) revert TicketNotFound(ticketId);
+        // Only a still-counted (Pending/Active) ticket owns a live pricing seat;
+        // release it once. Re-flagging an already-terminal ticket must not touch
+        // the meter.
+        if (t.status == TicketStatus.Pending || t.status == TicketStatus.Active) {
+            _onTicketDeactivated(t);
+        }
         t.status = TicketStatus.Ineligible;
         _vaultRemove(ticketId);
         if (activeTicketOf[t.owner] == ticketId) activeTicketOf[t.owner] = 0;
