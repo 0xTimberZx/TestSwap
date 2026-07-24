@@ -214,3 +214,54 @@ Notes:
 4. Run `forge test --gas-report` + `forge snapshot` to baseline real numbers.
 5. If L1: implement Finding 1 behind a re-tested PR, confirm with
    `forge snapshot --diff`.
+
+---
+
+## v5 — Dynamic entry pricing  *(deployed `0xBAb1…8530`)*
+
+Entry costs moved from static (`setEntryCosts`) to computed-on-chain, **fixed
+per round**: ETH = `escrow ≤ 1.1 ETH ? 0.001 : escrow/1000`; TIMBS =
+`2 + activeTimbEntries` with a ±2 deadband. Notes across the three axes.
+
+### Gas
+- **First entry of a round** now also runs `_fixPricesForRound`, writing
+  `fixedEthCost`, `fixedTimbsCost`, `pricedForRound` and (on a TIMBS re-fix)
+  `timbsPriceRefCount` — up to ~4 SSTOREs on the round's opening entry.
+  Subsequent entries hit the `pricedForRound` early-return and pay only the
+  meter bump.
+- **Every entry** bumps one meter (`totalEthEscrow` or `activeTimbEntries`);
+  **every terminal exit** (cancel / refund / forfeit / admin) decrements it once
+  via `_onTicketDeactivated` — one extra SLOAD+SSTORE per entry and per exit vs v4.
+- **`setEntryCosts` removed** — one fewer governance function + its slots.
+- Baseline with `forge test --gas-report` on `GameRegistryDynamicPricing.t.sol`
+  before/after any refactor.
+
+### Security invariants (reviewed)
+- **Per-round price lock:** price is fixed on the round's *first* entry and held
+  via the `pricedForRound` guard → no intra-round price MEV; nobody can spike
+  your cost after you've committed within the round.
+- **Seat conservation:** +1 at submit, −1 at exactly one terminal exit.
+  `_onTicketDeactivated` is generation-scoped and underflow-guarded (can't go
+  negative or double-count). Concession (`replaceEntry`) is net-neutral (seat
+  carries to the replacement); expiry is *not* terminal (ETH stays escrowed
+  through the refund window). Covered by the 12 tests in
+  `GameRegistryDynamicPricing.t.sol`.
+- **Escrow-driven ETH price** (`escrow/1000`): a whale could inflate escrow to
+  make ETH entries dear — but that ETH also backs the pot they're competing for,
+  so it's self-aligning. Considered, benign.
+- **Vault weight decoupled:** activation registers a constant `VAULT_WEIGHT_UNIT`
+  (1e14, ETH-denominated) for both tokens, so yield share is uniform per ticket
+  regardless of the variable cost.
+- **Migration:** the old v4 registry (`0xfca8…B5B4`) keeps its in-flight tickets,
+  reclaimable there via `reclaimFromPastGame`; the shared vault carries
+  negligible stale weight until those exit.
+
+### Frontend / DebugHub
+- ETH cost floats, so a round rollover between the quoted price and a landing tx
+  can undershoot `msg.value` → `WrongEscrowAmount` (`0x0ee6446f`). `compete.js`
+  now re-reads `entryCostETH()` immediately before `submitEntry` and sends a +2%
+  buffer (refunded on-chain) to absorb the drift, and `ENTRY_REVERTS` decodes
+  `WrongEscrowAmount` (+ `ActiveTicketExists`, `NoLiveTicket`, `ContractPaused`)
+  to plain-language guidance.
+- TIMBS side is unaffected: the frontend approves `MaxUint256`, so allowance is
+  never the binding constraint under a moving price.
