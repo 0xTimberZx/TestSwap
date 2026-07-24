@@ -484,6 +484,16 @@ async function updateCostDisplay() {
 
   el.textContent = base;
 
+  // Dynamic-pricing hint: entry costs are computed on-chain and fixed per round.
+  // ETH floats with the pot's ETH escrow (0.001 floor); TIMBS steps with the
+  // live entry count (2 floor). What's shown is locked for the round you enter.
+  const hintEl = document.getElementById("entry-cost-hint");
+  if (hintEl) {
+    hintEl.textContent = selectedToken.isNative
+      ? "Floats with the pot · 0.001 ETH floor"
+      : "Scales with entries · 2 TIMBS floor";
+  }
+
   const noteEl = document.getElementById("extra-cost-note");
   if (extraRounds > 0 && noteEl) {
     try {
