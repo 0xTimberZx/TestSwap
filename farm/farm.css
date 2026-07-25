@@ -305,3 +305,14 @@
   border-radius: 999px;
   vertical-align: 1px;
 }
+
+/* Emissions status per pool — live period vs. ended (see waitForReadBlock note). */
+.pool-emit {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  color: var(--muted, #8a94a6);
+  letter-spacing: 0.01em;
+}
+.pool-emit .emit-val { font-weight: 600; }
+.pool-emit.is-live .emit-val { color: var(--green); }
+.pool-emit.is-ended .emit-val { color: var(--amber, #d9a441); }

@@ -34,7 +34,7 @@
     }
   </script>
   <link rel="stylesheet" href="../style.css?v=20260724h" />
-  <link rel="stylesheet" href="farm.css?v=20260718e" />
+  <link rel="stylesheet" href="farm.css?v=20260725b" />
 </head>
 <body>
 
@@ -139,6 +139,8 @@
           </div>
         </div>
 
+        <div class="pool-emit" id="staking-emit">Emissions: <span class="emit-val">—</span></div>
+
         <button class="add-wallet-chip" title="Add TIMBS to your wallet"
                 onclick="addTokenToWallet({ address: ADDRESSES.TIMBSToken, symbol: 'TIMBS', decimals: 18 })">
           ＋ Add TIMBS to wallet
@@ -191,6 +193,8 @@
           </div>
         </div>
 
+        <div class="pool-emit" id="farm-emit">Emissions: <span class="emit-val">—</span></div>
+
         <div class="pool-input-row">
           <input id="farm-amount" class="pool-input" type="number" placeholder="0.0 LP" />
           <button class="pool-max-btn" onclick="setAmount('farm', 100)">MAX</button>
@@ -241,7 +245,7 @@
   </footer>
 
   <script src="../config.js?v=20260724c"></script>
-  <script src="farm.js?v=20260725a"></script>
+  <script src="farm.js?v=20260725b"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
