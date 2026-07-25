@@ -73,7 +73,7 @@ const STAKE_BOOTSTRAP_BPS = BigInt(process.env.STAKE_BOOTSTRAP_BPS || "2000"); /
 // executeBuyback, whose burn/reserve/waterfall split is what ultimately funds
 // the epoch grants. All knobs have defaults — no new required secrets.
 const BUYBACK_ENABLED  = (process.env.BUYBACK_ENABLED ?? "true") !== "false";
-const BUYBACK_MIN_ETH  = ethers.parseEther(process.env.BUYBACK_MIN_ETH || "0.001"); // skip dust
+const BUYBACK_MIN_ETH  = ethers.parseEther(process.env.BUYBACK_MIN_ETH || "0.005"); // skip dust — pool fees until a buy is worth making
 const BUYBACK_SPEND_BPS = BigInt(process.env.BUYBACK_SPEND_BPS || "10000"); // % of available ETH (100%)
 const BUYBACK_SLIP_BPS  = BigInt(process.env.BUYBACK_SLIPPAGE_BPS || "1500"); // 15% — thin testnet pools
 
