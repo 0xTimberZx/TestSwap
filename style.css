@@ -830,16 +830,22 @@ body { padding-top: 60px; }
 .b1 .basin-fill { height: 82%; } .b2 .basin-fill { height: 62%; } .b3 .basin-fill { height: 38%; }
 .basin-fill::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,0.16) 50%, transparent 70%);
+  background: linear-gradient(100deg, transparent 28%, rgba(255,255,255,0.20) 50%, transparent 72%);
   background-size: 220% 100%;
-  animation: tide-sweep 3.2s ease-in-out infinite;
+  background-position: -120% 0;
+  animation: tide-sweep 2.6s linear infinite;
 }
+/* Cascade the sheen left → right across the descending basins (farm →
+   staking → boost) so the gleam reads as one fluid flow pouring down the
+   waterfall, not three bins shimmering in place. */
+.b2 .basin-fill::after { animation-delay: 0.45s; }
+.b3 .basin-fill::after { animation-delay: 0.9s; }
 .basin-name { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--text-2); text-align: center; }
 .basin-ord { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-align: center; }
 .cascade-cap { font-size: 13px; color: var(--text-2); margin-top: 16px; line-height: 1.5; }
 .cascade-cap strong { color: var(--green); font-weight: 700; }
 .cascade-src { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; color: var(--text-3); margin-bottom: 14px; }
-@keyframes tide-sweep { 0% { background-position: 120% 0; } 60%, 100% { background-position: -120% 0; } }
+@keyframes tide-sweep { from { background-position: -120% 0; } to { background-position: 120% 0; } }
 @media (prefers-reduced-motion: reduce) { .basin-fill::after { animation: none; } }
 @media (max-width: 860px) { .cycle-grid { grid-template-columns: 1fr; } }
 
