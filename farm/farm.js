@@ -166,12 +166,18 @@ async function refreshEmit(pool, contract) {
   const now = Math.floor(Date.now() / 1000);
   const end = pf.toNumber();
   const perDay = fmtStake(rate.mul(86400));
+  // The APR badge is estimatedAPR() off the LAST STORED rate — it keeps printing
+  // a big number after the period ends, contradicting the "ended" line. When the
+  // pool isn't actually emitting, mark the badge Paused instead of a stale APR.
+  const aprEl = document.getElementById(pool + "-apr");
   if (end > now) {
     el.classList.add("is-live");
     if (val) val.textContent = `live · ${perDay}/day · ${fmtStake(rate.mul(end - now))} TIMBS left (ends in ${fmtDur(end - now)})`;
+    if (aprEl) aprEl.classList.remove("apr-paused");
   } else {
     el.classList.add("is-ended");
     if (val) val.textContent = end === 0 ? "not started" : `⚠ ended ${fmtDur(now - end)} ago — needs refunding`;
+    if (aprEl) { aprEl.textContent = "Paused"; aprEl.classList.add("apr-paused"); }
   }
 }
 
