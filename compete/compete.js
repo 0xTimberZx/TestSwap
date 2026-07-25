@@ -977,6 +977,7 @@ async function handleSubmitEntry() {
     extraRounds = 0;
     document.getElementById("extra-rounds-val").textContent = "0";
     renderPlaysRound(currentRoundNum);
+    loadEntryCosts();     // our own entry moves the dynamic price — re-quote it
     updateCostDisplay();  // clear the stale "+N TIMBS" extra-rounds note
     await loadMyEntries();
     setTimeout(() => { updateEntryButton(); }, 2000);
@@ -1772,6 +1773,10 @@ function handleDisconnect() {
   // Keep the entry-token balance current (drops after an entry, rises after a
   // faucet/transfer) without the user having to touch the selector.
   setInterval(whenVisible(refreshEntryBalance), 12000);
+  // v5 prices float with entries and re-fix per round, so a load-time read goes
+  // stale as soon as anyone enters — the extras note (a live read) then shows a
+  // different price than the Entry cost box. Keep the base cost live too.
+  setInterval(whenVisible(loadEntryCosts), 12000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) { pollRoundState(); refreshEntryBalance(); }
   });
