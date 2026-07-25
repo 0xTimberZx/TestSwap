@@ -316,3 +316,7 @@
 .pool-emit .emit-val { font-weight: 600; }
 .pool-emit.is-live .emit-val { color: var(--green); }
 .pool-emit.is-ended .emit-val { color: var(--amber, #d9a441); }
+
+/* A lapsed pool advertises a stale high APR from its last stored rate; show it
+   as Paused (amber) to match the "ended — needs refunding" emissions line. */
+.pool-apr.apr-paused { color: var(--amber, #d9a441); }
