@@ -345,9 +345,13 @@ async function refreshBoostPool(boost, pid, totalWeight, windowOpen = true) {
     // shown is the pool's trading-fee return (≈0.0% on a quiet testnet pair),
     // NOT the phantom emission rate. The "idle" marker moves to the Weight
     // slot (emission share is meaningless while nothing's emitting).
+    // estimatedPoolAPR divides by TVL, so a pool seeded with dust prints the
+    // phantom ">10,000%" cap. An APR on an ~empty pool is meaningless — show
+    // "New" until it holds a real stake, so the cards don't all scream >10,000%.
+    const boostDust = info.totalStaked.lt(ethers.utils.parseUnits("0.01", 18));
     document.getElementById(`boost-${pid}-apr`).textContent   = info.paused
       ? "paused"
-      : (windowOpen ? formatApr(apr) : "0.0% APR");
+      : (!windowOpen ? "0.0% APR" : (boostDust ? "New" : formatApr(apr)));
     document.getElementById(`boost-${pid}-total`).textContent = fmtStake(info.totalStaked);
     document.getElementById(`boost-${pid}-weight`).textContent = info.paused
       ? "—"
