@@ -229,9 +229,13 @@ async function pairName(lp) {
       new ethers.Contract(t0, SYMBOL_ABI, readProv()).symbol().catch(() => "?"),
       new ethers.Contract(t1, SYMBOL_ABI, readProv()).symbol().catch(() => "?")
     ]);
+    // Only cache a CLEAN resolve. A transient RPC hiccup used to get cached
+    // for the whole session, leaving cards stuck as "?/? LP" / "0x1234…abcd LP".
+    // Return the fallback uncached so the next refresh retries and self-heals.
+    if (s0 === "?" || s1 === "?") return s0 + "/" + s1;
     _pairNames[lp] = pairLabelFor(t0, s0, t1, s1);
   } catch {
-    _pairNames[lp] = lp.slice(0, 6) + "…" + lp.slice(-4);
+    return lp.slice(0, 6) + "…" + lp.slice(-4);
   }
   return _pairNames[lp];
 }
@@ -345,13 +349,13 @@ async function refreshBoostPool(boost, pid, totalWeight, windowOpen = true) {
     // shown is the pool's trading-fee return (≈0.0% on a quiet testnet pair),
     // NOT the phantom emission rate. The "idle" marker moves to the Weight
     // slot (emission share is meaningless while nothing's emitting).
-    // estimatedPoolAPR divides by TVL, so a pool seeded with dust prints the
-    // phantom ">10,000%" cap. An APR on an ~empty pool is meaningless — show
-    // "New" until it holds a real stake, so the cards don't all scream >10,000%.
-    const boostDust = info.totalStaked.lt(ethers.utils.parseUnits("0.01", 18));
+    // estimatedPoolAPR divides by TVL, so an EMPTY pool prints the phantom
+    // ">10,000%" cap. Show "New" only when totalStaked is exactly zero —
+    // LP units are tiny by nature (0.0034 LP can be a real, earning stake),
+    // so any nonzero stake shows its true (capped) APR.
     document.getElementById(`boost-${pid}-apr`).textContent   = info.paused
       ? "paused"
-      : (!windowOpen ? "0.0% APR" : (boostDust ? "New" : formatApr(apr)));
+      : (!windowOpen ? "0.0% APR" : (info.totalStaked.isZero() ? "New" : formatApr(apr)));
     document.getElementById(`boost-${pid}-total`).textContent = fmtStake(info.totalStaked);
     document.getElementById(`boost-${pid}-weight`).textContent = info.paused
       ? "—"
