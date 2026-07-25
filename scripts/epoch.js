@@ -53,6 +53,13 @@ const STAKE_CAP_BPS    = 8_000;  // ≤ 0.80 × leftover
 const BOOST_DRAW_BPS   = 500;    // 5% of each farm claim
 const LOG_CHUNK        = Number(process.env.EPOCH_LOG_CHUNK || 40_000); // getLogs block-range chunk
 
+// Emission window sizing. The nominal window (ROUND_DURATION × ROUNDS_PER_EPOCH,
+// 36h) assumes rounds tick at their on-chain nominal rate. On a quiet chain they
+// run far slower, so a nominal window drains and the main pools go dark mid-epoch.
+// Size the window to the LAST epoch's real wall-clock × slack, with a floor.
+const EMIT_SLACK         = Number(process.env.EMIT_SLACK || "2");   // 2× the last epoch's measured length
+const EMIT_FLOOR_SECONDS = Number(process.env.EMIT_FLOOR_DAYS || "4") * 86_400; // never below 4 days
+
 // ── Buyback automation (section 0) ──────────────────────────────────────────
 // Each run converts accrued protocol-fee ETH in the Treasury into TIMBS via
 // executeBuyback, whose burn/reserve/waterfall split is what ultimately funds
@@ -300,9 +307,18 @@ async function main() {
     B -= stakeGrant;
     const boostBudget = B;
 
-    const duration = Number(await prize.ROUND_DURATION()) * ROUNDS_PER_EPOCH;
+    // Window must OUTLAST the epoch's real wall-clock, not the nominal round time.
+    // Base it on how long the previous epoch actually took (× slack), floored so a
+    // first/one-off epoch can't dead-zone. Synthetix (notifyRewardAmount) rolls any
+    // leftover into the next notify, so over-provisioning only smooths the rate.
+    const nominalDuration = Number(await prize.ROUND_DURATION()) * ROUNDS_PER_EPOCH;
+    const nowTime  = Math.floor(Date.now() / 1000);
+    const lastTime = Number(state.lastEpochTime || 0);
+    const observed = lastTime ? Math.max(0, nowTime - lastTime) : 0;
+    const duration = Math.max(nominalDuration, EMIT_FLOOR_SECONDS, Math.ceil(observed * EMIT_SLACK));
 
     console.log(`EPOCH SETTLE  z=${fmt(z)} y=${fmt(y)} w=${fmt(w)}`);
+    console.log(`  window: nominal=${nominalDuration}s observed=${observed}s -> duration=${duration}s (${(duration/86400).toFixed(1)}d)`);
     console.log(`  farmGrant=${fmt(farmGrant)} stakeGrant=${fmt(stakeGrant)} boostBudget=${fmt(boostBudget)} duration=${duration}s`);
 
     if (!DRY_RUN) {
@@ -326,6 +342,7 @@ async function main() {
 
     state.lastEpochRound   = round;
     state.lastEpochBlock   = nowBlock;
+    state.lastEpochTime    = nowTime;   // wall-clock, for the next epoch's adaptive window
     state.boostCursorBlock = nowBlock;
     state.boostBudget      = boostBudget.toString();
     state.boostDrawn       = "0";
