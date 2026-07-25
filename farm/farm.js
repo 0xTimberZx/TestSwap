@@ -5,6 +5,8 @@ const STAKING_ABI = [
   "function totalStaked() external view returns (uint256)",
   "function earned(address account) external view returns (uint256)",
   "function estimatedAPR() external view returns (uint256 aprBps)",
+  "function periodFinish() external view returns (uint256)",
+  "function rewardRatePerSecond() external view returns (uint256)",
   "function stake(uint256 amount) external",
   "function unstake(uint256 amount) external",
   "function claimRewards() external"
@@ -14,6 +16,8 @@ const FARM_ABI = [
   "function totalStaked() external view returns (uint256)",
   "function earned(address account) external view returns (uint256)",
   "function estimatedEmissionsAPR() external view returns (uint256 aprBps)",
+  "function periodFinish() external view returns (uint256)",
+  "function rewardRatePerSecond() external view returns (uint256)",
   "function lpToken() external view returns (address)",
   "function stake(uint256 amount) external",
   "function unstake(uint256 amount) external",
@@ -97,6 +101,12 @@ async function loadPool(pool) {
     document.getElementById(pool + "-total").textContent = fmtStake(total);
     document.getElementById(pool + "-apr").textContent = formatApr(apr);
 
+    // Emissions status — a Synthetix-style period, so rewards stop the moment
+    // block.timestamp >= periodFinish even though APR keeps printing the last
+    // stored rate. Surface it so a stalled emission (e.g. keeper stopped funding)
+    // is visible on-page, not just in a console.
+    refreshEmit(pool, contract).catch(() => {});
+
     if (userAddress) {
       const wallet = new ethers.Contract(cfg.token, ERC20_ABI, readProv());
       const [mine, earned, inWallet] = await Promise.all([
@@ -130,6 +140,38 @@ async function loadPool(pool) {
     }
   } catch (e) {
     console.warn(`loadPool(${pool}):`, e.message);
+  }
+}
+
+// Compact duration: 3661 -> "1h 1m", 90061 -> "1d 1h 1m".
+function fmtDur(s) {
+  s = Math.max(0, Math.floor(s));
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return (d ? d + "d " : "") + (d || h ? h + "h " : "") + m + "m";
+}
+
+// Populate a classic pool's "Emissions:" line from its Synthetix-style period.
+async function refreshEmit(pool, contract) {
+  const el = document.getElementById(pool + "-emit");
+  if (!el) return;
+  const val = el.querySelector(".emit-val");
+  el.classList.remove("is-live", "is-ended");
+  let pf, rate;
+  try {
+    [pf, rate] = await Promise.all([contract.periodFinish(), contract.rewardRatePerSecond()]);
+  } catch {
+    if (val) val.textContent = "—";
+    return;
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const end = pf.toNumber();
+  const perDay = fmtStake(rate.mul(86400));
+  if (end > now) {
+    el.classList.add("is-live");
+    if (val) val.textContent = `live · ${perDay}/day · ${fmtStake(rate.mul(end - now))} TIMBS left (ends in ${fmtDur(end - now)})`;
+  } else {
+    el.classList.add("is-ended");
+    if (val) val.textContent = end === 0 ? "not started" : `⚠ ended ${fmtDur(now - end)} ago — needs refunding`;
   }
 }
 
