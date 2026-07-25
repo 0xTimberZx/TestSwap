@@ -35,6 +35,19 @@ function readProv() {
   return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
 }
 
+// The public Arb Sepolia RPC is load-balanced across nodes that lag each other,
+// so a state read fired immediately after confirmTx can hit a node still a block
+// behind and return pre-tx values (e.g. a "stale" staked balance after an
+// unstake). Wait for our read provider to reach the tx's block before refreshing.
+async function waitForReadBlock(minBlock, { tries = 24, intervalMs = 500 } = {}) {
+  if (!minBlock) return;
+  const prov = readProv();
+  for (let i = 0; i < tries; i++) {
+    try { if ((await prov.getBlockNumber()) >= minBlock) return; } catch { /* transient RPC read */ }
+    await new Promise(res => setTimeout(res, intervalMs));
+  }
+}
+
 // APR is emission-rate ÷ total-staked, so with a tiny testnet stake it prints
 // absurd figures (52,911% / 1,310,329%). Cap the DISPLAY so it reads sanely —
 // the on-chain number is unchanged; this is presentation only.
@@ -370,11 +383,12 @@ async function handleBoostStake(pid) {
     DebugHub.logCheckpoint("Boost:Stake Requested", "pass");
     const boost = await writeContract(boostAddr(), BOOST_ABI);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await confirmTx(await boost.deposit(pid, amountWei, { ...gas, nonce }));
+    const rcpt = await confirmTx(await boost.deposit(pid, amountWei, { ...gas, nonce }));
     DebugHub.logCheckpoint("Boost:Stake Confirmed", "pass");
 
     document.getElementById(`boost-${pid}-amount`).value = "";
     btn.textContent = "Staked ✓";
+    await waitForReadBlock(rcpt.blockNumber);
     await loadBoost();
     setTimeout(() => { btn.textContent = "Stake"; btn.disabled = false; }, 1800);
   } catch (err) {
@@ -404,11 +418,12 @@ async function handleBoostUnstake(pid) {
     btn.textContent = "Withdrawing…";
     DebugHub.logCheckpoint("Boost:Unstake Requested", "pass");
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await confirmTx(await boost.withdraw(pid, amountWei, { ...gas, nonce }));
+    const rcpt = await confirmTx(await boost.withdraw(pid, amountWei, { ...gas, nonce }));
     DebugHub.logCheckpoint("Boost:Unstake Confirmed", "pass");
 
     document.getElementById(`boost-${pid}-amount`).value = "";
     btn.textContent = "Withdrawn ✓";
+    await waitForReadBlock(rcpt.blockNumber);
     await loadBoost();
     setTimeout(() => { btn.textContent = "Withdraw"; btn.disabled = false; }, 1800);
   } catch (err) {
@@ -429,10 +444,11 @@ async function handleBoostClaim(pid) {
     DebugHub.logCheckpoint("Boost:Claim Requested", "pass");
     const boost = await writeContract(boostAddr(), BOOST_ABI);
     const gas = await getGasParams(); const nonce = await getPendingNonce();
-    await confirmTx(await boost.claimRewards(pid, { ...gas, nonce }));
+    const rcpt = await confirmTx(await boost.claimRewards(pid, { ...gas, nonce }));
     DebugHub.logCheckpoint("Boost:Claim Confirmed", "pass");
 
     btn.textContent = "Claimed ✓";
+    await waitForReadBlock(rcpt.blockNumber);
     await loadBoost();
     setTimeout(() => { btn.textContent = "Claim Rewards"; }, 1800);
   } catch (err) {
@@ -504,11 +520,12 @@ async function handleStake(pool) {
     const nonce = await getPendingNonce();
     const tx = await poolContract.stake(amountWei, { ...gas, nonce });
     DebugHub.logCheckpoint("Stake Submitted", "pass");
-    await confirmTx(tx);
+    const rcpt = await confirmTx(tx);
     DebugHub.logCheckpoint("Stake Confirmed", "pass");
 
     document.getElementById(pool + "-amount").value = "";
     btn.textContent = "Staked ✓";
+    await waitForReadBlock(rcpt.blockNumber);
     await loadPool(pool);
     setTimeout(() => { btn.textContent = "Stake"; btn.disabled = false; }, 1800);
 
@@ -548,11 +565,12 @@ async function handleUnstake(pool) {
     const nonce = await getPendingNonce();
     const tx = await poolContract.unstake(amountWei, { ...gas, nonce });
     DebugHub.logCheckpoint("Unstake Submitted", "pass");
-    await confirmTx(tx);
+    const rcpt = await confirmTx(tx);
     DebugHub.logCheckpoint("Unstake Confirmed", "pass");
 
     document.getElementById(pool + "-amount").value = "";
     btn.textContent = "Unstaked ✓";
+    await waitForReadBlock(rcpt.blockNumber);
     await loadPool(pool);
     setTimeout(() => { btn.textContent = "Unstake"; btn.disabled = false; }, 1800);
 
@@ -581,10 +599,11 @@ async function handleClaim(pool) {
     const nonce = await getPendingNonce();
     const tx = await poolContract.claimRewards({ ...gas, nonce });
     DebugHub.logCheckpoint("Claim Submitted", "pass");
-    await confirmTx(tx);
+    const rcpt = await confirmTx(tx);
     DebugHub.logCheckpoint("Claim Confirmed", "pass");
 
     btn.textContent = "Claimed ✓";
+    await waitForReadBlock(rcpt.blockNumber);
     await loadPool(pool);
     setTimeout(() => { btn.textContent = "Claim Rewards"; }, 1800);
 
