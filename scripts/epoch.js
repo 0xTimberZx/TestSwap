@@ -60,6 +60,14 @@ const LOG_CHUNK        = Number(process.env.EPOCH_LOG_CHUNK || 40_000); // getLo
 const EMIT_SLACK         = Number(process.env.EMIT_SLACK || "2");   // 2× the last epoch's measured length
 const EMIT_FLOOR_SECONDS = Number(process.env.EMIT_FLOOR_DAYS || "4") * 86_400; // never below 4 days
 
+// Post-blackout restart. The waterfall is claim-driven (farm 0.8×y, staking
+// 1.25×w) — after an emission blackout y = w = 0, so the grants stay zero even
+// with budget in hand: grants need claims, claims need emissions. Deadlock.
+// When a silo's activity metric is zero but z > 0, bootstrap it with a fixed
+// slice of z so the loop re-ignites; claim-driven sizing resumes next epoch.
+const FARM_BOOTSTRAP_BPS  = BigInt(process.env.FARM_BOOTSTRAP_BPS  || "3000"); // 30% of z
+const STAKE_BOOTSTRAP_BPS = BigInt(process.env.STAKE_BOOTSTRAP_BPS || "2000"); // 20% of z
+
 // ── Buyback automation (section 0) ──────────────────────────────────────────
 // Each run converts accrued protocol-fee ETH in the Treasury into TIMBS via
 // executeBuyback, whose burn/reserve/waterfall split is what ultimately funds
@@ -299,9 +307,18 @@ async function main() {
 
     // Waterfall — farm → staking → boost, one shared budget, never exceeds z.
     let B = z;
-    const farmGrant = (() => { const g = (y * BigInt(FARM_SHARE_BPS)) / 10_000n; return g < B ? g : B; })();
+    let farmWant = (y * BigInt(FARM_SHARE_BPS)) / 10_000n;
+    if (farmWant === 0n && z > 0n) {
+      farmWant = (z * FARM_BOOTSTRAP_BPS) / 10_000n;   // restart after a blackout
+      console.log(`  farm bootstrap: no claims in window, seeding ${fmt(farmWant)} from z`);
+    }
+    const farmGrant = farmWant < B ? farmWant : B;
     B -= farmGrant;
-    const stakeWant = (w * BigInt(STAKE_BOOST_BPS)) / 10_000n;
+    let stakeWant = (w * BigInt(STAKE_BOOST_BPS)) / 10_000n;
+    if (stakeWant === 0n && z > 0n) {
+      stakeWant = (z * STAKE_BOOTSTRAP_BPS) / 10_000n; // restart after a blackout
+      console.log(`  stake bootstrap: no claims in window, seeding ${fmt(stakeWant)} from z`);
+    }
     const stakeCap  = (B * BigInt(STAKE_CAP_BPS)) / 10_000n;
     const stakeGrant = stakeWant < stakeCap ? stakeWant : stakeCap;
     B -= stakeGrant;
