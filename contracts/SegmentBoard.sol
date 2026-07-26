@@ -92,7 +92,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
     /// @dev Pocket colouring: 18 red / 18 black over the ordered alphabet.
     ///      Bit i set => symbol i is red. Alternating gives the 18/18 split.
-    uint64 constant RED_MASK = 0x555555555;
+    uint64 constant RED_MASK = 0x55555555;
 
     /// @dev Vowel set {A,E,I,O,U,Y} as alphabet-index bits.
     uint64 constant VOWEL_MASK =
@@ -289,6 +289,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         ledger.fundSeed(treasury, TABLE_SEED);
 
         emit TableOpened(tableId, seedRound, seedString, t.pickTime);
+        return tableId;
     }
 
     /// @notice Take a seat before the entry cutoff. `ticket` is the wallet's entry
@@ -439,6 +440,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (t.lockedMask & (uint8(1) << (segment - 1)) != 0) {
             revert SegmentAlreadyLocked(segment);
         }
+        return t;
     }
 
     function _applyLock(
@@ -452,9 +454,9 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         bytes1 c  = ALPHABET[idx];
 
         // write the char into the accumulating six-char string
-        bytes memory cur = abi.encodePacked(t.lockedChars);
+        bytes6 cur = t.lockedChars;
         cur[segment - 1]  = c;
-        t.lockedChars     = bytes6(cur);
+        t.lockedChars     = cur;
         t.lockedMask     |= uint8(1) << (segment - 1);
 
         emit SegmentLocked(tableId, segment, c, viaFallback);
@@ -510,11 +512,13 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
     /// @dev Pot = every chip in the pool, plus the seed share if the pool is
     ///      contested (>= SEED_MIN_WALLETS distinct wallets, §9).
-    function _potOf(Bet[] storage bs, uint256 n) internal view returns (uint256 pot) {
+    function _potOf(Bet[] storage bs, uint256 n) internal view returns (uint256) {
+        uint256 pot;
         for (uint256 i; i < n; ++i) {
             pot += CHIPS[bs[i].chipIdx];
         }
         if (n >= SEED_MIN_WALLETS) pot += SEED_SHARE;
+        return pot;
     }
 
     /// @dev Resolve winners and stash their raw weights (stake x fair multiple).
@@ -529,20 +533,31 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         amt = new uint256[](n);
         for (uint256 i; i < n; ++i) {
             Bet storage b = bs[i];
-            who[i] = b.wallet;
+            address wallet = b.wallet;
+            who[i] = wallet;
             bool won;
             if (pool == DD_POOL) {
                 won = ddWins;
             } else {
                 // pool == segment - 1, so it indexes the ticket's char directly
-                won = _wins(b.kind, b.pick, charIdx, seats[tableId][b.wallet].ticket[pool]);
+                bytes1 tc = _getTicketChar(tableId, wallet, pool);
+                won = _wins(b.kind, b.pick, charIdx, tc);
             }
             if (won) {
                 uint256 weight = CHIPS[b.chipIdx] * _weightBps(b.kind);
                 amt[i] = weight;
                 totalWeight += weight;
             }
+            else {
+                amt[i] = 0;
+            }
         }
+        return (who, amt, totalWeight);
+    }
+
+    function _getTicketChar(uint256 tableId, address wallet, uint8 pool) internal view returns (bytes1) {
+        Seat storage s = seats[tableId][wallet];
+        return s.ticket[pool];
     }
 
     // ─── Retire (§7) ───────────────────────────────────────────────────────────
@@ -634,6 +649,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (tableId == 0 || tableId > tableCount) revert TableUnknown();
         t = tables[tableId];
         if (t.retired) revert TableRetiredAlready();
+        return t;
     }
 
     function _salt(uint256 tableId, uint8 segment) internal pure returns (bytes32) {
@@ -659,15 +675,15 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
             if (pick > 2) revert BadPick();
         } else if (kind == KIND_COLOR || kind == KIND_LOWHIGH) {
             if (pick > 1) revert BadPick();
-        } else if (pick != 0) {
-            revert BadPick(); // set bets carry no pick
+        } else if (kind == KIND_VOWELS || kind == KIND_LETTER || kind == KIND_NUMBER || kind == KIND_YOURTICKET) {
+            if (pick != 0) revert BadPick(); // set bets carry no pick
         }
     }
 
     function _wins(uint8 kind, uint8 pick, uint8 idx, bytes1 ticketChar)
         internal
         pure
-        returns (bool)
+        returns (bool won)
     {
         if (kind == KIND_EXACTLY)  return idx == pick;
         if (kind == KIND_COLUMN)   return idx % 3 == pick;
