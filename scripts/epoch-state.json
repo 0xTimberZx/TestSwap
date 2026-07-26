@@ -1,7 +1,8 @@
 {
-  "lastEpochRound": 49,
-  "lastEpochBlock": 290997466,
-  "boostCursorBlock": 290997466,
-  "boostBudget": "0",
-  "boostDrawn": "0"
+  "lastEpochRound": 56,
+  "lastEpochBlock": 291659807,
+  "boostCursorBlock": 291659807,
+  "boostBudget": "7973742038628348082514",
+  "boostDrawn": "0",
+  "lastEpochTime": 1785100330
 }
