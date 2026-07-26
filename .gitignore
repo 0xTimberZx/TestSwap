@@ -30,3 +30,6 @@ artifacts/
 
 # ─── Local scratch / generated exports (not part of the site) ─────────────────
 scratchpad/
+
+# scratch dir — never commit working copies of contracts here
+tmp/
