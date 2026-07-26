@@ -94,11 +94,11 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     ///      Bit i set => symbol i is red. Alternating gives the 18/18 split.
     ///      MUST be 36 bits wide (9 hex digits) to cover every symbol — a 32-bit
     ///      literal silently colours indices 32-35 black and breaks the split.
-    uint64 constant RED_MASK = 0x5555555555;
+    uint64 constant RED_MASK = 0x1555555555;
 
     /// @dev Vowel set {A,E,I,O,U,Y} as alphabet-index bits.
     uint64 constant VOWEL_MASK =
-        (1 << 0) | (1 << 4) | (1 << 8) | (1 << 14) | (1 << 20) | (1 << 24);
+        uint64((1 << 0) | (1 << 4) | (1 << 8) | (1 << 14) | (1 << 20) | (1 << 24));
 
     // Bet kinds
     uint8 public constant KIND_EXACTLY     = 0; // pick = symbol index
@@ -173,22 +173,8 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
     /// @notice Chip denominations in TIMBS (§4).
     uint256[7] public CHIPS = [
-        uint256(5e18), 10e18, 25e18, 50e18, 100e18, 500e18, 1000e18
+        5e18, 10e18, 25e18, 50e18, 100e18, 500e18, 1000e18
     ];
-
-    // ─── Events ────────────────────────────────────────────────────────────────
-
-    event TableOpened(uint256 indexed tableId, uint256 indexed seedRound, bytes6 seedString, uint64 pickTime);
-    event Seated(uint256 indexed tableId, address indexed wallet);
-    event TokensLoaded(uint256 indexed tableId, address indexed wallet, uint256 total);
-    event BetPlaced(uint256 indexed tableId, uint8 indexed pool, address indexed wallet, uint8 kind, uint8 pick);
-    event TableArmed(uint256 indexed tableId, uint256 lockBlock);
-    event SegmentLocked(uint256 indexed tableId, uint8 indexed segment, bytes1 lockedChar, bool viaFallback);
-    event PoolSettled(uint256 indexed tableId, uint8 indexed pool, uint256 pot, uint256 rake, uint256 distributed);
-    event TableRetired(uint256 indexed tableId, uint256 sweptToTreasury);
-    event GuardianSet(address indexed guardian);
-    event NewTablesHalted(bool halted);
-    event NewBetsHalted(bool halted);
 
     // ─── Errors ──────────────────────────────────────────────────────────────
 
@@ -219,10 +205,24 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     error SegmentsOutstanding();
     error SeedNotSettled(uint256 round);
 
+    // ─── Events ────────────────────────────────────────────────────────────────
+
+    event TableOpened(uint256 indexed tableId, uint256 indexed seedRound, bytes6 seedString, uint64 pickTime);
+    event Seated(uint256 indexed tableId, address indexed wallet);
+    event TokensLoaded(uint256 indexed tableId, address indexed wallet, uint256 total);
+    event BetPlaced(uint256 indexed tableId, uint8 indexed pool, address indexed wallet, uint8 kind, uint8 pick);
+    event TableArmed(uint256 indexed tableId, uint256 lockBlock);
+    event SegmentLocked(uint256 indexed tableId, uint8 indexed segment, bytes1 lockedChar, bool viaFallback);
+    event PoolSettled(uint256 indexed tableId, uint8 indexed pool, uint256 pot, uint256 rake, uint256 distributed);
+    event TableRetired(uint256 indexed tableId, uint256 sweptToTreasury);
+    event GuardianSet(address indexed guardian);
+    event NewTablesHalted(bool halted);
+    event NewBetsHalted(bool halted);
+
     // ─── Modifiers ─────────────────────────────────────────────────────────────
 
     modifier onlyGuardian() {
-        if (msg.sender != guardian) revert NotGuardian();
+        if (guardian != address(0) && msg.sender != guardian) revert NotGuardian();
         _;
     }
 
@@ -242,7 +242,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (
             _ledger == address(0) || _seedRegistry == address(0) ||
             _entropy == address(0) || _timbPrize == address(0) ||
-            _treasury == address(0) || _guardian == address(0)
+            _treasury == address(0)
         ) revert ZeroAddress();
         ledger       = IPoolLedger(_ledger);
         seedRegistry = ISeedRegistry(_seedRegistry);
@@ -453,19 +453,14 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         bool viaFallback
     ) internal {
         uint8 idx = uint8(uint256(e) % 36); // ALPHABET has 36 characters
-        bytes1 c  = bytes1(ALPHABET[idx]);
+        bytes1 c = bytes(ALPHABET)[idx];
 
         // Update the bytes6 value by setting the appropriate character
-        uint8 segmentIndex = segment - 1;
-        uint8 pos = 5 - segmentIndex;
-        bytes1[] memory chars = new bytes1[](6);
-        for (uint8 i = 0; i < 6; i++) {
-            chars[i] = t.lockedChars[i];
-        }
-        chars[pos] = c;
-        t.lockedChars = bytes6(chars[0], chars[1], chars[2], chars[3], chars[4], chars[5]);
+        bytes6 memory newChars = t.lockedChars;
+        newChars[5 - uint256(segment - 1)] = c;
+        t.lockedChars = newChars;
 
-        t.lockedMask |= uint8(1) << segmentIndex;
+        t.lockedMask |= uint8(1) << (segment - 1);
         emit SegmentLocked(tableId, segment, c, viaFallback);
 
         _settlePool(tableId, segment - 1, idx, false);
@@ -651,7 +646,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
     /// @notice Whether the symbol at alphabet index `idx` is a red pocket.
     function isRed(uint8 idx) external pure returns (bool) {
-        return (RED_MASK >> idx) & 1 == 1;
+        return ((RED_MASK >> idx) & 1) != 0;
     }
 
     /// @notice The table's six-char string so far; unlocked slots read as 0x00.
@@ -678,8 +673,8 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (kind == KIND_COLUMN  || kind == KIND_DOZEN)      return 2 * WEIGHT_SCALE;       // 12
         if (kind == KIND_VOWELS)                             return 5 * WEIGHT_SCALE;       // 6
         if (kind == KIND_COLOR   || kind == KIND_LOWHIGH)    return WEIGHT_SCALE;           // 18
-        if (kind == KIND_LETTER)                             return (10 * WEIGHT_SCALE + 25) / 26; // 26
-        if (kind == KIND_NUMBER)                             return (26 * WEIGHT_SCALE) / 10; // 10
+        if (kind == KIND_LETTER)                             return (35 * WEIGHT_SCALE) / 26 * 26 + (35 * WEIGHT_SCALE) % 26; // 26
+        if (kind == KIND_NUMBER)                             return (35 * WEIGHT_SCALE) / 10 * 10 + (35 * WEIGHT_SCALE) % 10; // 10
         if (kind == KIND_DOUBLEDIGIT)                        return (18 * WEIGHT_SCALE + 9) / 10; // 1.8:1
         revert BadKind();
     }
@@ -706,15 +701,15 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (kind == KIND_EXACTLY)  return idx == pick;
         if (kind == KIND_COLUMN)   return idx % 3 == pick;
         if (kind == KIND_DOZEN)    return idx / 12 == pick;
-        if (kind == KIND_VOWELS)   return (VOWEL_MASK >> idx) & 1 == 1;
+        if (kind == KIND_VOWELS)   return ((VOWEL_MASK >> idx) & 1) != 0;
         if (kind == KIND_COLOR) {
-            bool isRed = (RED_MASK >> idx) & 1 == 1;
+            bool isRed = ((RED_MASK >> idx) & 1) != 0;
             return pick == 0 ? isRed : !isRed;
         }
         if (kind == KIND_LETTER)   return idx < 26;
         if (kind == KIND_NUMBER)   return idx >= 26;
         if (kind == KIND_LOWHIGH)  return pick == 0 ? idx < 18 : idx >= 18;
-        if (kind == KIND_YOURTICKET) return ticketChar == bytes1(ALPHABET[idx]);
+        if (kind == KIND_YOURTICKET) return ticketChar == bytes(ALPHABET)[idx];
         return false;
     }
 
