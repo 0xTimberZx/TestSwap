@@ -28,7 +28,7 @@
 (function () {
   "use strict";
 
-  var SDK_VERSION = "1.2.0";
+  var SDK_VERSION = "1.2.1";
   var MAX_EVENTS = 200;
 
   var config = window.DEBUGHUB_CONFIG || {};
