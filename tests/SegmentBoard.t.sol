@@ -305,6 +305,64 @@ contract SegmentBoardTest is Test {
         assertEq(ledger.heldBalance(), ledger.totalCredited());
     }
 
+    // ─── re-arm: recovering a table whose lock block aged out ──────────────────
+
+    /// @dev Past BLOCKHASH_HORIZON the lock block's hash reads zero, so BOTH
+    ///      lockSegment and lockSegmentFallback revert while retire() still wants
+    ///      all six — the table would jam with every bet inside. On Arbitrum that
+    ///      horizon is ~65 seconds, so this is a live risk, not a corner case.
+    function test_RearmRecoversATableWhoseLockBlockExpired() public {
+        uint256 id = _openTable();
+        _seatAndBet(id);
+        vm.warp(block.timestamp + PICK_DELAY + 1);
+        board.armTable(id);
+        vm.roll(block.number + 1);
+
+        board.lockSegment(id, 1, _secret(1)); // one settles fine
+
+        // ...then the hash ages out before the rest are locked
+        vm.roll(block.number + board.BLOCKHASH_HORIZON() + 1);
+
+        vm.expectRevert(); // LockBlockUnavailable — happy path dead
+        board.lockSegment(id, 2, _secret(2));
+        vm.expectRevert(); // ...and so is the fallback
+        board.lockSegmentFallback(id, 2);
+
+        // anyone may re-arm onto a fresh block, and the rest settle normally
+        vm.prank(bob);
+        board.rearmTable(id);
+        vm.roll(block.number + 1);
+        for (uint8 s = 2; s <= 6; ++s) board.lockSegment(id, s, _secret(s));
+
+        board.retire(id);
+        assertEq(ledger.heldBalance(), ledger.totalCredited(), "exactly backed");
+        assertGt(ledger.totalCredited(), 0, "players were paid");
+    }
+
+    function test_CannotRearmWhileLockBlockStillLive() public {
+        uint256 id = _openTable();
+        _seatAndBet(id);
+        vm.warp(block.timestamp + PICK_DELAY + 1);
+        board.armTable(id);
+        uint256 lb = block.number;
+        vm.roll(block.number + 10); // well inside the horizon
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SegmentBoard.LockBlockStillLive.selector, lb, lb + 256
+            )
+        );
+        board.rearmTable(id);
+    }
+
+    function test_CannotRearmAFullySettledTable() public {
+        uint256 id = _openTable();
+        _seatAndBet(id);
+        _lockAll(id);
+        vm.roll(block.number + board.BLOCKHASH_HORIZON() + 1);
+        vm.expectRevert(SegmentBoard.NothingLeftToLock.selector);
+        board.rearmTable(id);
+    }
+
     // ─── cancel: the under-seated escape hatch ─────────────────────────────────
 
     /// @dev A table below SEATS_MIN can never be armed, so without this path its
