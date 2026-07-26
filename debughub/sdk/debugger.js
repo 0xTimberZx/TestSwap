@@ -195,24 +195,35 @@
 
     pushEvent(baseEvent("session_start"));
 
+    // A wallet extension that hasn't exposed an account yet is the NORMAL
+    // first-paint state (not connected, or selectedAddress not yet populated).
+    // Only report a failure if the backfill genuinely finds no account —
+    // otherwise every ordinary page load logged a permanent security "fail".
     if (!wallet && window.ethereum) {
-      var sec = baseEvent("security");
-      sec.name = "Wallet Detect";
-      sec.status = "fail";
-      pushEvent(sec);
       backfillWallet(currentSession);
     }
     return currentSession.id;
   }
 
   function backfillWallet(session) {
+    function noAccount() {
+      if (currentSession !== session || currentSession.wallet) return;
+      var sec = baseEvent("security");
+      sec.name = "Wallet Detect";
+      sec.status = "fail";
+      pushEvent(sec);
+    }
     try {
       window.ethereum.request({ method: "eth_accounts" }).then(function (accounts) {
-        if (accounts && accounts.length > 0 && currentSession === session && !currentSession.wallet) {
-          currentSession.wallet = accounts[0].toLowerCase();
+        if (accounts && accounts.length > 0) {
+          if (currentSession === session && !currentSession.wallet) {
+            currentSession.wallet = accounts[0].toLowerCase();
+          }
+        } else {
+          noAccount();
         }
-      }).catch(function () {});
-    } catch (e) {}
+      }).catch(noAccount);
+    } catch (e) { noAccount(); }
   }
 
   function endSession() {
@@ -269,7 +280,7 @@
         if (currentSession) {
           var sec = baseEvent("security");
           sec.name = "Wallet Dropped";
-          sec.status = "fail";
+          sec.status = "pass"; // user disconnected/locked — lifecycle, not a fault
           pushEvent(sec);
         }
         endSession();
