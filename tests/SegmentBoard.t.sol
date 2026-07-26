@@ -404,6 +404,36 @@ contract SegmentBoardTest is Test {
         assertEq(board.weightBps(board.KIND_NUMBER()),  uint256(26 * 10_000) / 10);
     }
 
+    /// @dev Regression: RED_MASK must be 36 bits wide. A 32-bit literal silently
+    ///      colours indices 32-35 black and breaks the even-money 18/18 split.
+    function test_RedBlackIsAnEvenEighteenSplit() public view {
+        uint256 reds;
+        for (uint8 i; i < 36; ++i) {
+            if (board.isRed(i)) ++reds;
+        }
+        assertEq(reds, 18, "red/black must be an even 18/18 split across all 36 symbols");
+    }
+
+    function test_LockedCharsAccumulateInSegmentOrder() public {
+        uint256 id = _openTable();
+        _seatAndBet(id);
+        vm.warp(block.timestamp + PICK_DELAY + 1);
+        board.armTable(id);
+        vm.roll(block.number + 1);
+
+        // lock out of order; each char must land in its own slot and leave the
+        // others untouched
+        board.lockSegment(id, 3, _secret(3));
+        bytes6 afterThird = board.lockedCharsOf(id);
+        assertTrue(afterThird[2] != 0, "segment 3 writes index 2");
+        assertTrue(afterThird[0] == 0 && afterThird[5] == 0, "other slots untouched");
+
+        board.lockSegment(id, 1, _secret(1));
+        bytes6 afterFirst = board.lockedCharsOf(id);
+        assertTrue(afterFirst[0] != 0, "segment 1 writes index 0");
+        assertEq(afterFirst[2], afterThird[2], "segment 3's char survived");
+    }
+
     function test_DoubleDigitRepeatDetection() public view {
         assertFalse(board.hasRepeat(bytes6("ABCDEF")));
         assertTrue(board.hasRepeat(bytes6("ABCDEA")));
