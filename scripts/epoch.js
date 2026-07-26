@@ -213,6 +213,7 @@ async function main() {
   const prize    = new ethers.Contract(TIMBPRIZE_ADDR, PRIZE_ABI, provider);
   const treasury = new ethers.Contract(TREASURY_ADDR, TREASURY_ABI, wallet ?? provider);
   const farm     = new ethers.Contract(TIMBFARM_ADDR, FARM_ABI, wallet ?? provider);
+  const staking  = new ethers.Contract(TIMBSTAKING_ADDR, FARM_ABI, wallet ?? provider);
   const timbs    = new ethers.Contract(TIMBS_ADDR, ERC20_ABI, wallet ?? provider);
   const boost    = BOOSTFARM_ADDR ? new ethers.Contract(BOOSTFARM_ADDR, BOOST_ABI, wallet ?? provider) : null;
 
@@ -352,8 +353,25 @@ async function main() {
         console.log("  farm funded ✓");
       }
       if (stakeGrant > 0n) {
-        await (await treasury.distributeToStaking(stakeGrant, duration)).wait();
-        console.log("  staking funded ✓");
+        // NOT treasury.distributeToStaking(): that transfers TIMBS to the
+        // staking contract and THEN calls notifyRewardAmount, which itself does
+        // safeTransferFrom(msg.sender) — a second pull the Treasury never
+        // approved, so it always reverts ERC20InsufficientAllowance (and
+        // approving instead would make the Treasury pay twice). Use the same
+        // withdraw → approve → notify path the farm uses; the keeper wallet is
+        // a registered rewardNotifier on TimbStaking.
+        try {
+          await (await treasury.withdrawToken(TIMBS_ADDR, wallet.address, stakeGrant)).wait();
+          await (await timbs.approve(TIMBSTAKING_ADDR, stakeGrant)).wait();
+          await (await staking.notifyRewardAmount(stakeGrant, duration)).wait();
+          console.log("  staking funded ✓");
+        } catch (e) {
+          // Never let a staking failure discard an already-funded farm: without
+          // this the run threw before saveState, so the next run re-settled the
+          // same epoch and granted the farm all over again, every 2 hours.
+          console.error("  staking funding FAILED (epoch still settles):", e.message);
+          await tg(`⚠️ Staking grant failed this epoch: ${e.shortMessage || e.message}`);
+        }
       }
     }
 
