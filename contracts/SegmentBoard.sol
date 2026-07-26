@@ -265,8 +265,12 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
     // ─── Modifiers ─────────────────────────────────────────────────────────────
 
+    /// @dev Do NOT special-case guardian == address(0) here. Skipping the check
+    ///      when the role is vacant would make the halt functions permissionless
+    ///      the moment the guardian retires — the opposite of retiring it. A plain
+    ///      comparison is already terminal: nobody can transact as address(0).
     modifier onlyGuardian() {
-        if (guardian != address(0) && msg.sender != guardian) revert NotGuardian();
+        if (msg.sender != guardian) revert NotGuardian();
         _;
     }
 
@@ -847,8 +851,11 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         return t;
     }
 
+    /// @dev encodePacked is safe here — both operands are fixed-size, so the
+    ///      encoding is unambiguous and no collision is possible. It must also stay
+    ///      encodePacked to match the deployed board and every published salt.
     function _salt(uint256 tableId, uint8 segment) internal pure returns (bytes32) {
-        return keccak256(abi.encode(tableId, segment));
+        return keccak256(abi.encodePacked(tableId, segment));
     }
 
     /// @dev fair multiple = 36/symbols - 1, scaled by WEIGHT_SCALE.
@@ -857,9 +864,9 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (kind == KIND_COLUMN  || kind == KIND_DOZEN)      return 2 * WEIGHT_SCALE;       // 12
         if (kind == KIND_VOWELS)                             return 5 * WEIGHT_SCALE;       // 6
         if (kind == KIND_COLOR   || kind == KIND_LOWHIGH)    return WEIGHT_SCALE;           // 18
-        if (kind == KIND_LETTER)                             return (35 * WEIGHT_SCALE) / 26 * 26 + (35 * WEIGHT_SCALE) % 26; // 26
-        if (kind == KIND_NUMBER)                             return (35 * WEIGHT_SCALE) / 10 * 10 + (35 * WEIGHT_SCALE) % 10; // 10
-        if (kind == KIND_DOUBLEDIGIT)                        return (18 * WEIGHT_SCALE + 9) / 10; // 1.8:1
+        if (kind == KIND_LETTER)                             return (10 * WEIGHT_SCALE) / 26; // 26 symbols -> 0.3846:1
+        if (kind == KIND_NUMBER)                             return (26 * WEIGHT_SCALE) / 10; // 10 symbols -> 2.6:1
+        if (kind == KIND_DOUBLEDIGIT)                        return (18 * WEIGHT_SCALE) / 10; // 1.8:1
         revert BadKind();
     }
 
