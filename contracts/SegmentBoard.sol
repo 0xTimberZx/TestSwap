@@ -92,7 +92,9 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
     /// @dev Pocket colouring: 18 red / 18 black over the ordered alphabet.
     ///      Bit i set => symbol i is red. Alternating gives the 18/18 split.
-    uint64 constant RED_MASK = 0x55555555;
+    ///      MUST be 36 bits wide (9 hex digits) to cover every symbol — a 32-bit
+    ///      literal silently colours indices 32-35 black and breaks the split.
+    uint64 constant RED_MASK = 0x555555555;
 
     /// @dev Vowel set {A,E,I,O,U,Y} as alphabet-index bits.
     uint64 constant VOWEL_MASK =
@@ -453,11 +455,14 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         uint8 idx = uint8(uint256(e) % ALPHABET.length);
         bytes1 c  = ALPHABET[idx];
 
-        // write the char into the accumulating six-char string
-        bytes6 cur = t.lockedChars;
-        cur[segment - 1]  = c;
-        t.lockedChars     = cur;
-        t.lockedMask     |= uint8(1) << (segment - 1);
+        // Write the char into the accumulating six-char string. A byte of a
+        // fixed bytesN cannot be assigned directly, so splice it numerically:
+        // byte 0 of a bytes6 is the most significant, hence the (5 - i) shift.
+        uint256 shift = 8 * (5 - uint256(segment - 1));
+        uint48 packed = uint48(t.lockedChars);
+        packed = (packed & ~(uint48(0xFF) << shift)) | (uint48(uint8(c)) << shift);
+        t.lockedChars = bytes6(packed);
+        t.lockedMask |= uint8(1) << (segment - 1);
 
         emit SegmentLocked(tableId, segment, c, viaFallback);
 
@@ -643,6 +648,16 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         return _hasRepeat(s);
     }
 
+    /// @notice Whether the symbol at alphabet index `idx` is a red pocket.
+    function isRed(uint8 idx) external pure returns (bool) {
+        return (RED_MASK >> idx) & 1 == 1;
+    }
+
+    /// @notice The table's six-char string so far; unlocked slots read as 0x00.
+    function lockedCharsOf(uint256 tableId) external view returns (bytes6) {
+        return tables[tableId].lockedChars;
+    }
+
     // ─── Internal helpers ────────────────────────────────────────────────────
 
     function _liveTable(uint256 tableId) internal view returns (Table storage t) {
@@ -675,8 +690,10 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
             if (pick > 2) revert BadPick();
         } else if (kind == KIND_COLOR || kind == KIND_LOWHIGH) {
             if (pick > 1) revert BadPick();
-        } else if (kind == KIND_VOWELS || kind == KIND_LETTER || kind == KIND_NUMBER || kind == KIND_YOURTICKET) {
-            if (pick != 0) revert BadPick(); // set bets carry no pick
+        } else if (pick != 0) {
+            // every remaining kind is a set bet and carries no pick; catch-all so
+            // a future kind cannot silently accept a junk pick
+            revert BadPick();
         }
     }
 
