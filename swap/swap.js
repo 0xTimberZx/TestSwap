@@ -915,6 +915,13 @@ async function handleSwap() {
         freshOut = amounts[amounts.length - 1];
       } else {
         const [rIn, rOut] = await reader.getReserves(effAddr(tokenIn), effAddr(tokenOut));
+        // getAmountOut reverts ZeroAmount() (0x1f2a2005) on a zero input or an
+        // empty pool. Unguarded, that surfaced to the user as a raw ethers
+        // CALL_EXCEPTION blob — say what's actually wrong instead.
+        if (amountInWei.isZero()) throw new Error("Enter an amount to swap.");
+        if (rIn.isZero() || rOut.isZero()) {
+          throw new Error("This pair has no liquidity yet — add liquidity before swapping.");
+        }
         freshOut = await reader.getAmountOut(amountInWei, rIn, rOut);
       }
       minOut = freshOut.mul(Math.floor((100 - slippagePct) * 100)).div(10000);
