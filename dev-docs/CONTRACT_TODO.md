@@ -729,3 +729,34 @@ namespaces). A `ethers.utils.getAddress` (v5) slipped through a syntax check and
 crash-looped the keeper at startup. Before touching `scripts/settler.js`, actually
 run it (`cd scripts && npm i ethers && node settler.js` — it exits fast if RPC/env
 are unset) so a v5/v6 API mismatch surfaces locally, not in Actions.
+
+**`TimbTreasury.distributeToStaking` is broken — fix before mainnet (found live,
+round-55 epoch settle):** the function pushes TIMBS to the staking contract and
+*then* calls `notifyRewardAmount`, which itself does
+`safeTransferFrom(msg.sender, ...)` — a **second pull of the same amount** that
+the Treasury never approved. It always reverts
+`ERC20InsufficientAllowance(TimbStaking, 0, amount)`, so this path has **never
+once succeeded**; `TimbStaking.periodFinish` stayed `0` ("not started") for the
+life of the deployment.
+
+Do **not** "fix" it by approving TimbStaking from the Treasury — with both the
+transfer *and* the pull in place the Treasury would pay **twice**. The correct
+contract fix is one or the other, not both:
+- either drop the `safeTransfer` and `approve(timbStaking, amount)` before
+  notifying (pull model, matches `notifyRewardAmount`'s own expectation), or
+- give TimbStaking a push-style entry point that credits an already-received
+  balance without a `transferFrom`.
+
+Until a Treasury redeploy, the epoch keeper routes **around** it (#245) using the
+same path the farm already uses: `withdrawToken(TIMBS, keeper, amt)` →
+`approve(TimbStaking, amt)` → `staking.notifyRewardAmount(amt, duration)`. That
+works because the keeper wallet is a registered `rewardNotifier` on TimbStaking
+(as is the Treasury) — verify `rewardNotifiers[keeper] == true` after any
+staking redeploy, or the keeper's staking grant reverts `NotAuthorised`.
+
+**Keeper failures must not roll back a partial epoch (same incident):** the
+staking revert threw *before* `saveState()`, so `lastEpochRound` never advanced
+and every subsequent 2-hourly run re-settled the *same* epoch — re-granting the
+farm each time. Four identical **8,725.95 TIMBS** grants (~34.9k total) landed on
+TimbFarm before it was caught. Any new keeper step that spends funds belongs in
+its own try/catch so one failing leg can't restart the whole settle.
