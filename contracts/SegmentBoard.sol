@@ -66,7 +66,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     // ─── Constants ─────────────────────────────────────────────────────────────
 
     /// @notice A-Z then 0-9, the 36 pocket symbols.
-    bytes constant ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    string constant ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
     uint8 public constant SEGMENTS       = 6;
     uint8 public constant POOLS          = 7;   // 6 segment pools + Double-Digit
@@ -94,7 +94,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     ///      Bit i set => symbol i is red. Alternating gives the 18/18 split.
     ///      MUST be 36 bits wide (9 hex digits) to cover every symbol — a 32-bit
     ///      literal silently colours indices 32-35 black and breaks the split.
-    uint64 constant RED_MASK = 0x555555555;
+    uint64 constant RED_MASK = 0x5555555555;
 
     /// @dev Vowel set {A,E,I,O,U,Y} as alphabet-index bits.
     uint64 constant VOWEL_MASK =
@@ -242,7 +242,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (
             _ledger == address(0) || _seedRegistry == address(0) ||
             _entropy == address(0) || _timbPrize == address(0) ||
-            _treasury == address(0)
+            _treasury == address(0) || _guardian == address(0)
         ) revert ZeroAddress();
         ledger       = IPoolLedger(_ledger);
         seedRegistry = ISeedRegistry(_seedRegistry);
@@ -250,8 +250,8 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         timbPrize    = ITimbPrize(_timbPrize);
         treasury     = _treasury;
         guardian     = _guardian; // may be address(0) for a zero-privilege generation
-        entryWindow   = _entryWindow;
-        pickDelay     = _pickDelay;
+        entryWindow  = _entryWindow;
+        pickDelay    = _pickDelay;
         betsCloseLead = _betsCloseLead;
     }
 
@@ -452,18 +452,20 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         bytes32 e,
         bool viaFallback
     ) internal {
-        uint8 idx = uint8(uint256(e) % ALPHABET.length);
-        bytes1 c  = ALPHABET[idx];
+        uint8 idx = uint8(uint256(e) % 36); // ALPHABET has 36 characters
+        bytes1 c  = bytes1(ALPHABET[idx]);
 
-        // Write the char into the accumulating six-char string. A byte of a
-        // fixed bytesN cannot be assigned directly, so splice it numerically:
-        // byte 0 of a bytes6 is the most significant, hence the (5 - i) shift.
-        uint256 shift = 8 * (5 - uint256(segment - 1));
-        uint48 packed = uint48(t.lockedChars);
-        packed = (packed & ~(uint48(0xFF) << shift)) | (uint48(uint8(c)) << shift);
-        t.lockedChars = bytes6(packed);
-        t.lockedMask |= uint8(1) << (segment - 1);
+        // Update the bytes6 value by setting the appropriate character
+        uint8 segmentIndex = segment - 1;
+        uint8 pos = 5 - segmentIndex;
+        bytes1[] memory chars = new bytes1[](6);
+        for (uint8 i = 0; i < 6; i++) {
+            chars[i] = t.lockedChars[i];
+        }
+        chars[pos] = c;
+        t.lockedChars = bytes6(chars[0], chars[1], chars[2], chars[3], chars[4], chars[5]);
 
+        t.lockedMask |= uint8(1) << segmentIndex;
         emit SegmentLocked(tableId, segment, c, viaFallback);
 
         _settlePool(tableId, segment - 1, idx, false);
@@ -552,8 +554,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
                 uint256 weight = CHIPS[b.chipIdx] * _weightBps(b.kind);
                 amt[i] = weight;
                 totalWeight += weight;
-            }
-            else {
+            } else {
                 amt[i] = 0;
             }
         }
@@ -658,7 +659,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         return tables[tableId].lockedChars;
     }
 
-    // ─── Internal helpers ────────────────────────────────────────────────────
+    // ─── Internal helpers ──────────────────────────────────────────────────────
 
     function _liveTable(uint256 tableId) internal view returns (Table storage t) {
         if (tableId == 0 || tableId > tableCount) revert TableUnknown();
@@ -668,7 +669,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     }
 
     function _salt(uint256 tableId, uint8 segment) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(tableId, segment));
+        return keccak256(abi.encode(tableId, segment));
     }
 
     /// @dev fair multiple = 36/symbols - 1, scaled by WEIGHT_SCALE.
@@ -677,9 +678,9 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (kind == KIND_COLUMN  || kind == KIND_DOZEN)      return 2 * WEIGHT_SCALE;       // 12
         if (kind == KIND_VOWELS)                             return 5 * WEIGHT_SCALE;       // 6
         if (kind == KIND_COLOR   || kind == KIND_LOWHIGH)    return WEIGHT_SCALE;           // 18
-        if (kind == KIND_LETTER)                             return (10 * WEIGHT_SCALE) / 26; // 26
+        if (kind == KIND_LETTER)                             return (10 * WEIGHT_SCALE + 25) / 26; // 26
         if (kind == KIND_NUMBER)                             return (26 * WEIGHT_SCALE) / 10; // 10
-        if (kind == KIND_DOUBLEDIGIT)                        return (18 * WEIGHT_SCALE) / 10; // 1.8:1
+        if (kind == KIND_DOUBLEDIGIT)                        return (18 * WEIGHT_SCALE + 9) / 10; // 1.8:1
         revert BadKind();
     }
 
@@ -713,12 +714,12 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (kind == KIND_LETTER)   return idx < 26;
         if (kind == KIND_NUMBER)   return idx >= 26;
         if (kind == KIND_LOWHIGH)  return pick == 0 ? idx < 18 : idx >= 18;
-        if (kind == KIND_YOURTICKET) return ticketChar == ALPHABET[idx];
+        if (kind == KIND_YOURTICKET) return ticketChar == bytes1(ALPHABET[idx]);
         return false;
     }
 
     function _hasRepeat(bytes6 s) internal pure returns (bool) {
-        for (uint256 i; i < 6; ++i) {
+        for (uint256 i = 0; i < 6; ++i) {
             for (uint256 j = i + 1; j < 6; ++j) {
                 if (s[i] == s[j]) return true;
             }
