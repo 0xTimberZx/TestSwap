@@ -211,6 +211,12 @@
       <button id="lockAll" class="ghost" disabled>Lock 6</button>
       <button id="retire" class="ghost" disabled>Retire</button>
     </div>
+    <div class="row" style="margin-top:10px">
+      <button id="lockFallback" class="ghost" disabled>Fallback-lock the rest</button>
+    </div>
+    <p class="note">Fallback needs no secret and works once the reveal window (64 blocks)
+      has passed, but only while the lock block is still inside the 256-block hash
+      horizon — about 65 seconds at 0.25s blocks. Use it if the reveal is lost or late.</p>
   </div>
 
   <div class="card">
@@ -244,6 +250,9 @@ const BOARD_ABI = [
   "function placeDoubleDigit(uint256 tableId,uint8 chipIdx)",
   "function armTable(uint256 tableId)",
   "function lockSegment(uint256 tableId,uint8 segment,bytes32 secret)",
+  "function lockSegmentFallback(uint256 tableId,uint8 segment)",
+  "function REVEAL_WINDOW() view returns (uint256)",
+  "function BLOCKHASH_HORIZON() view returns (uint256)",
   "function retire(uint256 tableId)",
   "function lockedCharsOf(uint256) view returns (bytes6)",
   // Custom errors. Without these in the ABI every failure decodes as a bare
@@ -279,6 +288,10 @@ const BOARD_ABI = [
   "error LockBlockStillLive(uint256 lockBlock,uint256 expiresAt)",
   "error NothingLeftToLock()",
   "error SeedNotSettled(uint256 round)",
+  // thrown by CommitRevealEntropy, propagated through the board's lock calls
+  "error LockBlockUnavailable(uint256 lockBlock)",
+  "error LockBlockNotPast(uint256 lockBlock)",
+  "error BadReveal()",
   // Inherited from OpenZeppelin — reachable on the operator/owner calls.
   "error OwnableUnauthorizedAccount(address account)",
   "error OwnableInvalidOwner(address owner)",
@@ -305,6 +318,10 @@ const ERR_HINT = {
   EntryStillOpen:      "entry is still open — cancel only after it closes",
   SegmentsOutstanding: "retire needs all six segments locked first",
   SeedNotSettled:      "that TimbPrize round has not settled — use Find settled",
+  RevealWindowOpen:    "too early for the fallback — the 64-block reveal window is still open",
+  LockBlockUnavailable:"the lock block aged past the 256-block hash horizon — this table can no longer be locked",
+  BadReveal:           "wrong passphrase — the secret does not match the commitment for this table",
+  LockBlockNotPast:    "the lock block has not been mined yet — wait one block",
   ExceedsUnowed:       "that would dip into player escrow, which is untouchable",
   NothingToWithdraw:   "no credit to withdraw",
   OwnableUnauthorizedAccount: "this wallet is not the owner of that contract",
@@ -338,6 +355,12 @@ const PRIZE_ABI = ["function roundWinningString(uint256) view returns (bytes6)"]
 let provider, signer, me, board, ledger, timbs, prize, T = null;
 
 const $ = id => document.getElementById(id);
+// An armed table dies in ~65s if the reveal is lost, and a page reload used to
+// wipe the passphrase that derives the secrets. Persist it.
+try {
+  const saved = localStorage.getItem("swaptables:phrase");
+  if (saved) addEventListener("DOMContentLoaded", () => { if (!$("phrase").value) $("phrase").value = saved; });
+} catch {}
 const fmt = w => Number(ethers.formatUnits(w, 18)).toLocaleString(undefined,{maximumFractionDigits:4});
 function log(msg, cls="") {
   const el = $("log");
@@ -535,6 +558,7 @@ $("placeDD").onclick = async () => {
 // ── operator ───────────────────────────────────────────
 function secretsFor(id){
   const p = $("phrase").value;
+  if (p) try { localStorage.setItem("swaptables:phrase", p); } catch {}
   if (!p) { log("Set a passphrase first — it derives (and recovers) your six secrets.", "l-err"); return null; }
   return [...Array(6).keys()].map(i => ethers.keccak256(ethers.toUtf8Bytes(`${p}:${id}:${i+1}`)));
 }
@@ -587,6 +611,18 @@ async function doLocks(){
 $("arm").onclick    = async () => { await doArm(); refresh(); };
 $("lockAll").onclick= async () => { await doLocks(); refresh(); };
 $("retire").onclick = async () => { if (await tx("retire", () => board.retire(tid()))) refresh(); };
+$("lockFallback").onclick = async () => {
+  await refreshTable();
+  if (!T || T.lockBlock === 0n) { log("table is not armed yet", "l-err"); return; }
+  const now = await provider.getBlockNumber();
+  const age = now - Number(T.lockBlock);
+  log(`lock block ${T.lockBlock}, now ${now} (age ${age} blocks; fallback opens at 64, dies at 256)`, "l-dim");
+  for (let s = 1; s <= 6; s++){
+    if ((Number(T.lockedMask) >> (s-1)) & 1) { log(`seg ${s} already locked`, "l-dim"); continue; }
+    if (!await tx(`fallback-lock seg ${s}`, () => board.lockSegmentFallback(tid(), s))) break;
+  }
+  refresh();
+};
 $("runSettle").onclick = async () => {
   const btn = $("runSettle"); btn.disabled = true;
   try{
