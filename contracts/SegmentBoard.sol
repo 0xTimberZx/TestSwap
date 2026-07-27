@@ -18,6 +18,7 @@ interface ISeedRegistry {
 }
 
 interface IEntropy {
+    function commitmentOf(bytes32 secret, bytes32 salt) external view returns (bytes32);
     function deriveEntropy(bytes32 commitment, bytes32 secret, uint256 lockBlock, bytes32 salt)
         external view returns (bytes32);
     function fallbackEntropy(uint256 lockBlock, bytes32 salt) external view returns (bytes32);
@@ -55,6 +56,18 @@ interface ITimbPrize {
  *   char early (guard #1). Swaps never enter this contract (guard #2): the
  *   velocity envelope is display-only.
  *
+ * Status:
+ *   Generation 1 ran a full round live on Arbitrum Sepolia (2026-07-26): open ->
+ *   seat -> load -> place -> arm -> six locks -> retire -> withdraw, with the
+ *   ledger draining to exactly zero. Escrow conservation, the graduated rake
+ *   (4.87% at two wallets vs 8% solo) and the §9 seed guard all reconciled to the
+ *   wei. See SwapTables/docs/VALIDATION.md.
+ *
+ *   That run surfaced one way player funds could stick: a table that never reaches
+ *   SEATS_MIN can never be armed, so it would never lock or retire and its loaded
+ *   chips would be stranded. cancelTable() closes it — permissionless, refunds
+ *   every chip, returns the seed. Deployed gen-1 predates it (see VALIDATION.md).
+ *
  * Security:
  *   - Guardian may only halt new tables / new bets; it can never move funds,
  *     change an outcome, or block a withdrawal (those live in PoolLedger and are
@@ -90,6 +103,11 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     ///         lock block hash is still retrievable).
     uint256 public constant REVEAL_WINDOW = 64;
 
+    /// @notice How long `blockhash` can still see the lock block. Past this the
+    ///         hash reads zero and BOTH settle paths fail, so the table must be
+    ///         past this the hash reads zero (see lockSegmentFallback).
+    uint256 public constant BLOCKHASH_HORIZON = 256;
+
     /// @dev Pocket colouring: 18 red / 18 black over the ordered alphabet.
     ///      Bit i set => symbol i is red. Alternating gives the 18/18 split.
     ///      MUST be 36 bits wide (9 hex digits) to cover every symbol — a 32-bit
@@ -119,7 +137,26 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     ISeedRegistry public immutable seedRegistry;
     IEntropy      public immutable entropy;
     ITimbPrize    public immutable timbPrize;
-    address       public immutable treasury;
+
+    /// @notice Where leftovers are PUSHED at retire (rake, no-winner pots, dust).
+    ///         Any address works, including a contract like TimbTreasury.
+    address public immutable treasury;
+
+    /**
+     * @notice Where the table seed is PULLED from at openTable.
+     * @dev Deliberately separate from `treasury`. Funding is a transferFrom, so
+     *      this address must be able to call approve() on TIMBS — which a
+     *      treasury *contract* generally cannot do unless it exposes a generic
+     *      approve. Keeping the two apart lets sweeps still go to the real
+     *      treasury while an ops wallet supplies the seed float.
+     *
+     *      Owner-settable, and safe to be: the seed funder can only ever be a
+     *      source of funds it has itself approved. Pointing this at an address
+     *      with no allowance makes openTable fail — a liveness effect, never a
+     *      way to touch player escrow (§13.2). Locked forever once ownership is
+     *      renounced.
+     */
+    address public seedFunder;
 
     /// @notice Seconds from open to the entry cutoff (no new seats after).
     uint64 public immutable entryWindow;
@@ -203,6 +240,8 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     error SegmentAlreadyLocked(uint8 segment);
     error RevealWindowOpen();
     error SegmentsOutstanding();
+    error EntryStillOpen();
+    error TableCanProceed(uint8 seated, uint8 required);
     error SeedNotSettled(uint256 round);
 
     // ─── Events ────────────────────────────────────────────────────────────────
@@ -215,14 +254,20 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     event SegmentLocked(uint256 indexed tableId, uint8 indexed segment, bytes1 lockedChar, bool viaFallback);
     event PoolSettled(uint256 indexed tableId, uint8 indexed pool, uint256 pot, uint256 rake, uint256 distributed);
     event TableRetired(uint256 indexed tableId, uint256 sweptToTreasury);
+    event TableCancelled(uint256 indexed tableId, uint8 seated, uint256 refundedWallets, uint256 sweptToTreasury);
     event GuardianSet(address indexed guardian);
+    event SeedFunderSet(address indexed seedFunder);
     event NewTablesHalted(bool halted);
     event NewBetsHalted(bool halted);
 
     // ─── Modifiers ─────────────────────────────────────────────────────────────
 
+    /// @dev Do NOT special-case guardian == address(0) here. Skipping the check
+    ///      when the role is vacant would make the halt functions permissionless
+    ///      the moment the guardian retires — the opposite of retiring it. A plain
+    ///      comparison is already terminal: nobody can transact as address(0).
     modifier onlyGuardian() {
-        if (guardian != address(0) && msg.sender != guardian) revert NotGuardian();
+        if (msg.sender != guardian) revert NotGuardian();
         _;
     }
 
@@ -234,6 +279,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         address _entropy,
         address _timbPrize,
         address _treasury,
+        address _seedFunder,
         address _guardian,
         uint64  _entryWindow,
         uint64  _pickDelay,
@@ -249,6 +295,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         entropy      = IEntropy(_entropy);
         timbPrize    = ITimbPrize(_timbPrize);
         treasury     = _treasury;
+        seedFunder   = _seedFunder == address(0) ? _treasury : _seedFunder;
         guardian     = _guardian; // may be address(0) for a zero-privilege generation
         entryWindow  = _entryWindow;
         pickDelay    = _pickDelay;
@@ -288,7 +335,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         }
 
         // House seed float for the table's pools.
-        ledger.fundSeed(treasury, TABLE_SEED);
+        ledger.fundSeed(seedFunder, TABLE_SEED);
 
         emit TableOpened(tableId, seedRound, seedString, t.pickTime);
         return tableId;
@@ -455,12 +502,15 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         uint8 idx = uint8(uint256(e) % 36); // ALPHABET has 36 characters
         bytes1 c = bytes(ALPHABET)[idx];
 
-        // Update the bytes6 value by setting the appropriate character
-        bytes6 memory newChars = t.lockedChars;
-        newChars[5 - uint256(segment - 1)] = c;
-        t.lockedChars = newChars;
-
+        // Write the char into the accumulating six-char string. A byte of a
+        // fixed bytesN cannot be assigned directly, so splice it numerically:
+        // byte 0 of a bytes6 is the most significant, hence the (5 - i) shift.
+        uint256 shift  = 8 * (5 - uint256(segment - 1));
+        uint256 packed = uint256(uint48(t.lockedChars));
+        packed = (packed & ~(uint256(0xFF) << shift)) | (uint256(uint8(c)) << shift);
+        t.lockedChars = bytes6(uint48(packed));
         t.lockedMask |= uint8(1) << (segment - 1);
+
         emit SegmentLocked(tableId, segment, c, viaFallback);
 
         _settlePool(tableId, segment - 1, idx, false);
@@ -595,6 +645,54 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         emit TableRetired(tableId, leftover);
     }
 
+    /**
+     * @notice Cancel a table that never filled. Permissionless.
+     * @dev A table below SEATS_MIN can never be armed (§10.3), so it would never
+     *      lock, never retire, and any chips already loaded would be stranded —
+     *      the one way player funds could stick. This is the escape hatch: past
+     *      the entry cutoff with too few seats, anyone may cancel.
+     *
+     *      Every chip is refunded, placed or not, because nothing settled — no
+     *      char was ever locked, so no bet can have won or lost. The seed then
+     *      sweeps back to the treasury. Bounded by SEATS_HARD_MAX like every
+     *      other settlement loop.
+     */
+    function cancelTable(uint256 tableId) external nonReentrant {
+        Table storage t = _liveTable(tableId);
+        if (block.timestamp < t.openedAt + entryWindow) revert EntryStillOpen();
+        if (t.seatCount >= SEATS_MIN) {
+            revert TableCanProceed(t.seatCount, SEATS_MIN);
+        }
+        // Unreachable while armTable enforces SEATS_MIN, but asserted so the
+        // "nothing settled" premise above can never quietly stop holding.
+        if (t.lockBlock != 0) revert AlreadyArmed();
+
+        address[] storage list = seatList[tableId];
+        uint256 len = list.length;
+        uint256 refunded;
+        for (uint256 i; i < len; ++i) {
+            Seat storage s = seats[tableId][list[i]];
+            uint256 owed;
+            for (uint8 g; g < SEGMENTS; ++g) {
+                uint8 packed = uint8((s.chipPack >> (8 * g)) & 0xFF);
+                if (packed == 0) continue;
+                owed += CHIPS[packed - 1];
+            }
+            if (s.ddChip != 0) owed += CHIPS[s.ddChip - 1];
+            if (owed > 0) {
+                ledger.refund(list[i], owed);
+                unchecked { ++refunded; }
+            }
+        }
+
+        t.retired = true;
+
+        uint256 leftover = ledger.unowed(); // the seed, plus any dust
+        if (leftover > 0) ledger.sweep(treasury, leftover);
+
+        emit TableCancelled(tableId, t.seatCount, refunded, leftover);
+    }
+
     // ─── Guardian: halt only ───────────────────────────────────────────────────
 
     /// @notice Halt/resume opening new tables. Cannot touch funds or outcomes.
@@ -617,6 +715,17 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     }
 
     // ─── Owner: config ─────────────────────────────────────────────────────────
+
+    /**
+     * @notice Point the seed pull at a different funder (must be able to approve
+     *         TIMBS for the ledger). Cannot touch escrow; see `seedFunder`.
+     *         Locked forever once ownership is renounced.
+     */
+    function setSeedFunder(address _seedFunder) external onlyOwner {
+        if (_seedFunder == address(0)) revert ZeroAddress();
+        seedFunder = _seedFunder;
+        emit SeedFunderSet(_seedFunder);
+    }
 
     /// @notice Replace the guardian. Locked forever once ownership is renounced.
     function setGuardian(address _guardian) external onlyOwner {
@@ -654,7 +763,49 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         return tables[tableId].lockedChars;
     }
 
-    // ─── Internal helpers ──────────────────────────────────────────────────────
+    // ─── Commitment helpers (operator safety) ──────────────────────────────────
+    //
+    // A commitment is bound to the table id it will be opened under. Computing it
+    // against the wrong id is silent: the table opens and takes bets, then EVERY
+    // lockSegment reverts BadReveal and the round can only be settled by the
+    // fallback. These views remove that whole class of mistake — derive the
+    // commitments on-chain instead of hand-encoding the salt off-chain.
+
+    /// @notice The id the next openTable() will assign. Compute commitments for
+    ///         THIS id, not the current tableCount.
+    function nextTableId() external view returns (uint256) {
+        return tableCount + 1;
+    }
+
+    /// @notice The salt binding a commitment to one table+segment.
+    function saltFor(uint256 tableId, uint8 segment) external pure returns (bytes32) {
+        return _salt(tableId, segment);
+    }
+
+    /// @notice The exact commitment to pass to openTable() for `segment` of
+    ///         `tableId`, given the secret you will later reveal. Delegates to the
+    ///         entropy module so the two can never drift apart.
+    function commitmentFor(bytes32 secret, uint256 tableId, uint8 segment)
+        external
+        view
+        returns (bytes32)
+    {
+        return entropy.commitmentOf(secret, _salt(tableId, segment));
+    }
+
+    /// @notice All six commitments for `tableId`, ready to pass straight into
+    ///         openTable(). Secrets must be supplied in segment order 1-6.
+    function commitmentsFor(bytes32[6] calldata secrets, uint256 tableId)
+        external
+        view
+        returns (bytes32[6] memory cs)
+    {
+        for (uint8 i; i < SEGMENTS; ++i) {
+            cs[i] = entropy.commitmentOf(secrets[i], _salt(tableId, i + 1));
+        }
+    }
+
+    // ─── Internal helpers ────────────────────────────────────────────────────
 
     function _liveTable(uint256 tableId) internal view returns (Table storage t) {
         if (tableId == 0 || tableId > tableCount) revert TableUnknown();
@@ -663,8 +814,11 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         return t;
     }
 
+    /// @dev encodePacked is safe here — both operands are fixed-size, so the
+    ///      encoding is unambiguous and no collision is possible. It must also stay
+    ///      encodePacked to match the deployed board and every published salt.
     function _salt(uint256 tableId, uint8 segment) internal pure returns (bytes32) {
-        return keccak256(abi.encode(tableId, segment));
+        return keccak256(abi.encodePacked(tableId, segment));
     }
 
     /// @dev fair multiple = 36/symbols - 1, scaled by WEIGHT_SCALE.
@@ -673,9 +827,9 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (kind == KIND_COLUMN  || kind == KIND_DOZEN)      return 2 * WEIGHT_SCALE;       // 12
         if (kind == KIND_VOWELS)                             return 5 * WEIGHT_SCALE;       // 6
         if (kind == KIND_COLOR   || kind == KIND_LOWHIGH)    return WEIGHT_SCALE;           // 18
-        if (kind == KIND_LETTER)                             return (35 * WEIGHT_SCALE) / 26 * 26 + (35 * WEIGHT_SCALE) % 26; // 26
-        if (kind == KIND_NUMBER)                             return (35 * WEIGHT_SCALE) / 10 * 10 + (35 * WEIGHT_SCALE) % 10; // 10
-        if (kind == KIND_DOUBLEDIGIT)                        return (18 * WEIGHT_SCALE + 9) / 10; // 1.8:1
+        if (kind == KIND_LETTER)                             return (10 * WEIGHT_SCALE) / 26; // 26 symbols -> 0.3846:1
+        if (kind == KIND_NUMBER)                             return (26 * WEIGHT_SCALE) / 10; // 10 symbols -> 2.6:1
+        if (kind == KIND_DOUBLEDIGIT)                        return (18 * WEIGHT_SCALE) / 10; // 1.8:1
         revert BadKind();
     }
 

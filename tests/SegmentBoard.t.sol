@@ -58,7 +58,7 @@ contract SegmentBoardTest is Test {
 
         board = new SegmentBoard(
             address(ledger), address(registry), address(ent),
-            address(prize), treasury, guardian,
+            address(prize), treasury, treasury, guardian,
             ENTRY_WINDOW, PICK_DELAY, BETS_CLOSE
         );
 
@@ -305,6 +305,83 @@ contract SegmentBoardTest is Test {
         assertEq(ledger.heldBalance(), ledger.totalCredited());
     }
 
+    // ─── re-arm: recovering a table whose lock block aged out ──────────────────
+
+    /// @dev Past BLOCKHASH_HORIZON the lock block's hash reads zero, so BOTH
+    ///      lockSegment and lockSegmentFallback revert while retire() still wants
+    ///      all six — the table would jam with every bet inside. On Arbitrum that
+    ///      horizon is ~65 seconds, so this is a live risk, not a corner case.
+
+    // ─── cancel: the under-seated escape hatch ─────────────────────────────────
+
+    /// @dev A table below SEATS_MIN can never be armed, so without this path its
+    ///      loaded chips would be stranded forever. Cancel must return every chip
+    ///      and hand the seed back, leaving nothing behind.
+    function test_CancelRefundsEverythingOnUnderSeatedTable() public {
+        uint256 id = _openTable();
+        uint8[6] memory chips = [CHIP25, CHIP25, CHIP25, CHIP25, CHIP25, CHIP25];
+
+        // one wallet sits, loads all six and even places — then nobody else joins
+        vm.startPrank(alice);
+        board.sit(id, bytes6("ABCDEF"));
+        board.loadTokens(id, chips);
+        for (uint8 s = 1; s <= 6; ++s) board.place(id, s, kLetter, 0);
+        board.placeDoubleDigit(id, CHIP25);
+        vm.stopPrank();
+
+        uint256 staked = 7 * 25e18; // six segment chips + the DD stake
+        assertEq(ledger.heldBalance(), staked + SEED);
+
+        // entry closes with only one seat: armTable is impossible
+        vm.warp(block.timestamp + PICK_DELAY + 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(SegmentBoard.NotEnoughSeats.selector, uint8(1), uint8(2))
+        );
+        board.armTable(id);
+
+        // ...so anyone may cancel it
+        uint256 treasuryBefore = timbs.balanceOf(treasury);
+        vm.prank(bob); // permissionless
+        board.cancelTable(id);
+
+        // every chip came back, placed ones included — nothing settled, so
+        // nothing can have been won or lost
+        assertEq(ledger.credit(alice), staked, "all seven chips refunded");
+        assertEq(timbs.balanceOf(treasury) - treasuryBefore, SEED, "seed returned");
+        assertEq(ledger.heldBalance(), ledger.totalCredited(), "exactly backed");
+
+        vm.prank(alice);
+        ledger.withdraw();
+        assertEq(timbs.balanceOf(alice), 10_000e18, "player made whole");
+        assertEq(ledger.heldBalance(), 0, "vault fully drained");
+    }
+
+    function test_CannotCancelWhileEntryOpen() public {
+        uint256 id = _openTable();
+        vm.expectRevert(SegmentBoard.EntryStillOpen.selector);
+        board.cancelTable(id);
+    }
+
+    function test_CannotCancelATableThatCanProceed() public {
+        uint256 id = _openTable();
+        _seatAndBet(id); // two seats -> it can arm, so it must not be cancellable
+        vm.warp(block.timestamp + PICK_DELAY + 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(SegmentBoard.TableCanProceed.selector, uint8(2), uint8(2))
+        );
+        board.cancelTable(id);
+    }
+
+    function test_CannotCancelTwice() public {
+        uint256 id = _openTable();
+        vm.prank(alice);
+        board.sit(id, bytes6("ABCDEF"));
+        vm.warp(block.timestamp + PICK_DELAY + 1);
+        board.cancelTable(id);
+        vm.expectRevert(SegmentBoard.TableRetiredAlready.selector);
+        board.cancelTable(id);
+    }
+
     // ─── missed reveal ────────────────────────────────────────────────────────
 
     function test_FallbackOnlyAfterRevealWindow() public {
@@ -402,6 +479,95 @@ contract SegmentBoardTest is Test {
         assertEq(board.weightBps(board.KIND_COLOR()),         10_000);
         assertEq(board.weightBps(board.KIND_LETTER()),  uint256(10 * 10_000) / 26);
         assertEq(board.weightBps(board.KIND_NUMBER()),  uint256(26 * 10_000) / 10);
+    }
+
+    /// @dev The seed is PULLED (transferFrom) but sweeps are PUSHED, so the two
+    ///      addresses have different requirements: a treasury *contract* with no
+    ///      generic approve() can still receive sweeps, but can never fund a seed.
+    ///      Splitting them is what lets the real TimbTreasury stay the sweep
+    ///      destination while an ops wallet supplies the float.
+    function test_SeedFunderSeparateFromTreasury() public {
+        address opsWallet = address(0x0F5);
+        address coldVault = address(0xC01D); // stands in for a no-approve contract
+
+        PoolLedger l2 = new PoolLedger(address(timbs), coldVault);
+        SegmentBoard b2 = new SegmentBoard(
+            address(l2), address(registry), address(ent),
+            address(prize), coldVault, opsWallet, guardian,
+            ENTRY_WINDOW, PICK_DELAY, BETS_CLOSE
+        );
+        l2.setBoard(address(b2));
+        registry.addWriter(address(b2));
+
+        assertEq(b2.treasury(), coldVault, "sweeps go to the treasury");
+        assertEq(b2.seedFunder(), opsWallet, "seed is pulled from the ops wallet");
+
+        // only the ops wallet funds; the treasury never needs to approve anything
+        timbs.mintTo(opsWallet, 1_000e18);
+        vm.prank(opsWallet); timbs.approve(address(l2), type(uint256).max);
+
+        prize.setResult(8, bytes6("ZYXWVU"));
+        bytes32[6] memory cs;
+        for (uint8 i; i < 6; ++i) cs[i] = ent.commitmentOf(_secret(i + 1), _salt(1, i + 1));
+        b2.openTable(8, cs);
+
+        assertEq(l2.heldBalance(), SEED, "seed came from the ops wallet");
+        assertEq(timbs.balanceOf(opsWallet), 1_000e18 - SEED);
+        assertEq(timbs.balanceOf(coldVault), 0, "treasury paid nothing");
+    }
+
+    function test_OnlyOwnerCanRepointSeedFunder() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        board.setSeedFunder(alice);
+
+        board.setSeedFunder(bob);
+        assertEq(board.seedFunder(), bob);
+
+        vm.expectRevert(SegmentBoard.ZeroAddress.selector);
+        board.setSeedFunder(address(0));
+    }
+
+    /// @dev The on-chain commitment helpers must produce commitments that
+    ///      actually reveal — this is the guard against binding a commitment to
+    ///      the wrong table id, which otherwise only surfaces at lock time.
+    function test_CommitmentHelpersRoundTrip() public {
+        assertEq(board.nextTableId(), 1, "fresh board opens table 1 next");
+
+        bytes32[6] memory secrets;
+        for (uint8 i; i < 6; ++i) secrets[i] = _secret(i + 1);
+
+        uint256 id = board.nextTableId();
+        bytes32[6] memory cs = board.commitmentsFor(secrets, id);
+
+        // helper output must match the salt/commitment the board derives itself
+        for (uint8 i; i < 6; ++i) {
+            assertEq(cs[i], board.commitmentFor(secrets[i], id, i + 1));
+            assertEq(board.saltFor(id, i + 1), _salt(id, i + 1));
+        }
+
+        // and a table opened on them reveals cleanly for every segment
+        assertEq(board.openTable(7, cs), id);
+        _seatAndBet(id);
+        _lockAll(id);
+        assertEq(board.lockedCharsOf(id).length, 6);
+        assertGe(ledger.heldBalance(), ledger.totalCredited());
+    }
+
+    /// @dev Commitments bound to the wrong table id open fine but cannot reveal.
+    function test_CommitmentsForWrongTableIdFailAtLock() public {
+        bytes32[6] memory secrets;
+        for (uint8 i; i < 6; ++i) secrets[i] = _secret(i + 1);
+
+        bytes32[6] memory wrong = board.commitmentsFor(secrets, 99); // not the id it gets
+        uint256 id = board.openTable(7, wrong);
+        _seatAndBet(id);
+        vm.warp(block.timestamp + PICK_DELAY + 1);
+        board.armTable(id);
+        vm.roll(block.number + 1);
+
+        vm.expectRevert(CommitRevealEntropy.BadReveal.selector);
+        board.lockSegment(id, 1, secrets[0]);
     }
 
     /// @dev Regression: RED_MASK must be 36 bits wide. A 32-bit literal silently
