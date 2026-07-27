@@ -121,10 +121,33 @@ contract SegmentBoardTest is Test {
         vm.stopPrank();
     }
 
+    /**
+     * @dev Advance the chain by `n` blocks / `s` seconds.
+     *
+     *      Do NOT write `vm.roll(block.number + n)` in these tests. NUMBER and
+     *      TIMESTAMP have no dependency on external calls in real EVM semantics,
+     *      so the via-IR Yul optimizer is free to hoist or sink those reads
+     *      across a call — and under `via_ir = true` it does exactly that around
+     *      the vm.roll/vm.warp cheatcodes that quietly mutate them. The result
+     *      is a test that reads a stale (or prematurely updated) block number
+     *      and passes without via-IR while failing with it, on the same solc.
+     *
+     *      vm.getBlockNumber()/vm.getBlockTimestamp() are staticcalls to the
+     *      cheatcode address, which the optimizer cannot reorder, so they always
+     *      observe the post-cheatcode value.
+     */
+    function _advance(uint256 n) internal {
+        vm.roll(vm.getBlockNumber() + n);
+    }
+
+    function _fastForward(uint256 s) internal {
+        vm.warp(vm.getBlockTimestamp() + s);
+    }
+
     function _lockAll(uint256 id) internal {
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         board.armTable(id);
-        vm.roll(block.number + 1);
+        _advance(1);
         for (uint8 s = 1; s <= 6; ++s) {
             board.lockSegment(id, s, _secret(s));
         }
@@ -182,7 +205,7 @@ contract SegmentBoardTest is Test {
         board.loadTokens(id, chips);
         vm.stopPrank();
 
-        vm.warp(block.timestamp + PICK_DELAY - BETS_CLOSE); // exactly at the cutoff
+        _fastForward(PICK_DELAY - BETS_CLOSE); // exactly at the cutoff
         vm.prank(alice);
         vm.expectRevert(SegmentBoard.BetsClosed.selector);
         board.place(id, 1, kLetter, 0);
@@ -196,7 +219,7 @@ contract SegmentBoardTest is Test {
         board.loadTokens(id, chips);
         vm.stopPrank();
 
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         vm.expectRevert(
             abi.encodeWithSelector(SegmentBoard.NotEnoughSeats.selector, uint8(1), uint8(2))
         );
@@ -206,7 +229,7 @@ contract SegmentBoardTest is Test {
     function test_CannotLockInSameBlockAsArm() public {
         uint256 id = _openTable();
         _seatAndBet(id);
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         board.armTable(id);
         vm.expectRevert(SegmentBoard.SameBlockAsArm.selector);
         board.lockSegment(id, 1, _secret(1));
@@ -311,6 +334,57 @@ contract SegmentBoardTest is Test {
     ///      lockSegment and lockSegmentFallback revert while retire() still wants
     ///      all six — the table would jam with every bet inside. On Arbitrum that
     ///      horizon is ~65 seconds, so this is a live risk, not a corner case.
+    function test_RearmRecoversATableWhoseLockBlockExpired() public {
+        uint256 id = _openTable();
+        _seatAndBet(id);
+        _fastForward(PICK_DELAY + 1);
+        board.armTable(id);
+        _advance(1);
+
+        board.lockSegment(id, 1, _secret(1)); // one settles fine
+
+        // ...then the hash ages out before the rest are locked
+        _advance(board.BLOCKHASH_HORIZON() + 1);
+
+        vm.expectRevert(); // LockBlockUnavailable — happy path dead
+        board.lockSegment(id, 2, _secret(2));
+        vm.expectRevert(); // ...and so is the fallback
+        board.lockSegmentFallback(id, 2);
+
+        // anyone may re-arm onto a fresh block, and the rest settle normally
+        vm.prank(bob);
+        board.rearmTable(id);
+        _advance(1);
+        for (uint8 s = 2; s <= 6; ++s) board.lockSegment(id, s, _secret(s));
+
+        board.retire(id);
+        assertEq(ledger.heldBalance(), ledger.totalCredited(), "exactly backed");
+        assertGt(ledger.totalCredited(), 0, "players were paid");
+    }
+
+    function test_CannotRearmWhileLockBlockStillLive() public {
+        uint256 id = _openTable();
+        _seatAndBet(id);
+        _fastForward(PICK_DELAY + 1);
+        board.armTable(id);
+        uint256 lb = vm.getBlockNumber();
+        _advance(10); // well inside the horizon
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SegmentBoard.LockBlockStillLive.selector, lb, lb + 256
+            )
+        );
+        board.rearmTable(id);
+    }
+
+    function test_CannotRearmAFullySettledTable() public {
+        uint256 id = _openTable();
+        _seatAndBet(id);
+        _lockAll(id);
+        _advance(board.BLOCKHASH_HORIZON() + 1);
+        vm.expectRevert(SegmentBoard.NothingLeftToLock.selector);
+        board.rearmTable(id);
+    }
 
     // ─── cancel: the under-seated escape hatch ─────────────────────────────────
 
@@ -333,7 +407,7 @@ contract SegmentBoardTest is Test {
         assertEq(ledger.heldBalance(), staked + SEED);
 
         // entry closes with only one seat: armTable is impossible
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         vm.expectRevert(
             abi.encodeWithSelector(SegmentBoard.NotEnoughSeats.selector, uint8(1), uint8(2))
         );
@@ -365,7 +439,7 @@ contract SegmentBoardTest is Test {
     function test_CannotCancelATableThatCanProceed() public {
         uint256 id = _openTable();
         _seatAndBet(id); // two seats -> it can arm, so it must not be cancellable
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         vm.expectRevert(
             abi.encodeWithSelector(SegmentBoard.TableCanProceed.selector, uint8(2), uint8(2))
         );
@@ -376,7 +450,7 @@ contract SegmentBoardTest is Test {
         uint256 id = _openTable();
         vm.prank(alice);
         board.sit(id, bytes6("ABCDEF"));
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         board.cancelTable(id);
         vm.expectRevert(SegmentBoard.TableRetiredAlready.selector);
         board.cancelTable(id);
@@ -387,15 +461,15 @@ contract SegmentBoardTest is Test {
     function test_FallbackOnlyAfterRevealWindow() public {
         uint256 id = _openTable();
         _seatAndBet(id);
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         board.armTable(id);
-        vm.roll(block.number + 1);
+        _advance(1);
 
         vm.expectRevert(SegmentBoard.RevealWindowOpen.selector);
         board.lockSegmentFallback(id, 1);
 
         // once the protocol has missed its window, anyone can settle the table
-        vm.roll(block.number + board.REVEAL_WINDOW() + 1);
+        _advance(board.REVEAL_WINDOW() + 1);
         vm.prank(bob); // permissionless
         board.lockSegmentFallback(id, 1);
         assertGe(ledger.heldBalance(), ledger.totalCredited());
@@ -404,9 +478,9 @@ contract SegmentBoardTest is Test {
     function test_BadRevealIsRejected() public {
         uint256 id = _openTable();
         _seatAndBet(id);
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         board.armTable(id);
-        vm.roll(block.number + 1);
+        _advance(1);
 
         vm.expectRevert(CommitRevealEntropy.BadReveal.selector);
         board.lockSegment(id, 1, keccak256("not-the-secret"));
@@ -562,9 +636,9 @@ contract SegmentBoardTest is Test {
         bytes32[6] memory wrong = board.commitmentsFor(secrets, 99); // not the id it gets
         uint256 id = board.openTable(7, wrong);
         _seatAndBet(id);
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         board.armTable(id);
-        vm.roll(block.number + 1);
+        _advance(1);
 
         vm.expectRevert(CommitRevealEntropy.BadReveal.selector);
         board.lockSegment(id, 1, secrets[0]);
@@ -583,9 +657,9 @@ contract SegmentBoardTest is Test {
     function test_LockedCharsAccumulateInSegmentOrder() public {
         uint256 id = _openTable();
         _seatAndBet(id);
-        vm.warp(block.timestamp + PICK_DELAY + 1);
+        _fastForward(PICK_DELAY + 1);
         board.armTable(id);
-        vm.roll(block.number + 1);
+        _advance(1);
 
         // lock out of order; each char must land in its own slot and leave the
         // others untouched
