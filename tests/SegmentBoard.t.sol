@@ -153,6 +153,43 @@ contract SegmentBoardTest is Test {
         }
     }
 
+    // ─── constructor dial sanity ──────────────────────────────────────────────
+
+    /// @dev The dials are immutable, so an unusable set bricks the generation with
+    ///      no recovery. These are the two ways that happens.
+    function _deployWithDials(uint64 e, uint64 p, uint64 b) internal returns (SegmentBoard) {
+        return new SegmentBoard(
+            address(ledger), address(registry), address(ent),
+            address(prize), treasury, treasury, guardian, e, p, b
+        );
+    }
+
+    function test_BetsCloseLeadCannotSwallowTheWholeRound() public {
+        // betsCloseLead >= pickDelay: place() would revert BetsClosed from the
+        // instant a table opens, so no bet could ever be made.
+        vm.expectRevert(abi.encodeWithSelector(SegmentBoard.BadDials.selector,
+            uint64(100), uint64(300), uint64(300)));
+        _deployWithDials(100, 300, 300);
+
+        vm.expectRevert(abi.encodeWithSelector(SegmentBoard.BadDials.selector,
+            uint64(100), uint64(300), uint64(400)));
+        _deployWithDials(100, 300, 400);
+    }
+
+    function test_EntryCannotOutliveBetting() public {
+        // entryWindow > pickDelay - betsCloseLead: a wallet could sit and load
+        // chips it can never place.
+        vm.expectRevert(abi.encodeWithSelector(SegmentBoard.BadDials.selector,
+            uint64(2500), uint64(2700), uint64(300)));
+        _deployWithDials(2500, 2700, 300);
+    }
+
+    function test_RealDialSetsAreAccepted() public {
+        _deployWithDials(2400, 2700, 300);   // generation 1, exactly on the boundary
+        _deployWithDials(2400, 3595, 295);   // production, matches §10.3
+        _deployWithDials(240,  360,  30);    // compressed test set
+    }
+
     // ─── lifecycle ───────────────────────────────────────────────────────────
 
     function test_OpenTablePullsSeedAndConsumesRound() public {
