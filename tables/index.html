@@ -1,0 +1,466 @@
+<!doctype html>
+<!--
+  SwapTables — table console.
+
+  SERVED COPY. The source of truth is SwapTables/app/index.html; this mirror
+  exists because SwapTables is private and GitHub Pages needs a public repo (or
+  a paid plan), while TimbSwap already publishes Pages. Edit the source there
+  and re-copy — the page is self-contained, so it copies across verbatim. The
+  <head> here carries the site metadata (canonical, description, favicon) that
+  the source does not need.
+
+  Retire this copy once SwapTables serves its own Pages.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tables — TimbSwap</title>
+  <link rel="canonical" href="https://timbswap.xyz/tables/" />
+  <meta name="description" content="SwapTables segment-betting console on Arbitrum Sepolia — open a table, place bets, settle the round." />
+  <meta name="theme-color" content="#0e1613" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<style>
+  :root{
+    --felt:#0e1613; --panel:#14201b; --panel2:#1a2822; --line:#26372f;
+    --ink:#e9e6dc; --soft:#9db0a6; --faint:#6a7d73;
+    --brass:#c9a24b; --brass2:#e0bd6a;
+    --ok:#46b0a6; --warn:#cbb040; --bad:#d9604b;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--felt);color:var(--ink);font-family:var(--mono);
+       font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px 16px 80px}
+  h1{font-size:1.3rem;margin:0;letter-spacing:-.01em}
+  .eyebrow{font-size:.65rem;letter-spacing:.22em;text-transform:uppercase;color:var(--brass);font-weight:600}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .card h2{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+           margin:0 0 12px;font-weight:600}
+
+  button{font-family:var(--mono);font-size:.82rem;font-weight:600;color:#0e1613;background:var(--brass);
+         border:none;padding:9px 14px;border-radius:8px;cursor:pointer}
+  button:hover:not(:disabled){filter:brightness(1.08)}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  button.big{width:100%;padding:13px;font-size:.9rem}
+  button.danger{background:var(--bad);color:#fff}
+
+  input,select{font-family:var(--mono);font-size:.82rem;background:var(--panel2);color:var(--ink);
+        border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%}
+  label{display:block;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+  .row>*{flex:1;min-width:120px}
+  .row.tight>*{flex:0 0 auto;min-width:0}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .stat{background:var(--panel2);border-radius:8px;padding:10px 12px}
+  .stat .k{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .stat .v{font-size:1rem;color:var(--ink);font-variant-numeric:tabular-nums;word-break:break-all}
+  .stat .v.big{font-size:1.5rem;letter-spacing:.12em}
+
+  .pill{display:inline-block;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;
+        padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--soft)}
+  .pill.ok{color:var(--ok);border-color:var(--ok)}
+  .pill.warn{color:var(--warn);border-color:var(--warn)}
+  .pill.bad{color:var(--bad);border-color:var(--bad)}
+
+  .chars{display:flex;gap:8px;flex-wrap:wrap}
+  .ch{width:46px;height:58px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);
+      display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ch b{font-size:1.5rem;color:var(--faint)}
+  .ch.set b{color:var(--brass2)}
+  .ch span{font-size:.55rem;color:var(--faint)}
+
+  #log{background:#0a110e;border:1px solid var(--line);border-radius:8px;padding:10px;
+       max-height:230px;overflow:auto;font-size:.72rem;white-space:pre-wrap;word-break:break-word}
+  .l-ok{color:var(--ok)} .l-err{color:var(--bad)} .l-warn{color:var(--warn)} .l-dim{color:var(--faint)}
+
+  .note{font-size:.72rem;color:var(--faint);margin-top:8px}
+  .hide{display:none}
+  a{color:var(--brass2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">SwapTables · Arbitrum Sepolia</div>
+      <h1>Table console</h1>
+    </div>
+    <div style="text-align:right">
+      <div id="acct" class="pill">not connected</div>
+      <div id="net" class="pill" style="margin-top:6px"></div>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="row">
+      <button id="connect" style="flex:0 0 auto">Connect wallet</button>
+      <button id="refresh" class="ghost" style="flex:0 0 auto" disabled>Refresh</button>
+      <div style="flex:1"></div>
+      <div id="timbsBox" class="pill">TIMBS —</div>
+    </div>
+  </div>
+
+  <!-- ── money ─────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Your money</h2>
+    <div class="grid">
+      <div class="stat"><div class="k">TIMBS balance</div><div class="v" id="sBal">—</div></div>
+      <div class="stat"><div class="k">Approved to ledger</div><div class="v" id="sAllow">—</div></div>
+      <div class="stat"><div class="k">Credit (withdrawable)</div><div class="v" id="sCredit">—</div></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="approve" class="ghost" disabled>Approve 1000 TIMBS</button>
+      <button id="withdraw" disabled>Withdraw my credit</button>
+    </div>
+  </div>
+
+  <!-- ── table state ───────────────────────────────────── -->
+  <div class="card">
+    <h2>Table</h2>
+    <div class="row" style="margin-bottom:12px">
+      <div style="flex:0 0 120px"><label>Table id</label><input id="tableId" type="number" min="1" value="1"></div>
+      <button id="load" class="ghost" style="flex:0 0 auto" disabled>Load</button>
+      <div style="flex:1"></div>
+      <div id="phase" class="pill">—</div>
+    </div>
+
+    <div class="grid">
+      <div class="stat"><div class="k">Seats</div><div class="v" id="sSeats">—</div></div>
+      <div class="stat"><div class="k">Seed round</div><div class="v" id="sRound">—</div></div>
+      <div class="stat"><div class="k">Entry / bets close</div><div class="v" id="sEntry">—</div></div>
+      <div class="stat"><div class="k">Pick at</div><div class="v" id="sPick">—</div></div>
+      <div class="stat"><div class="k">Lock block</div><div class="v" id="sLock">—</div></div>
+      <div class="stat"><div class="k">Segments locked</div><div class="v" id="sLocked">—</div></div>
+    </div>
+
+    <div style="margin-top:14px">
+      <label>Winning string so far</label>
+      <div class="chars" id="chars"></div>
+    </div>
+  </div>
+
+  <!-- ── play ──────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Play</h2>
+    <div class="row">
+      <div><label>Your ticket (any 6 chars)</label><input id="ticket" value="TQJDIP" maxlength="6"></div>
+      <button id="sit" style="flex:0 0 auto" disabled>Sit</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Chip for all six tokens</label>
+        <select id="chip">
+          <option value="0">5 TIMBS</option><option value="1">10</option>
+          <option value="2" selected>25</option><option value="3">50</option>
+          <option value="4">100</option><option value="5">500</option><option value="6">1000</option>
+        </select></div>
+      <button id="loadTokens" style="flex:0 0 auto" disabled>Load 6 tokens</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Bet kind</label>
+        <select id="kind">
+          <option value="5">Letter (A–Z)</option>
+          <option value="6">Number (0–9)</option>
+          <option value="4">Red / Black</option>
+          <option value="7">Low / High</option>
+          <option value="3">Vowels</option>
+          <option value="1">Column</option>
+          <option value="2">Dozen</option>
+          <option value="0">Exactly (pocket)</option>
+          <option value="8">Your ticket</option>
+        </select></div>
+      <div style="flex:0 0 110px"><label>Pick</label><input id="pick" type="number" value="0" min="0"></div>
+      <button id="placeAll" style="flex:0 0 auto" disabled>Place on all 6</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="placeDD" class="ghost" disabled>Place Double-Digit</button>
+    </div>
+    <p class="note">Pick is only used by Exactly (0–35), Column/Dozen (0–2), Red/Black (0=red), Low/High (0=low). Leave 0 otherwise.</p>
+  </div>
+
+  <!-- ── operator ──────────────────────────────────────── -->
+  <div class="card">
+    <h2>Operator</h2>
+    <div class="row">
+      <div><label>Passphrase (derives the 6 secrets — save it)</label><input id="phrase" placeholder="something private"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div style="flex:0 0 140px"><label>Seed round</label><input id="round" type="number" placeholder="56"></div>
+      <button id="findRound" class="ghost" style="flex:0 0 auto" disabled>Find settled</button>
+      <button id="open" style="flex:0 0 auto" disabled>Open table</button>
+    </div>
+    <p class="note" id="roundNote"></p>
+  </div>
+
+  <!-- ── settle ────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Settle</h2>
+    <button id="runSettle" class="big" disabled>Arm + lock all six + retire</button>
+    <p class="note">Runs the whole close-out back-to-back so the six locks land well inside the
+      block-hash window. You can still fire the steps individually below.</p>
+    <div class="row" style="margin-top:10px">
+      <button id="arm" class="ghost" disabled>Arm</button>
+      <button id="lockAll" class="ghost" disabled>Lock 6</button>
+      <button id="retire" class="ghost" disabled>Retire</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Log</h2>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script type="module">
+import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm";
+
+const ADDR = {
+  board:  "0x25D47477f7bf912791B9a6033d810283f33bF13D",
+  ledger: "0xf3686b4E86e2b21FaDF36FE43b87EAF9D35FE409",
+  timbs:  "0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa",
+  prize:  "0x35976f4D2260127848a6274D2eC89ee054412432",
+};
+const CHAIN = 421614n;
+const CHIPS = [5,10,25,50,100,500,1000];
+
+const BOARD_ABI = [
+  "function tableCount() view returns (uint256)",
+  "function nextTableId() view returns (uint256)",
+  "function tables(uint256) view returns (uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRound,uint8 seatCount,uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars)",
+  "function entryWindow() view returns (uint64)",
+  "function commitmentsFor(bytes32[6] secrets,uint256 tableId) view returns (bytes32[6])",
+  "function openTable(uint256 seedRound,bytes32[6] c) returns (uint256)",
+  "function sit(uint256 tableId,bytes6 ticket)",
+  "function loadTokens(uint256 tableId,uint8[6] chipIdxs)",
+  "function place(uint256 tableId,uint8 segment,uint8 kind,uint8 pick)",
+  "function placeDoubleDigit(uint256 tableId,uint8 chipIdx)",
+  "function armTable(uint256 tableId)",
+  "function lockSegment(uint256 tableId,uint8 segment,bytes32 secret)",
+  "function retire(uint256 tableId)",
+  "function lockedCharsOf(uint256) view returns (bytes6)",
+];
+const LEDGER_ABI = [
+  "function credit(address) view returns (uint256)",
+  "function heldBalance() view returns (uint256)",
+  "function totalCredited() view returns (uint256)",
+  "function withdraw()",
+];
+const ERC20_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address,address) view returns (uint256)",
+  "function approve(address,uint256) returns (bool)",
+];
+const PRIZE_ABI = ["function roundWinningString(uint256) view returns (bytes6)"];
+
+let provider, signer, me, board, ledger, timbs, prize, T = null;
+
+const $ = id => document.getElementById(id);
+const fmt = w => Number(ethers.formatUnits(w, 18)).toLocaleString(undefined,{maximumFractionDigits:4});
+function log(msg, cls="") {
+  const el = $("log");
+  el.innerHTML += `<div class="${cls}">${new Date().toLocaleTimeString()}  ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+function b6ToStr(hex){
+  try{ const s = ethers.toUtf8String(hex).replace(/\0/g,""); return s || "—"; }catch{ return "—"; }
+}
+async function tx(label, fn){
+  try{
+    log(`${label} …`, "l-dim");
+    const t = await fn();
+    log(`  sent ${t.hash.slice(0,18)}…`, "l-dim");
+    await t.wait();
+    log(`✓ ${label}`, "l-ok");
+    return true;
+  }catch(e){
+    const m = e?.info?.error?.message || e?.shortMessage || e?.message || String(e);
+    log(`✗ ${label} — ${m}`, "l-err");
+    return false;
+  }
+}
+
+// ── connect ────────────────────────────────────────────
+$("connect").onclick = async () => {
+  if (!window.ethereum) return log("No wallet found. Install/enable a browser wallet.", "l-err");
+  provider = new ethers.BrowserProvider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+  signer = await provider.getSigner();
+  me = await signer.getAddress();
+  const net = await provider.getNetwork();
+  $("acct").textContent = me.slice(0,6)+"…"+me.slice(-4);
+  $("acct").className = "pill ok";
+  $("net").textContent = net.chainId === CHAIN ? "Arbitrum Sepolia" : `wrong chain (${net.chainId})`;
+  $("net").className = net.chainId === CHAIN ? "pill ok" : "pill bad";
+  if (net.chainId !== CHAIN) return log("Switch your wallet to Arbitrum Sepolia (421614).", "l-err");
+
+  board  = new ethers.Contract(ADDR.board,  BOARD_ABI,  signer);
+  ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
+  timbs  = new ethers.Contract(ADDR.timbs,  ERC20_ABI,  signer);
+  prize  = new ethers.Contract(ADDR.prize,  PRIZE_ABI,  signer);
+
+  document.querySelectorAll("button").forEach(b => b.disabled = false);
+  log("connected", "l-ok");
+  const n = await board.nextTableId().catch(()=>null);
+  if (n) { $("tableId").value = n > 1n ? (n-1n).toString() : "1"; log(`next table id = ${n}`, "l-dim"); }
+  await refresh();
+};
+
+// ── reads ──────────────────────────────────────────────
+async function refreshMoney(){
+  const [bal, allow, cred] = await Promise.all([
+    timbs.balanceOf(me), timbs.allowance(me, ADDR.ledger), ledger.credit(me)
+  ]);
+  $("sBal").textContent = fmt(bal);
+  $("sAllow").textContent = fmt(allow);
+  $("sCredit").textContent = fmt(cred);
+  $("timbsBox").textContent = `TIMBS ${fmt(bal)}`;
+  $("withdraw").disabled = cred === 0n;
+}
+async function refreshTable(){
+  const id = BigInt($("tableId").value || "1");
+  const count = await board.tableCount();
+  if (id === 0n || id > count) { $("phase").textContent = "no such table"; $("phase").className="pill bad"; T=null; return; }
+  const t = await board.tables(id);
+  T = t;
+  const ew = await board.entryWindow();
+  const entryClose = t.openedAt + ew;
+  const now = BigInt(Math.floor(Date.now()/1000));
+
+  $("sSeats").textContent  = `${t.seatCount} / 12`;
+  $("sRound").textContent  = t.seedRound.toString();
+  $("sLock").textContent   = t.lockBlock === 0n ? "not armed" : t.lockBlock.toString();
+  const lockedCount = [...Array(6).keys()].filter(i => (Number(t.lockedMask) >> i) & 1).length;
+  $("sLocked").textContent = `${lockedCount} / 6`;
+
+  const cd = (target) => {
+    const d = Number(target - now);
+    if (d <= 0) return "closed";
+    const m = Math.floor(d/60), s = d%60;
+    return `${m}m ${s}s left`;
+  };
+  $("sEntry").textContent = cd(entryClose);
+  $("sPick").textContent  = t.pickTime <= now ? "ready" : cd(t.pickTime);
+
+  // phase pill
+  let ph, cls;
+  if (t.retired)                    { ph="retired";        cls="pill"; }
+  else if (lockedCount === 6)       { ph="ready to retire"; cls="pill warn"; }
+  else if (t.lockBlock !== 0n)      { ph="armed — locking"; cls="pill warn"; }
+  else if (t.pickTime <= now)       { ph="ready to arm";    cls="pill warn"; }
+  else if (entryClose > now)        { ph="open for play";   cls="pill ok"; }
+  else                              { ph="bets closed";     cls="pill"; }
+  $("phase").textContent = ph; $("phase").className = cls;
+
+  // chars
+  const s = b6ToStr(t.lockedChars);
+  $("chars").innerHTML = [...Array(6).keys()].map(i=>{
+    const on = (Number(t.lockedMask) >> i) & 1;
+    const c = on && s !== "—" ? s[i] : "·";
+    return `<div class="ch ${on?"set":""}"><b>${c}</b><span>SEG ${i+1}</span></div>`;
+  }).join("");
+}
+async function refresh(){ if(!me) return; try{ await refreshMoney(); await refreshTable(); }catch(e){ log(e.message,"l-err"); } }
+$("refresh").onclick = refresh;
+$("load").onclick = refresh;
+setInterval(()=>{ if(me && T && !T.retired) refreshTable().catch(()=>{}); }, 5000);
+
+// ── money actions ──────────────────────────────────────
+$("approve").onclick = async () => {
+  if (await tx("approve 1000 TIMBS", () => timbs.approve(ADDR.ledger, ethers.parseUnits("1000",18)))) refresh();
+};
+$("withdraw").onclick = async () => { if (await tx("withdraw", () => ledger.withdraw())) refresh(); };
+
+// ── play actions ───────────────────────────────────────
+const tid = () => BigInt($("tableId").value || "1");
+$("sit").onclick = async () => {
+  const t = ethers.hexlify(ethers.toUtf8Bytes($("ticket").value.padEnd(6," ").slice(0,6)));
+  if (await tx("sit", () => board.sit(tid(), t))) refresh();
+};
+$("loadTokens").onclick = async () => {
+  const c = Number($("chip").value);
+  log(`loading 6 × ${CHIPS[c]} TIMBS = ${CHIPS[c]*6} total`, "l-dim");
+  if (await tx("loadTokens", () => board.loadTokens(tid(), [c,c,c,c,c,c]))) refresh();
+};
+$("placeAll").onclick = async () => {
+  const kind = Number($("kind").value), pick = Number($("pick").value);
+  for (let s=1; s<=6; s++){
+    const ok = await tx(`place seg ${s}`, () => board.place(tid(), s, kind, pick));
+    if (!ok) break;
+  }
+  refresh();
+};
+$("placeDD").onclick = async () => {
+  const c = Number($("chip").value);
+  if (await tx("placeDoubleDigit", () => board.placeDoubleDigit(tid(), c))) refresh();
+};
+
+// ── operator ───────────────────────────────────────────
+function secretsFor(id){
+  const p = $("phrase").value;
+  if (!p) { log("Set a passphrase first — it derives (and recovers) your six secrets.", "l-err"); return null; }
+  return [...Array(6).keys()].map(i => ethers.keccak256(ethers.toUtf8Bytes(`${p}:${id}:${i+1}`)));
+}
+$("findRound").onclick = async () => {
+  $("roundNote").textContent = "searching…";
+  const start = Number($("round").value || 60);
+  for (let r = start; r > start-40 && r > 0; r--){
+    const s = await prize.roundWinningString(r).catch(()=>null);
+    if (s && s !== "0x000000000000"){
+      $("round").value = r;
+      $("roundNote").textContent = `round ${r} is settled → "${b6ToStr(s)}"`;
+      log(`found settled round ${r} = ${b6ToStr(s)}`, "l-ok");
+      return;
+    }
+  }
+  $("roundNote").textContent = "no settled round found in the last 40 — try a higher starting number";
+};
+$("open").onclick = async () => {
+  const next = await board.nextTableId();
+  const secs = secretsFor(next.toString());
+  if (!secs) return;
+  log(`opening table ${next} (secrets bound to id ${next})`, "l-dim");
+  const cs = await board.commitmentsFor(secs, next);
+  if (await tx(`openTable round ${$("round").value}`, () => board.openTable(BigInt($("round").value), cs))){
+    $("tableId").value = next.toString();
+    refresh();
+  }
+};
+
+// ── settle ─────────────────────────────────────────────
+async function doArm(){ return tx("armTable", () => board.armTable(tid())); }
+async function doLocks(){
+  const secs = secretsFor(tid().toString());
+  if (!secs) return false;
+  // one block must pass after arming
+  const start = await provider.getBlockNumber();
+  while (await provider.getBlockNumber() === start) await new Promise(r=>setTimeout(r,300));
+  for (let s=1; s<=6; s++){
+    const t = T && ((Number(T.lockedMask) >> (s-1)) & 1);
+    if (t) { log(`seg ${s} already locked`, "l-dim"); continue; }
+    const ok = await tx(`lock seg ${s}`, () => board.lockSegment(tid(), s, secs[s-1]));
+    if (!ok) return false;
+  }
+  return true;
+}
+$("arm").onclick    = async () => { await doArm(); refresh(); };
+$("lockAll").onclick= async () => { await doLocks(); refresh(); };
+$("retire").onclick = async () => { if (await tx("retire", () => board.retire(tid()))) refresh(); };
+$("runSettle").onclick = async () => {
+  const btn = $("runSettle"); btn.disabled = true;
+  try{
+    await refreshTable();
+    if (T && T.lockBlock === 0n) { if (!await doArm()) return; }
+    if (!await doLocks()) return;
+    await tx("retire", () => board.retire(tid()));
+    log("round closed — winners can now Withdraw", "l-ok");
+  } finally { btn.disabled = false; refresh(); }
+};
+
+log("Connect a wallet to begin.", "l-dim");
+</script>
+</body>
+</html>
