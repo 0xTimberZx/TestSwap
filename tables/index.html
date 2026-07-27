@@ -70,9 +70,17 @@
   .chars{display:flex;gap:8px;flex-wrap:wrap}
   .ch{width:46px;height:58px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);
       display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .ch b{font-size:1.5rem;color:var(--faint)}
+  .ch b{font-size:1.5rem;color:var(--faint);position:relative;line-height:1}
   .ch.set b{color:var(--brass2)}
   .ch span{font-size:.55rem;color:var(--faint)}
+  /* The digit zero and the letter O are near-identical in this face, and the
+     winning string is the most important thing on the page — a misread flips
+     which side of a Letter/Number bet won. Dot the zero so they cannot be
+     confused. */
+  .ch b.zero::after{
+    content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:.19em;height:.19em;border-radius:50%;background:currentColor;
+  }
 
   /* Tall enough to hold a whole close-out sequence — arm, six locks, retire —
      without scrolling, since that is exactly when you need to read it back. */
@@ -570,7 +578,12 @@ async function refreshTable(){
   $("chars").innerHTML = [...Array(6).keys()].map(i=>{
     const on = (Number(t.lockedMask) >> i) & 1;
     const c = on && s !== "—" ? s[i] : "·";
-    return `<div class="ch ${on?"set":""}"><b>${c}</b><span>SEG ${i+1}</span></div>`;
+    // dot the zero, and label the tile with which side of a Letter/Number bet won
+    const isZero = c === "0";
+    const kind = !on || c === "·" ? `SEG ${i+1}`
+               : /[0-9]/.test(c) ? `${i+1} · NUM` : `${i+1} · LTR`;
+    return `<div class="ch ${on?"set":""}"><b class="${isZero?"zero":""}">${c}</b>`
+         + `<span>${kind}</span></div>`;
   }).join("");
 }
 async function refresh(){ if(!me) return; try{ await refreshMoney(); await refreshTable(); }catch(e){ log(e.message,"l-err"); } }
