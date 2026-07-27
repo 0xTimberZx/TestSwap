@@ -63,6 +63,10 @@ contract DeploySegmentBoard is Script {
         address timbs     = vm.envAddress("TIMBS_ADDRESS");
         address timbPrize = vm.envAddress("TIMB_PRIZE_ADDRESS");
         address treasury  = vm.envAddress("TREASURY_ADDRESS");
+        // Seed is PULLED via transferFrom, so this must be an address that can
+        // call approve() — a treasury *contract* usually cannot. Defaults to the
+        // treasury only when it is itself able to approve.
+        address seedFunder = vm.envOr("SEED_FUNDER_ADDRESS", treasury);
         address guardian  = vm.envOr("GUARDIAN_ADDRESS", address(0));
 
         uint64 entryWindow   = uint64(vm.envOr("ENTRY_WINDOW_SECONDS", uint256(40 minutes)));
@@ -98,6 +102,7 @@ contract DeploySegmentBoard is Script {
             address(entropy),
             timbPrize,
             treasury,
+            seedFunder,
             guardian,
             entryWindow,
             pickDelay,
@@ -125,10 +130,11 @@ contract DeploySegmentBoard is Script {
         console.log("pickDelay    (s):", pickDelay);
         console.log("betsClose    (s):", betsCloseLead);
         console.log("guardian        :", guardian);
+        console.log("seedFunder      :", seedFunder);
         console.log("");
         console.log("REQUIRED next steps:");
         console.log(" 1. TIMBS.setTransferWhitelist(poolLedger, true)");
-        console.log(" 2. From treasury: TIMBS.approve(poolLedger, seedBudget)");
+        console.log(" 2. From the SEED FUNDER: TIMBS.approve(poolLedger, seedBudget)");
         console.log(" 3. Put SegmentBoard in SwapTables/onchain/addresses.js");
         if (!registryWired) {
             console.log(" 4. ACTION REQUIRED: registry owner must call");
