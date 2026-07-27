@@ -247,6 +247,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     error LockBlockStillLive(uint256 lockBlock, uint256 expiresAt);
     error NothingLeftToLock();
     error SeedNotSettled(uint256 round);
+    error BadDials(uint64 entryWindow, uint64 pickDelay, uint64 betsCloseLead);
 
     // ─── Events ────────────────────────────────────────────────────────────────
 
@@ -302,6 +303,19 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         treasury     = _treasury;
         seedFunder   = _seedFunder == address(0) ? _treasury : _seedFunder;
         guardian     = _guardian; // may be address(0) for a zero-privilege generation
+        // The dials are immutable, so a bad set bricks the generation with no
+        // recovery. Two ways that happens:
+        //   betsCloseLead >= pickDelay  -> `block.timestamp + betsCloseLead >=
+        //     pickTime` holds from the instant a table opens, so place() always
+        //     reverts BetsClosed and no bet can ever be made.
+        //   entryWindow > pickDelay - betsCloseLead -> entry outlives betting, so
+        //     a wallet can sit and load chips it can never place.
+        // Generation 1 sat exactly on the second boundary (2400 == 2700 - 300),
+        // which is legal, so this rejects only genuinely unusable sets.
+        if (_pickDelay <= _betsCloseLead ||
+            _entryWindow > _pickDelay - _betsCloseLead) {
+            revert BadDials(_entryWindow, _pickDelay, _betsCloseLead);
+        }
         entryWindow  = _entryWindow;
         pickDelay    = _pickDelay;
         betsCloseLead = _betsCloseLead;
