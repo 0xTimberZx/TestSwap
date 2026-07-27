@@ -10,6 +10,17 @@ on:
       - "tests/**"
       - "foundry.toml"
       - ".github/workflows/contracts.yml"
+  # Also gate main itself. PR-only meant a regression could land on main and sit
+  # there unnoticed — e.g. an edit committed straight to main, or a squash-merge
+  # whose result differs from what CI saw on the branch. Same path filter, so the
+  # keeper's [skip ci] epoch-state commits still never trigger it.
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "tests/**"
+      - "foundry.toml"
+      - ".github/workflows/contracts.yml"
   workflow_dispatch:
 
 permissions:
