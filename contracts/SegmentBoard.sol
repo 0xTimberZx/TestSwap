@@ -105,7 +105,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
     /// @notice How long `blockhash` can still see the lock block. Past this the
     ///         hash reads zero and BOTH settle paths fail, so the table must be
-    ///         past this the hash reads zero (see lockSegmentFallback).
+    ///         re-armed onto a fresh block (see rearmTable).
     uint256 public constant BLOCKHASH_HORIZON = 256;
 
     /// @dev Pocket colouring: 18 red / 18 black over the ordered alphabet.
@@ -242,6 +242,8 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     error SegmentsOutstanding();
     error EntryStillOpen();
     error TableCanProceed(uint8 seated, uint8 required);
+    error LockBlockStillLive(uint256 lockBlock, uint256 expiresAt);
+    error NothingLeftToLock();
     error SeedNotSettled(uint256 round);
 
     // ─── Events ────────────────────────────────────────────────────────────────
@@ -251,6 +253,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     event TokensLoaded(uint256 indexed tableId, address indexed wallet, uint256 total);
     event BetPlaced(uint256 indexed tableId, uint8 indexed pool, address indexed wallet, uint8 kind, uint8 pick);
     event TableArmed(uint256 indexed tableId, uint256 lockBlock);
+    event TableRearmed(uint256 indexed tableId, uint256 staleBlock, uint256 lockBlock);
     event SegmentLocked(uint256 indexed tableId, uint8 indexed segment, bytes1 lockedChar, bool viaFallback);
     event PoolSettled(uint256 indexed tableId, uint8 indexed pool, uint256 pot, uint256 rake, uint256 distributed);
     event TableRetired(uint256 indexed tableId, uint256 sweptToTreasury);
@@ -450,6 +453,40 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (t.seatCount < SEATS_MIN)      revert NotEnoughSeats(t.seatCount, SEATS_MIN);
         t.lockBlock = uint64(block.number);
         emit TableArmed(tableId, block.number);
+    }
+
+    /**
+     * @notice Re-arm a table whose lock block has aged out. Permissionless.
+     * @dev `blockhash` only reaches back BLOCKHASH_HORIZON blocks. Past that the
+     *      hash reads zero and BOTH lockSegment and lockSegmentFallback revert,
+     *      while retire() still demands all six segments — so an un-settled table
+     *      would jam permanently with every bet inside it. On a fast chain that
+     *      window is short (~65s at Arbitrum's ~0.25s blocks), which makes this a
+     *      live risk, not a corner case.
+     *
+     *      Re-arming records a fresh lock block and the remaining segments settle
+     *      against it. Guard #1 is unaffected: bets closed long before, so the new
+     *      block hash is just as unknowable to everyone as the old one.
+     *
+     *      Caveat: whoever re-arms gets new randomness for the unsettled
+     *      segments, so a party who could suppress everyone else for a full
+     *      horizon could grind. That is bounded by this being permissionless —
+     *      from REVEAL_WINDOW onward anyone may settle via the fallback, so a
+     *      griefer has to win every race for ~192 blocks to reroll once.
+     */
+    function rearmTable(uint256 tableId) external {
+        Table storage t = _liveTable(tableId);
+        if (t.lockBlock == 0)     revert NotArmed();
+        if (t.lockedMask == 0x3F) revert NothingLeftToLock();
+
+        uint256 expiresAt = t.lockBlock + BLOCKHASH_HORIZON;
+        if (block.number <= expiresAt) {
+            revert LockBlockStillLive(t.lockBlock, expiresAt);
+        }
+
+        uint256 stale = t.lockBlock;
+        t.lockBlock = uint64(block.number);
+        emit TableRearmed(tableId, stale, block.number);
     }
 
     /// @notice Lock a segment by revealing its secret, then settle its pool.
