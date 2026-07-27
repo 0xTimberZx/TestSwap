@@ -106,6 +106,8 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     /// @notice How long `blockhash` can still see the lock block. Past this the
     ///         hash reads zero and BOTH settle paths fail, so the table must be
     ///         re-armed onto a fresh block (see rearmTable).
+    /// @dev    Counted in L1 blocks: on Arbitrum `block.number` is the L1 block
+    ///         number, so 256 blocks is ~51 minutes, not ~65 seconds.
     uint256 public constant BLOCKHASH_HORIZON = 256;
 
     /// @dev Pocket colouring: 18 red / 18 black over the ordered alphabet.
@@ -460,9 +462,21 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
      * @dev `blockhash` only reaches back BLOCKHASH_HORIZON blocks. Past that the
      *      hash reads zero and BOTH lockSegment and lockSegmentFallback revert,
      *      while retire() still demands all six segments — so an un-settled table
-     *      would jam permanently with every bet inside it. On a fast chain that
-     *      window is short (~65s at Arbitrum's ~0.25s blocks), which makes this a
-     *      live risk, not a corner case.
+     *      would jam permanently with every bet inside it.
+     *
+     *      On the size of that window: an earlier note here put it at ~65s, from
+     *      Arbitrum's ~0.25s L2 block time. That is wrong. On Arbitrum
+     *      `block.number` is the *L1* block number, not the L2 one, so both
+     *      REVEAL_WINDOW and BLOCKHASH_HORIZON count L1 blocks at ~12s:
+     *
+     *        REVEAL_WINDOW      64 blocks  ~13 minutes
+     *        BLOCKHASH_HORIZON 256 blocks  ~51 minutes
+     *
+     *      Measured live on 2026-07-27: table 3 armed at L1 block 11359219 and
+     *      was still inside the reveal window 12 minutes later (~11-12s/block).
+     *      So this is a slow leak rather than the near-instant trap the old
+     *      comment described — but still real: an operator who loses the reveal
+     *      has under an hour to recover, and no second chance after.
      *
      *      Re-arming records a fresh lock block and the remaining segments settle
      *      against it. Guard #1 is unaffected: bets closed long before, so the new
