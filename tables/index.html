@@ -70,9 +70,20 @@
   .chars{display:flex;gap:8px;flex-wrap:wrap}
   .ch{width:46px;height:58px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);
       display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .ch b{font-size:1.5rem;color:var(--faint)}
+  .ch b{font-size:1.5rem;color:var(--faint);position:relative;line-height:1}
   .ch.set b{color:var(--brass2)}
   .ch span{font-size:.55rem;color:var(--faint)}
+  /* The digit zero and the letter O are near-identical in this face, and the
+     winning string is the most important thing on the page — a misread flips
+     which side of a Letter/Number bet won. Dot the zero so they cannot be
+     confused. */
+  /* And round the letter O out against it — monospace draws both narrow, so
+     widening the O gives the pair a shape difference as well as the dot. */
+  .ch b.oh{display:inline-block;transform:scaleX(1.18)}
+  .ch b.zero::after{
+    content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:.19em;height:.19em;border-radius:50%;background:currentColor;
+  }
 
   /* Tall enough to hold a whole close-out sequence — arm, six locks, retire —
      without scrolling, since that is exactly when you need to read it back. */
@@ -121,6 +132,18 @@
       <button id="approve" class="ghost" disabled>Approve 1000 TIMBS</button>
       <button id="withdraw" disabled>Withdraw my credit</button>
     </div>
+  </div>
+
+  <!-- ── vault ─────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Vault (PoolLedger)</h2>
+    <div class="grid">
+      <div class="stat"><div class="k">Held balance</div><div class="v" id="sHeld">—</div></div>
+      <div class="stat"><div class="k">Total credited</div><div class="v" id="sOwed">—</div></div>
+      <div class="stat"><div class="k">Unowed (sweepable)</div><div class="v" id="sUnowed">—</div></div>
+    </div>
+    <p class="note" id="vaultNote">Escrow is sacred: held must always be &ge; credited. After a table
+      retires the two should meet exactly, and once every winner withdraws both read zero.</p>
   </div>
 
   <!-- ── table state ───────────────────────────────────── -->
@@ -215,13 +238,20 @@
       <button id="lockFallback" class="ghost" disabled>Fallback-lock the rest</button>
     </div>
     <p class="note">Fallback needs no secret and works once the reveal window (64 blocks)
-      has passed, but only while the lock block is still inside the 256-block hash
-      horizon — about 65 seconds at 0.25s blocks. Use it if the reveal is lost or late.</p>
+      has passed, but only while the lock block is still inside the 256-block hash horizon.
+      On Arbitrum <code>block.number</code> is the <b>L1</b> block number, so those are L1
+      blocks: roughly <b>13 minutes</b> until the fallback opens and <b>51 minutes</b> until
+      the table can no longer be locked. Use it if the reveal is lost or late.</p>
   </div>
 
   <div class="card">
     <h2>Log</h2>
     <div id="log"></div>
+  </div>
+
+  <div class="card">
+    <h2>Contracts</h2>
+    <div id="addrList" style="font-size:.72rem;line-height:1.9;word-break:break-all"></div>
   </div>
 </div>
 
@@ -355,8 +385,16 @@ const PRIZE_ABI = ["function roundWinningString(uint256) view returns (bytes6)"]
 let provider, signer, me, board, ledger, timbs, prize, T = null;
 
 const $ = id => document.getElementById(id);
-// An armed table dies in ~65s if the reveal is lost, and a page reload used to
-// wipe the passphrase that derives the secrets. Persist it.
+addEventListener("DOMContentLoaded", () => {
+  const rows = [["SegmentBoard","board"],["PoolLedger","ledger"],["TIMBS","timbs"],["TimbPrize","prize"]];
+  $("addrList").innerHTML = rows.map(([label,k]) =>
+    `<div><span style="color:var(--faint)">${label}</span> ` +
+    `<a href="https://sepolia.arbiscan.io/address/${ADDR[k]}" target="_blank" rel="noopener">${ADDR[k]}</a></div>`
+  ).join("");
+});
+// An armed table dies ~51 minutes after arming if the reveal is lost (256 L1
+// blocks), and a page reload used to wipe the passphrase that derives the
+// secrets. Persist it.
 try {
   const saved = localStorage.getItem("swaptables:phrase");
   if (saved) addEventListener("DOMContentLoaded", () => { if (!$("phrase").value) $("phrase").value = saved; });
@@ -476,6 +514,32 @@ async function refreshMoney(){
   $("sCredit").textContent = fmt(cred);
   $("timbsBox").textContent = `TIMBS ${fmt(bal)}`;
   $("withdraw").disabled = cred === 0n;
+
+  // The escrow-sacred invariant, read straight off the ledger.
+  const [held, owed] = await Promise.all([ledger.heldBalance(), ledger.totalCredited()]);
+  $("sHeld").textContent = fmt(held);
+  $("sOwed").textContent = fmt(owed);
+  $("sUnowed").textContent = fmt(held - owed);
+  const note = $("vaultNote");
+  if (held < owed){
+    note.textContent = `BROKEN: held is ${fmt(owed - held)} short of credited.`;
+    note.className = "note l-err";
+  } else if (held === owed && held === 0n){
+    note.textContent = "Drained to exactly zero — every chip accounted for.";
+    note.className = "note l-ok";
+  } else if (held === owed){
+    note.textContent = "Held == credited: escrow exactly backs what is owed, nothing sweepable.";
+    note.className = "note l-ok";
+  } else {
+    note.textContent = "Escrow is sacred: held must always be >= credited. After a table retires "
+      + "the two should meet exactly, and once every winner withdraws both read zero.";
+    note.className = "note";
+  }
+  // exact wei on long-press / hover, for reconciling against a prediction
+  $("sHeld").title = held.toString();
+  $("sOwed").title = owed.toString();
+  $("sCredit").title = cred.toString();
+  log(`vault held ${held} | credited ${owed} | your credit ${cred}`, "l-dim");
 }
 async function refreshTable(){
   const id = BigInt($("tableId").value || "1");
@@ -517,7 +581,12 @@ async function refreshTable(){
   $("chars").innerHTML = [...Array(6).keys()].map(i=>{
     const on = (Number(t.lockedMask) >> i) & 1;
     const c = on && s !== "—" ? s[i] : "·";
-    return `<div class="ch ${on?"set":""}"><b>${c}</b><span>SEG ${i+1}</span></div>`;
+    // dot the zero, and label the tile with which side of a Letter/Number bet won
+    const isZero = c === "0", isOh = c === "O";
+    const kind = !on || c === "·" ? `SEG ${i+1}`
+               : /[0-9]/.test(c) ? `${i+1} · NUM` : `${i+1} · LTR`;
+    return `<div class="ch ${on?"set":""}"><b class="${isZero?"zero":isOh?"oh":""}">${c}</b>`
+         + `<span>${kind}</span></div>`;
   }).join("");
 }
 async function refresh(){ if(!me) return; try{ await refreshMoney(); await refreshTable(); }catch(e){ log(e.message,"l-err"); } }
@@ -594,6 +663,15 @@ $("open").onclick = async () => {
 
 // ── settle ─────────────────────────────────────────────
 async function doArm(){ return tx("armTable", () => board.armTable(tid())); }
+/// The L1 block height as the contract sees it. Arbitrum tags each L2 block
+/// with the L1 block it derives from; that is what block.number returns.
+async function l1BlockNumber(){
+  try{
+    const b = await provider.send("eth_getBlockByNumber", ["latest", false]);
+    return b?.l1BlockNumber != null ? Number(BigInt(b.l1BlockNumber)) : null;
+  }catch{ return null; }
+}
+
 async function doLocks(){
   const secs = secretsFor(tid().toString());
   if (!secs) return false;
@@ -614,9 +692,17 @@ $("retire").onclick = async () => { if (await tx("retire", () => board.retire(ti
 $("lockFallback").onclick = async () => {
   await refreshTable();
   if (!T || T.lockBlock === 0n) { log("table is not armed yet", "l-err"); return; }
-  const now = await provider.getBlockNumber();
-  const age = now - Number(T.lockBlock);
-  log(`lock block ${T.lockBlock}, now ${now} (age ${age} blocks; fallback opens at 64, dies at 256)`, "l-dim");
+  // NOT provider.getBlockNumber() — that is the L2 block number, while
+  // block.number inside the contract is the L1 one, and the two differ by
+  // hundreds of millions. Arbitrum exposes the L1 height on the block object.
+  const now = await l1BlockNumber();
+  if (now === null){
+    log(`lock block ${T.lockBlock}; could not read the L1 height, trying anyway`, "l-warn");
+  } else {
+    const age = now - Number(T.lockBlock);
+    log(`lock block ${T.lockBlock}, L1 now ${now} (age ${age} of 256 blocks; `
+      + `fallback opens at 64, ~${Math.max(0, 256 - age) * 12 / 60 | 0} min left)`, "l-dim");
+  }
   for (let s = 1; s <= 6; s++){
     if ((Number(T.lockedMask) >> (s-1)) & 1) { log(`seg ${s} already locked`, "l-dim"); continue; }
     if (!await tx(`fallback-lock seg ${s}`, () => board.lockSegmentFallback(tid(), s))) break;
