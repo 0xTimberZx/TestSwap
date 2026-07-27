@@ -419,18 +419,64 @@ function log(msg, cls="") {
 function b6ToStr(hex){
   try{ const s = ethers.toUtf8String(hex).replace(/\0/g,""); return s || "—"; }catch{ return "—"; }
 }
-async function tx(label, fn){
+/**
+ * Send a state-changing call.
+ *
+ * The ethers path is tried first because it gives the best diagnostics: a call
+ * that will revert fails at eth_estimateGas, which returns data ethers decodes
+ * into a named error.
+ *
+ * But ethers v6 also populates and post-processes the transaction itself, and
+ * when any step of that handshake returns something it cannot map it throws
+ * "could not coalesce error", swallowing the real cause. Observed live on
+ * 2026-07-27 with a perfect correlation: every call that would REVERT decoded
+ * cleanly, and every call that would SUCCEED died at send. Remix drives the same
+ * wallet fine because it hands over {from, to, data} and lets the wallet
+ * populate everything.
+ *
+ * So on that specific failure, retry the way Remix does.
+ */
+async function send(label, contract, method, ...args){
+  log(`${label} …`, "l-dim");
   try{
-    log(`${label} …`, "l-dim");
-    const t = await fn();
+    const t = await contract[method](...args);
     log(`  sent ${t.hash.slice(0,18)}…`, "l-dim");
     await t.wait();
+    log(`✓ ${label}`, "l-ok");
+    return true;
+  }catch(e){
+    if (!isSendHandshakeFailure(e)){
+      log(`✗ ${label} — ${explain(e)}`, "l-err");
+      return false;
+    }
+    log(`  wallet send handshake failed — retrying raw`, "l-warn");
+  }
+  try{
+    const data = contract.interface.encodeFunctionData(method, args);
+    const to   = await contract.getAddress();
+    const hash = await window.ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{ from: me, to, data }],
+    });
+    log(`  sent ${String(hash).slice(0,18)}… (raw)`, "l-dim");
+    const rec = await provider.waitForTransaction(hash);
+    if (rec && Number(rec.status) === 0){
+      log(`✗ ${label} — reverted on chain`, "l-err");
+      return false;
+    }
     log(`✓ ${label}`, "l-ok");
     return true;
   }catch(e){
     log(`✗ ${label} — ${explain(e)}`, "l-err");
     return false;
   }
+}
+
+/// ethers could not map what the wallet returned — the real error is hidden, so
+/// this is worth retrying by a different route rather than reporting.
+function isSendHandshakeFailure(e){
+  const m = `${e?.message || ""} ${e?.shortMessage || ""}`;
+  return e?.code === "UNKNOWN_ERROR" || /could not coalesce/i.test(m);
 }
 
 /// Turn a revert into something readable. ethers hands back the decoded custom
@@ -607,32 +653,32 @@ setInterval(()=>{ if(me && T && !T.retired) refreshTable().catch(()=>{}); }, 500
 
 // ── money actions ──────────────────────────────────────
 $("approve").onclick = async () => {
-  if (await tx("approve 1000 TIMBS", () => timbs.approve(ADDR.ledger, ethers.parseUnits("1000",18)))) refresh();
+  if (await send("approve 1000 TIMBS", timbs, "approve", ADDR.ledger, ethers.parseUnits("1000",18))) refresh();
 };
-$("withdraw").onclick = async () => { if (await tx("withdraw", () => ledger.withdraw())) refresh(); };
+$("withdraw").onclick = async () => { if (await send("withdraw", ledger, "withdraw")) refresh(); };
 
 // ── play actions ───────────────────────────────────────
 const tid = () => BigInt($("tableId").value || "1");
 $("sit").onclick = async () => {
   const t = ethers.hexlify(ethers.toUtf8Bytes($("ticket").value.padEnd(6," ").slice(0,6)));
-  if (await tx("sit", () => board.sit(tid(), t))) refresh();
+  if (await send("sit", board, "sit", tid(), t)) refresh();
 };
 $("loadTokens").onclick = async () => {
   const c = Number($("chip").value);
   log(`loading 6 × ${CHIPS[c]} TIMBS = ${CHIPS[c]*6} total`, "l-dim");
-  if (await tx("loadTokens", () => board.loadTokens(tid(), [c,c,c,c,c,c]))) refresh();
+  if (await send("loadTokens", board, "loadTokens", tid(), [c,c,c,c,c,c])) refresh();
 };
 $("placeAll").onclick = async () => {
   const kind = Number($("kind").value), pick = Number($("pick").value);
   for (let s=1; s<=6; s++){
-    const ok = await tx(`place seg ${s}`, () => board.place(tid(), s, kind, pick));
+    const ok = await send(`place seg ${s}`, board, "place", tid(), s, kind, pick);
     if (!ok) break;
   }
   refresh();
 };
 $("placeDD").onclick = async () => {
   const c = Number($("chip").value);
-  if (await tx("placeDoubleDigit", () => board.placeDoubleDigit(tid(), c))) refresh();
+  if (await send("placeDoubleDigit", board, "placeDoubleDigit", tid(), c)) refresh();
 };
 
 // ── operator ───────────────────────────────────────────
@@ -666,14 +712,14 @@ $("open").onclick = async () => {
   // "Cannot assign to read only property '0'", which is what stopped this
   // button working. Copy it into a plain array first.
   const cs = Array.from(await board.commitmentsFor(secs, next));
-  if (await tx(`openTable round ${$("round").value}`, () => board.openTable(BigInt($("round").value), cs))){
+  if (await send(`openTable round ${$("round").value}`, board, "openTable", BigInt($("round").value), cs)){
     $("tableId").value = next.toString();
     refresh();
   }
 };
 
 // ── settle ─────────────────────────────────────────────
-async function doArm(){ return tx("armTable", () => board.armTable(tid())); }
+async function doArm(){ return send("armTable", board, "armTable", tid()); }
 /// The L1 block height as the contract sees it. Arbitrum tags each L2 block
 /// with the L1 block it derives from; that is what block.number returns.
 async function l1BlockNumber(){
@@ -692,14 +738,14 @@ async function doLocks(){
   for (let s=1; s<=6; s++){
     const t = T && ((Number(T.lockedMask) >> (s-1)) & 1);
     if (t) { log(`seg ${s} already locked`, "l-dim"); continue; }
-    const ok = await tx(`lock seg ${s}`, () => board.lockSegment(tid(), s, secs[s-1]));
+    const ok = await send(`lock seg ${s}`, board, "lockSegment", tid(), s, secs[s-1]);
     if (!ok) return false;
   }
   return true;
 }
 $("arm").onclick    = async () => { await doArm(); refresh(); };
 $("lockAll").onclick= async () => { await doLocks(); refresh(); };
-$("retire").onclick = async () => { if (await tx("retire", () => board.retire(tid()))) refresh(); };
+$("retire").onclick = async () => { if (await send("retire", board, "retire", tid())) refresh(); };
 $("rearm").onclick = async () => {
   await refreshTable();
   if (!T) { log("load a table first", "l-err"); return; }
@@ -710,7 +756,7 @@ $("rearm").onclick = async () => {
     log(`lock block ${T.lockBlock}, L1 now ${now} (age ${age}; re-arm only past 256)`, "l-dim");
     if (age <= 256) log(`still ${256 - age} blocks (~${Math.ceil((256-age)*12/60)} min) of live hash left`, "l-warn");
   }
-  if (await tx(`rearmTable ${tid()}`, () => board.rearmTable(tid()))){
+  if (await send(`rearmTable ${tid()}`, board, "rearmTable", tid())){
     log("re-armed onto a fresh block — lock the remaining segments now", "l-ok");
   }
   refresh();
@@ -719,7 +765,7 @@ $("cancel").onclick = async () => {
   await refreshTable();
   if (!T) { log("load a table first", "l-err"); return; }
   log(`cancelling table ${tid()} — ${T.seatCount} seat(s)`, "l-dim");
-  if (await tx(`cancelTable ${tid()}`, () => board.cancelTable(tid()))){
+  if (await send(`cancelTable ${tid()}`, board, "cancelTable", tid())){
     log("cancelled — chips refunded, seed returned", "l-ok");
   }
   refresh();
@@ -740,7 +786,7 @@ $("lockFallback").onclick = async () => {
   }
   for (let s = 1; s <= 6; s++){
     if ((Number(T.lockedMask) >> (s-1)) & 1) { log(`seg ${s} already locked`, "l-dim"); continue; }
-    if (!await tx(`fallback-lock seg ${s}`, () => board.lockSegmentFallback(tid(), s))) break;
+    if (!await send(`fallback-lock seg ${s}`, board, "lockSegmentFallback", tid(), s)) break;
   }
   refresh();
 };
@@ -750,7 +796,7 @@ $("runSettle").onclick = async () => {
     await refreshTable();
     if (T && T.lockBlock === 0n) { if (!await doArm()) return; }
     if (!await doLocks()) return;
-    await tx("retire", () => board.retire(tid()));
+    await send("retire", board, "retire", tid());
     log("round closed — winners can now Withdraw", "l-ok");
   } finally { btn.disabled = false; refresh(); }
 };
