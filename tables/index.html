@@ -169,6 +169,13 @@
       <label>Winning string so far</label>
       <div class="chars" id="chars"></div>
     </div>
+
+    <div class="row" style="margin-top:14px">
+      <button id="cancel" class="danger" style="flex:0 0 auto" disabled>Cancel table (refund all)</button>
+    </div>
+    <p class="note">Only for a table that can never be armed: entry closed with fewer
+      than the minimum seats. Refunds every chip and returns the seed. A table with
+      enough players refuses to cancel.</p>
   </div>
 
   <!-- ── play ──────────────────────────────────────────── -->
@@ -236,6 +243,7 @@
     </div>
     <div class="row" style="margin-top:10px">
       <button id="lockFallback" class="ghost" disabled>Fallback-lock the rest</button>
+      <button id="rearm" class="ghost" disabled>Re-arm (lock block aged out)</button>
     </div>
     <p class="note">Fallback needs no secret and works once the reveal window (64 blocks)
       has passed, but only while the lock block is still inside the 256-block hash horizon.
@@ -281,6 +289,9 @@ const BOARD_ABI = [
   "function armTable(uint256 tableId)",
   "function lockSegment(uint256 tableId,uint8 segment,bytes32 secret)",
   "function lockSegmentFallback(uint256 tableId,uint8 segment)",
+  "function rearmTable(uint256 tableId)",
+  "function cancelTable(uint256 tableId)",
+  "function SEATS_MIN() view returns (uint8)",
   "function REVEAL_WINDOW() view returns (uint256)",
   "function BLOCKHASH_HORIZON() view returns (uint256)",
   "function retire(uint256 tableId)",
@@ -689,6 +700,30 @@ async function doLocks(){
 $("arm").onclick    = async () => { await doArm(); refresh(); };
 $("lockAll").onclick= async () => { await doLocks(); refresh(); };
 $("retire").onclick = async () => { if (await tx("retire", () => board.retire(tid()))) refresh(); };
+$("rearm").onclick = async () => {
+  await refreshTable();
+  if (!T) { log("load a table first", "l-err"); return; }
+  if (T.lockBlock === 0n) { log("not armed — nothing to re-arm", "l-err"); return; }
+  const now = await l1BlockNumber();
+  if (now !== null){
+    const age = now - Number(T.lockBlock);
+    log(`lock block ${T.lockBlock}, L1 now ${now} (age ${age}; re-arm only past 256)`, "l-dim");
+    if (age <= 256) log(`still ${256 - age} blocks (~${Math.ceil((256-age)*12/60)} min) of live hash left`, "l-warn");
+  }
+  if (await tx(`rearmTable ${tid()}`, () => board.rearmTable(tid()))){
+    log("re-armed onto a fresh block — lock the remaining segments now", "l-ok");
+  }
+  refresh();
+};
+$("cancel").onclick = async () => {
+  await refreshTable();
+  if (!T) { log("load a table first", "l-err"); return; }
+  log(`cancelling table ${tid()} — ${T.seatCount} seat(s)`, "l-dim");
+  if (await tx(`cancelTable ${tid()}`, () => board.cancelTable(tid()))){
+    log("cancelled — chips refunded, seed returned", "l-ok");
+  }
+  refresh();
+};
 $("lockFallback").onclick = async () => {
   await refreshTable();
   if (!T || T.lockBlock === 0n) { log("table is not armed yet", "l-err"); return; }
