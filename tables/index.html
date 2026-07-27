@@ -211,6 +211,12 @@
       <button id="lockAll" class="ghost" disabled>Lock 6</button>
       <button id="retire" class="ghost" disabled>Retire</button>
     </div>
+    <div class="row" style="margin-top:10px">
+      <button id="lockFallback" class="ghost" disabled>Fallback-lock the rest</button>
+    </div>
+    <p class="note">Fallback needs no secret and works once the reveal window (64 blocks)
+      has passed, but only while the lock block is still inside the 256-block hash
+      horizon — about 65 seconds at 0.25s blocks. Use it if the reveal is lost or late.</p>
   </div>
 
   <div class="card">
@@ -244,6 +250,9 @@ const BOARD_ABI = [
   "function placeDoubleDigit(uint256 tableId,uint8 chipIdx)",
   "function armTable(uint256 tableId)",
   "function lockSegment(uint256 tableId,uint8 segment,bytes32 secret)",
+  "function lockSegmentFallback(uint256 tableId,uint8 segment)",
+  "function REVEAL_WINDOW() view returns (uint256)",
+  "function BLOCKHASH_HORIZON() view returns (uint256)",
   "function retire(uint256 tableId)",
   "function lockedCharsOf(uint256) view returns (bytes6)",
   // Custom errors. Without these in the ABI every failure decodes as a bare
@@ -279,6 +288,10 @@ const BOARD_ABI = [
   "error LockBlockStillLive(uint256 lockBlock,uint256 expiresAt)",
   "error NothingLeftToLock()",
   "error SeedNotSettled(uint256 round)",
+  // thrown by CommitRevealEntropy, propagated through the board's lock calls
+  "error LockBlockUnavailable(uint256 lockBlock)",
+  "error LockBlockNotPast(uint256 lockBlock)",
+  "error BadReveal()",
   // Inherited from OpenZeppelin — reachable on the operator/owner calls.
   "error OwnableUnauthorizedAccount(address account)",
   "error OwnableInvalidOwner(address owner)",
@@ -293,7 +306,10 @@ const ERR_HINT = {
   AlreadySeated:       "this wallet is already seated here",
   NotLoaded:           "load your six tokens before placing",
   AlreadyLoaded:       "tokens are already loaded for this wallet",
-  AlreadyPlaced:       "one token per segment — that segment is already played",
+  // pool 6 is DD_POOL; anything lower is a segment index
+  AlreadyPlaced:       a => Number(a?.[0]) === 6
+                          ? "this wallet already placed its Double-Digit bet"
+                          : "one token per segment — that segment is already played",
   TableFull:           "all 12 seats are taken",
   NotEnoughSeats:      "not enough players seated to arm — cancel to refund instead",
   NotYetPickTime:      "too early to arm — wait for the pick time",
@@ -302,6 +318,10 @@ const ERR_HINT = {
   EntryStillOpen:      "entry is still open — cancel only after it closes",
   SegmentsOutstanding: "retire needs all six segments locked first",
   SeedNotSettled:      "that TimbPrize round has not settled — use Find settled",
+  RevealWindowOpen:    "too early for the fallback — the 64-block reveal window is still open",
+  LockBlockUnavailable:"the lock block aged past the 256-block hash horizon — this table can no longer be locked",
+  BadReveal:           "wrong passphrase — the secret does not match the commitment for this table",
+  LockBlockNotPast:    "the lock block has not been mined yet — wait one block",
   ExceedsUnowed:       "that would dip into player escrow, which is untouchable",
   NothingToWithdraw:   "no credit to withdraw",
   OwnableUnauthorizedAccount: "this wallet is not the owner of that contract",
@@ -335,6 +355,12 @@ const PRIZE_ABI = ["function roundWinningString(uint256) view returns (bytes6)"]
 let provider, signer, me, board, ledger, timbs, prize, T = null;
 
 const $ = id => document.getElementById(id);
+// An armed table dies in ~65s if the reveal is lost, and a page reload used to
+// wipe the passphrase that derives the secrets. Persist it.
+try {
+  const saved = localStorage.getItem("swaptables:phrase");
+  if (saved) addEventListener("DOMContentLoaded", () => { if (!$("phrase").value) $("phrase").value = saved; });
+} catch {}
 const fmt = w => Number(ethers.formatUnits(w, 18)).toLocaleString(undefined,{maximumFractionDigits:4});
 function log(msg, cls="") {
   const el = $("log");
@@ -362,15 +388,56 @@ async function tx(label, fn){
 /// error on e.revert once the ABI carries the error signatures; everything else
 /// falls through to the plain message.
 function explain(e){
-  const r = e?.revert ?? e?.info?.error?.revert;
-  if (r?.name){
-    const hint = ERR_HINT[r.name];
-    const args = r.args?.length ? ` (${r.args.map(String).join(", ")})` : "";
-    return hint ? `${r.name}${args} — ${hint}` : `${r.name}${args}`;
-  }
   if (e?.code === "ACTION_REJECTED") return "you rejected it in the wallet";
   if (e?.code === "INSUFFICIENT_FUNDS") return "not enough ETH for gas";
+
+  const named = n => {
+    const h = ERR_HINT[n.name];
+    const hint = typeof h === "function" ? h(n.args) : h;
+    const args = n.args?.length ? ` (${n.args.map(String).join(", ")})` : "";
+    return hint ? `${n.name}${args} — ${hint}` : `${n.name}${args}`;
+  };
+  if (e?.revert?.name) return named(e.revert);
+  if (e?.info?.error?.revert?.name) return named(e.info.error.revert);
+
+  // ethers only decodes the revert when it can find the return data itself. A
+  // browser wallet that fails on eth_estimateGas buries it — the shape differs
+  // per wallet and per RPC, so hunt for the selector blob and decode by hand
+  // against every interface we know.
+  const data = findRevertData(e);
+  if (data){
+    for (const iface of [board?.interface, ledger?.interface, timbs?.interface]){
+      let parsed = null;
+      try { parsed = iface?.parseError(data); } catch { /* not this one */ }
+      if (parsed) return named(parsed);
+    }
+    // Solidity's own Error(string) / Panic(uint256)
+    try {
+      const s = new ethers.Interface([
+        "error Error(string reason)", "error Panic(uint256 code)"
+      ]).parseError(data);
+      if (s) return `${s.name}(${s.args.map(String).join(", ")})`;
+    } catch { /* fall through */ }
+    return `reverted, undecodable — data ${data.slice(0,10)}`;
+  }
   return e?.info?.error?.message || e?.shortMessage || e?.message || String(e);
+}
+
+/// Walk an arbitrary wallet/RPC error object looking for revert return data:
+/// a 0x-prefixed hex blob at least a 4-byte selector long.
+function findRevertData(e, depth = 0){
+  if (depth > 6 || e == null) return null;
+  if (typeof e === "string")
+    return /^0x[0-9a-fA-F]{8,}$/.test(e) && e.length % 2 === 0 ? e : null;
+  if (typeof e !== "object") return null;
+  // check the usual carriers first so we do not return some unrelated hex
+  for (const k of ["data", "returnData", "originalError", "error", "info", "cause", "body"]){
+    if (k in e){
+      const hit = findRevertData(e[k], depth + 1);
+      if (hit) return hit;
+    }
+  }
+  return null;
 }
 
 // ── connect ────────────────────────────────────────────
@@ -491,6 +558,7 @@ $("placeDD").onclick = async () => {
 // ── operator ───────────────────────────────────────────
 function secretsFor(id){
   const p = $("phrase").value;
+  if (p) try { localStorage.setItem("swaptables:phrase", p); } catch {}
   if (!p) { log("Set a passphrase first — it derives (and recovers) your six secrets.", "l-err"); return null; }
   return [...Array(6).keys()].map(i => ethers.keccak256(ethers.toUtf8Bytes(`${p}:${id}:${i+1}`)));
 }
@@ -543,6 +611,18 @@ async function doLocks(){
 $("arm").onclick    = async () => { await doArm(); refresh(); };
 $("lockAll").onclick= async () => { await doLocks(); refresh(); };
 $("retire").onclick = async () => { if (await tx("retire", () => board.retire(tid()))) refresh(); };
+$("lockFallback").onclick = async () => {
+  await refreshTable();
+  if (!T || T.lockBlock === 0n) { log("table is not armed yet", "l-err"); return; }
+  const now = await provider.getBlockNumber();
+  const age = now - Number(T.lockBlock);
+  log(`lock block ${T.lockBlock}, now ${now} (age ${age} blocks; fallback opens at 64, dies at 256)`, "l-dim");
+  for (let s = 1; s <= 6; s++){
+    if ((Number(T.lockedMask) >> (s-1)) & 1) { log(`seg ${s} already locked`, "l-dim"); continue; }
+    if (!await tx(`fallback-lock seg ${s}`, () => board.lockSegmentFallback(tid(), s))) break;
+  }
+  refresh();
+};
 $("runSettle").onclick = async () => {
   const btn = $("runSettle"); btn.disabled = true;
   try{
