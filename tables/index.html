@@ -293,7 +293,10 @@ const ERR_HINT = {
   AlreadySeated:       "this wallet is already seated here",
   NotLoaded:           "load your six tokens before placing",
   AlreadyLoaded:       "tokens are already loaded for this wallet",
-  AlreadyPlaced:       "one token per segment — that segment is already played",
+  // pool 6 is DD_POOL; anything lower is a segment index
+  AlreadyPlaced:       a => Number(a?.[0]) === 6
+                          ? "this wallet already placed its Double-Digit bet"
+                          : "one token per segment — that segment is already played",
   TableFull:           "all 12 seats are taken",
   NotEnoughSeats:      "not enough players seated to arm — cancel to refund instead",
   NotYetPickTime:      "too early to arm — wait for the pick time",
@@ -362,15 +365,56 @@ async function tx(label, fn){
 /// error on e.revert once the ABI carries the error signatures; everything else
 /// falls through to the plain message.
 function explain(e){
-  const r = e?.revert ?? e?.info?.error?.revert;
-  if (r?.name){
-    const hint = ERR_HINT[r.name];
-    const args = r.args?.length ? ` (${r.args.map(String).join(", ")})` : "";
-    return hint ? `${r.name}${args} — ${hint}` : `${r.name}${args}`;
-  }
   if (e?.code === "ACTION_REJECTED") return "you rejected it in the wallet";
   if (e?.code === "INSUFFICIENT_FUNDS") return "not enough ETH for gas";
+
+  const named = n => {
+    const h = ERR_HINT[n.name];
+    const hint = typeof h === "function" ? h(n.args) : h;
+    const args = n.args?.length ? ` (${n.args.map(String).join(", ")})` : "";
+    return hint ? `${n.name}${args} — ${hint}` : `${n.name}${args}`;
+  };
+  if (e?.revert?.name) return named(e.revert);
+  if (e?.info?.error?.revert?.name) return named(e.info.error.revert);
+
+  // ethers only decodes the revert when it can find the return data itself. A
+  // browser wallet that fails on eth_estimateGas buries it — the shape differs
+  // per wallet and per RPC, so hunt for the selector blob and decode by hand
+  // against every interface we know.
+  const data = findRevertData(e);
+  if (data){
+    for (const iface of [board?.interface, ledger?.interface, timbs?.interface]){
+      let parsed = null;
+      try { parsed = iface?.parseError(data); } catch { /* not this one */ }
+      if (parsed) return named(parsed);
+    }
+    // Solidity's own Error(string) / Panic(uint256)
+    try {
+      const s = new ethers.Interface([
+        "error Error(string reason)", "error Panic(uint256 code)"
+      ]).parseError(data);
+      if (s) return `${s.name}(${s.args.map(String).join(", ")})`;
+    } catch { /* fall through */ }
+    return `reverted, undecodable — data ${data.slice(0,10)}`;
+  }
   return e?.info?.error?.message || e?.shortMessage || e?.message || String(e);
+}
+
+/// Walk an arbitrary wallet/RPC error object looking for revert return data:
+/// a 0x-prefixed hex blob at least a 4-byte selector long.
+function findRevertData(e, depth = 0){
+  if (depth > 6 || e == null) return null;
+  if (typeof e === "string")
+    return /^0x[0-9a-fA-F]{8,}$/.test(e) && e.length % 2 === 0 ? e : null;
+  if (typeof e !== "object") return null;
+  // check the usual carriers first so we do not return some unrelated hex
+  for (const k of ["data", "returnData", "originalError", "error", "info", "cause", "body"]){
+    if (k in e){
+      const hit = findRevertData(e[k], depth + 1);
+      if (hit) return hit;
+    }
+  }
+  return null;
 }
 
 // ── connect ────────────────────────────────────────────
