@@ -123,6 +123,18 @@
     </div>
   </div>
 
+  <!-- ── vault ─────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Vault (PoolLedger)</h2>
+    <div class="grid">
+      <div class="stat"><div class="k">Held balance</div><div class="v" id="sHeld">—</div></div>
+      <div class="stat"><div class="k">Total credited</div><div class="v" id="sOwed">—</div></div>
+      <div class="stat"><div class="k">Unowed (sweepable)</div><div class="v" id="sUnowed">—</div></div>
+    </div>
+    <p class="note" id="vaultNote">Escrow is sacred: held must always be &ge; credited. After a table
+      retires the two should meet exactly, and once every winner withdraws both read zero.</p>
+  </div>
+
   <!-- ── table state ───────────────────────────────────── -->
   <div class="card">
     <h2>Table</h2>
@@ -224,6 +236,11 @@
   <div class="card">
     <h2>Log</h2>
     <div id="log"></div>
+  </div>
+
+  <div class="card">
+    <h2>Contracts</h2>
+    <div id="addrList" style="font-size:.72rem;line-height:1.9;word-break:break-all"></div>
   </div>
 </div>
 
@@ -357,6 +374,13 @@ const PRIZE_ABI = ["function roundWinningString(uint256) view returns (bytes6)"]
 let provider, signer, me, board, ledger, timbs, prize, T = null;
 
 const $ = id => document.getElementById(id);
+addEventListener("DOMContentLoaded", () => {
+  const rows = [["SegmentBoard","board"],["PoolLedger","ledger"],["TIMBS","timbs"],["TimbPrize","prize"]];
+  $("addrList").innerHTML = rows.map(([label,k]) =>
+    `<div><span style="color:var(--faint)">${label}</span> ` +
+    `<a href="https://sepolia.arbiscan.io/address/${ADDR[k]}" target="_blank" rel="noopener">${ADDR[k]}</a></div>`
+  ).join("");
+});
 // An armed table dies ~51 minutes after arming if the reveal is lost (256 L1
 // blocks), and a page reload used to wipe the passphrase that derives the
 // secrets. Persist it.
@@ -479,6 +503,32 @@ async function refreshMoney(){
   $("sCredit").textContent = fmt(cred);
   $("timbsBox").textContent = `TIMBS ${fmt(bal)}`;
   $("withdraw").disabled = cred === 0n;
+
+  // The escrow-sacred invariant, read straight off the ledger.
+  const [held, owed] = await Promise.all([ledger.heldBalance(), ledger.totalCredited()]);
+  $("sHeld").textContent = fmt(held);
+  $("sOwed").textContent = fmt(owed);
+  $("sUnowed").textContent = fmt(held - owed);
+  const note = $("vaultNote");
+  if (held < owed){
+    note.textContent = `BROKEN: held is ${fmt(owed - held)} short of credited.`;
+    note.className = "note l-err";
+  } else if (held === owed && held === 0n){
+    note.textContent = "Drained to exactly zero — every chip accounted for.";
+    note.className = "note l-ok";
+  } else if (held === owed){
+    note.textContent = "Held == credited: escrow exactly backs what is owed, nothing sweepable.";
+    note.className = "note l-ok";
+  } else {
+    note.textContent = "Escrow is sacred: held must always be >= credited. After a table retires "
+      + "the two should meet exactly, and once every winner withdraws both read zero.";
+    note.className = "note";
+  }
+  // exact wei on long-press / hover, for reconciling against a prediction
+  $("sHeld").title = held.toString();
+  $("sOwed").title = owed.toString();
+  $("sCredit").title = cred.toString();
+  log(`vault held ${held} | credited ${owed} | your credit ${cred}`, "l-dim");
 }
 async function refreshTable(){
   const id = BigInt($("tableId").value || "1");
