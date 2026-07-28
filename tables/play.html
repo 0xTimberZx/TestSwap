@@ -436,7 +436,12 @@ const ADDR = {
   board:  "0x1633Fb6405b42835bb8f883a67B7968649c62257",
   ledger: "0x5ee3d08FEFeFE08d8dDf09386E987Df23dbe105C",
   timbs:  "0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa",
+  crank:  "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher, generation-agnostic
 };
+const CRANK_ABI = [
+  "function fallbackAll(address board,uint256 tableId,bool alsoRetire)",
+  "error NothingToDo(uint256 tableId)",
+];
 const CHAIN = 421614n;
 const CHIPS = [5,10,25,50,100,500,1000];
 const CHIPCOLOR = {5:"#b0243a",10:"#20507f",25:"#1f7a44",50:"#c56a1e",100:"#565b66",500:"#6a3b8f",1000:"#caa63f"};
@@ -498,7 +503,7 @@ const ERR_HINT = {
 };
 
 const $ = id => document.getElementById(id);
-let provider, signer, me, board, ledger, timbs;
+let provider, signer, me, board, ledger, timbs, crank;
 let T=null, tid=null, dials=null, mySeat=null;
 let curSeg=null, curChip=null, pending=null;
 const localChips={};                 // seg -> chipIdx picked before the load tx
@@ -575,7 +580,7 @@ function explain(e){
   if(e?.revert?.name) return named(e.revert);
   if(e?.info?.error?.revert?.name) return named(e.info.error.revert);
   const data = findData(e);
-  if(data){ for(const iface of [board?.interface, ledger?.interface, timbs?.interface]){
+  if(data){ for(const iface of [board?.interface, ledger?.interface, timbs?.interface, crank?.interface]){
     let p=null; try{ p=iface?.parseError(data);}catch{} if(p) return named(p);
   } return "reverted ("+data.slice(0,10)+"…)"; }
   return e?.info?.error?.message || e?.shortMessage || e?.message || String(e);
@@ -626,6 +631,7 @@ $("connect").onclick = async () => {
     window.ethereum.on?.("chainChanged",  ()=>location.reload());
   }catch{}
   board  = new ethers.Contract(ADDR.board, BOARD_ABI, signer);
+  crank  = new ethers.Contract(ADDR.crank, CRANK_ABI, signer);
   ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
   timbs  = new ethers.Contract(ADDR.timbs, ERC20_ABI, signer);
   dials = { entry: Number(await board.entryWindow()), lead: Number(await board.betsCloseLead()) };
@@ -1275,13 +1281,8 @@ $("finishPick").onclick = async () => {
   if(!T) return;
   $("finishPick").disabled=true;
   try{
-    for(let seg=1;seg<=6;seg++){
-      if(Number(T.lockedMask)&(1<<(seg-1))) continue;
-      if(!await send("fallback-lock segment "+seg, board, "lockSegmentFallback", tid, seg)) break;
-      await refreshChain();
-    }
-    if(Number(T.lockedMask)===0x3F){
-      await send("retire the table", board, "retire", tid);
+    // one approval: SegmentCrank fallback-locks every open segment AND retires
+    if(await send("finish the pick (one approval)", crank, "fallbackAll", ADDR.board, tid, true)){
       await refreshChain();
       rail('<span class="win">Pick finished and table retired.</span> Winnings are credited — withdraw any time.');
     }
