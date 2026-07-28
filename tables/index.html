@@ -140,10 +140,11 @@
     <div class="grid">
       <div class="stat"><div class="k">Held balance</div><div class="v" id="sHeld">—</div></div>
       <div class="stat"><div class="k">Total credited</div><div class="v" id="sOwed">—</div></div>
-      <div class="stat"><div class="k">Unowed (sweepable)</div><div class="v" id="sUnowed">—</div></div>
+      <div class="stat"><div class="k">Table escrow (live)</div><div class="v" id="sEscrowed">—</div></div>
+      <div class="stat"><div class="k">Surplus</div><div class="v" id="sUnowed">—</div></div>
     </div>
-    <p class="note" id="vaultNote">Escrow is sacred: held must always be &ge; credited. After a table
-      retires the two should meet exactly, and once every winner withdraws both read zero.</p>
+    <p class="note" id="vaultNote">Escrow is sacred: held must always be &ge; credited + table escrow.
+      Surplus is only dust and stray transfers; live tables' money can never appear there.</p>
   </div>
 
   <!-- ── table state ───────────────────────────────────── -->
@@ -267,8 +268,8 @@
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm";
 
 const ADDR = {
-  board:  "0xAfC3a78a4F906C5CEb806d0d580d9175B2105924",
-  ledger: "0x65ABf55FD57a34c527B07Bd6D90d91D2FbDa220f",
+  board:  "0x1633Fb6405b42835bb8f883a67B7968649c62257",
+  ledger: "0x5ee3d08FEFeFE08d8dDf09386E987Df23dbe105C",
   timbs:  "0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa",
   prize:  "0x35976f4D2260127848a6274D2eC89ee054412432",
 };
@@ -363,7 +364,8 @@ const ERR_HINT = {
   LockBlockUnavailable:"the lock block aged past the 256-block hash horizon — this table can no longer be locked",
   BadReveal:           "wrong passphrase — the secret does not match the commitment for this table",
   LockBlockNotPast:    "the lock block has not been mined yet — wait one block",
-  ExceedsUnowed:       "that would dip into player escrow, which is untouchable",
+  ExceedsUnowed:       "that would dip past genuine surplus — player credit and live escrow are untouchable",
+  ExceedsTableEscrow:  "that table cannot pay this much — a pool only pays out of its own table's stakes",
   NothingToWithdraw:   "no credit to withdraw",
   OwnableUnauthorizedAccount: "this wallet is not the owner of that contract",
   SafeERC20FailedOperation:   "the TIMBS transfer failed — check balance and allowance",
@@ -372,6 +374,8 @@ const LEDGER_ABI = [
   "function credit(address) view returns (uint256)",
   "function heldBalance() view returns (uint256)",
   "function totalCredited() view returns (uint256)",
+  "function totalEscrowed() view returns (uint256)",
+  "function tableEscrow(uint256) view returns (uint256)",
   "function withdraw()",
   "error ZeroAddress()",
   "error ZeroAmount()",
@@ -379,6 +383,7 @@ const LEDGER_ABI = [
   "error BoardAlreadySet()",
   "error LengthMismatch()",
   "error ExceedsUnowed(uint256 requested,uint256 available)",
+  "error ExceedsTableEscrow(uint256 tableId,uint256 requested,uint256 held)",
   "error NothingToWithdraw()",
   // Inherited from OpenZeppelin — reachable on the operator/owner calls.
   "error OwnableUnauthorizedAccount(address account)",
@@ -572,31 +577,36 @@ async function refreshMoney(){
   $("timbsBox").textContent = `TIMBS ${fmt(bal)}`;
   $("withdraw").disabled = cred === 0n;
 
-  // The escrow-sacred invariant, read straight off the ledger.
-  const [held, owed] = await Promise.all([ledger.heldBalance(), ledger.totalCredited()]);
+  // The gen-3 escrow-sacred invariant, read straight off the ledger:
+  // held >= credited + escrowed, and the difference is genuine surplus only.
+  const [held, owed, escrowed] = await Promise.all([
+    ledger.heldBalance(), ledger.totalCredited(), ledger.totalEscrowed()
+  ]);
   $("sHeld").textContent = fmt(held);
   $("sOwed").textContent = fmt(owed);
-  $("sUnowed").textContent = fmt(held - owed);
+  $("sEscrowed").textContent = fmt(escrowed);
+  $("sUnowed").textContent = fmt(held - owed - escrowed);
   const note = $("vaultNote");
-  if (held < owed){
-    note.textContent = `BROKEN: held is ${fmt(owed - held)} short of credited.`;
+  if (held < owed + escrowed){
+    note.textContent = `BROKEN: held is ${fmt(owed + escrowed - held)} short of credited + escrowed.`;
     note.className = "note l-err";
-  } else if (held === owed && held === 0n){
+  } else if (held === 0n && owed === 0n && escrowed === 0n){
     note.textContent = "Drained to exactly zero — every chip accounted for.";
     note.className = "note l-ok";
-  } else if (held === owed){
-    note.textContent = "Held == credited: escrow exactly backs what is owed, nothing sweepable.";
+  } else if (held === owed + escrowed){
+    note.textContent = "Held == credited + escrowed: every token is spoken for, surplus zero.";
     note.className = "note l-ok";
   } else {
-    note.textContent = "Escrow is sacred: held must always be >= credited. After a table retires "
-      + "the two should meet exactly, and once every winner withdraws both read zero.";
+    note.textContent = "Escrow is sacred: held must always be >= credited + table escrow. "
+      + "Surplus is only dust and stray transfers.";
     note.className = "note";
   }
   // exact wei on long-press / hover, for reconciling against a prediction
   $("sHeld").title = held.toString();
   $("sOwed").title = owed.toString();
+  $("sEscrowed").title = escrowed.toString();
   $("sCredit").title = cred.toString();
-  log(`vault held ${held} | credited ${owed} | your credit ${cred}`, "l-dim");
+  log(`vault held ${held} | credited ${owed} | escrowed ${escrowed} | your credit ${cred}`, "l-dim");
 }
 async function refreshTable(){
   const id = BigInt($("tableId").value || "1");
