@@ -281,6 +281,28 @@
   .actions{margin-left:auto;display:flex;gap:10px;align-self:center}
   .foot{margin-top:20px;font-size:12px;color:#8fa295;line-height:1.6;font-family:Georgia,serif;font-style:italic;max-width:82ch}
   .foot b{color:var(--gold);font-style:normal;font-family:"Arial Narrow",Arial,sans-serif}
+
+  /* ── Mobile landscape ──────────────────────────────────────────────────────
+     The roulette grid is already fluid (fr columns); only .felt's min-width
+     forces the side-scroll. In a phone's horizontal view, drop it so the board
+     and the meter fill the width, and tighten the vertical rhythm so the whole
+     felt fits a short landscape viewport without scrolling either way. */
+  @media (orientation: landscape) and (max-height: 600px) {
+    body{padding:14px 12px 40px}
+    .felt-scroll{overflow-x:visible}
+    .felt{min-width:0;width:100%;padding:12px;
+      box-shadow:0 0 0 6px var(--wood),0 0 0 8px #14100a,0 14px 34px -14px rgba(0,0,0,.8),inset 0 0 60px rgba(0,0,0,.35)}
+    /* shorter rows so all seven bet-rows clear a ~390px-tall viewport */
+    .board{grid-template-rows:repeat(3,34px) 30px 32px 32px 32px;gap:3px}
+    .pocket{font-size:16px}
+    .out .lab{font-size:9px}.out .sub{font-size:7px}
+    .dd .lab{font-size:12px}.dd .sub{margin-top:3px}
+    .coin{width:16px;height:16px;font-size:7px}
+    /* the meter spans the full width too: reels widen to fill (native cell
+       height kept — the strip's translateY math is pinned to RCELL=40 in JS). */
+    .reels{gap:6px}
+    .reel{max-width:none}
+  }
 </style>
 </head>
 <body class="pre">
