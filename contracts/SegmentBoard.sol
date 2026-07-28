@@ -729,8 +729,12 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
      *
      *      Every chip is refunded, placed or not, because nothing settled — no
      *      char was ever locked, so no bet can have won or lost. The seed then
-     *      sweeps back to the treasury. Bounded by SEATS_HARD_MAX like every
-     *      other settlement loop.
+     *      returns to the CURRENT seedFunder — not the treasury — because a
+     *      cancelled table had no round and earned no rake: the float goes back
+     *      where it was pulled from, so cancels never drain the ops wallet.
+     *      (Retire is different: a played table's leftovers are protocol revenue
+     *      and sweep to Treasury.) Bounded by SEATS_HARD_MAX like every other
+     *      settlement loop.
      */
     function cancelTable(uint256 tableId) external nonReentrant {
         Table storage t = _liveTable(tableId);
@@ -762,7 +766,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
         t.retired = true;
 
-        uint256 leftover = ledger.sweepTable(treasury, tableId); // the seed
+        uint256 leftover = ledger.sweepTable(seedFunder, tableId); // the seed
 
         emit TableCancelled(tableId, t.seatCount, refunded, leftover);
     }
