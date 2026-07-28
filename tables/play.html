@@ -226,7 +226,11 @@
   /* live feed */
   .table{margin:16px 0 0;border:1px solid rgba(247,240,214,.16);border-radius:12px;background:rgba(247,240,214,.03);overflow:hidden}
   .table .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid rgba(247,240,214,.12);background:rgba(0,0,0,.14)}
+  .table .hd{cursor:pointer;-webkit-tap-highlight-color:transparent}
   .table .hd h2{margin:0;font-family:Georgia,serif;font-size:13px;letter-spacing:.04em;color:#e8dcae;font-weight:700;text-transform:uppercase}
+  .table .hd h2::after{content:" ▾";color:#93a698;font-family:"Arial Narrow",Arial,sans-serif}
+  .table.collapsed .hd h2::after{content:" ▸"}
+  .table.collapsed .feed{display:none}
   .live{display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ok)}
   .live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(111,224,160,.6);animation:pulse 1.6s infinite}
   @keyframes pulse{70%{box-shadow:0 0 0 7px rgba(111,224,160,0)}100%{box-shadow:0 0 0 0 rgba(111,224,160,0)}}
@@ -393,8 +397,8 @@
     <div class="rv-stats" id="rvStats"></div>
   </div>
 
-  <div class="table prehide">
-    <div class="hd">
+  <div class="table prehide" id="feedCard">
+    <div class="hd" id="feedHd">
       <h2>Live table</h2>
       <span class="live">Live</span>
       <span class="seat-note" id="seatNote">seats fill 2–12 · identity shown as a masked tag, never a full address</span>
@@ -1019,6 +1023,16 @@ $("approveBtn").onclick=async ()=>{
   }
 };
 
+
+// live feed collapses like the cards do, and remembers the choice
+try{
+  const fc=$("feedCard");
+  if(localStorage.getItem("swaptables.feedCollapsed")==="1") fc.classList.add("collapsed");
+  $("feedHd").onclick=()=>{
+    fc.classList.toggle("collapsed");
+    try{ localStorage.setItem("swaptables.feedCollapsed", fc.classList.contains("collapsed")?"1":"0"); }catch{}
+  };
+}catch{}
 
 // ── live feed (BetPlaced events, masked) ───────────────
 async function pollFeed(){
