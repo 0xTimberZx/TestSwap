@@ -179,10 +179,10 @@
   .spin.on{display:block}
   .spin h2{margin:0 0 4px;font-family:Georgia,serif;font-size:13px;letter-spacing:.04em;color:#e8dcae;font-weight:700;text-transform:uppercase}
   .spin .note{font-size:11.5px;color:#8fa295;font-family:Georgia,serif;font-style:italic;margin:0 0 12px}
-  .reels{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;max-width:560px}
+  .reels{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
   .reelcard{display:flex;flex-direction:column;align-items:center;gap:6px}
   .reelcard .rlab{font-size:9px;letter-spacing:.12em;color:#9fb4a4}
-  .reel{position:relative;width:100%;max-width:70px;height:120px;overflow:hidden;border:1px solid var(--felt-line);border-radius:9px;background:#0b1a12}
+  .reel{position:relative;width:100%;max-width:84px;margin:0 auto;height:120px;overflow:hidden;border:1px solid var(--felt-line);border-radius:9px;background:#0b1a12}
   .reelstrip{position:absolute;left:0;right:0;top:0;will-change:transform}
   .rcell{height:40px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:var(--cream);font-family:Georgia,serif}
   .reelwin{position:absolute;left:0;right:0;top:40px;height:40px;pointer-events:none;
@@ -194,13 +194,11 @@
   /* pick tracker bar — six slanted stage cells that fill as segments lock */
   .picktrack{display:none;gap:5px;margin:12px 0 0;padding-right:8px}
   .picktrack.on{display:flex}
-  .pt{flex:1;height:34px;transform:skewX(-16deg);border:1px solid var(--gold-dim);border-radius:5px;
-    display:grid;place-items:center;background:rgba(247,240,214,.05);overflow:hidden}
-  .pt span{transform:skewX(16deg);font-family:Georgia,serif;font-weight:800;font-size:15px;color:#6d7a70}
+  .pt{flex:1;height:9px;transform:skewX(-16deg);border:1px solid var(--gold-dim);border-radius:4px;
+    background:rgba(247,240,214,.05);overflow:hidden}
+  .pt span{display:none}
   .pt.done{background:linear-gradient(180deg,#e2c25f,var(--gold));border-color:var(--gold)}
-  .pt.done span{color:var(--ink)}
   .pt.next{border-color:var(--cream);animation:ptpulse 1.1s ease-in-out infinite}
-  .pt.next span{color:var(--cream)}
   @keyframes ptpulse{50%{background:rgba(215,179,76,.28);border-color:var(--gold)}}
 
   /* live feed */
@@ -291,7 +289,7 @@
   <div class="phases" id="phases"></div>
 
   <div class="gate" id="gate">
-    <span class="req">Your <b>ticket</b> — any six characters, A–Z 0–9. It powers the <b>Your Ticket</b> spots.</span>
+    <span class="req">Your <b>ticket</b> — use the same six characters as your <b>TimbSwap Compete</b> ticket (any A–Z 0–9 works). It powers the <b>Your Ticket</b> spots.</span>
     <input id="ticketIn" maxlength="6" placeholder="ABC123" autocomplete="off">
     <button class="btn primary" id="sitBtn">Sit at this table</button>
     <div class="ticket" id="ticketTiles"></div>
@@ -336,6 +334,9 @@
     <p class="note" id="spinNote">Bets are closed — the six balls are running. The meter is display only:
       the chain decides each character from the lock-block hash, never from this animation (§10.1).</p>
     <div class="reels" id="reels"></div>
+    <label style="display:inline-flex;align-items:center;gap:7px;margin:10px 0 0;font-size:11.5px;color:#9fb4a4;cursor:pointer">
+      <input type="checkbox" id="holdReveal" style="accent-color:#d7b34c"> hold the drop — reels stay face-down until all six lock
+    </label>
     <div class="picktrack" id="pickTrack">
       <div class="pt" data-i="0"><span>1</span></div><div class="pt" data-i="1"><span>2</span></div>
       <div class="pt" data-i="2"><span>3</span></div><div class="pt" data-i="3"><span>4</span></div>
@@ -650,6 +651,11 @@ function drawPhases(p){
     return '<div class="'+cls+'"><div class="k">'+lab+'</div><div class="v">'+(sub||"·")+'</div></div>';
   }).join("");
 }
+try{
+  const hr=$("holdReveal");
+  hr.checked = localStorage.getItem("swaptables.holdReveal")==="1";
+  hr.onchange = ()=>{ try{ localStorage.setItem("swaptables.holdReveal", hr.checked?"1":"0"); }catch{} };
+}catch{}
 $("armBtn").onclick = async () => {
   if(await send("start the pick", board, "armTable", tid)){ rail("The table is armed — the lock block is set. Locks land from the console."); await refreshChain(); }
 };
@@ -1104,7 +1110,12 @@ function driveSpin(p){
   if(pv!=null) tau=Math.min(0.97,pv/6.5);
   else if(p.key==="committed") tau=Math.min(0.97,(nowS-betsEnd)/Math.max(1,dials.lead));
   else tau=0.97;
-  const chars = pv!=null ? (pv>6.5? preview.targets : [null,null,null,null,null,null]) : lockedCharsArr();
+  let chars = pv!=null ? (pv>6.5? preview.targets : [null,null,null,null,null,null]) : lockedCharsArr();
+  // face-down mode: a locked reel keeps spinning visually until ALL six are in.
+  // Pure theater — betting closed long before the first char existed.
+  const hold = $("holdReveal")?.checked && T && Number(T.lockedMask)!==0x3F;
+  const realChars = chars;
+  if(hold && pv==null) chars = [null,null,null,null,null,null];
   reelObjs.forEach(o=>{
     const lockedCh = chars[o.seg-1];
     if(lockedCh){
@@ -1122,8 +1133,10 @@ function driveSpin(p){
       o.offset+=v*dt*34;
       const blur=Math.min(6,v*5);
       o.strip.style.filter=blur>0.4? "blur("+blur.toFixed(1)+"px)":"none";
-      o.stat.textContent = p.key==="committed" ? (tau<c.ts?"spinning":"settling") : "at the wire";
-      o.stat.classList.remove("locked");
+      const heldLock = hold && realChars[o.seg-1];
+      o.stat.textContent = heldLock ? "● locked" :
+        (p.key==="committed" ? (tau<c.ts?"spinning":"settling") : "at the wire");
+      o.stat.classList.toggle("locked", !!heldLock);
     }
     const off=((o.offset%NC)+NC)%NC;
     o.strip.style.transform="translateY("+(-(off*RCELL)-NC*RCELL+RCELL)+"px)";
