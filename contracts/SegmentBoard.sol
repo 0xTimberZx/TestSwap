@@ -4,13 +4,21 @@ pragma solidity 0.8.24;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+/**
+ * @dev Every mutator is table-scoped. The ledger holds the money, so the ledger —
+ *      not the board — is what tracks whose money it is. `sweepTable` takes no
+ *      amount on purpose: the board cannot reach another table's escrow because
+ *      it cannot name a figure at all.
+ */
 interface IPoolLedger {
-    function collect(address from, uint256 amount) external;
-    function fundSeed(address from, uint256 amount) external;
-    function creditWinnings(address[] calldata recipients, uint256[] calldata amounts) external;
-    function refund(address to, uint256 amount) external;
-    function sweep(address to, uint256 amount) external;
-    function unowed() external view returns (uint256);
+    function collect(address from, uint256 amount, uint256 tableId) external;
+    function fundSeed(address from, uint256 amount, uint256 tableId) external;
+    function creditWinnings(address[] calldata recipients,
+                            uint256[] calldata amounts,
+                            uint256 tableId) external;
+    function refund(address to, uint256 amount, uint256 tableId) external;
+    function sweepTable(address to, uint256 tableId) external returns (uint256);
+    function tableEscrow(uint256 tableId) external view returns (uint256);
 }
 
 interface ISeedRegistry {
@@ -354,7 +362,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         }
 
         // House seed float for the table's pools.
-        ledger.fundSeed(seedFunder, TABLE_SEED);
+        ledger.fundSeed(seedFunder, TABLE_SEED, tableId);
 
         emit TableOpened(tableId, seedRound, seedString, t.pickTime);
         return tableId;
@@ -398,7 +406,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
             pack  |= uint64(uint64(c) + 1) << (8 * i);
         }
         s.chipPack = pack;
-        ledger.collect(msg.sender, total);
+        ledger.collect(msg.sender, total, tableId);
 
         emit TokensLoaded(tableId, msg.sender, total);
     }
@@ -445,7 +453,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (s.ddChip != 0) revert AlreadyPlaced(DD_POOL);
 
         s.ddChip = chipIdx + 1;
-        ledger.collect(msg.sender, CHIPS[chipIdx]);
+        ledger.collect(msg.sender, CHIPS[chipIdx], tableId);
 
         _bets[tableId][DD_POOL].push(
             Bet({wallet: msg.sender, chipIdx: chipIdx, kind: KIND_DOUBLEDIGIT, pick: 0})
@@ -598,8 +606,8 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         Bet[] storage bs = _bets[tableId][pool];
         uint256 n = bs.length;
         if (n == 0) {
-            // Nobody played this pool: its seed share (if any) stays unowed and
-            // sweeps to Treasury at retire.
+            // Nobody played this pool: its seed share (if any) stays in the
+            // table's escrow and sweeps to Treasury at retire.
             emit PoolSettled(tableId, pool, 0, 0, 0);
             return;
         }
@@ -620,9 +628,10 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
                 amt[i] = pay;
                 distributed += pay;
             }
-            ledger.creditWinnings(who, amt);
+            ledger.creditWinnings(who, amt, tableId);
         }
-        // No winners → the whole pot stays unowed and sweeps to Treasury (§7).
+        // No winners → the whole pot stays in the table's escrow and sweeps to
+        // Treasury at retire (§7).
 
         emit PoolSettled(tableId, pool, pot, pot - distributed, distributed);
     }
@@ -699,13 +708,14 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
                 if (packed == 0) continue;
                 owed += CHIPS[packed - 1];
             }
-            if (owed > 0) ledger.refund(list[i], owed);
+            if (owed > 0) ledger.refund(list[i], owed, tableId);
         }
 
         t.retired = true;
 
-        uint256 leftover = ledger.unowed();
-        if (leftover > 0) ledger.sweep(treasury, leftover);
+        // Exactly this table's remaining escrow — rake, no-winner pots, its
+        // forfeited seed share. Another live table's stake is unreachable here.
+        uint256 leftover = ledger.sweepTable(treasury, tableId);
 
         emit TableRetired(tableId, leftover);
     }
@@ -719,8 +729,12 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
      *
      *      Every chip is refunded, placed or not, because nothing settled — no
      *      char was ever locked, so no bet can have won or lost. The seed then
-     *      sweeps back to the treasury. Bounded by SEATS_HARD_MAX like every
-     *      other settlement loop.
+     *      returns to the CURRENT seedFunder — not the treasury — because a
+     *      cancelled table had no round and earned no rake: the float goes back
+     *      where it was pulled from, so cancels never drain the ops wallet.
+     *      (Retire is different: a played table's leftovers are protocol revenue
+     *      and sweep to Treasury.) Bounded by SEATS_HARD_MAX like every other
+     *      settlement loop.
      */
     function cancelTable(uint256 tableId) external nonReentrant {
         Table storage t = _liveTable(tableId);
@@ -745,15 +759,14 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
             }
             if (s.ddChip != 0) owed += CHIPS[s.ddChip - 1];
             if (owed > 0) {
-                ledger.refund(list[i], owed);
+                ledger.refund(list[i], owed, tableId);
                 unchecked { ++refunded; }
             }
         }
 
         t.retired = true;
 
-        uint256 leftover = ledger.unowed(); // the seed, plus any dust
-        if (leftover > 0) ledger.sweep(treasury, leftover);
+        uint256 leftover = ledger.sweepTable(seedFunder, tableId); // the seed
 
         emit TableCancelled(tableId, t.seatCount, refunded, leftover);
     }
@@ -922,8 +935,8 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (kind == KIND_DOZEN)    return idx / 12 == pick;
         if (kind == KIND_VOWELS)   return ((VOWEL_MASK >> idx) & 1) != 0;
         if (kind == KIND_COLOR) {
-            bool isRed = ((RED_MASK >> idx) & 1) != 0;
-            return pick == 0 ? isRed : !isRed;
+            bool red = ((RED_MASK >> idx) & 1) != 0;
+            return pick == 0 ? red : !red;
         }
         if (kind == KIND_LETTER)   return idx < 26;
         if (kind == KIND_NUMBER)   return idx >= 26;

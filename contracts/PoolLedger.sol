@@ -25,12 +25,18 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  *     drained by the wallets it owes.
  *
  * Security (escrow is sacred):
- *   - `totalCredited` is the sum of every wallet's owed credit and can never
- *     exceed the contract's TIMBS balance — credit is always fully backed.
- *   - Sweeps (to Treasury) and the owner's protocol-fund withdrawal are both
- *     capped to the UNOWED surplus (`heldBalance - totalCredited`), so neither
- *     the board, the Treasury path, nor the owner can ever touch a wallet's
- *     credit.
+ *   - Money is tracked per table. `tableEscrow[id]` holds a table's seed plus its
+ *     players' loaded chips; a pool can only ever pay out of the stakes that
+ *     entered its own table, and `sweepTable` takes no amount, so one table's
+ *     close-out cannot reach another's funds. The earlier `sweep(to, amount)`
+ *     could, and did (VALIDATION.md discovery #11).
+ *   - The invariant is `balanceOf(this) >= totalCredited + totalEscrowed`.
+ *     `totalCredited` is what wallets may withdraw; `totalEscrowed` is live
+ *     table money not yet credited. Both are fully backed at all times.
+ *   - The owner's protocol-fund withdrawal is capped to the residual
+ *     `balanceOf(this) - totalCredited - totalEscrowed` — genuine surplus only.
+ *     Neither the board, the Treasury path, nor the owner can reach a wallet's
+ *     credit or a live table's stake.
  *   - ReentrancyGuard on every function that transfers TIMBS out;
  *     checks-effects-interactions throughout.
  *   - The owner is renounceable (OZ Ownable): once renounced, `setBoard` and
@@ -63,14 +69,24 @@ contract PoolLedger is Ownable, ReentrancyGuard {
     /// @notice Sum of all `credit` entries. Never exceeds the TIMBS balance.
     uint256 public totalCredited;
 
+    /// @notice Tokens held on behalf of one table: its seed plus every chip its
+    ///         players have loaded, minus whatever has since been credited,
+    ///         refunded or swept. Escrow that has not been credited *yet* is
+    ///         still somebody's money, and this is what makes that legible.
+    mapping(uint256 => uint256) public tableEscrow;
+
+    /// @notice Sum of `tableEscrow` across live tables, maintained incrementally
+    ///         so nothing ever iterates over tables.
+    uint256 public totalEscrowed;
+
     // ─── Events ────────────────────────────────────────────────────────────────
 
     event BoardSet(address indexed board);
-    event Collected(address indexed from, uint256 amount);
-    event SeedFunded(address indexed from, uint256 amount);
-    event WinningsCredited(address indexed to, uint256 amount);
-    event Refunded(address indexed to, uint256 amount);
-    event Swept(address indexed to, uint256 amount);
+    event Collected(address indexed from, uint256 indexed tableId, uint256 amount);
+    event SeedFunded(address indexed from, uint256 indexed tableId, uint256 amount);
+    event WinningsCredited(address indexed to, uint256 indexed tableId, uint256 amount);
+    event Refunded(address indexed to, uint256 indexed tableId, uint256 amount);
+    event Swept(address indexed to, uint256 indexed tableId, uint256 amount);
     event Withdrawn(address indexed to, uint256 amount);
     event ProtocolWithdrawn(address indexed to, uint256 amount);
 
@@ -82,6 +98,7 @@ contract PoolLedger is Ownable, ReentrancyGuard {
     error BoardAlreadySet();
     error LengthMismatch();
     error ExceedsUnowed(uint256 requested, uint256 available);
+    error ExceedsTableEscrow(uint256 tableId, uint256 requested, uint256 held);
     error NothingToWithdraw();
 
     // ─── Modifiers ─────────────────────────────────────────────────────────────
@@ -105,22 +122,26 @@ contract PoolLedger is Ownable, ReentrancyGuard {
      * @notice Pull a player's stake into the vault. Caller must have approved
      *         this ledger for `amount`. Board-gated; the board records which pool.
      */
-    function collect(address from, uint256 amount) external onlyBoard {
+    function collect(address from, uint256 amount, uint256 tableId) external onlyBoard {
         if (from == address(0)) revert ZeroAddress();
         if (amount == 0)        revert ZeroAmount();
         timbs.safeTransferFrom(from, address(this), amount);
-        emit Collected(from, amount);
+        tableEscrow[tableId] += amount;
+        totalEscrowed        += amount;
+        emit Collected(from, tableId, amount);
     }
 
     /**
      * @notice Pull seed float into the vault (e.g. from the Treasury). Caller
      *         must have approved this ledger for `amount`.
      */
-    function fundSeed(address from, uint256 amount) external onlyBoard {
+    function fundSeed(address from, uint256 amount, uint256 tableId) external onlyBoard {
         if (from == address(0)) revert ZeroAddress();
         if (amount == 0)        revert ZeroAmount();
         timbs.safeTransferFrom(from, address(this), amount);
-        emit SeedFunded(from, amount);
+        tableEscrow[tableId] += amount;
+        totalEscrowed        += amount;
+        emit SeedFunded(from, tableId, amount);
     }
 
     // ─── Board: settlement accounting ──────────────────────────────────────────
@@ -133,10 +154,11 @@ contract PoolLedger is Ownable, ReentrancyGuard {
      * @dev Reverts if the resulting `totalCredited` would exceed the held
      *      balance — credit must always be fully backed.
      */
-    function creditWinnings(address[] calldata recipients, uint256[] calldata amounts)
-        external
-        onlyBoard
-    {
+    function creditWinnings(
+        address[] calldata recipients,
+        uint256[] calldata amounts,
+        uint256 tableId
+    ) external onlyBoard {
         uint256 len = recipients.length;
         if (len != amounts.length) revert LengthMismatch();
 
@@ -148,44 +170,59 @@ contract PoolLedger is Ownable, ReentrancyGuard {
             if (amount == 0)      continue; // losers carry zero weight; skip cheaply
             credit[to] += amount;
             added      += amount;
-            emit WinningsCredited(to, amount);
+            emit WinningsCredited(to, tableId, amount);
         }
 
-        uint256 newTotal = totalCredited + added;
-        if (newTotal > timbs.balanceOf(address(this))) {
-            revert ExceedsUnowed(added, _unowed());
-        }
-        totalCredited = newTotal;
+        // A pool can only ever pay out of the stakes that entered its own table.
+        uint256 held = tableEscrow[tableId];
+        if (added > held) revert ExceedsTableEscrow(tableId, added, held);
+        tableEscrow[tableId] = held - added;
+        totalEscrowed       -= added;
+        totalCredited       += added;
     }
 
     /**
      * @notice Credit a single wallet a refund (e.g. an unplayed/dislodged chip
      *         at retire). Backed like any other credit.
      */
-    function refund(address to, uint256 amount) external onlyBoard {
+    function refund(address to, uint256 amount, uint256 tableId) external onlyBoard {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0)      revert ZeroAmount();
-        uint256 newTotal = totalCredited + amount;
-        if (newTotal > timbs.balanceOf(address(this))) {
-            revert ExceedsUnowed(amount, _unowed());
-        }
-        credit[to]   += amount;
-        totalCredited = newTotal;
-        emit Refunded(to, amount);
+        uint256 held = tableEscrow[tableId];
+        if (amount > held) revert ExceedsTableEscrow(tableId, amount, held);
+        tableEscrow[tableId] = held - amount;
+        totalEscrowed       -= amount;
+        credit[to]          += amount;
+        totalCredited       += amount;
+        emit Refunded(to, tableId, amount);
     }
 
     /**
-     * @notice Sweep unowed surplus (no-winner pots, rake, dust) to `to`
-     *         (typically the Treasury). Capped to the unowed balance so a sweep
-     *         can never reach into a wallet's credit.
+     * @notice Sweep what a *single* table has left — its rake, no-winner pots,
+     *         forfeited seed and dust — to `to` (typically the Treasury).
+     *
+     * @dev There is deliberately no `amount` parameter. The previous
+     *      `sweep(to, amount)` was capped only to the ledger's *global* unowed
+     *      balance, which made over-sweeping a matter of the board passing the
+     *      right number — and it did not: closing out any one table took every
+     *      other live table's seed and its players' loaded chips with it
+     *      (VALIDATION.md discovery #11). Taking the table id instead of an
+     *      amount makes a cross-table sweep unrepresentable rather than merely
+     *      guarded against.
      */
-    function sweep(address to, uint256 amount) external onlyBoard nonReentrant {
+    function sweepTable(address to, uint256 tableId)
+        external
+        onlyBoard
+        nonReentrant
+        returns (uint256 amount)
+    {
         if (to == address(0)) revert ZeroAddress();
-        if (amount == 0)      revert ZeroAmount();
-        uint256 avail = _unowed();
-        if (amount > avail) revert ExceedsUnowed(amount, avail);
+        amount = tableEscrow[tableId];
+        if (amount == 0) return 0;           // nothing left is not an error
+        tableEscrow[tableId] = 0;
+        totalEscrowed       -= amount;
         timbs.safeTransfer(to, amount);
-        emit Swept(to, amount);
+        emit Swept(to, tableId, amount);
     }
 
     // ─── Player: pull-claim ────────────────────────────────────────────────────
@@ -214,10 +251,11 @@ contract PoolLedger is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Narrow protocol-fund move: withdraw only the UNOWED surplus (rake
-     *         awaiting sweep, stray tokens, seed float not backing a credit) to
-     *         `to`. Capped to `heldBalance - totalCredited`, so player credit is
-     *         provably untouchable. Removed forever once ownership is renounced.
+     * @notice Narrow protocol-fund move: withdraw only genuine surplus — dust and
+     *         tokens transferred in by accident — to `to`. Capped to
+     *         `heldBalance - totalCredited - totalEscrowed`, so both player credit
+     *         and live table escrow are provably untouchable. Removed forever once
+     *         ownership is renounced.
      */
     function ownerWithdraw(address to, uint256 amount)
         external
@@ -239,12 +277,20 @@ contract PoolLedger is Ownable, ReentrancyGuard {
         return timbs.balanceOf(address(this));
     }
 
-    /// @notice Unowed surplus: held balance minus all owed credit.
+    /// @notice Genuine surplus: held balance minus owed credit AND live escrow.
     function unowed() external view returns (uint256) {
         return _unowed();
     }
 
+    /**
+     * @dev Genuine protocol surplus: dust, and tokens someone transferred in by
+     *      accident. Deliberately excludes `totalEscrowed` — escrow that has not
+     *      been credited yet is still a live table's stake, and the old
+     *      definition (balance - totalCredited) let `ownerWithdraw` reach it.
+     */
     function _unowed() internal view returns (uint256) {
-        return timbs.balanceOf(address(this)) - totalCredited;
+        uint256 spokenFor = totalCredited + totalEscrowed;
+        uint256 bal = timbs.balanceOf(address(this));
+        return bal > spokenFor ? bal - spokenFor : 0;
     }
 }

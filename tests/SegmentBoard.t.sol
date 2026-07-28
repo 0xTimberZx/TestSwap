@@ -458,6 +458,8 @@ contract SegmentBoardTest is Test {
         // every chip came back, placed ones included — nothing settled, so
         // nothing can have been won or lost
         assertEq(ledger.credit(alice), staked, "all seven chips refunded");
+        // seedFunder == treasury in this fixture; the dedicated test below
+        // proves the seed goes to the FUNDER when the two are different wallets
         assertEq(timbs.balanceOf(treasury) - treasuryBefore, SEED, "seed returned");
         assertEq(ledger.heldBalance(), ledger.totalCredited(), "exactly backed");
 
@@ -465,6 +467,29 @@ contract SegmentBoardTest is Test {
         ledger.withdraw();
         assertEq(timbs.balanceOf(alice), 10_000e18, "player made whole");
         assertEq(ledger.heldBalance(), 0, "vault fully drained");
+    }
+
+    /// @dev A cancelled table had no round and earned no rake, so its seed goes
+    ///      back where it was pulled from — the ops wallet — not to Treasury.
+    ///      Without this, every cancel drained seedFunder by 100 TIMBS one-way.
+    function test_CancelReturnsSeedToFunderNotTreasury() public {
+        address ops = address(0x0F5);
+        timbs.mintTo(ops, 1_000e18);
+        vm.prank(ops); timbs.approve(address(ledger), type(uint256).max);
+        board.setSeedFunder(ops);
+
+        uint256 id = _openTable();
+        assertEq(timbs.balanceOf(ops), 900e18, "seed pulled from ops");
+
+        vm.prank(alice);
+        board.sit(id, bytes6("ABCDEF")); // one seat: can never arm
+
+        _fastForward(PICK_DELAY + 1);
+        uint256 treasuryBefore = timbs.balanceOf(treasury);
+        board.cancelTable(id);
+
+        assertEq(timbs.balanceOf(ops), 1_000e18, "ops wallet made whole");
+        assertEq(timbs.balanceOf(treasury), treasuryBefore, "treasury took nothing");
     }
 
     function test_CannotCancelWhileEntryOpen() public {
