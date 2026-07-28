@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SwapTables — The Segment Board</title>
+<!-- DebugHub: siloed under its own appName; add #debug to the URL for the
+     snapshot+share button. Logs locally, no wallet required, nothing uploaded. -->
+<script>window.DEBUGHUB_CONFIG = { appName: "SwapTables" };</script>
+<script src="../debughub/sdk/debugger.js"></script>
 <!--
   The player-facing table. Same live gen-3 contracts as the console (index.html),
   different job: the console is for operating tables; this page is for sitting at
@@ -589,9 +593,11 @@ async function send(label, contract, method, ...args){
     const t = await contract[method](...args);
     rail("<b>"+label+"</b> sent ("+t.hash.slice(0,14)+"…) — waiting for the chain…");
     await t.wait();
+    try{ window.DebugHub && DebugHub.logCheckpoint(label, "pass"); }catch(_){}
     return true;
   }catch(e){
-    if(!isHandshakeFail(e)){ rail('<span class="lose">✗ '+label+"</span> — "+explain(e)); return false; }
+    if(!isHandshakeFail(e)){ try{ window.DebugHub && DebugHub.logError(label, e); }catch(_){}
+      rail('<span class="lose">✗ '+label+"</span> — "+explain(e)); return false; }
   }
   try{
     const data = contract.interface.encodeFunctionData(method, args);
@@ -599,9 +605,12 @@ async function send(label, contract, method, ...args){
     const hash = await window.ethereum.request({method:"eth_sendTransaction",params:[{from:me,to,data}]});
     rail("<b>"+label+"</b> sent raw ("+String(hash).slice(0,14)+"…) — waiting…");
     const rec = await provider.waitForTransaction(hash);
-    if(rec && Number(rec.status)===0){ rail('<span class="lose">✗ '+label+"</span> — reverted on chain"); return false; }
+    if(rec && Number(rec.status)===0){ try{ window.DebugHub && DebugHub.logError(label, "reverted on chain"); }catch(_){}
+      rail('<span class="lose">✗ '+label+"</span> — reverted on chain"); return false; }
+    try{ window.DebugHub && DebugHub.logCheckpoint(label+" (raw)", "pass"); }catch(_){}
     return true;
-  }catch(e){ rail('<span class="lose">✗ '+label+"</span> — "+explain(e)); return false; }
+  }catch(e){ try{ window.DebugHub && DebugHub.logError(label, e); }catch(_){}
+    rail('<span class="lose">✗ '+label+"</span> — "+explain(e)); return false; }
 }
 function isHandshakeFail(e){
   const m = (e?.message||"")+" "+(e?.shortMessage||"");
@@ -672,6 +681,7 @@ $("connect").onclick = async () => {
   timbs  = new ethers.Contract(ADDR.timbs, ERC20_ABI, signer);
   dials = { entry: Number(await board.entryWindow()), lead: Number(await board.betsCloseLead()) };
   rail("Connected. Loading the newest table…");
+  try{ window.DebugHub && DebugHub.logCheckpoint("wallet connected · "+short(me), "pass"); }catch(e){}
   await pickNewest();
   setInterval(refreshChain, 12000);
   setInterval(tick, 1000);
