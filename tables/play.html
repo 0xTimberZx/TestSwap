@@ -318,6 +318,19 @@
     <div class="reels" id="reels"></div>
   </div>
 
+  <details class="panel" style="margin:16px 0 0">
+    <summary style="cursor:pointer;font-family:Georgia,serif;font-size:13px;letter-spacing:.04em;color:#e8dcae;font-weight:700;text-transform:uppercase">Meter console
+      <span style="color:#93a698;font-weight:400;text-transform:none;font-family:'Arial Narrow',Arial,sans-serif;font-size:12px">· tune the §10.2 envelope · display-only, saved in this browser</span></summary>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;align-items:center">
+      <button class="btn" id="replaySpin">Replay spin</button>
+      <button class="btn" id="meterReset">Reset dials</button>
+      <button class="btn" id="meterCopy">Copy for spec</button>
+      <span class="hint" id="meterHint" style="margin-top:0">Dials move the ride, never the landing — the chain picks the characters.</span>
+    </div>
+    <div id="meterSliders" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:2px 24px"></div>
+    <textarea id="meterOut" hidden readonly spellcheck="false" style="width:100%;margin-top:10px;min-height:130px;background:#0b1a12;border:1px solid var(--felt-line);border-radius:8px;color:var(--cream);font-size:11px;line-height:1.45;padding:10px;white-space:pre;overflow-x:auto"></textarea>
+  </details>
+
   <div class="reveal" id="reveal">
     <div class="rv-hd">Winning string <span class="dd-flag" id="ddFlag"></span></div>
     <div class="rv-str" id="rvStr"></div>
@@ -939,8 +952,10 @@ async function addFeedRow(wallet, pool, kind, pick){
 }
 
 // ── spin meter (§10.2 envelope, display only) ──────────
-const SPIN_D = {vrunMin:0.55,vrunMax:1.20,tsLate:0.40,tsEarly:0.39,residMax:0.120,residMin:0.145,
-  kMin:12.0,kMax:16.0,tau0:0.05,gamma:1.28,rattleBeta:0.31,rattleZeta:3.5,rattleOmega:10.0,tauR:0.72};
+const SPIN_DEFAULTS = {vrunMin:0.55,vrunMax:1.20,tsLate:0.40,tsEarly:0.39,residMax:0.120,residMin:0.145,
+  kMin:12.0,kMax:16.0,tau0:0.05,gamma:1.28,rattleBeta:0.31,rattleZeta:3.5,rattleOmega:10.0,tauR:0.72,swapNoise:0.21};
+let SPIN_D = Object.assign({}, SPIN_DEFAULTS);
+try{ Object.assign(SPIN_D, JSON.parse(localStorage.getItem("swaptables.meter")||"{}")); }catch{}
 const HARD=12;
 function pOfN(n){ if(n<=3) return 0; return Math.max(0,Math.min(1,Math.log(n-2)/Math.log(HARD-2))); }
 function coeffN(n){ const p=pOfN(n); return {p,
@@ -976,21 +991,28 @@ const reelObjs=[];
     reelObjs.push({seg:s,strip,stat,offset:Math.random()*NC,settled:null,settleFrom:null,settleT0:0});
   }
 })();
-let lastFrame=0;
+let lastFrame=0, preview=null;
 function driveSpin(p){
-  const on = ["committed","ready","spinning","locked","done"].includes(p.key) && T && Number(T.seatCount)>=2;
+  let pv=null;
+  if(preview){
+    const el=(performance.now()-preview.t0)/1000;
+    if(el>9.5){ preview=null; reelObjs.forEach(o=>{o.settled=null;o.settleFrom=null;}); }
+    else pv=el;
+  }
+  const on = pv!=null || (["committed","ready","spinning","locked","done"].includes(p.key) && T && Number(T.seatCount)>=2);
   $("spin").classList.toggle("on", on);
   if(!on) return;
-  const n=Number(T.seatCount);
+  const n=T? Math.max(2,Number(T.seatCount)) : 3;
   const c=coeffN(Math.max(3,n));
   const now=Date.now();
   const dt=lastFrame? Math.min(0.2,(now-lastFrame)/1000):0.05; lastFrame=now;
   // τ over the committed window; pinned near the wire while waiting for locks
   let tau;
-  const nowS=now/1000, betsEnd=Number(T.pickTime)-dials.lead;
-  if(p.key==="committed") tau=Math.min(0.97,(nowS-betsEnd)/Math.max(1,dials.lead));
+  const nowS=now/1000, betsEnd=T? Number(T.pickTime)-dials.lead : 0;
+  if(pv!=null) tau=Math.min(0.97,pv/6.5);
+  else if(p.key==="committed") tau=Math.min(0.97,(nowS-betsEnd)/Math.max(1,dials.lead));
   else tau=0.97;
-  const chars = lockedCharsArr();
+  const chars = pv!=null ? (pv>6.5? preview.targets : [null,null,null,null,null,null]) : lockedCharsArr();
   reelObjs.forEach(o=>{
     const lockedCh = chars[o.seg-1];
     if(lockedCh){
@@ -1004,7 +1026,7 @@ function driveSpin(p){
       o.stat.textContent=prog>=1? "● "+lockedCh : "settling";
       o.stat.classList.toggle("locked",prog>=1);
     } else {
-      const v=envelope(tau,c)*(1+0.21*(Math.random()-0.5));
+      const v=envelope(tau,c)*(1+SPIN_D.swapNoise*(Math.random()-0.5));
       o.offset+=v*dt*34;
       const blur=Math.min(6,v*5);
       o.strip.style.filter=blur>0.4? "blur("+blur.toFixed(1)+"px)":"none";
@@ -1014,7 +1036,9 @@ function driveSpin(p){
     const off=((o.offset%NC)+NC)%NC;
     o.strip.style.transform="translateY("+(-(off*RCELL)-NC*RCELL+RCELL)+"px)";
   });
-  $("spinNote").textContent = p.key==="committed"
+  $("spinNote").textContent = pv!=null
+    ? "Replaying the spin on the "+n+"-seat envelope — a preview, nothing on chain moves."
+    : p.key==="committed"
     ? "Bets are closed — six balls running on the "+n+"-seat envelope. Display only: the chain decides from the lock-block hash (§10.1)."
     : p.key==="ready" ? "At the wire — waiting for the pick to be started (anyone may)."
     : "The pick is armed — each ball drops as its segment locks on chain.";
@@ -1088,6 +1112,63 @@ function stampFeed(winStr){
     tail.outerHTML='<span class="obadge '+(won?"w":"l")+'">'+(won?"WON":"MISS")+'</span>';
   });
 }
+
+// ── meter console (tune SPIN_D, saved per-browser; display-only) ─────
+const METER_DEFS=[
+  ["vrunMin","v_run @ n=3",0.2,1.2,0.01],   ["vrunMax","v_run @ HARD",0.5,1.5,0.01],
+  ["kMin","spin-up k @ n=3",2,18,0.1],      ["kMax","spin-up k @ HARD",2,22,0.1],
+  ["tsLate","settle onset τ_s @ n=3",0.3,0.95,0.01],["tsEarly","settle onset τ_s @ HARD",0.3,0.9,0.01],
+  ["tau0","spin-up midpoint τ₀",0,0.4,0.01],["gamma","glide exponent γ",0.6,3.5,0.05],
+  ["residMax","wire jitter @ n=3",0,0.3,0.005],["residMin","wire jitter @ HARD",0,0.3,0.005],
+  ["rattleBeta","rattle depth β",0,0.5,0.01],["rattleZeta","rattle damping ζ",1,14,0.5],
+  ["rattleOmega","rattle freq ω",10,80,1],  ["tauR","rattle onset τ_r",0.7,0.98,0.01],
+  ["swapNoise","swap jitter amplitude",0,0.3,0.01],
+];
+const meterOuts={};
+(function buildMeter(){
+  const wrap=$("meterSliders"); if(!wrap) return;
+  METER_DEFS.forEach(([key,label,min,max,step])=>{
+    const row=document.createElement("div");
+    row.style.cssText="display:grid;grid-template-columns:1fr 1.2fr auto;align-items:center;gap:10px;padding:3px 0";
+    const lab=document.createElement("label"); lab.textContent=label;
+    lab.style.cssText="font-size:11.5px;color:#9fb4a4";
+    const inp=document.createElement("input"); inp.type="range"; inp.min=min; inp.max=max; inp.step=step; inp.value=SPIN_D[key];
+    inp.style.cssText="accent-color:#d7b34c;width:100%";
+    const out=document.createElement("output"); out.textContent=Number(SPIN_D[key]).toFixed(step<0.01?3:step<1?2:1);
+    out.style.cssText="font-size:11.5px;color:var(--cream);font-variant-numeric:tabular-nums;min-width:3.4em;text-align:right";
+    meterOuts[key]={inp,out,step};
+    inp.addEventListener("input",()=>{
+      SPIN_D[key]=parseFloat(inp.value);
+      out.textContent=Number(SPIN_D[key]).toFixed(step<0.01?3:step<1?2:1);
+      try{ localStorage.setItem("swaptables.meter", JSON.stringify(SPIN_D)); }catch{}
+    });
+    row.append(lab,inp,out); wrap.appendChild(row);
+  });
+  $("replaySpin").onclick=()=>{
+    let targets = lockedCharsArr();
+    if(!targets.some(Boolean)) targets=Array.from({length:6},()=>ALPHABET[Math.floor(Math.random()*36)]);
+    else targets=targets.map(ch=>ch||ALPHABET[Math.floor(Math.random()*36)]);
+    reelObjs.forEach(o=>{o.settled=null;o.settleFrom=null;});
+    preview={t0:performance.now(),targets};
+  };
+  $("meterReset").onclick=()=>{
+    SPIN_D=Object.assign({},SPIN_DEFAULTS);
+    try{ localStorage.removeItem("swaptables.meter"); }catch{}
+    METER_DEFS.forEach(([key,,,,step])=>{ const o=meterOuts[key]; o.inp.value=SPIN_D[key]; o.out.textContent=Number(SPIN_D[key]).toFixed(step<0.01?3:step<1?2:1); });
+    $("meterHint").textContent="Back to the spec §10.2 defaults.";
+  };
+  $("meterCopy").onclick=()=>{
+    const rows=[2,3,4,5,6,8,12].map(n=>{
+      const c=coeffN(Math.max(3,n)), floor=n===2;
+      return "| "+n+(floor?" (floor)":"")+" | "+(floor?"—":c.p.toFixed(2))+" | "+c.vrun.toFixed(2)+" | "+c.ts.toFixed(2)+" | "+c.resid.toFixed(3)+" | "+c.k.toFixed(1)+" |";
+    }).join("\n");
+    const dials=Object.entries(SPIN_D).map(([k,v])=>k+" = "+v).join(", ");
+    const md="| n | p(n) | v_run | τ_s | resid | k |\n|---|------|-------|-----|-------|---|\n"+rows+"\n\ndials: "+dials;
+    const ta=$("meterOut"); ta.hidden=false; ta.value=md; ta.focus(); ta.select();
+    try{ navigator.clipboard?.writeText(md); $("meterHint").textContent="Copied — paste into §10.2."; }
+    catch{ $("meterHint").textContent="Select the text below and copy."; }
+  };
+})();
 
 function updateTotals(){
   if(!mySeat?.seated){ return; }
