@@ -371,6 +371,7 @@
       <div class="pt" data-i="4"><span>5</span></div><div class="pt" data-i="5"><span>6</span></div>
     </div>
     <p class="note" id="lockTracker" style="display:none;margin:10px 0 0;font-variant-numeric:tabular-nums"></p>
+    <button class="btn primary" id="finishPick" style="display:none;margin-top:10px">Finish the pick — no secret needed, you pay the gas</button>
   </div>
 
   <details class="panel prehide" style="margin:16px 0 0">
@@ -454,6 +455,9 @@ const BOARD_ABI = [
   "function place(uint256 tableId,uint8 segment,uint8 kind,uint8 pick)",
   "function placeDoubleDigit(uint256 tableId,uint8 chipIdx)",
   "function armTable(uint256 tableId)",
+  "function lockSegmentFallback(uint256 tableId,uint8 segment)",
+  "function retire(uint256 tableId)",
+  "error RevealWindowOpen()","error LockBlockUnavailable(uint256 lockBlock)","error SegmentAlreadyLocked(uint8 segment)",
   "event Seated(uint256 indexed tableId,address indexed wallet)",
   "event BetPlaced(uint256 indexed tableId,uint8 indexed pool,address indexed wallet,uint8 kind,uint8 pick)",
   "event PoolSettled(uint256 indexed tableId,uint8 indexed pool,uint256 pot,uint256 rake,uint256 distributed)",
@@ -1242,14 +1246,33 @@ async function updateLockTracker(){
     let status, tone="#9fb4a4";
     if(age<1){ status="waiting for the lock block to be mined"; }
     else if(age<64){ status="reveal window OPEN — locks land from the console (passphrase) · fallback unlocks in ~"+t(64-age); tone="#6fe0a0"; }
-    else if(age<200){ status="reveal window closed — the no-secret FALLBACK is open in the console · horizon in ~"+t(256-age); tone="#d7b34c"; }
+    else if(age<200){ status="reveal window closed — anyone can finish the pick below · horizon in ~"+t(256-age); tone="#d7b34c"; }
     else if(age<256){ status="HURRY — only ~"+t(256-age)+" before the lock block ages out and the table needs a re-arm"; tone="#e88"; }
     else { status="lock block aged out — re-arm from the console, then lock again"; tone="#e88"; }
     el.style.display="";
     el.style.color=tone;
     el.textContent = "The pick · "+nLocked+" / 6 locked · lock block "+T.lockBlock+" · age "+Math.max(0,age)+" of 256 L1 blocks (~"+t(Math.max(0,age))+") · "+status;
+    // §10.1's liveness valve, surfaced for players: after the reveal window the
+    // fallback is permissionless — whoever cares most funds the gas.
+    $("finishPick").style.display = (age>=64 && age<256 && nLocked<6) ? "" : "none";
   }catch{ el.style.display="none"; }
 }
+$("finishPick").onclick = async () => {
+  if(!T) return;
+  $("finishPick").disabled=true;
+  try{
+    for(let seg=1;seg<=6;seg++){
+      if(Number(T.lockedMask)&(1<<(seg-1))) continue;
+      if(!await send("fallback-lock segment "+seg, board, "lockSegmentFallback", tid, seg)) break;
+      await refreshChain();
+    }
+    if(Number(T.lockedMask)===0x3F){
+      await send("retire the table", board, "retire", tid);
+      await refreshChain();
+      rail('<span class="win">Pick finished and table retired.</span> Winnings are credited — withdraw any time.');
+    }
+  } finally { $("finishPick").disabled=false; }
+};
 
 // ── reveal + settle stamping ───────────────────────────
 let revealDone=false;
