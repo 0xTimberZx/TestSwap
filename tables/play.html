@@ -50,6 +50,28 @@
   .btn:disabled{opacity:.4;cursor:not-allowed}
   .spacer{flex:1}
 
+  /* first-visit calm: until a wallet connects, only the pitch and the button */
+  .pre .prehide{display:none!important}
+  details.how{max-width:66ch;margin:0 0 18px}
+  details.how summary{cursor:pointer;font-family:Georgia,serif;font-size:13.5px;color:var(--gold);letter-spacing:.02em}
+  details.how p{font-size:14.5px;line-height:1.6;color:#cdd8cf;margin:10px 0 0}
+  details.how b{color:var(--cream)}
+
+  /* wallet bar — one framed strip that reacts to connection state */
+  .wbar{border:1px solid rgba(247,240,214,.16);border-radius:12px;padding:10px 14px;background:rgba(247,240,214,.03);gap:10px}
+  .wid{display:inline-flex;align-items:center;gap:8px;padding:8px 15px;border-radius:22px;border:1px solid var(--ok);
+    color:var(--cream);font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;letter-spacing:.02em}
+  .wid::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(111,224,160,.6);animation:pulse 1.6s infinite}
+  .wid.bad{border-color:var(--err);color:var(--err)}
+  .wid.bad::before{background:var(--err);animation:none}
+  .wstat{display:inline-flex;flex-direction:column;align-items:flex-end;gap:1px;padding:5px 13px;
+    border:1px solid var(--gold-dim);border-radius:10px;min-width:86px}
+  .wstat .k{font-size:8.5px;letter-spacing:.18em;color:#8fa295}
+  .wstat .v{font-family:Georgia,serif;font-weight:800;font-size:15px;color:var(--cream);font-variant-numeric:tabular-nums;line-height:1.1}
+  .wstat.win .v{color:var(--ok)}
+  #withdraw.ready{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:700}
+  #connect:disabled{opacity:.7}
+
   /* phase timeline */
   .phases{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
   .ph{flex:1 1 120px;border:1px solid rgba(247,240,214,.16);border-radius:9px;padding:8px 12px;background:rgba(247,240,214,.03)}
@@ -204,7 +226,11 @@
   /* live feed */
   .table{margin:16px 0 0;border:1px solid rgba(247,240,214,.16);border-radius:12px;background:rgba(247,240,214,.03);overflow:hidden}
   .table .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid rgba(247,240,214,.12);background:rgba(0,0,0,.14)}
+  .table .hd{cursor:pointer;-webkit-tap-highlight-color:transparent}
   .table .hd h2{margin:0;font-family:Georgia,serif;font-size:13px;letter-spacing:.04em;color:#e8dcae;font-weight:700;text-transform:uppercase}
+  .table .hd h2::after{content:" ▾";color:#93a698;font-family:"Arial Narrow",Arial,sans-serif}
+  .table.collapsed .hd h2::after{content:" ▸"}
+  .table.collapsed .feed{display:none}
   .live{display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ok)}
   .live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(111,224,160,.6);animation:pulse 1.6s infinite}
   @keyframes pulse{70%{box-shadow:0 0 0 7px rgba(111,224,160,0)}100%{box-shadow:0 0 0 0 rgba(111,224,160,0)}}
@@ -253,30 +279,36 @@
   .foot b{color:var(--gold);font-style:normal;font-family:"Arial Narrow",Arial,sans-serif}
 </style>
 </head>
-<body>
+<body class="pre">
 <div class="wrap">
   <p class="eyebrow">SwapTables · Arbitrum Sepolia · pre-round segment betting</p>
   <h1>Load all six <em>tokens</em>, then play.</h1>
   <p class="lede">
-    Sit with a six-character ticket, take your <b>six segment tokens</b> — one per segment.
-    First <b>load every token</b> with a TIMBS chip: all six carry a stake before the board opens
-    to you. Then place them — pick a spot, read what it calls for, approve the transaction.
-    <b>Once it's mined, it's final.</b> Tokens you load but never place come back as withdrawable
-    credit when the table retires. Operating a table (open / lock / retire) lives in the
-    <a href="index.html">console</a>.
+    Sit with a ticket, stake six chips, place your bets — <b>the chain spins, winners split the pot.</b>
   </p>
+  <details class="how">
+    <summary>How it works</summary>
+    <p>
+      Sit with a six-character ticket and take your <b>six segment tokens</b> — one per segment.
+      First <b>load every token</b> with a TIMBS chip: all six carry a stake before the board opens
+      to you. Then place them — pick a spot, read what it calls for, approve the transaction.
+      <b>Once it's mined, it's final.</b> Tokens you load but never place come back as withdrawable
+      credit when the table retires. Operating a table (open / lock / retire) lives in the
+      <a href="index.html">console</a>.
+    </p>
+  </details>
 
-  <div class="top">
+  <div class="top wbar">
     <button class="btn primary" id="connect">Connect wallet</button>
-    <span class="pill" id="acct">not connected</span>
-    <span class="pill" id="net">—</span>
+    <span class="wid" id="acct" style="display:none">—</span>
+    <span class="pill" id="net" style="display:none">—</span>
     <span class="spacer"></span>
-    <span class="pill" id="balPill">TIMBS —</span>
-    <span class="pill" id="credPill">credit —</span>
-    <button class="btn" id="withdraw" disabled>Withdraw</button>
+    <span class="wstat" id="balPill" style="display:none"><span class="k">TIMBS</span><span class="v">—</span></span>
+    <span class="wstat" id="credPill" style="display:none"><span class="k">CREDIT</span><span class="v">—</span></span>
+    <button class="btn" id="withdraw" style="display:none" disabled>Withdraw</button>
   </div>
 
-  <div class="top">
+  <div class="top prehide">
     <span class="pill">table</span>
     <input id="tableId" inputmode="numeric" style="width:70px;background:#0b1a12;border:1px solid var(--felt-line);border-radius:6px;color:var(--cream);font-size:15px;font-weight:800;padding:7px 10px;text-align:center">
     <button class="btn" id="loadTable">Load</button>
@@ -286,16 +318,16 @@
     <button class="btn" id="armBtn" style="display:none">Start the pick</button>
   </div>
 
-  <div class="phases" id="phases"></div>
+  <div class="phases prehide" id="phases"></div>
 
-  <div class="gate" id="gate">
+  <div class="gate prehide" id="gate">
     <span class="req">Your <b>ticket</b> — use the same six characters as your <b>TimbSwap Compete</b> ticket (any A–Z 0–9 works). It powers the <b>Your Ticket</b> spots.</span>
     <input id="ticketIn" maxlength="6" placeholder="ABC123" autocomplete="off">
     <button class="btn primary" id="sitBtn">Sit at this table</button>
     <div class="ticket" id="ticketTiles"></div>
   </div>
 
-  <div class="controls">
+  <div class="controls prehide">
     <div class="panel" id="tokensPanel">
       <h2 class="clickable" onclick="this.parentElement.classList.toggle('collapsed')">Your segment tokens <span>· each bets on its own segment</span></h2>
       <div class="rack" id="rack"></div>
@@ -311,7 +343,7 @@
     </div>
   </div>
 
-  <div class="felt-scroll">
+  <div class="felt-scroll prehide">
     <div class="felt locked" id="felt" data-lock="Connect, sit and load to open the board"><div class="board" id="board"></div></div>
   </div>
 
@@ -343,9 +375,10 @@
       <div class="pt" data-i="4"><span>5</span></div><div class="pt" data-i="5"><span>6</span></div>
     </div>
     <p class="note" id="lockTracker" style="display:none;margin:10px 0 0;font-variant-numeric:tabular-nums"></p>
+    <button class="btn primary" id="finishPick" style="display:none;margin-top:10px">Finish the pick — no secret needed, you pay the gas</button>
   </div>
 
-  <details class="panel" style="margin:16px 0 0">
+  <details class="panel prehide" style="margin:16px 0 0">
     <summary style="cursor:pointer;font-family:Georgia,serif;font-size:13px;letter-spacing:.04em;color:#e8dcae;font-weight:700;text-transform:uppercase">Meter console
       <span style="color:#93a698;font-weight:400;text-transform:none;font-family:'Arial Narrow',Arial,sans-serif;font-size:12px">· tune the §10.2 envelope · display-only, saved in this browser</span></summary>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;align-items:center">
@@ -364,8 +397,8 @@
     <div class="rv-stats" id="rvStats"></div>
   </div>
 
-  <div class="table">
-    <div class="hd">
+  <div class="table prehide" id="feedCard">
+    <div class="hd" id="feedHd">
       <h2>Live table</h2>
       <span class="live">Live</span>
       <span class="seat-note" id="seatNote">seats fill 2–12 · identity shown as a masked tag, never a full address</span>
@@ -373,7 +406,7 @@
     <ul class="feed" id="feed"></ul>
   </div>
 
-  <div class="totals">
+  <div class="totals prehide">
     <div class="stat"><div class="k">Loaded</div><div class="v" id="tLoad">0<small>/6</small></div></div>
     <div class="stat"><div class="k">On the board</div><div class="v" id="tOn">0 <small>TIMBS</small></div></div>
     <div class="stat"><div class="k">Tokens placed</div><div class="v" id="tTok">0<small>/6</small></div></div>
@@ -426,6 +459,9 @@ const BOARD_ABI = [
   "function place(uint256 tableId,uint8 segment,uint8 kind,uint8 pick)",
   "function placeDoubleDigit(uint256 tableId,uint8 chipIdx)",
   "function armTable(uint256 tableId)",
+  "function lockSegmentFallback(uint256 tableId,uint8 segment)",
+  "function retire(uint256 tableId)",
+  "error RevealWindowOpen()","error LockBlockUnavailable(uint256 lockBlock)","error SegmentAlreadyLocked(uint8 segment)",
   "event Seated(uint256 indexed tableId,address indexed wallet)",
   "event BetPlaced(uint256 indexed tableId,uint8 indexed pool,address indexed wallet,uint8 kind,uint8 pick)",
   "event PoolSettled(uint256 indexed tableId,uint8 indexed pool,uint256 pot,uint256 rake,uint256 distributed)",
@@ -470,6 +506,7 @@ const feedSeen=new Set();
 const packCache={};                  // wallet -> chipPack
 
 const fmtT = wei => { const s = ethers.formatUnits(wei,18); return s.endsWith(".0")? s.slice(0,-2): s; };
+const fmt4 = wei => Number(ethers.formatUnits(wei,18)).toLocaleString(undefined,{maximumFractionDigits:4});
 const rail = t => { $("railtxt").innerHTML = t; };
 const short = a => a.slice(0,6)+"…"+a.slice(-4);
 const SUITS=["♠","♥","♦","♣"];
@@ -555,16 +592,35 @@ function findData(e,d=0){
 
 // ── connect ────────────────────────────────────────────
 $("connect").onclick = async () => {
-  if(!window.ethereum) return rail("No wallet found — open this page in a wallet browser.");
-  provider = new ethers.BrowserProvider(window.ethereum);
-  await provider.send("eth_requestAccounts", []);
-  signer = await provider.getSigner();
-  me = await signer.getAddress();
-  const net = await provider.getNetwork();
-  $("acct").textContent = short(me); $("acct").className="pill ok";
-  $("net").textContent = net.chainId===CHAIN ? "Arbitrum Sepolia" : "wrong chain";
-  $("net").className = net.chainId===CHAIN ? "pill ok" : "pill bad";
-  if(net.chainId!==CHAIN) return rail("Switch your wallet to Arbitrum Sepolia (421614).");
+  if(!window.ethereum){
+    $("connect").textContent="No wallet found"; setTimeout(()=>$("connect").textContent="Connect wallet",2200);
+    return rail("No wallet found — open this page in a wallet browser.");
+  }
+  $("connect").disabled=true; $("connect").textContent="Connecting…";
+  let net;
+  try{
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = await provider.getSigner();
+    me = await signer.getAddress();
+    net = await provider.getNetwork();
+  }catch(e){
+    $("connect").disabled=false; $("connect").textContent="Connect wallet";
+    return rail(explain(e));
+  }
+  // the button becomes the identity: chip with a live dot, stats fade in
+  $("connect").style.display="none";
+  $("acct").style.display=""; $("acct").textContent=short(me);
+  ["balPill","credPill","withdraw"].forEach(id=>$(id).style.display="");
+  if(net.chainId!==CHAIN){
+    $("acct").classList.add("bad");
+    $("net").style.display=""; $("net").textContent="wrong chain — switch to Arbitrum Sepolia";
+    $("net").className="pill bad";
+    return rail("Switch your wallet to Arbitrum Sepolia (421614).");
+  }
+  $("acct").classList.remove("bad");
+  $("acct").title = me+" · Arbitrum Sepolia";
+  document.body.classList.remove("pre");
   try{
     window.ethereum.on?.("accountsChanged", ()=>location.reload());
     window.ethereum.on?.("chainChanged",  ()=>location.reload());
@@ -602,9 +658,14 @@ async function refreshChain(){
       timbs.balanceOf(me), ledger.credit(me),
     ]);
     T=t; mySeat=seat;
-    $("balPill").textContent = "TIMBS "+fmtT(bal);
-    $("credPill").textContent = "credit "+fmtT(cred);
+    $("balPill").querySelector(".v").textContent = fmt4(bal);
+    $("balPill").title = fmtT(bal)+" TIMBS";
+    $("credPill").querySelector(".v").textContent = fmt4(cred);
+    $("credPill").title = fmtT(cred)+" TIMBS withdrawable";
+    $("credPill").classList.toggle("win", cred>0n);
     $("withdraw").disabled = cred===0n;
+    $("withdraw").classList.toggle("ready", cred>0n);
+    $("withdraw").textContent = cred>0n ? "Withdraw "+fmt4(cred) : "Withdraw";
     $("seatsPill").textContent = "seats "+t.seatCount+" / 12";
     paintSeat(); tick(); await pollFeed(); relabelFeed(); paintReveal(); await updateLockTracker();
   } finally { refreshing=false; }
@@ -963,6 +1024,16 @@ $("approveBtn").onclick=async ()=>{
 };
 
 
+// live feed collapses like the cards do, and remembers the choice
+try{
+  const fc=$("feedCard");
+  if(localStorage.getItem("swaptables.feedCollapsed")==="1") fc.classList.add("collapsed");
+  $("feedHd").onclick=()=>{
+    fc.classList.toggle("collapsed");
+    try{ localStorage.setItem("swaptables.feedCollapsed", fc.classList.contains("collapsed")?"1":"0"); }catch{}
+  };
+}catch{}
+
 // ── live feed (BetPlaced events, masked) ───────────────
 async function pollFeed(){
   try{
@@ -1189,14 +1260,33 @@ async function updateLockTracker(){
     let status, tone="#9fb4a4";
     if(age<1){ status="waiting for the lock block to be mined"; }
     else if(age<64){ status="reveal window OPEN — locks land from the console (passphrase) · fallback unlocks in ~"+t(64-age); tone="#6fe0a0"; }
-    else if(age<200){ status="reveal window closed — the no-secret FALLBACK is open in the console · horizon in ~"+t(256-age); tone="#d7b34c"; }
+    else if(age<200){ status="reveal window closed — anyone can finish the pick below · horizon in ~"+t(256-age); tone="#d7b34c"; }
     else if(age<256){ status="HURRY — only ~"+t(256-age)+" before the lock block ages out and the table needs a re-arm"; tone="#e88"; }
     else { status="lock block aged out — re-arm from the console, then lock again"; tone="#e88"; }
     el.style.display="";
     el.style.color=tone;
     el.textContent = "The pick · "+nLocked+" / 6 locked · lock block "+T.lockBlock+" · age "+Math.max(0,age)+" of 256 L1 blocks (~"+t(Math.max(0,age))+") · "+status;
+    // §10.1's liveness valve, surfaced for players: after the reveal window the
+    // fallback is permissionless — whoever cares most funds the gas.
+    $("finishPick").style.display = (age>=64 && age<256 && nLocked<6) ? "" : "none";
   }catch{ el.style.display="none"; }
 }
+$("finishPick").onclick = async () => {
+  if(!T) return;
+  $("finishPick").disabled=true;
+  try{
+    for(let seg=1;seg<=6;seg++){
+      if(Number(T.lockedMask)&(1<<(seg-1))) continue;
+      if(!await send("fallback-lock segment "+seg, board, "lockSegmentFallback", tid, seg)) break;
+      await refreshChain();
+    }
+    if(Number(T.lockedMask)===0x3F){
+      await send("retire the table", board, "retire", tid);
+      await refreshChain();
+      rail('<span class="win">Pick finished and table retired.</span> Winnings are credited — withdraw any time.');
+    }
+  } finally { $("finishPick").disabled=false; }
+};
 
 // ── reveal + settle stamping ───────────────────────────
 let revealDone=false;
@@ -1219,7 +1309,7 @@ async function paintReveal(){
     $("ddFlag").innerHTML = rep
       ? '<span class="hit">Double-Digit ✓ — a character repeats</span>'
       : '<span class="miss">No repeat — Double-Digit misses</span>';
-    stampFeed(winStr);
+    await stampFeed(winStr);
     if(T.retired && !revealDone){
       revealDone=true;
       try{
@@ -1238,25 +1328,43 @@ async function paintReveal(){
   }
 }
 function stat(k,v,cls){ return '<div class="s"><div class="k">'+k+'</div><div class="v'+(cls?" "+cls:"")+'">'+v+'</div></div>'; }
-function stampFeed(winStr){
-  document.querySelectorAll(".frow").forEach(li=>{
-    const tail=li.querySelector(".tail"); if(!tail) return;
+const ticketCache={};
+async function ticketOf(w){
+  const k=(w||"").toLowerCase();
+  if(k in ticketCache) return ticketCache[k];
+  try{
+    const st=await board.seats(tid,w);
+    ticketCache[k]=st.seated? ethers.toUtf8String(st.ticket):null;
+  }catch{ ticketCache[k]=null; }
+  return ticketCache[k];
+}
+/// Every row gets a real verdict, Your-Ticket included: the bettor's ticket is
+/// read from the public seat and judged by the CONTRACT rule — the segment
+/// landing that ticket's character FOR THAT SEGMENT (that is what pays 35x).
+/// The badge shows only WON/MISS; the matching character is never printed.
+async function stampFeed(winStr){
+  for(const li of document.querySelectorAll(".frow")){
+    let tail=li.querySelector(".tail");
     const kind=+li.dataset.kind, pick=+li.dataset.pick, pool=+li.dataset.pool;
-    let won;
-    if(kind===KIND.DD) won=new Set(winStr).size<6;
-    else{
-      const idx=ALPHABET.indexOf(winStr[pool]);
-      let ticketChar=null;
-      if(kind===KIND.TICKET){ ticketChar="?"; } // resolved below only for own row
-      won=winsAgainst(kind,pick,idx,ticketChar,winStr);
-      if(kind===KIND.TICKET){
-        if(li.dataset.wallet.toLowerCase()===me.toLowerCase() && mySeat?.seated){
-          won = winStr[pool]===ethers.toUtf8String(mySeat.ticket)[pool];
-        } else { tail.outerHTML='<span class="obadge">?</span>'; return; }
-      }
+    if(!tail){
+      // an unresolved "?" from an earlier pass — pick it up and restamp
+      if(kind!==KIND.TICKET) continue;
+      const b=li.querySelector(".obadge");
+      if(!b || b.classList.contains("w") || b.classList.contains("l")) continue;
+      tail=b;
     }
-    tail.outerHTML='<span class="obadge '+(won?"w":"l")+'">'+(won?"WON":"MISS")+'</span>';
-  });
+    let won=null;
+    if(kind===KIND.DD) won=new Set(winStr).size<6;
+    else if(kind===KIND.TICKET){
+      const t=await ticketOf(li.dataset.wallet);
+      won = t? winStr[pool]===t[pool] : null;
+    } else {
+      won=winsAgainst(kind,pick,ALPHABET.indexOf(winStr[pool]),null,winStr);
+    }
+    tail.outerHTML = won==null
+      ? '<span class="obadge">?</span>'
+      : '<span class="obadge '+(won?"w":"l")+'">'+(won?"WON":"MISS")+'</span>';
+  }
 }
 
 // ── meter console (tune SPIN_D, saved per-browser; display-only) ─────
