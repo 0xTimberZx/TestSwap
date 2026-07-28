@@ -311,6 +311,14 @@
   // shares it via the OS share sheet. No file is ever uploaded to us and none
   // is downloaded to their device — the share is outbound, initiated by them.
 
+  // True when this page has a network sink wired, i.e. transmit() will POST
+  // events to the operator. Read lazily, exactly like transmit() does, since
+  // the config may load after this SDK.
+  function sinkConfigured() {
+    var cfg = window.DEBUGHUB_CONFIG || config;
+    return !!(cfg && cfg.supabaseUrl && cfg.supabaseKey);
+  }
+
   function snapshotArmed() {
     try {
       var h = (location.hash || "").toLowerCase();
@@ -391,7 +399,8 @@
           e.status === "fail" ? "#e88" : "#cdd8cf");
     }
     g.fillStyle = "#6d7a70"; g.font = "12px ui-monospace, monospace";
-    g.fillText("SDK v" + s.sdk + "  \u00b7  local only, nothing uploaded", pad, H - 16);
+    g.fillText("SDK v" + s.sdk + "  \u00b7  " +
+      (sinkConfigured() ? "snapshot is local, not uploaded" : "local only, nothing uploaded"), pad, H - 16);
     return c;
   }
 
@@ -413,7 +422,13 @@
     var closeBtn = mk("Close", false);
     var note = document.createElement("div");
     note.setAttribute("style", "color:#9fb4a4;font:12px ui-monospace,monospace;text-align:center;max-width:60ch");
-    note.textContent = "Your local record only \u2014 nothing is uploaded or downloaded. Share sends it out through your own apps.";
+    // The SNAPSHOT is never uploaded \u2014 but the underlying events are, on any
+    // page that configures a sink (transmit() POSTs each one as it happens).
+    // Saying "nothing is uploaded" there would be false, so tell the truth per
+    // page instead of asserting the SwapTables case everywhere.
+    note.textContent = sinkConfigured()
+      ? "This snapshot is never uploaded \u2014 sharing sends it out through your own apps. Note this app also reports its own diagnostics to the operator."
+      : "Your local record only \u2014 nothing is uploaded or downloaded. Share sends it out through your own apps.";
     shareBtn.onclick = function () { shareCanvas(canvas, s, note); };
     closeBtn.onclick = function () { document.body.removeChild(wrap); };
     btns.appendChild(shareBtn); btns.appendChild(closeBtn);
