@@ -115,9 +115,19 @@ not a defect.
   version bump **must** be matched by bumping that `?v=` token across every
   page or returning visitors keep the stale SDK. This has now broken three
   rollouts in a row: the un-versioned tag served cached 1.1.0; 1.2.0 shipped
-  behind a stale token; and 1.3.0 landed with all ten pages still requesting
-  `?v=1.2.1`. **Bump the token in the same commit as `SDK_VERSION`** — treat
-  them as one edit, not two.
+  behind a stale token; 1.3.0 landed with all ten pages still requesting
+  `?v=1.2.1`; and 1.3.1 bumped only 4 of the 11 pages, leaving the majority of
+  the site serving the very build it was released to fix. **Bump the token in
+  the same commit as `SDK_VERSION`, and verify with the one-liner below** —
+  treat it as one edit, not two.
+
+  ```bash
+  # every page must agree with SDK_VERSION; this should print ONE line
+  grep -rn "debugger.js?v=" --include=*.html . | sed 's/.*v=//' | sort -u
+  ```
+
+  Do not hand-list the pages — `tables/play.html` sits outside the top-level
+  page set and was missed twice on exactly that basis.
 - **All four apps transmit.** TimbSwap, Faucet, BlockpotDAO and MessageBoard
   each carry `supabaseUrl`/`supabaseKey`. (This bullet used to say only
   TimbSwap did; the 1.2.1 rollout wired the rest.) The hub still falls back to
@@ -158,19 +168,26 @@ that was a deliberate constraint, not an oversight.
 
 ### The claim to be careful about
 
-The snapshot itself is never uploaded. The **events it summarises already were**,
-on any page with a sink configured — `transmit()` POSTs each one as it happens.
-So the card's wording is conditional on `sinkConfigured()`:
+**As of 1.3.1, `#debug` suppresses the sink rather than disclosing it.**
+`transmit()` returns early whenever the page is armed, checked lazily so a
+`#debug` added mid-session stops uploads at once. An armed viewer's events never
+leave the device on *any* page, sink-configured or not.
 
-| page | sink | card says |
-|------|------|-----------|
-| `tables/play.html` | none | "Your local record only — nothing is uploaded or downloaded." |
-| TimbSwap pages | Supabase | "This snapshot is never uploaded … this app also reports its own diagnostics to the operator." |
+The card's wording reads from `sinkActive()` — configured **and** not armed:
 
-The unconditional local-only wording shipped briefly in 1.3.0 and was false on
-the TimbSwap pages. If you add a sink to a page that didn't have one, the
-disclosure follows automatically — but if you ever hardcode the wording again,
-this is the trap.
+| situation | `sinkActive()` | card says |
+|-----------|----------------|-----------|
+| `#debug` armed, any page | false | "Your local record only — nothing is uploaded or downloaded." |
+| `tables/play.html`, no sink | false | same |
+| `openSnapshot()` called by the dapp *without* `#debug`, sink configured | true | "This snapshot is never uploaded … this app also reports its own diagnostics to the operator." |
+
+Because the floating button only mounts when armed, the disclosure branch is
+reachable **only** through a dapp calling `openSnapshot()` itself.
+
+Two versions of this got it wrong before landing here, which is why the wording
+is derived rather than written: 1.3.0 first claimed local-only unconditionally
+(false wherever a sink existed), then disclosed the upload (true, but not the
+privacy the viewer path was for). Don't hardcode this string.
 
 ### Exposure
 

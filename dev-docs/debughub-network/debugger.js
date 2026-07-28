@@ -1,6 +1,6 @@
 /* ============================================================
    DebugHub SDK
-   Version: 1.3.0  (local snapshot + share; network sink from 1.2.0)
+   Version: 1.3.1  (#debug is local-only: sink held back while armed)
 
    Drop-in replacement for MyDapp/debughub/sdk/debugger.js.
 
