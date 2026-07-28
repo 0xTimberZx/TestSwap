@@ -1443,13 +1443,22 @@ async function paintReveal(){
       try{
         const latest=await provider.getBlockNumber();
         const evs=await board.queryFilter(board.filters.PoolSettled(tid),Math.max(0,latest-400000),latest);
-        let pot=0n,dist=0n,rake=0n;
-        evs.forEach(e=>{pot+=e.args.pot;rake+=e.args.rake;dist+=e.args.distributed;});
+        // Two different fates share the event's rake field: a pool WITH winners
+        // contributes its true rake shave; a pool with NO winners forfeits the
+        // whole pot. Report them apart — they tell opposite stories.
+        let pot=0n,dist=0n,rakeTrue=0n,unclaimed=0n,unclaimedPools=0;
+        evs.forEach(e=>{
+          pot+=e.args.pot; dist+=e.args.distributed;
+          if(e.args.pot===0n) return;               // nobody played this pool
+          if(e.args.distributed===0n){ unclaimed+=e.args.pot; ++unclaimedPools; }
+          else rakeTrue+=e.args.rake;
+        });
         const cred=await ledger.credit(me);
         $("rvStats").innerHTML=
           stat("Table pot",fmtT(pot)+" <small>TIMBS</small>")
          +stat("Paid out",fmtT(dist)+" <small>TIMBS</small>")
-         +stat("Rake + unclaimed",fmtT(rake)+" <small>TIMBS</small>")
+         +stat("Rake",fmtT(rakeTrue)+" <small>TIMBS</small>")
+         +stat("Unclaimed pots"+(unclaimedPools?" ("+unclaimedPools+")":""),fmtT(unclaimed)+" <small>TIMBS</small>")
          +stat("Your credit",fmtT(cred)+" <small>TIMBS</small>",cred>0n?"win":"");
       }catch{}
     }
