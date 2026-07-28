@@ -91,9 +91,14 @@
   .token:hover{transform:translateY(-2px)}
   .token.sel{border:2px solid var(--gold);box-shadow:0 0 0 3px rgba(215,179,76,.25),0 8px 18px -8px #000}
   .token.loaded{border:2px solid var(--gold);border-style:solid;background:radial-gradient(circle at 50% 34%, #24422e, #0f2418)}
-  .token .load{position:absolute;bottom:-15px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:800;color:var(--gold);letter-spacing:.03em;white-space:nowrap}
+  .token .val{font-size:12.5px;font-weight:800;color:var(--gold);font-family:Georgia,serif;line-height:1.1;font-variant-numeric:tabular-nums;min-height:14px}
+  .token.pendload{border-style:dotted}
+  .token .val .pd{font-size:8px;color:#9fb4a4;letter-spacing:.08em;display:block;font-family:"Arial Narrow",Arial,sans-serif}
   .token.placed{opacity:.42;border-style:solid;cursor:default;filter:grayscale(.4)}
-  .token.placed .load{display:none}
+  .panel.collapsed > *:not(h2){display:none}
+  .panel h2.clickable{cursor:pointer}
+  .panel h2.clickable::after{content:" ▾";color:#93a698}
+  .panel.collapsed h2.clickable::after{content:" ▸"}
   .token.placed::after{content:"ON BOARD";position:absolute;bottom:-15px;left:50%;transform:translateX(-50%);font-size:8px;letter-spacing:.12em;color:var(--gold);white-space:nowrap}
   .chips{display:flex;flex-wrap:wrap;gap:9px}
   .chip{width:52px;height:52px;border-radius:50%;flex:none;cursor:pointer;position:relative;
@@ -144,7 +149,10 @@
   .bet.blackbet{border-color:#50535c}.bet.blackbet .lab{color:#d6dfd8}
   .coins{position:absolute;top:-7px;right:-7px;display:flex;flex-direction:row-reverse;pointer-events:none;z-index:2}
   .coin{width:22px;height:22px;border-radius:50%;margin-left:-9px;display:grid;place-items:center;
-    font-size:9px;font-weight:800;color:#fff;border:2px solid rgba(255,255,255,.7);box-shadow:0 2px 4px rgba(0,0,0,.6)}
+    font-size:8.5px;font-weight:800;color:#fff;border:2px solid rgba(255,255,255,.7);box-shadow:0 2px 4px rgba(0,0,0,.6);
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .coins .sum{height:16px;align-self:center;margin-left:-6px;padding:0 5px;border-radius:8px;display:grid;place-items:center;
+    font-size:8.5px;font-weight:800;color:var(--ink);background:var(--gold);box-shadow:0 2px 4px rgba(0,0,0,.6);z-index:1}
   .bet.pending{box-shadow:0 0 0 2px var(--cream) inset,0 0 22px -2px rgba(243,236,216,.75);animation:pend 1s ease-in-out infinite;z-index:4}
   @keyframes pend{50%{box-shadow:0 0 0 2px var(--gold) inset,0 0 26px 0 rgba(215,179,76,.7)}}
 
@@ -278,16 +286,16 @@
   </div>
 
   <div class="controls">
-    <div class="panel">
-      <h2>Your segment tokens <span>· each bets on its own segment</span></h2>
+    <div class="panel" id="tokensPanel">
+      <h2 class="clickable" onclick="this.parentElement.classList.toggle('collapsed')">Your segment tokens <span>· each bets on its own segment</span></h2>
       <div class="rack" id="rack"></div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
         <button class="btn primary" id="loadBtn" disabled>Load all six</button>
         <span class="hint" id="loadHint" style="margin-top:0"></span>
       </div>
     </div>
-    <div class="panel">
-      <h2>TIMBS chips <span>· the stake you load onto a token</span></h2>
+    <div class="panel" id="chipsPanel">
+      <h2 class="clickable" onclick="this.parentElement.classList.toggle('collapsed')">TIMBS chips <span>· the stake you load onto a token</span></h2>
       <div class="chips" id="chips"></div>
       <div class="hint" id="hint"><b>Phase 1 — load.</b> Give every token a chip. All six load in one transaction, and it must land before entry closes.</div>
     </div>
@@ -379,6 +387,8 @@ const ADDR = {
 };
 const CHAIN = 421614n;
 const CHIPS = [5,10,25,50,100,500,1000];
+const CHIPCOLOR = {5:"#b0243a",10:"#20507f",25:"#1f7a44",50:"#c56a1e",100:"#565b66",500:"#6a3b8f",1000:"#caa63f"};
+let collapsedChips=false, collapsedTokens=false, ticketShown=false;
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 // RED_MASK 0x1555555555 — bit i set => symbol i is red (alternating 18/18).
 const RED = i => (0x1555555555n >> BigInt(i) & 1n) === 1n;
@@ -536,6 +546,10 @@ $("connect").onclick = async () => {
   $("net").textContent = net.chainId===CHAIN ? "Arbitrum Sepolia" : "wrong chain";
   $("net").className = net.chainId===CHAIN ? "pill ok" : "pill bad";
   if(net.chainId!==CHAIN) return rail("Switch your wallet to Arbitrum Sepolia (421614).");
+  try{
+    window.ethereum.on?.("accountsChanged", ()=>location.reload());
+    window.ethereum.on?.("chainChanged",  ()=>location.reload());
+  }catch{}
   board  = new ethers.Contract(ADDR.board, BOARD_ABI, signer);
   ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
   timbs  = new ethers.Contract(ADDR.timbs, ERC20_ABI, signer);
@@ -573,7 +587,7 @@ async function refreshChain(){
     $("credPill").textContent = "credit "+fmtT(cred);
     $("withdraw").disabled = cred===0n;
     $("seatsPill").textContent = "seats "+t.seatCount+" / 12";
-    paintSeat(); tick(); await pollFeed(); paintReveal();
+    paintSeat(); tick(); await pollFeed(); relabelFeed(); paintReveal();
   } finally { refreshing=false; }
 }
 
@@ -630,13 +644,20 @@ function paintSeat(){
   const tiles=$("ticketTiles"); tiles.innerHTML="";
   if(seated){
     const t = ethers.toUtf8String(mySeat.ticket);
-    [...t].forEach((ch,i)=>{
+    [...t].forEach(ch=>{
       const isNum = ch>="0"&&ch<="9";
       const d=document.createElement("div");
-      d.className="tk"+(ch==="0"?" zero":"");
-      d.innerHTML=(ch==="O"?'<span style="display:inline-block;transform:scaleX(1.18)">O</span>':ch)+"<small>"+(isNum?"NUM":"LTR")+"</small>";
+      d.className="tk"+(ticketShown&&ch==="0"?" zero":"");
+      d.innerHTML = ticketShown
+        ? (ch==="O"?'<span style="display:inline-block;transform:scaleX(1.18)">O</span>':ch)+"<small>"+(isNum?"NUM":"LTR")+"</small>"
+        : "•";
       tiles.appendChild(d);
     });
+    const tog=document.createElement("button");
+    tog.className="btn"; tog.style.cssText="padding:5px 10px;font-size:11px";
+    tog.textContent=ticketShown? "hide":"show";
+    tog.onclick=()=>{ ticketShown=!ticketShown; paintSeat(); };
+    tiles.appendChild(tog);
     $("ticketIn").style.display="none";
   }
   const pack = seated ? mySeat.chipPack : 0n;
@@ -646,16 +667,25 @@ function paintSeat(){
     const byte = Number(pack >> BigInt(8*(s-1)) & 0xFFn);
     const placedBit = seated && (Number(mySeat.placedMask) & (1<<(s-1)))!==0;
     el.classList.toggle("placed", placedBit);
-    if(loadedOnChain){
-      el.classList.add("loaded");
-      el.querySelector(".load").textContent = byte? CHIPS[byte-1]+" TIMBS":"";
+    const val = el.querySelector(".val");
+    if(loadedOnChain && byte){
+      el.classList.add("loaded"); el.classList.remove("pendload");
+      el.style.borderColor = CHIPCOLOR[CHIPS[byte-1]];
+      val.innerHTML = CHIPS[byte-1];
     } else if(localChips[s]!=null){
-      el.classList.add("loaded");
-      el.querySelector(".load").textContent = CHIPS[localChips[s]]+" TIMBS (not sent)";
+      el.classList.add("loaded","pendload");
+      el.style.borderColor = CHIPCOLOR[CHIPS[localChips[s]]];
+      val.innerHTML = CHIPS[localChips[s]]+'<span class="pd">NOT SENT</span>';
     } else {
-      el.classList.remove("loaded");
-      el.querySelector(".load").textContent="";
+      el.classList.remove("loaded","pendload");
+      el.style.borderColor = "";
+      val.innerHTML = "";
     }
+  }
+  // once the load is on chain, tuck the chips card away (re-expandable, once)
+  if(loadedOnChain && !collapsedChips){ collapsedChips=true; $("chipsPanel").classList.add("collapsed"); }
+  if(seated && Number(mySeat.placedMask)===0x3F && Number(mySeat.ddChip)!==0 && !collapsedTokens){
+    collapsedTokens=true; $("tokensPanel").classList.add("collapsed");
   }
   const p = phaseOf();
   const felt=$("felt");
@@ -708,7 +738,7 @@ $("loadBtn").onclick = async () => {
 const rack=$("rack");
 for(let s=1;s<=6;s++){
   const t=document.createElement("div"); t.className="token"; t.dataset.seg=s; t.tabIndex=0;
-  t.innerHTML='<div><div class="seg">SEG</div><div class="no">'+s+'</div></div><div class="load"></div>';
+  t.innerHTML='<div><div class="seg">SEG '+s+'</div><div class="no">'+s+'</div><div class="val"></div></div>';
   t.addEventListener("click",()=>selToken(s));
   rack.appendChild(t);
 }
@@ -822,6 +852,9 @@ boardEl.appendChild(cellBet({cls:"out",kind:KIND.LOWHIGH,pick:1,count:18,
   html:'<span class="lab">High</span><span class="sub">S–9 · last 18</span>',
   desc:"the segment locks on S through 9",col:"11 / 14",row:"7"}));
 
+const CELLMAP={};
+document.querySelectorAll(".bet").forEach(el=>{ CELLMAP[el.dataset.kind+":"+el.dataset.pick]=el; });
+
 function describe(el){
   const kind=+el.dataset.kind, count=+el.dataset.count;
   const spec=specOf(kind,+el.dataset.pick);
@@ -881,7 +914,8 @@ function stage(p){
   rail("Awaiting your approval — <b>"+spec.name+"</b>. Approve to send, or choose another spot.");
 }
 function paintApproveMsg(){
-  approveMsg.innerHTML='Stake the <b>Double-Digit</b> — a separate <b>'+CHIPS[ddPick]+'-TIMBS</b> chip, one per wallet, round-wide. '
+  approveMsg.innerHTML='Stake the <b>Double-Digit</b> — <b>pick its chip on the right →</b> currently <b>'+CHIPS[ddPick]+' TIMBS</b>. '
+    +'Separate from your six tokens, one per wallet, round-wide. '
     +'<span class="warn">Approving sends the transaction — once mined, it\'s final.</span>';
 }
 $("changeSpot").onclick=()=>{ clearPending(); railDefault(); };
@@ -893,22 +927,17 @@ $("approveBtn").onclick=async ()=>{
     const allow = await timbs.allowance(me, ADDR.ledger);
     if(allow<need && !await send("approve "+CHIPS[ddPick]+" TIMBS", timbs, "approve", ADDR.ledger, need*2n)) return;
     if(await send("Double-Digit · "+CHIPS[ddPick]+" TIMBS", board, "placeDoubleDigit", tid, ddPick)){
-      dropCoin(p.el, "DD"); clearPending(); rail('<span class="win">Double-Digit placed.</span> Final.'); await refreshChain();
+      clearPending(); rail('<span class="win">Double-Digit placed.</span> Final.'); await refreshChain();
     }
   } else {
     const spec=specOf(p.kind,p.pick);
     if(await send("SEG "+p.seg+" on "+spec.name, board, "place", tid, p.seg, p.kind, p.pick)){
-      dropCoin(p.el, p.seg); clearPending(); curSeg=null; paintSel();
+      clearPending(); curSeg=null; paintSel();
       rail('<span class="win">Placed.</span> SEG '+p.seg+' on <b>'+spec.name+'</b> — final.'); await refreshChain();
     }
   }
 };
-function dropCoin(el, tag){
-  const coin=document.createElement("div"); coin.className="coin";
-  coin.style.background="#12271b"; coin.style.borderColor="var(--gold)"; coin.style.color="var(--gold)";
-  coin.textContent=tag;
-  el.querySelector(".coins")?.appendChild(coin);
-}
+
 
 // ── live feed (BetPlaced events, masked) ───────────────
 async function pollFeed(){
@@ -943,12 +972,57 @@ async function addFeedRow(wallet, pool, kind, pick){
   li.dataset.pool=pool; li.dataset.kind=kind; li.dataset.pick=pick; li.dataset.wallet=wallet;
   li.innerHTML=
     '<span class="who"><span class="av">'+(isMe?"★":SUITS[parseInt(wallet.slice(-1),16)%4])+'</span>'
-    +'<span class="nm'+(isMe?" self":"")+'">'+(isMe?"You":tagOf(wallet))+'</span></span>'
+    +'<span class="nm'+(isMe?" self":"")+'">'+(isMe?"You · "+tagOf(wallet):tagOf(wallet))+'</span></span>'
     +'<span class="fseg">'+(kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
     +'<span class="fbet">on <b>'+spec.name+'</b>'+(kind===KIND.DD?"":" · "+fair(spec.count)+"×")+'</span>'
     +'<span class="famt">'+(amt||"·")+'</span>'
     +'<span class="tail"></span>';
   $("feed").prepend(li);
+  // drop the same bet on the felt as a chip-coloured coin, whoever placed it.
+  // The coin face is the STAKE, super-abbreviated — colour + number both say
+  // denomination; the tooltip carries who/segment/spot.
+  const cell = CELLMAP[kind+":"+(kind===KIND.DD?0:pick)];
+  if(cell){
+    const coins=cell.querySelector(".coins");
+    const coin=document.createElement("div");
+    coin.className="coin";
+    coin.style.background = amt? CHIPCOLOR[amt] : "#12271b";
+    if(isMe){ coin.style.borderColor="var(--gold)"; }
+    // yours: segment number (you track your tokens; the gold ring marks them).
+    // everyone else's: the monetary value, super-abbreviated.
+    coin.textContent = isMe
+      ? (kind===KIND.DD? "DD" : String(pool+1))
+      : (amt? abbrev(amt) : (kind===KIND.DD? "DD" : "?"));
+    coin.title=(isMe?"You":tagOf(wallet))+" · "+(kind===KIND.DD?"round":"SEG "+(pool+1))+(amt?" · "+amt+" TIMBS":"")+" on "+spec.name;
+    coins?.appendChild(coin);
+    // 2+ coins on a spot → a tiny running total so the pile reads at a glance
+    if(coins && amt){
+      const tot=(Number(coins.dataset.total||0))+amt;
+      coins.dataset.total=tot;
+      if(coins.querySelectorAll(".coin").length>1){
+        let sum=coins.querySelector(".sum");
+        if(!sum){ sum=document.createElement("div"); sum.className="sum"; coins.prepend(sum); }
+        sum.textContent="="+abbrev(tot);
+        sum.title=tot+" TIMBS on this spot";
+      }
+    }
+  }
+}
+function abbrev(n){
+  if(n>=1000) return (n%1000===0? (n/1000):"~"+Math.round(n/100)/10)+"K";
+  return String(n);
+}
+/// Labels are stamped when a row is first seen; the wallet can change under a
+/// long-lived tab, so re-derive You/other from the row's own wallet each pass.
+function relabelFeed(){
+  document.querySelectorAll(".frow").forEach(li=>{
+    const w=li.dataset.wallet; if(!w||!me) return;
+    const isMe=w.toLowerCase()===me.toLowerCase();
+    li.classList.toggle("me",isMe);
+    const nm=li.querySelector(".nm"), av=li.querySelector(".av");
+    if(nm){ nm.textContent=isMe? "You · "+tagOf(w):tagOf(w); nm.classList.toggle("self",isMe); }
+    if(av) av.textContent=isMe? "★":SUITS[parseInt(w.slice(-1),16)%4];
+  });
 }
 
 // ── spin meter (§10.2 envelope, display only) ──────────
