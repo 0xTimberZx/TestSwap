@@ -398,8 +398,10 @@ const ERC20_ABI = [
   "function approve(address,uint256) returns (bool)",
 ];
 const PRIZE_ABI = ["function roundWinningString(uint256) view returns (bytes6)"];
+const REG_ABI   = ["function isUsed(uint256) view returns (bool)"];
+const REGISTRY  = "0x2460C8ed63414F36838542982A5Ab263C9Fcb914"; // long-lived, all generations
 
-let provider, signer, me, board, ledger, timbs, prize, T = null;
+let provider, signer, me, board, ledger, timbs, prize, registry, T = null;
 
 const $ = id => document.getElementById(id);
 addEventListener("DOMContentLoaded", () => {
@@ -559,6 +561,7 @@ $("connect").onclick = async () => {
   ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
   timbs  = new ethers.Contract(ADDR.timbs,  ERC20_ABI,  signer);
   prize  = new ethers.Contract(ADDR.prize,  PRIZE_ABI,  signer);
+  registry = new ethers.Contract(REGISTRY, REG_ABI, signer);
 
   document.querySelectorAll("button").forEach(b => b.disabled = false);
   log("connected", "l-ok");
@@ -699,19 +702,36 @@ function secretsFor(id){
   if (!p) { log("Set a passphrase first — it derives (and recovers) your six secrets.", "l-err"); return null; }
   return [...Array(6).keys()].map(i => ethers.keccak256(ethers.toUtf8Bytes(`${p}:${id}:${i+1}`)));
 }
+/// Usable means BOTH: the TimbPrize round has settled (string != 0) AND no
+/// generation has consumed it in the SeedRegistry. The old scan checked only
+/// the first, so it parked on the newest settled round even when a previous
+/// table had already burned it — and openTable then refused.
 $("findRound").onclick = async () => {
   $("roundNote").textContent = "searching…";
   const start = Number($("round").value || 60);
-  for (let r = start; r > start-40 && r > 0; r--){
-    const s = await prize.roundWinningString(r).catch(()=>null);
-    if (s && s !== "0x000000000000"){
+  let skipped = 0;
+  for (let r = start; r > start-60 && r > 0; r--){
+    $("roundNote").textContent = `searching… round ${r}`;
+    const [s, used] = await Promise.all([
+      prize.roundWinningString(r).catch(()=>null),
+      registry.isUsed(r).catch(()=>null),
+    ]);
+    const settled = s && s !== "0x000000000000";
+    if (settled && used === false){
       $("round").value = r;
-      $("roundNote").textContent = `round ${r} is settled → "${b6ToStr(s)}"`;
-      log(`found settled round ${r} = ${b6ToStr(s)}`, "l-ok");
+      $("roundNote").textContent = `round ${r} is settled → "${b6ToStr(s)}" — unused, ready to open`
+        + (skipped ? ` (skipped ${skipped} settled-but-consumed)` : "");
+      log(`found usable round ${r} = ${b6ToStr(s)}${skipped ? ` — skipped ${skipped} already-consumed round(s) above it` : ""}`, "l-ok");
       return;
     }
+    if (settled && used){
+      ++skipped;
+      log(`round ${r} settled (${b6ToStr(s)}) but already consumed — skipping`, "l-dim");
+    }
   }
-  $("roundNote").textContent = "no settled round found in the last 40 — try a higher starting number";
+  $("roundNote").textContent = skipped
+    ? `every settled round in the last 60 is already consumed (${skipped}) — try a higher starting number once newer rounds settle`
+    : "no settled round found in the last 60 — try a higher starting number";
 };
 $("open").onclick = async () => {
   const next = await board.nextTableId();
