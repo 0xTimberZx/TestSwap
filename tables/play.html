@@ -350,6 +350,13 @@
     </div>
   </div>
 
+  <div class="top wbar prehide" id="potbar" style="margin-bottom:12px">
+    <span class="wstat"><span class="k">ON THE TABLE</span><span class="v" id="potEscrow">—</span></span>
+    <span class="wstat"><span class="k">SEED ON OFFER</span><span class="v" id="potSeed">100</span></span>
+    <span class="wstat" title="a pool draws its 14.29 seed share once two wallets contest it"><span class="k">POOLS CONTESTED</span><span class="v" id="potPools">0/7</span></span>
+    <span class="hint" style="margin:0;flex:1 1 220px">Everything here is the prize: every chip placed plus the seed —
+      minus the graduated rake — pays back out to winners.</span>
+  </div>
   <div class="felt-scroll prehide">
     <div class="felt locked" id="felt" data-lock="Connect, sit and load to open the board"><div class="board" id="board"></div></div>
   </div>
@@ -357,6 +364,14 @@
   <div class="rail">
     <span class="chiplbl">Your bet</span>
     <span class="txt" id="railtxt">Connect your wallet to begin.</span>
+  </div>
+
+  <div class="panel prehide" id="picksPanel" style="margin:14px 0 0">
+    <h2 class="clickable" onclick="this.parentElement.classList.toggle('collapsed')">Your picks
+      <span>· live payout estimates · figures move as players join</span></h2>
+    <div id="picksList" style="font-size:13px;line-height:1.5"></div>
+    <p class="hint" id="picksNote" style="display:none">"Up to" assumes yours is the only winning pick in the pool —
+      pari-mutuel means co-winners split the pot by stake × weight. Rake falls as more wallets join.</p>
   </div>
 
   <div class="approve" id="approve">
@@ -492,6 +507,7 @@ const BOARD_ABI = [
 ];
 const LEDGER_ABI = [
   "function credit(address) view returns (uint256)",
+  "function tableEscrow(uint256) view returns (uint256)",
   "function withdraw()",
   "error NothingToWithdraw()",
 ];
@@ -523,6 +539,8 @@ let T=null, tid=null, dials=null, mySeat=null;
 let curSeg=null, curChip=null, pending=null;
 const localChips={};                 // seg -> chipIdx picked before the load tx
 const feedSeen=new Set();
+const poolBook=[[],[],[],[],[],[],[]];   // pool 0-5 = segments, 6 = Double-Digit
+const SEED_SHARE=100/7;
 const packCache={};                  // wallet -> chipPack
 
 const fmtT = wei => { const s = ethers.formatUnits(wei,18); return s.endsWith(".0")? s.slice(0,-2): s; };
@@ -704,7 +722,7 @@ async function refreshChain(){
     $("withdraw").classList.toggle("ready", cred>0n);
     $("withdraw").textContent = cred>0n ? "Withdraw "+fmt4(cred) : "Withdraw";
     $("seatsPill").textContent = "seats "+t.seatCount+" / 12";
-    paintSeat(); tick(); await pollFeed(); relabelFeed(); paintReveal(); await updateLockTracker();
+    paintSeat(); tick(); await pollFeed(); relabelFeed(); await renderStakes(); paintReveal(); await updateLockTracker();
   } finally { refreshing=false; }
 }
 
@@ -1007,10 +1025,15 @@ function describe(el){
   if(kind===KIND.TICKET && curSeg && mySeat?.seated){
     desc = "segment "+curSeg+" locks on <b>"+ethers.toUtf8String(mySeat.ticket)[curSeg-1]+"</b> — your ticket's character for it";
   }
+  let poolTail="";
+  if(curSeg){
+    const st=poolStats(curSeg-1);
+    poolTail=" SEG "+curSeg+" pool so far: <b>"+fmt2(st.pot)+"</b> across "+st.n+" bet"+(st.n===1?"":"s")+".";
+  }
   const tail = stake
     ? " Stake <b>"+stake+"</b> · weight <b>"+odds+"×</b> — actual payout is pari-mutuel."
     : " Fair weight <b>"+odds+"×</b> ("+count+" of 36) — actual payout is pari-mutuel.";
-  rail("<b>"+spec.name+"</b> — pays if "+desc+"."+tail);
+  rail("<b>"+spec.name+"</b> — pays if "+desc+"."+tail+poolTail);
 }
 
 // ── staging + approval (the wallet tx IS the approval) ─────────
@@ -1115,6 +1138,7 @@ async function addFeedRow(wallet, pool, kind, pick){
       if(byte) amt=CHIPS[byte-1];
     }
   }catch{}
+  poolBook[pool].push({wallet, kind, pick, amt: amt||0});
   const spec=specOf(kind,pick);
   const li=document.createElement("li");
   li.className="frow"+(isMe?" me":"");
@@ -1172,6 +1196,48 @@ function relabelFeed(){
     if(nm){ nm.textContent=isMe? "You · "+tagOf(w):tagOf(w); nm.classList.toggle("self",isMe); }
     if(av) av.textContent=isMe? "★":SUITS[parseInt(w.slice(-1),16)%4];
   });
+}
+
+// ── stakes: what the table is playing for, live ─────────────────
+function poolStats(pool){
+  const bets=poolBook[pool];
+  const chips=bets.reduce((a,b)=>a+b.amt,0);
+  const n=bets.length;                       // == distinct wallets, by design
+  const contested=n>=2;
+  const pot=chips+(contested? SEED_SHARE:0);
+  const rakeBps=n? 175+Math.floor(625/n):0;
+  return {n, chips, contested, pot, rakeBps, dist: pot*(10000-rakeBps)/10000};
+}
+function fmt2(x){ return x.toLocaleString(undefined,{maximumFractionDigits:2}); }
+async function renderStakes(){
+  if(!T || !ledger || !tid) return;
+  try{
+    const esc=await ledger.tableEscrow(tid);
+    $("potEscrow").textContent=fmt4(esc);
+    $("potEscrow").title=fmtT(esc)+" TIMBS held for this table";
+  }catch{}
+  const contested=poolBook.filter((_,i)=>poolStats(i).contested).length;
+  $("potPools").textContent=contested+"/7";
+  // your picks, priced off the CURRENT pool composition
+  const rows=[];
+  poolBook.forEach((bets,pool)=>{
+    bets.forEach(b=>{
+      if(b.wallet.toLowerCase()!==me?.toLowerCase()) return;
+      const st=poolStats(pool);
+      const spec=specOf(b.kind,b.pick);
+      rows.push('<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;'
+        +'padding:7px 0;border-bottom:1px solid rgba(247,240,214,.08)">'
+        +'<span class="fseg" style="width:52px">'+(b.kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
+        +'<span style="flex:1;color:#dfe7df">'+fmt2(b.amt)+' on <b style="color:var(--cream)">'+spec.name+'</b></span>'
+        +'<span style="color:#9fb4a4">pool '+fmt2(st.pot)+' · '+st.n+' bet'+(st.n===1?"":"s")
+        +' · rake '+(st.rakeBps/100).toFixed(2)+'%'+(st.contested?"":" · uncontested — no seed share yet")+'</span>'
+        +'<span style="font-family:Georgia,serif;font-weight:800;color:var(--ok)">up to ~'+fmt2(st.dist)+'</span>'
+        +'</div>');
+    });
+  });
+  $("picksList").innerHTML = rows.length? rows.join("")
+    : '<span class="hint">Nothing placed yet — your bets appear here with live payout estimates.</span>';
+  $("picksNote").style.display = rows.length? "":"none";
 }
 
 // ── spin meter (§10.2 envelope, display only) ──────────
