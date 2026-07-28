@@ -33,7 +33,7 @@
 (function () {
   "use strict";
 
-  var SDK_VERSION = "1.3.0";
+  var SDK_VERSION = "1.3.1";
   var MAX_EVENTS = 200;
 
   var config = window.DEBUGHUB_CONFIG || {};
@@ -106,6 +106,12 @@
   // swallowed — telemetry must never affect the host app, and the event is
   // already in localStorage as a fallback.
   function transmit(event) {
+    // Private-viewer mode: when the page is armed with #debug the session is
+    // strictly local — hold back the sink entirely so an unauthorized viewer's
+    // events never leave their device (checked lazily so a #debug added mid-
+    // session takes effect immediately). This is what makes the snapshot's
+    // "nothing uploaded" assurance literally true.
+    if (snapshotArmed()) return;
     var cfg = window.DEBUGHUB_CONFIG || config;
     var url = cfg.supabaseUrl, key = cfg.supabaseKey;
     if (!url || !key || typeof fetch !== "function") return;
@@ -324,6 +330,13 @@
     return !!(cfg && cfg.supabaseUrl && cfg.supabaseKey);
   }
 
+  // A sink is only ACTIVE if it is both configured and not suppressed by the
+  // private-viewer switch. When #debug is armed, transmit() is a no-op, so the
+  // honest statement is "nothing uploaded" even on a page that wires a sink.
+  function sinkActive() {
+    return sinkConfigured() && !snapshotArmed();
+  }
+
   function snapshotArmed() {
     try {
       var h = (location.hash || "").toLowerCase();
@@ -405,7 +418,7 @@
     }
     g.fillStyle = "#6d7a70"; g.font = "12px ui-monospace, monospace";
     g.fillText("SDK v" + s.sdk + "  \u00b7  " +
-      (sinkConfigured() ? "snapshot is local, not uploaded" : "local only, nothing uploaded"), pad, H - 16);
+      (sinkActive() ? "snapshot is local, not uploaded" : "local only, nothing uploaded"), pad, H - 16);
     return c;
   }
 
@@ -431,7 +444,7 @@
     // page that configures a sink (transmit() POSTs each one as it happens).
     // Saying "nothing is uploaded" there would be false, so tell the truth per
     // page instead of asserting the SwapTables case everywhere.
-    note.textContent = sinkConfigured()
+    note.textContent = sinkActive()
       ? "This snapshot is never uploaded \u2014 sharing sends it out through your own apps. Note this app also reports its own diagnostics to the operator."
       : "Your local record only \u2014 nothing is uploaded or downloaded. Share sends it out through your own apps.";
     shareBtn.onclick = function () { shareCanvas(canvas, s, note); };
