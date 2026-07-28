@@ -191,6 +191,18 @@
   .rstat{font-size:9.5px;color:#8fa295;letter-spacing:.06em;min-height:1.2em}
   .rstat.locked{color:var(--gold);font-weight:800}
 
+  /* pick tracker bar — six slanted stage cells that fill as segments lock */
+  .picktrack{display:none;gap:5px;margin:12px 0 0;padding-right:8px}
+  .picktrack.on{display:flex}
+  .pt{flex:1;height:34px;transform:skewX(-16deg);border:1px solid var(--gold-dim);border-radius:5px;
+    display:grid;place-items:center;background:rgba(247,240,214,.05);overflow:hidden}
+  .pt span{transform:skewX(16deg);font-family:Georgia,serif;font-weight:800;font-size:15px;color:#6d7a70}
+  .pt.done{background:linear-gradient(180deg,#e2c25f,var(--gold));border-color:var(--gold)}
+  .pt.done span{color:var(--ink)}
+  .pt.next{border-color:var(--cream);animation:ptpulse 1.1s ease-in-out infinite}
+  .pt.next span{color:var(--cream)}
+  @keyframes ptpulse{50%{background:rgba(215,179,76,.28);border-color:var(--gold)}}
+
   /* live feed */
   .table{margin:16px 0 0;border:1px solid rgba(247,240,214,.16);border-radius:12px;background:rgba(247,240,214,.03);overflow:hidden}
   .table .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid rgba(247,240,214,.12);background:rgba(0,0,0,.14)}
@@ -324,6 +336,12 @@
     <p class="note" id="spinNote">Bets are closed — the six balls are running. The meter is display only:
       the chain decides each character from the lock-block hash, never from this animation (§10.1).</p>
     <div class="reels" id="reels"></div>
+    <div class="picktrack" id="pickTrack">
+      <div class="pt" data-i="0"><span>1</span></div><div class="pt" data-i="1"><span>2</span></div>
+      <div class="pt" data-i="2"><span>3</span></div><div class="pt" data-i="3"><span>4</span></div>
+      <div class="pt" data-i="4"><span>5</span></div><div class="pt" data-i="5"><span>6</span></div>
+    </div>
+    <p class="note" id="lockTracker" style="display:none;margin:10px 0 0;font-variant-numeric:tabular-nums"></p>
   </div>
 
   <details class="panel" style="margin:16px 0 0">
@@ -587,7 +605,7 @@ async function refreshChain(){
     $("credPill").textContent = "credit "+fmtT(cred);
     $("withdraw").disabled = cred===0n;
     $("seatsPill").textContent = "seats "+t.seatCount+" / 12";
-    paintSeat(); tick(); await pollFeed(); relabelFeed(); paintReveal();
+    paintSeat(); tick(); await pollFeed(); relabelFeed(); paintReveal(); await updateLockTracker();
   } finally { refreshing=false; }
 }
 
@@ -1124,6 +1142,47 @@ function lockedCharsArr(){
   const out=[];
   for(let i=0;i<6;i++) out.push(mask&(1<<i)? String.fromCharCode(raw[i]):null);
   return out;
+}
+
+/// The pick has real deadlines the felt should show: the reveal window
+/// (64 L1 blocks, ~13 min — operator locks with the passphrase) and the
+/// blockhash horizon (256 L1 blocks, ~51 min — past it the table needs a
+/// re-arm). On Arbitrum block.number is the L1 block, read from the header.
+async function updateLockTracker(){
+  const el=$("lockTracker"); if(!el) return;
+  const bar=$("pickTrack");
+  const inPick = T && T.lockBlock!==0n && !T.retired;
+  if(bar){
+    bar.classList.toggle("on", !!inPick);
+    if(inPick){
+      const mask=Number(T.lockedMask);
+      let nextSet=false;
+      bar.querySelectorAll(".pt").forEach(c=>{
+        const i=+c.dataset.i, done=(mask&(1<<i))!==0;
+        c.classList.toggle("done",done);
+        const isNext=!done&&!nextSet; if(isNext) nextSet=true;
+        c.classList.toggle("next",isNext&&mask!==0x3F);
+      });
+    }
+  }
+  const armed = T && T.lockBlock!==0n && !T.retired && Number(T.lockedMask)!==0x3F;
+  if(!armed){ el.style.display="none"; return; }
+  try{
+    const blk = await provider.send("eth_getBlockByNumber",["latest",false]);
+    const l1  = Number(BigInt(blk.l1BlockNumber || blk.number));
+    const age = l1 - Number(T.lockBlock);
+    const nLocked = Number(T.lockedMask).toString(2).split("1").length-1;
+    const t = b => { const sec=Math.max(0,Math.round(b*12.3)); return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0"); };
+    let status, tone="#9fb4a4";
+    if(age<1){ status="waiting for the lock block to be mined"; }
+    else if(age<64){ status="reveal window OPEN — locks land from the console (passphrase) · fallback unlocks in ~"+t(64-age); tone="#6fe0a0"; }
+    else if(age<200){ status="reveal window closed — the no-secret FALLBACK is open in the console · horizon in ~"+t(256-age); tone="#d7b34c"; }
+    else if(age<256){ status="HURRY — only ~"+t(256-age)+" before the lock block ages out and the table needs a re-arm"; tone="#e88"; }
+    else { status="lock block aged out — re-arm from the console, then lock again"; tone="#e88"; }
+    el.style.display="";
+    el.style.color=tone;
+    el.textContent = "The pick · "+nLocked+" / 6 locked · lock block "+T.lockBlock+" · age "+Math.max(0,age)+" of 256 L1 blocks (~"+t(Math.max(0,age))+") · "+status;
+  }catch{ el.style.display="none"; }
 }
 
 // ── reveal + settle stamping ───────────────────────────
