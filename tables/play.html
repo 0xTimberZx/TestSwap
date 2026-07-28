@@ -321,10 +321,17 @@
   <div class="phases prehide" id="phases"></div>
 
   <div class="gate prehide" id="gate">
-    <span class="req">Your <b>ticket</b> — use the same six characters as your <b>TimbSwap Compete</b> ticket (any A–Z 0–9 works). It powers the <b>Your Ticket</b> spots.</span>
+    <span class="req">Your <b>ticket</b> — your active <b>TimbSwap Compete</b> ticket seats you, and its letters power the <b>Your Ticket</b> spots.</span>
     <input id="ticketIn" maxlength="6" placeholder="ABC123" autocomplete="off">
     <button class="btn primary" id="sitBtn">Sit at this table</button>
     <div class="ticket" id="ticketTiles"></div>
+    <div id="noTicket" style="display:none;flex:1 1 100%;font-family:Georgia,serif;font-size:13.5px;line-height:1.65;color:#f0e7c9">
+      <b style="color:var(--gold)">This wallet has no active Compete ticket — the table can't seat it.</b><br>
+      Your Compete ticket is what makes the letters <i>yours</i> here: the <b>Your Ticket</b> spots
+      pay against it. Enter a round first, then come back and sit.<br>
+      <a href="https://timbswap.xyz/compete/" target="_blank" rel="noopener" class="btn primary"
+         style="display:inline-block;margin-top:9px;text-decoration:none">Get your ticket at Compete →</a>
+    </div>
   </div>
 
   <div class="controls prehide">
@@ -442,6 +449,13 @@ const CRANK_ABI = [
   "function fallbackAll(address board,uint256 tableId,bool alsoRetire)",
   "error NothingToDo(uint256 tableId)",
 ];
+// TimbSwap Compete — the ticket gate. The felt only seats wallets holding an
+// active Compete ticket, and that ticket IS the player's letters here.
+const GAME = "0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530";
+const GAME_ABI = [
+  "function activeTicketOf(address owner) view returns (uint256)",
+  "function getTicketsOf(address owner) view returns (tuple(uint256 id,address owner,bytes6 string6,uint256 playRound,uint256 lastEligibleRound,uint256 escrowAmount,address escrowToken,uint8 status,uint256 supersedes,uint256 supersededBy,uint256 createdAt,uint256 forfeitRound,uint256 generation)[] list, uint8[] displayStatuses)",
+];
 const CHAIN = 421614n;
 const CHIPS = [5,10,25,50,100,500,1000];
 const CHIPCOLOR = {5:"#b0243a",10:"#20507f",25:"#1f7a44",50:"#c56a1e",100:"#565b66",500:"#6a3b8f",1000:"#caa63f"};
@@ -503,7 +517,8 @@ const ERR_HINT = {
 };
 
 const $ = id => document.getElementById(id);
-let provider, signer, me, board, ledger, timbs, crank;
+let provider, signer, me, board, ledger, timbs, crank, game;
+let myCompete = null, competeErr = false; // {id, str} once verified
 let T=null, tid=null, dials=null, mySeat=null;
 let curSeg=null, curChip=null, pending=null;
 const localChips={};                 // seg -> chipIdx picked before the load tx
@@ -632,6 +647,8 @@ $("connect").onclick = async () => {
   }catch{}
   board  = new ethers.Contract(ADDR.board, BOARD_ABI, signer);
   crank  = new ethers.Contract(ADDR.crank, CRANK_ABI, signer);
+  game   = new ethers.Contract(GAME, GAME_ABI, signer);
+  await checkCompete();
   ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
   timbs  = new ethers.Contract(ADDR.timbs, ERC20_ABI, signer);
   dials = { entry: Number(await board.entryWindow()), lead: Number(await board.betsCloseLead()) };
@@ -653,6 +670,20 @@ $("loadTable").onclick = async () => { tid = Number($("tableId").value||"0")||nu
 $("withdraw").onclick = async () => {
   if(await send("withdraw my credit", ledger, "withdraw")){ rail('<span class="win">Credit withdrawn.</span>'); await refreshChain(); }
 };
+
+/// The gate: an active Compete ticket is what makes the letters YOURS at
+/// payout time (the Your-Ticket spots resolve against it). No ticket, no seat
+/// — enforced here in the page today, on chain in generation 4.
+async function checkCompete(){
+  competeErr = false;
+  try{
+    const id = await game.activeTicketOf(me);
+    if(id === 0n){ myCompete = null; return; }
+    const [list] = await game.getTicketsOf(me);
+    const t = list.find(x => x.id === id);
+    myCompete = t ? { id, str: ethers.toUtf8String(t.string6) } : null;
+  }catch{ myCompete = null; competeErr = true; }
+}
 
 // ── chain refresh ──────────────────────────────────────
 let refreshing=false;
@@ -750,6 +781,22 @@ function paintSeat(){
     tog.onclick=()=>{ ticketShown=!ticketShown; paintSeat(); };
     tiles.appendChild(tog);
     $("ticketIn").style.display="none";
+    $("sitBtn").style.display=""; $("noTicket").style.display="none";
+  } else {
+    // the Compete gate — no active ticket, no seat
+    if(myCompete){
+      $("ticketIn").style.display=""; $("sitBtn").style.display="";
+      $("noTicket").style.display="none";
+      $("ticketIn").value = myCompete.str;
+      $("ticketIn").readOnly = true;
+      $("ticketIn").title = "Your active Compete ticket — the table plays these letters";
+    } else {
+      $("ticketIn").style.display="none"; $("sitBtn").style.display="none";
+      $("noTicket").style.display="";
+      if(competeErr) $("noTicket").innerHTML =
+        '<b style="color:var(--gold)">Could not verify your Compete ticket</b> — the RPC did not answer. '+
+        'Hit <b>Load</b> or refresh the page to retry.';
+    }
   }
   const pack = seated ? mySeat.chipPack : 0n;
   const loadedOnChain = pack !== 0n;
@@ -805,8 +852,9 @@ function paintSeat(){
 function localTotal(){ return Object.values(localChips).reduce((a,i)=>a+CHIPS[i],0); }
 
 $("sitBtn").onclick = async () => {
-  const t = ($("ticketIn").value||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
-  if(t.length!==6) return rail("The ticket needs exactly six characters, A–Z or 0–9.");
+  if(!myCompete){ await checkCompete(); paintSeat(); if(!myCompete) return rail("No active Compete ticket on this wallet — get one at Compete first."); }
+  const t = myCompete.str.toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if(t.length!==6) return rail("Your Compete ticket did not read as six characters — refresh and retry.");
   const bytes = ethers.hexlify(ethers.toUtf8Bytes(t));
   if(await send("sit with ticket "+t, board, "sit", tid, bytes)){ rail('<span class="win">Seated.</span> Now load your six tokens.'); await refreshChain(); }
 };
