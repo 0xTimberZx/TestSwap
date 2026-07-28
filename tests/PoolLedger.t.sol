@@ -27,6 +27,10 @@ contract PoolLedgerTest is Test {
     address bob      = address(0xB0B);
     address carol    = address(0xCA201);
 
+    /// @dev Two table ids. Most tests only need one; the isolation tests need both.
+    uint256 constant T1 = 1;
+    uint256 constant T2 = 2;
+
     function setUp() public {
         timbs  = new MockTIMBS();
         ledger = new PoolLedger(address(timbs), treasury);
@@ -63,26 +67,26 @@ contract PoolLedgerTest is Test {
     function test_OnlyBoardCanCollect() public {
         vm.prank(alice);
         vm.expectRevert(PoolLedger.NotBoard.selector);
-        ledger.collect(alice, 100e18);
+        ledger.collect(alice, 100e18, T1);
     }
 
     // ─── intake + credit + withdraw ────────────────────────────────────────────
 
     function test_CollectPullsStake() public {
-        ledger.collect(alice, 100e18);
+        ledger.collect(alice, 100e18, T1);
         assertEq(ledger.heldBalance(), 100e18);
         assertEq(timbs.balanceOf(alice), 900e18);
     }
 
     function test_CreditThenWithdraw() public {
-        ledger.collect(alice, 100e18);
-        ledger.collect(bob,   100e18);           // pot = 200
+        ledger.collect(alice, 100e18, T1);
+        ledger.collect(bob,   100e18, T1);           // pot = 200
 
         address[] memory ws = new address[](2);
         uint256[] memory as_ = new uint256[](2);
         ws[0] = alice; as_[0] = 150e18;          // alice won
         ws[1] = bob;   as_[1] = 0;               // bob lost (skipped)
-        ledger.creditWinnings(ws, as_);
+        ledger.creditWinnings(ws, as_, T1);
 
         assertEq(ledger.credit(alice), 150e18);
         assertEq(ledger.totalCredited(), 150e18);
@@ -104,96 +108,170 @@ contract PoolLedgerTest is Test {
         address[] memory ws = new address[](2);
         uint256[] memory as_ = new uint256[](1);
         vm.expectRevert(PoolLedger.LengthMismatch.selector);
-        ledger.creditWinnings(ws, as_);
+        ledger.creditWinnings(ws, as_, T1);
     }
 
     // ─── escrow is sacred ──────────────────────────────────────────────────────
 
-    function test_CannotCreditMoreThanHeld() public {
-        ledger.collect(alice, 100e18); // held = 100
+    function test_CannotCreditMoreThanTheTableHolds() public {
+        ledger.collect(alice, 100e18, T1); // T1's escrow = 100
         address[] memory ws = new address[](1);
         uint256[] memory as_ = new uint256[](1);
-        ws[0] = alice; as_[0] = 101e18; // more than held
+        ws[0] = alice; as_[0] = 101e18; // more than the table holds
         vm.expectRevert(
-            abi.encodeWithSelector(PoolLedger.ExceedsUnowed.selector, 101e18, 100e18)
+            abi.encodeWithSelector(
+                PoolLedger.ExceedsTableEscrow.selector, T1, 101e18, 100e18
+            )
         );
-        ledger.creditWinnings(ws, as_);
+        ledger.creditWinnings(ws, as_, T1);
     }
 
-    function test_SweepCannotTouchCredit() public {
-        ledger.collect(alice, 100e18);
-        ledger.collect(bob,   100e18);      // held 200
+    /// @dev The heart of the gen-3 fix: a pool pays out of its OWN table only.
+    ///      T2 is flush; T1 is not; T1's payout must still fail.
+    function test_ATableCannotPayOutOfAnotherTablesEscrow() public {
+        ledger.collect(alice, 10e18,  T1);
+        ledger.collect(bob,   500e18, T2);
 
         address[] memory ws = new address[](1);
         uint256[] memory as_ = new uint256[](1);
-        ws[0] = alice; as_[0] = 120e18;     // credited 120, unowed = 80
-        ledger.creditWinnings(ws, as_);
-
-        assertEq(ledger.unowed(), 80e18);
-        // sweeping 81 (into credit) must revert
+        ws[0] = alice; as_[0] = 200e18;   // plenty in the vault, none of it T1's
         vm.expectRevert(
-            abi.encodeWithSelector(PoolLedger.ExceedsUnowed.selector, 81e18, 80e18)
+            abi.encodeWithSelector(
+                PoolLedger.ExceedsTableEscrow.selector, T1, 200e18, 10e18
+            )
         );
-        ledger.sweep(treasury, 81e18);
-        // sweeping exactly the unowed surplus is fine
-        ledger.sweep(treasury, 80e18);
+        ledger.creditWinnings(ws, as_, T1);
+    }
+
+    function test_RefundCannotReachAnotherTablesEscrow() public {
+        ledger.collect(alice, 10e18,  T1);
+        ledger.collect(bob,   500e18, T2);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PoolLedger.ExceedsTableEscrow.selector, T1, 11e18, 10e18
+            )
+        );
+        ledger.refund(alice, 11e18, T1);
+    }
+
+    /// @dev Discovery #11, at the ledger. Closing T1 out takes exactly T1's
+    ///      remainder and leaves T2 whole — the old sweep(to, amount) took both.
+    function test_SweepingOneTableLeavesAnotherIntact() public {
+        ledger.collect(alice, 100e18, T1);
+        ledger.collect(bob,   100e18, T1);      // T1 escrow 200
+        ledger.collect(carol, 400e18, T2);      // T2 escrow 400
+
+        address[] memory ws = new address[](1);
+        uint256[] memory as_ = new uint256[](1);
+        ws[0] = alice; as_[0] = 120e18;         // T1: credited 120, 80 left as rake
+        ledger.creditWinnings(ws, as_, T1);
+
+        assertEq(ledger.tableEscrow(T1), 80e18);
+        assertEq(ledger.tableEscrow(T2), 400e18);
+
+        uint256 swept = ledger.sweepTable(treasury, T1);
+        assertEq(swept, 80e18);
         assertEq(timbs.balanceOf(treasury), 80e18);
-        // alice's credit survived the sweep
-        assertEq(ledger.credit(alice), 120e18);
+
+        // T2 untouched, and T1's winner still holds her credit.
+        assertEq(ledger.tableEscrow(T2), 400e18);
+        assertEq(ledger.totalEscrowed(),  400e18);
+        assertEq(ledger.credit(alice),    120e18);
+
+        // T2 can still pay out in full afterwards.
+        ws[0] = carol; as_[0] = 400e18;
+        ledger.creditWinnings(ws, as_, T2);
+        vm.prank(carol);
+        ledger.withdraw();
+        assertEq(timbs.balanceOf(carol), 1_000e18);
     }
 
-    function test_OwnerWithdrawOnlyUnowed() public {
-        ledger.collect(alice, 100e18);
+    function test_SweepingATwiceIsANoOp() public {
+        ledger.collect(alice, 100e18, T1);
+        assertEq(ledger.sweepTable(treasury, T1), 100e18);
+        assertEq(ledger.sweepTable(treasury, T1), 0);
+        assertEq(timbs.balanceOf(treasury), 100e18);
+    }
+
+    /// @dev The old `unowed()` (balance - totalCredited) counted live escrow as
+    ///      protocol surplus, so ownerWithdraw could reach a seated player's chips.
+    function test_OwnerWithdrawCannotTouchLiveEscrow() public {
+        ledger.collect(alice, 100e18, T1);
         address[] memory ws = new address[](1);
         uint256[] memory as_ = new uint256[](1);
-        ws[0] = alice; as_[0] = 60e18;      // unowed = 40
-        ledger.creditWinnings(ws, as_);
+        ws[0] = alice; as_[0] = 60e18;      // credited 60, 40 still escrowed
+        ledger.creditWinnings(ws, as_, T1);
 
-        // owner (this test deployed the ledger) cannot pull into credit
+        // 40 is the table's rake-in-waiting, not surplus. Nothing is withdrawable.
+        assertEq(ledger.unowed(), 0);
         vm.expectRevert(
-            abi.encodeWithSelector(PoolLedger.ExceedsUnowed.selector, 41e18, 40e18)
+            abi.encodeWithSelector(PoolLedger.ExceedsUnowed.selector, 1e18, 0)
         );
-        ledger.ownerWithdraw(treasury, 41e18);
+        ledger.ownerWithdraw(treasury, 1e18);
 
-        ledger.ownerWithdraw(treasury, 40e18); // exactly the surplus
+        // Sweeping the table out is the sanctioned route for the 40.
+        assertEq(ledger.sweepTable(treasury, T1), 40e18);
         assertEq(timbs.balanceOf(treasury), 40e18);
-        assertEq(ledger.credit(alice), 60e18); // untouched
+        assertEq(ledger.credit(alice), 60e18);
 
-        // and alice can still withdraw her full credit afterwards
         vm.prank(alice);
         ledger.withdraw();
         assertEq(timbs.balanceOf(alice), 900e18 + 60e18);
     }
 
+    /// @dev ownerWithdraw is now for genuine surplus only: dust and tokens sent
+    ///      here by accident, which is exactly what a stray transfer creates.
+    function test_OwnerWithdrawTakesStrayTokensOnly() public {
+        ledger.collect(alice, 100e18, T1);       // live escrow
+        timbs.transfer(address(ledger), 7e18);   // someone fat-fingers a transfer
+
+        assertEq(ledger.unowed(), 7e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(PoolLedger.ExceedsUnowed.selector, 8e18, 7e18)
+        );
+        ledger.ownerWithdraw(treasury, 8e18);
+
+        ledger.ownerWithdraw(treasury, 7e18);
+        assertEq(timbs.balanceOf(treasury), 7e18);
+        assertEq(ledger.tableEscrow(T1), 100e18); // the table never noticed
+    }
+
     function test_OnlyOwnerCanOwnerWithdraw() public {
-        ledger.collect(alice, 100e18);
+        ledger.collect(alice, 100e18, T1);
         vm.prank(bob);
         vm.expectRevert();
         ledger.ownerWithdraw(bob, 1e18);
     }
 
     function test_RefundIsBackedCredit() public {
-        ledger.collect(alice, 100e18);
-        ledger.refund(alice, 100e18);       // dislodge her unplayed chip
+        ledger.collect(alice, 100e18, T1);
+        ledger.refund(alice, 100e18, T1);       // dislodge her unplayed chip
         assertEq(ledger.credit(alice), 100e18);
         vm.prank(alice);
         ledger.withdraw();
         assertEq(timbs.balanceOf(alice), 1_000e18); // whole again
     }
 
-    /// @dev Conservation: for any sequence, totalCredited <= held always holds,
-    ///      and the sum of every wallet's withdrawable credit is fully backed.
-    function test_ConservationHeldGteCredited() public {
-        ledger.collect(alice, 300e18);
-        ledger.collect(bob,   200e18);      // held 500
+    /// @dev Conservation: held >= totalCredited + totalEscrowed at every step,
+    ///      and once the table is swept the vault backs credit exactly.
+    function test_ConservationHeldGteCreditedPlusEscrowed() public {
+        ledger.collect(alice, 300e18, T1);
+        ledger.collect(bob,   200e18, T1);      // T1 escrow 500
+        assertGe(ledger.heldBalance(), ledger.totalCredited() + ledger.totalEscrowed());
+
         address[] memory ws = new address[](2);
         uint256[] memory as_ = new uint256[](2);
         ws[0] = alice; as_[0] = 250e18;
-        ws[1] = bob;   as_[1] = 150e18;     // credited 400, unowed 100 (rake)
-        ledger.creditWinnings(ws, as_);
-        assertGe(ledger.heldBalance(), ledger.totalCredited());
-        assertEq(ledger.unowed(), 100e18);
-        ledger.sweep(treasury, 100e18);     // rake out
+        ws[1] = bob;   as_[1] = 150e18;     // credited 400, 100 left as rake
+        ledger.creditWinnings(ws, as_, T1);
+
+        assertEq(ledger.totalCredited(), 400e18);
+        assertEq(ledger.totalEscrowed(), 100e18);
+        assertGe(ledger.heldBalance(), ledger.totalCredited() + ledger.totalEscrowed());
+        assertEq(ledger.unowed(), 0);        // nothing here is protocol surplus
+
+        ledger.sweepTable(treasury, T1);     // rake out
+        assertEq(ledger.totalEscrowed(), 0);
         assertEq(ledger.heldBalance(), ledger.totalCredited()); // exactly backed
     }
 }

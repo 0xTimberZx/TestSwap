@@ -17,9 +17,11 @@ contract MockTimbPrize {
     function setResult(uint256 r, bytes6 s) external { roundWinningString[r] = s; }
 }
 
-/// @dev Does the ledger's global `unowed()` let one table's close-out spend
-///      another live table's seed? The board is designed for ~40 parallel
-///      tables (TABLES_MAX), so this is the normal case, not a corner.
+/// @dev Two tables live at once — the board is designed for ~40 (TABLES_MAX),
+///      so this is the normal case, not a corner. Under gen-2's global
+///      `unowed()` sweep, closing either one took the other's seed and its
+///      players' chips (VALIDATION.md discovery #11). These tests are the
+///      inversion of that: per-table escrow, proven end to end through the board.
 contract MultiTableSweepTest is Test {
     MockTIMBS timbs; MockTimbPrize prize; PoolLedger ledger;
     SeedRegistry registry; CommitRevealEntropy ent; SegmentBoard board;
@@ -70,10 +72,10 @@ contract MultiTableSweepTest is Test {
         vm.stopPrank();
     }
 
-    /// @dev KNOWN BUG, documented so it cannot regress silently. This test
-    ///      asserts the CURRENT (wrong) behaviour. When the per-table escrow fix
-    ///      lands, this test must be inverted: table B should be untouched.
-    function test_KNOWNBUG_RetiringOneTableSweepsAnotherLiveTablesEscrow() public {
+    /// @dev The gen-3 fix, stated as its own test. Same setup as the gen-2
+    ///      known-bug case (which asserted the opposite): table A's retire must
+    ///      take exactly table A's remainder and leave table B whole.
+    function test_RetiringOneTableLeavesAnotherLiveTablesEscrowIntact() public {
         uint256 a = board.openTable(7, _commits(1));
         uint256 b = board.openTable(8, _commits(2));
         assertEq(ledger.heldBalance(), 200e18, "two seeds held");
@@ -81,24 +83,76 @@ contract MultiTableSweepTest is Test {
         _seatAndBet(a, bytes6("ABCDEF"), bytes6("123456"));
         _seatAndBet(b, bytes6("ABCDEF"), bytes6("123456"));
 
+        // 100 seed + 2 wallets x 6 x 25 chips, per table
+        assertEq(ledger.tableEscrow(a), 400e18);
+        assertEq(ledger.tableEscrow(b), 400e18);
+
         // settle + retire table A only; table B is still live and unsettled
         vm.warp(vm.getBlockTimestamp() + 45 minutes + 1);
         board.armTable(a);
         vm.roll(vm.getBlockNumber() + 1);
         for (uint8 s=1; s<=6; ++s) board.lockSegment(a, s, _secret(a, s));
 
-        uint256 owedBefore = ledger.totalCredited();
+        uint256 treasuryBefore = timbs.balanceOf(treasury);
         board.retire(a);
 
-        // Everything not yet credited was swept — including table B's seed and
-        // every chip its players loaded.
-        assertEq(ledger.heldBalance(), owedBefore, "held collapsed to table A's credits");
-        emit log_named_uint("swept to treasury", timbs.balanceOf(treasury));
+        // A's escrow is spent; B's is untouched to the wei.
+        assertEq(ledger.tableEscrow(a), 0,      "table A drained");
+        assertEq(ledger.tableEscrow(b), 400e18, "table B untouched");
+        assertEq(ledger.totalEscrowed(), 400e18);
 
-        // Table B can no longer pay anyone.
+        // Treasury took only A's leftovers — never more than A ever held.
+        uint256 swept = timbs.balanceOf(treasury) - treasuryBefore;
+        assertLe(swept, 400e18, "swept beyond table A's own escrow");
+
+        // The vault still backs everyone: B's stake plus A's unwithdrawn credits.
+        assertGe(ledger.heldBalance(), ledger.totalCredited() + ledger.totalEscrowed());
+
+        // And table B settles and pays normally afterwards.
         board.armTable(b);
         vm.roll(vm.getBlockNumber() + 1);
-        vm.expectRevert(); // ExceedsUnowed — the tokens are gone
-        board.lockSegment(b, 1, _secret(b, 1));
+        for (uint8 s=1; s<=6; ++s) board.lockSegment(b, s, _secret(b, s));
+        board.retire(b);
+
+        assertEq(ledger.tableEscrow(b), 0);
+        assertEq(ledger.totalEscrowed(), 0);
+        assertGe(ledger.heldBalance(), ledger.totalCredited());
+
+        // Both wallets can pull whatever the two tables owe them.
+        if (ledger.credit(alice) > 0) { vm.prank(alice); ledger.withdraw(); }
+        if (ledger.credit(bob)   > 0) { vm.prank(bob);   ledger.withdraw(); }
+        assertEq(ledger.totalCredited(), 0, "everyone paid out");
+    }
+
+    /// @dev Settle the two tables in the opposite order and check each pays out
+    ///      of its own stakes — the parallel-scale case the board was always
+    ///      meant for (TABLES_MAX is 40) and which no test covered before.
+    function test_TwoTablesSettleInEitherOrder() public {
+        uint256 a = board.openTable(7, _commits(1));
+        uint256 b = board.openTable(8, _commits(2));
+        _seatAndBet(a, bytes6("ABCDEF"), bytes6("123456"));
+        _seatAndBet(b, bytes6("ABCDEF"), bytes6("123456"));
+
+        vm.warp(vm.getBlockTimestamp() + 45 minutes + 1);
+        board.armTable(b);                       // B first this time
+        vm.roll(vm.getBlockNumber() + 1);
+        for (uint8 s=1; s<=6; ++s) board.lockSegment(b, s, _secret(b, s));
+        board.retire(b);
+
+        assertEq(ledger.tableEscrow(a), 400e18, "table A untouched by B's retire");
+
+        board.armTable(a);
+        vm.roll(vm.getBlockNumber() + 1);
+        for (uint8 s=1; s<=6; ++s) board.lockSegment(a, s, _secret(a, s));
+        board.retire(a);
+
+        assertEq(ledger.totalEscrowed(), 0);
+        // Nothing was created or destroyed: every token that entered the ledger
+        // is now either a wallet's credit or in the Treasury.
+        assertEq(
+            ledger.totalCredited() + timbs.balanceOf(treasury) - 10_000e18 + 200e18,
+            800e18,
+            "conservation across two parallel tables"
+        );
     }
 }
