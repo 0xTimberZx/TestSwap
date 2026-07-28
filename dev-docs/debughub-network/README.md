@@ -18,7 +18,7 @@ backward compatible (omit the config and the SDK behaves like 1.1.0).
 ```
   App (any origin)                     Supabase (PostgREST + RLS)          Hub
   ────────────────                     ──────────────────────────         ─────
-  debugger.js v1.2.0  ──POST anon──▶   public.debughub_events   ◀──GET──  app.js
+  debugger.js v1.3.0  ──POST anon──▶   public.debughub_events   ◀──GET──  app.js
    (+ localStorage fallback)            anon INSERT (whitelist)           (+ localStorage
                                         anon SELECT (read-only)             fallback)
 ```
@@ -40,7 +40,7 @@ No further backend work is required unless you want the optional 30-day prune
 It's a **copy-two-files** job — no hand-editing:
 
 1. **Replace the SDK.** Copy [`debugger.js`](./debugger.js) over
-   `MyDapp/debughub/sdk/debugger.js`. Full v1.2.0 drop-in — same public API,
+   `MyDapp/debughub/sdk/debugger.js`. Full v1.3.0 drop-in — same public API,
    now with the network sink.
 
 2. **Replace the hub logic.** Copy [`app.js`](./app.js) over
@@ -63,10 +63,13 @@ and renders Sessions / Checkpoints / Errors / Wallets correctly.
 
 ## TimbSwap side — already wired ✅
 
-`config.js` now sets `window.DEBUGHUB_CONFIG` with `supabaseUrl` + `supabaseKey`
-alongside `appName`. The current (1.1.0) SDK ignores the extra fields, so this is
-a no-op until you drop in the v1.2.0 SDK above — at which point TimbSwap starts
-transmitting with **zero further TimbSwap changes**.
+`config.js` sets `window.DEBUGHUB_CONFIG` with `supabaseUrl` + `supabaseKey`
+alongside `appName`, and TimbSwap **self-hosts its own copy** of the SDK at
+`debughub/sdk/debugger.js` rather than loading MyDapp's. That split happened
+because loading MyDapp's copy meant TimbSwap could only ever run whatever
+version MyDapp served. The two copies are kept byte-identical
+(`dev-docs/debughub-network/debugger.js` is the packaged one) — if you change
+one, copy it to the other.
 
 The same-origin local dashboard at `timbswap.xyz/debughub/` keeps working off
 localStorage and needs nothing here; it's the "works right now, no backend"
@@ -82,3 +85,9 @@ view, complementary to the aggregated remote hub.
   or seed phrases. Same data the hub already displayed.
 - Free-text fields are length-capped (`message` ≤ 2000, `name` ≤ 200) at both
   the SDK (truncate) and DB (CHECK) layers.
+- **The 1.3.0 snapshot never leaves the device on its own.** It reads the app's
+  own siloed localStorage, renders to a canvas, and hands off to the OS share
+  sheet — outbound, user-initiated, no upload to us and no file download. But
+  the *events* it summarises were already POSTed to Supabase on any page with a
+  sink configured, so the snapshot card discloses that rather than claiming
+  local-only. See NOTES §3.

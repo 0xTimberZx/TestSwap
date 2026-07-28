@@ -1,6 +1,6 @@
 /* ============================================================
    DebugHub SDK
-   Version: 1.2.0  (network sink added — backward compatible)
+   Version: 1.3.0  (local snapshot + share; network sink from 1.2.0)
 
    Drop-in replacement for MyDapp/debughub/sdk/debugger.js.
 
@@ -23,6 +23,11 @@
      logError(functionName, error)
      logPerf(label, durationMs)
      logSecurity(name, status)     status: "pass" | "fail"
+     openSnapshot()                render + share this browser's own record
+
+   Appending #debug (or #snapshot / ?debug) to the URL arms the viewer path:
+   auto-starts a session, captures uncaught errors, and mounts a floating
+   snapshot button. See dev-docs/debughub-network/NOTES.md §3.
    ============================================================ */
 
 (function () {
