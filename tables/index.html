@@ -1,25 +1,9 @@
 <!doctype html>
-<!--
-  SwapTables — table console.
-
-  SERVED COPY. The source of truth is SwapTables/app/index.html; this mirror
-  exists because SwapTables is private and GitHub Pages needs a public repo (or
-  a paid plan), while TimbSwap already publishes Pages. Edit the source there
-  and re-copy — the page is self-contained, so it copies across verbatim. The
-  <head> here carries the site metadata (canonical, description, favicon) that
-  the source does not need.
-
-  Retire this copy once SwapTables serves its own Pages.
--->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tables — TimbSwap</title>
-  <link rel="canonical" href="https://timbswap.xyz/tables/" />
-  <meta name="description" content="SwapTables segment-betting console on Arbitrum Sepolia — open a table, place bets, settle the round." />
-  <meta name="theme-color" content="#0e1613" />
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<title>SwapTables — table console</title>
 <style>
   :root{
     --felt:#0e1613; --panel:#14201b; --panel2:#1a2822; --line:#26372f;
@@ -399,9 +383,15 @@ const ERC20_ABI = [
 ];
 const PRIZE_ABI = ["function roundWinningString(uint256) view returns (bytes6)"];
 const REG_ABI   = ["function isUsed(uint256) view returns (bool)"];
+const CRANK     = "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D"; // stateless batcher — works on every generation
+const CRANK_ABI = [
+  "function lockAll(address board,uint256 tableId,bytes32[6] secrets,bool alsoRetire)",
+  "function fallbackAll(address board,uint256 tableId,bool alsoRetire)",
+  "error NothingToDo(uint256 tableId)",
+];
 const REGISTRY  = "0x2460C8ed63414F36838542982A5Ab263C9Fcb914"; // long-lived, all generations
 
-let provider, signer, me, board, ledger, timbs, prize, registry, T = null;
+let provider, signer, me, board, ledger, timbs, prize, registry, crank, T = null;
 
 const $ = id => document.getElementById(id);
 addEventListener("DOMContentLoaded", () => {
@@ -509,7 +499,7 @@ function explain(e){
   // against every interface we know.
   const data = findRevertData(e);
   if (data){
-    for (const iface of [board?.interface, ledger?.interface, timbs?.interface]){
+    for (const iface of [board?.interface, ledger?.interface, timbs?.interface, crank?.interface]){
       let parsed = null;
       try { parsed = iface?.parseError(data); } catch { /* not this one */ }
       if (parsed) return named(parsed);
@@ -562,6 +552,7 @@ $("connect").onclick = async () => {
   timbs  = new ethers.Contract(ADDR.timbs,  ERC20_ABI,  signer);
   prize  = new ethers.Contract(ADDR.prize,  PRIZE_ABI,  signer);
   registry = new ethers.Contract(REGISTRY, REG_ABI, signer);
+  crank    = new ethers.Contract(CRANK, CRANK_ABI, signer);
 
   document.querySelectorAll("button").forEach(b => b.disabled = false);
   log("connected", "l-ok");
@@ -760,22 +751,20 @@ async function l1BlockNumber(){
   }catch{ return null; }
 }
 
-async function doLocks(){
+/// One approval via SegmentCrank: every still-open segment locks in a single
+/// transaction (and optionally retires). The per-segment path stayed in the
+/// contract; this is just the batched way to call it.
+async function doLocks(alsoRetire){
   const secs = secretsFor(tid().toString());
   if (!secs) return false;
   // one block must pass after arming
   const start = await provider.getBlockNumber();
   while (await provider.getBlockNumber() === start) await new Promise(r=>setTimeout(r,300));
-  for (let s=1; s<=6; s++){
-    const t = T && ((Number(T.lockedMask) >> (s-1)) & 1);
-    if (t) { log(`seg ${s} already locked`, "l-dim"); continue; }
-    const ok = await send(`lock seg ${s}`, board, "lockSegment", tid(), s, secs[s-1]);
-    if (!ok) return false;
-  }
-  return true;
+  return send(`lock all six${alsoRetire ? " + retire" : ""} (one approval)`,
+              crank, "lockAll", ADDR.board, tid(), secs, !!alsoRetire);
 }
 $("arm").onclick    = async () => { await doArm(); refresh(); };
-$("lockAll").onclick= async () => { await doLocks(); refresh(); };
+$("lockAll").onclick= async () => { await doLocks(false); refresh(); };
 $("retire").onclick = async () => { if (await send("retire", board, "retire", tid())) refresh(); };
 $("rearm").onclick = async () => {
   await refreshTable();
@@ -815,10 +804,7 @@ $("lockFallback").onclick = async () => {
     log(`lock block ${T.lockBlock}, L1 now ${now} (age ${age} of 256 blocks; `
       + `fallback opens at 64, ~${Math.max(0, 256 - age) * 12 / 60 | 0} min left)`, "l-dim");
   }
-  for (let s = 1; s <= 6; s++){
-    if ((Number(T.lockedMask) >> (s-1)) & 1) { log(`seg ${s} already locked`, "l-dim"); continue; }
-    if (!await send(`fallback-lock seg ${s}`, board, "lockSegmentFallback", tid(), s)) break;
-  }
+  await send("fallback-lock the rest (one approval)", crank, "fallbackAll", ADDR.board, tid(), false);
   refresh();
 };
 $("runSettle").onclick = async () => {
@@ -826,8 +812,7 @@ $("runSettle").onclick = async () => {
   try{
     await refreshTable();
     if (T && T.lockBlock === 0n) { if (!await doArm()) return; }
-    if (!await doLocks()) return;
-    await send("retire", board, "retire", tid());
+    if (!await doLocks(true)) return; // locks + retire ride one crank call
     log("round closed — winners can now Withdraw", "l-ok");
   } finally { btn.disabled = false; refresh(); }
 };
