@@ -398,6 +398,7 @@
     </div>
     <p class="note" id="lockTracker" style="display:none;margin:10px 0 0;font-variant-numeric:tabular-nums"></p>
     <button class="btn primary" id="finishPick" style="display:none;margin-top:10px">Finish the pick — no secret needed, you pay the gas</button>
+    <button class="btn primary" id="closeTable" style="display:none;margin-top:10px">Close the table — release refunds and finish the round (anyone may)</button>
   </div>
 
   <details class="panel prehide" style="margin:16px 0 0">
@@ -1369,6 +1370,9 @@ async function updateLockTracker(){
       });
     }
   }
+  // all six locked but nobody retired: the round is one permissionless call
+  // from finished — unplaced chips only come back as credit at retire.
+  $("closeTable").style.display = (T && Number(T.lockedMask)===0x3F && !T.retired) ? "" : "none";
   const armed = T && T.lockBlock!==0n && !T.retired && Number(T.lockedMask)!==0x3F;
   if(!armed){ el.style.display="none"; return; }
   try{
@@ -1391,6 +1395,15 @@ async function updateLockTracker(){
     $("finishPick").style.display = (age>=64 && age<256 && nLocked<6) ? "" : "none";
   }catch{ el.style.display="none"; }
 }
+$("closeTable").onclick = async () => {
+  $("closeTable").disabled=true;
+  try{
+    if(await send("close the table (retire)", board, "retire", tid)){
+      await refreshChain();
+      rail('<span class="win">Table closed.</span> Unplaced chips are credited back and the round is settled — withdraw any time.');
+    }
+  } finally { $("closeTable").disabled=false; }
+};
 $("finishPick").onclick = async () => {
   if(!T) return;
   $("finishPick").disabled=true;
