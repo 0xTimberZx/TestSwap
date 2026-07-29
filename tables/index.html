@@ -698,10 +698,27 @@ function secretsFor(id){
 /// the first, so it parked on the newest settled round even when a previous
 /// table had already burned it — and openTable then refused.
 $("findRound").onclick = async () => {
-  $("roundNote").textContent = "searching…";
-  const start = Number($("round").value || 60);
+  $("roundNote").textContent = "finding the last used round…";
+  // Anchor the scan at the highest round THIS board has consumed (max seedRound
+  // over its tables), reach 12 above it to catch rounds Compete has settled
+  // since, then work downward to 1 — first settled AND unused round wins.
+  // (The registry exposes isUsed + a totalUsed count, but no "highest used", so
+  // last-used is derived from the board's own tables.)
+  let lastUsed = 0;
+  try {
+    const count = Number(await board.tableCount());
+    const rounds = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        board.tables(i + 1).then(t => Number(t.seedRound)).catch(() => 0))
+    );
+    lastUsed = rounds.reduce((m, r) => (r > m ? r : m), 0);
+  } catch (e) { /* no tables yet, or read failed */ }
+  const boxed = Number($("round").value || 0);
+  const start = lastUsed > 0 ? lastUsed + 12 : (boxed || 60);
+  $("round").value = start;
+  log(`scan: last used round ${lastUsed || "none"} → start ${start}, working down to 1`, "l-dim");
   let skipped = 0;
-  for (let r = start; r > start-60 && r > 0; r--){
+  for (let r = start; r >= 1; r--){
     $("roundNote").textContent = `searching… round ${r}`;
     const [s, used] = await Promise.all([
       prize.roundWinningString(r).catch(()=>null),
@@ -711,7 +728,7 @@ $("findRound").onclick = async () => {
     if (settled && used === false){
       $("round").value = r;
       $("roundNote").textContent = `round ${r} is settled → "${b6ToStr(s)}" — unused, ready to open`
-        + (skipped ? ` (skipped ${skipped} settled-but-consumed)` : "");
+        + (skipped ? ` (skipped ${skipped} settled-but-consumed above it)` : "");
       log(`found usable round ${r} = ${b6ToStr(s)}${skipped ? ` — skipped ${skipped} already-consumed round(s) above it` : ""}`, "l-ok");
       return;
     }
@@ -721,8 +738,8 @@ $("findRound").onclick = async () => {
     }
   }
   $("roundNote").textContent = skipped
-    ? `every settled round in the last 60 is already consumed (${skipped}) — try a higher starting number once newer rounds settle`
-    : "no settled round found in the last 60 — try a higher starting number";
+    ? `every settled round from ${start} down is already consumed (${skipped}) — wait for Compete to settle newer rounds`
+    : `no settled round found from ${start} down to 1`;
 };
 $("open").onclick = async () => {
   const next = await board.nextTableId();
