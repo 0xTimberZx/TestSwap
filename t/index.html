@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SwapTables → the felt</title>
+<!--
+  Short link. timbswap.xyz/t  (14 chars) forwards to the player-facing felt.
+  JS redirect carries the hash and query through, so timbswap.xyz/t#debug
+  still arms the local-only snapshot on the felt, and any ?table= survives.
+  Meta-refresh is the no-JS fallback (it can't carry the hash, but the plain
+  page still lands).
+-->
+<meta http-equiv="refresh" content="0; url=/tables/play.html">
+<link rel="canonical" href="https://timbswap.xyz/tables/play.html">
+<script>
+  location.replace("/tables/play.html" + location.search + location.hash);
+</script>
+<style>
+  html,body{margin:0;height:100%}
+  body{background:#08150e;color:#d7b34c;font:15px Georgia,serif;
+    display:flex;align-items:center;justify-content:center;text-align:center}
+  a{color:#d7b34c}
+</style>
+</head>
+<body>
+  <p>Taking you to the table… <a href="/tables/play.html">tap here</a> if it doesn't.</p>
+</body>
+</html>
