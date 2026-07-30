@@ -41,6 +41,15 @@ const ADDRESSES = {
   TimbGovernance:       "0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061",
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
+
+  // ── SwapTables segment tables — generation 4, fast dials (deployed 2026-07-30) ──
+  // Dials 900/1500/300 (entry 15:00 · bets close 20:00 · pick 25:00).
+  // Gen-3 (0x1633Fb…) retired for dial speed only; its ledger still pays withdrawals.
+  SegmentBoard:         "0x57d5BE0203Fa30f7b99853a11e4D162824895F91",
+  PoolLedger:           "0x863e37FF91cbd745CBcb063266Bf0631Ce2546b5",
+  CommitRevealEntropy:  "0xe926797b2FC03E2936092D3de2B4c7ADE2e4A5Fd",
+  SeedRegistry:         "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived — spans generations
+  SegmentCrank:         "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher — generation-agnostic
   USDC:                 "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Circle canonical (6 decimals)
   LINK:                 "0xb1D4538B4571d411F07960EF2838Ce337FE1E80E", // Chainlink canonical (18 decimals)
   USDT:                 "0xbEEa6bc48adb31831bFCe5e91E48E08B3a836163", // TestUSDT — 6 decimals, 1M supply
