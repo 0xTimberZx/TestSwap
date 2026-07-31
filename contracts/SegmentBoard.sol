@@ -168,12 +168,27 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
      */
     address public seedFunder;
 
-    /// @notice Seconds from open to the entry cutoff (no new seats after).
-    uint64 public immutable entryWindow;
-    /// @notice Seconds from open to the pick (segments become lockable).
-    uint64 public immutable pickDelay;
-    /// @notice Seconds before the pick when bets close.
+    // ── Gen-5 adaptive-entry dials (docs/GEN5_ADAPTIVE_ENTRY.md) ──────────
+    /// @notice Hard ceiling: seats close at latest `openedAt + entryMax`.
+    uint64 public immutable entryMax;
+    /// @notice Quiet period after the last JOIN (sit or load) once the table
+    ///         has quorum; entry closes when it elapses with no new join.
+    ///         Measured from joins rather than sits alone so the join that
+    ///         *forms* quorum cannot retroactively slam the door it opened.
+    uint64 public immutable sitQuiet;
+    /// @notice Max wait for a lone funded player before entry closes anyway.
+    uint64 public immutable soloWait;
+    /// @notice Entry close → bets close; the board stays open for placing.
+    uint64 public immutable placeWindow;
+    /// @notice Seconds before the pick when bets close (the committed drumroll).
     uint64 public immutable betsCloseLead;
+
+    /// @dev Gen-4 app compatibility: the worst-case entry span.
+    function entryWindow() external view returns (uint64) { return entryMax; }
+    /// @dev Gen-4 app compatibility: the worst-case open→pick span.
+    function pickDelay() external view returns (uint64) {
+        return entryMax + placeWindow + betsCloseLead;
+    }
 
     /// @notice Halt-only role: may pause new tables / new bets, nothing else.
     address public guardian;
@@ -191,6 +206,11 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         bool    retired;
         bytes6  seedString;
         bytes6  lockedChars;
+        // ── gen-5 adaptive entry ──
+        uint64  entryCloseAt; // authoritative close; only ever rewritten to a future time
+        uint64  lastJoinAt;   // last sit OR load — resets the quiet timer
+        uint64  firstLoadAt;  // starts the lone-player clock
+        uint8   loadedCount;  // wallets that funded all six tokens
     }
 
     struct Seat {
@@ -255,11 +275,12 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     error LockBlockStillLive(uint256 lockBlock, uint256 expiresAt);
     error NothingLeftToLock();
     error SeedNotSettled(uint256 round);
-    error BadDials(uint64 entryWindow, uint64 pickDelay, uint64 betsCloseLead);
+    error BadDials(uint64 entryMax, uint64 placeWindow, uint64 betsCloseLead, uint64 sitQuiet, uint64 soloWait);
 
     // ─── Events ────────────────────────────────────────────────────────────────
 
     event TableOpened(uint256 indexed tableId, uint256 indexed seedRound, bytes6 seedString, uint64 pickTime);
+    event EntryRescheduled(uint256 indexed tableId, uint64 entryCloseAt, uint64 pickTime);
     event Seated(uint256 indexed tableId, address indexed wallet);
     event TokensLoaded(uint256 indexed tableId, address indexed wallet, uint256 total);
     event BetPlaced(uint256 indexed tableId, uint8 indexed pool, address indexed wallet, uint8 kind, uint8 pick);
@@ -295,9 +316,11 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         address _treasury,
         address _seedFunder,
         address _guardian,
-        uint64  _entryWindow,
-        uint64  _pickDelay,
-        uint64  _betsCloseLead
+        uint64  _entryMax,
+        uint64  _placeWindow,
+        uint64  _betsCloseLead,
+        uint64  _sitQuiet,
+        uint64  _soloWait
     ) Ownable(msg.sender) {
         if (
             _ledger == address(0) || _seedRegistry == address(0) ||
@@ -312,21 +335,23 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         seedFunder   = _seedFunder == address(0) ? _treasury : _seedFunder;
         guardian     = _guardian; // may be address(0) for a zero-privilege generation
         // The dials are immutable, so a bad set bricks the generation with no
-        // recovery. Two ways that happens:
-        //   betsCloseLead >= pickDelay  -> `block.timestamp + betsCloseLead >=
-        //     pickTime` holds from the instant a table opens, so place() always
-        //     reverts BetsClosed and no bet can ever be made.
-        //   entryWindow > pickDelay - betsCloseLead -> entry outlives betting, so
-        //     a wallet can sit and load chips it can never place.
-        // Generation 1 sat exactly on the second boundary (2400 == 2700 - 300),
-        // which is legal, so this rejects only genuinely unusable sets.
-        if (_pickDelay <= _betsCloseLead ||
-            _entryWindow > _pickDelay - _betsCloseLead) {
-            revert BadDials(_entryWindow, _pickDelay, _betsCloseLead);
+        // recovery. Zero placeWindow closes bets the moment entry closes (late
+        // loaders could never place); zero betsCloseLead lets bets ride into
+        // the entropy window (§10 guard #1); zero quiet/solo timers close
+        // entry the instant quorum forms. The schedule is always
+        //   entryCloseAt → +placeWindow → betsClose → +betsCloseLead → pick,
+        // so the gen-4 relation entryWindow ≤ pickDelay − betsCloseLead holds
+        // by construction and needs no separate check.
+        if (_entryMax == 0 || _placeWindow == 0 || _betsCloseLead == 0 ||
+            _sitQuiet == 0 || _soloWait == 0 ||
+            _sitQuiet > _entryMax || _soloWait > _entryMax) {
+            revert BadDials(_entryMax, _placeWindow, _betsCloseLead, _sitQuiet, _soloWait);
         }
-        entryWindow  = _entryWindow;
-        pickDelay    = _pickDelay;
+        entryMax      = _entryMax;
+        placeWindow   = _placeWindow;
         betsCloseLead = _betsCloseLead;
+        sitQuiet      = _sitQuiet;
+        soloWait      = _soloWait;
     }
 
     // ─── Table lifecycle ───────────────────────────────────────────────────────
@@ -352,8 +377,10 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
         tableId = ++tableCount;
         Table storage t = tables[tableId];
-        t.openedAt   = uint64(block.timestamp);
-        t.pickTime   = uint64(block.timestamp) + pickDelay;
+        t.openedAt     = uint64(block.timestamp);
+        t.entryCloseAt = uint64(block.timestamp) + entryMax;   // ceiling; joins pull it in
+        t.pickTime     = t.entryCloseAt + placeWindow + betsCloseLead;
+        t.lastJoinAt   = uint64(block.timestamp);
         t.seedRound  = uint32(seedRound);
         t.seedString = seedString;
 
@@ -372,7 +399,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     ///         string, used only to resolve Your-Ticket bets.
     function sit(uint256 tableId, bytes6 ticket) external {
         Table storage t = _liveTable(tableId);
-        if (block.timestamp >= t.openedAt + entryWindow) revert TableClosedForEntry();
+        if (block.timestamp >= t.entryCloseAt) revert TableClosedForEntry();
         if (t.seatCount >= SEATS_HARD_MAX) revert TableFull();
 
         Seat storage s = seats[tableId][msg.sender];
@@ -381,6 +408,9 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         s.ticket = ticket;
         ++t.seatCount;
         seatList[tableId].push(msg.sender);
+
+        t.lastJoinAt = uint64(block.timestamp);
+        _rescheduleEntry(t, tableId);
 
         emit Seated(tableId, msg.sender);
     }
@@ -391,7 +421,10 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
      */
     function loadTokens(uint256 tableId, uint8[6] calldata chipIdxs) external nonReentrant {
         Table storage t = _liveTable(tableId);
-        if (block.timestamp >= t.openedAt + entryWindow) revert TableClosedForEntry();
+        // Gen-5 late loading: seated before entry closes, fund any time before
+        // bets close (docs/GEN5_ADAPTIVE_ENTRY.md §2). Placing has always had
+        // this same deadline, so pool composition is unaffected.
+        if (block.timestamp + betsCloseLead >= t.pickTime) revert BetsClosed();
 
         Seat storage s = seats[tableId][msg.sender];
         if (!s.seated)        revert NotSeated();
@@ -406,9 +439,41 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
             pack  |= uint64(uint64(c) + 1) << (8 * i);
         }
         s.chipPack = pack;
+        if (t.firstLoadAt == 0) t.firstLoadAt = uint64(block.timestamp);
+        ++t.loadedCount;
+        t.lastJoinAt = uint64(block.timestamp);
+        _rescheduleEntry(t, tableId);
         ledger.collect(msg.sender, total, tableId);
 
         emit TokensLoaded(tableId, msg.sender, total);
+    }
+
+    /**
+     * @dev Adaptive entry (gen-5): pull `entryCloseAt` forward once the table
+     *      can actually play, push it out (never past the ceiling) while joins
+     *      keep arriving. Rules, earliest wins:
+     *        quorum (2+ loaded): lastJoinAt + sitQuiet
+     *        lone funded player: firstLoadAt + soloWait
+     *        always:             openedAt + entryMax  (ceiling)
+     *      Never touches a closed window and never writes the past, so the
+     *      schedule is monotone from any player's point of view. The whole
+     *      downstream timeline rides on it:
+     *        betsClose = entryCloseAt + placeWindow, pick = betsClose + lead.
+     */
+    function _rescheduleEntry(Table storage t, uint256 tableId) internal {
+        uint64 nowTs = uint64(block.timestamp);
+        if (nowTs >= t.entryCloseAt) return;         // window already shut
+        uint64 candidate;
+        if (t.loadedCount >= SEATS_MIN)      candidate = t.lastJoinAt + sitQuiet;
+        else if (t.loadedCount == 1)         candidate = t.firstLoadAt + soloWait;
+        else return;                                  // nobody funded: ceiling stands
+        uint64 ceiling = t.openedAt + entryMax;
+        if (candidate > ceiling) candidate = ceiling;
+        if (candidate < nowTs)   candidate = nowTs;   // future-only writes
+        if (candidate == t.entryCloseAt) return;
+        t.entryCloseAt = candidate;
+        t.pickTime     = candidate + placeWindow + betsCloseLead;
+        emit EntryRescheduled(tableId, candidate, t.pickTime);
     }
 
     /// @notice Place a loaded token on a board spot for its segment.
@@ -474,7 +539,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         Table storage t = _liveTable(tableId);
         if (block.timestamp < t.pickTime) revert NotYetPickTime();
         if (t.lockBlock != 0)             revert AlreadyArmed();
-        if (t.seatCount < SEATS_MIN)      revert NotEnoughSeats(t.seatCount, SEATS_MIN);
+        if (t.loadedCount < SEATS_MIN)    revert NotEnoughSeats(t.loadedCount, SEATS_MIN);
         t.lockBlock = uint64(block.number);
         emit TableArmed(tableId, block.number);
     }
@@ -613,9 +678,14 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         }
 
         uint256 pot = _potOf(bs, n);
-        // rake(n) = FLOOR + (BASE - FLOOR)/n, n = distinct wallets == bet count (§8)
-        uint256 distributable =
-            (pot * (BPS - (RAKE_FLOOR + (RAKE_BASE - RAKE_FLOOR) / n))) / BPS;
+        // rake(n) = FLOOR + (BASE - FLOOR)/n, n = distinct wallets == bet count (§8).
+        // Gen-5 (UNDERWRITE_SPEC Layer 0): an uncontested pool is not raked —
+        // the rake prices a contest, and a solo pool has nothing in it but the
+        // player's own chip. Solo winners take par instead of 0.92x.
+        uint256 rakeBps = n >= SEED_MIN_WALLETS
+            ? RAKE_FLOOR + (RAKE_BASE - RAKE_FLOOR) / n
+            : 0;
+        uint256 distributable = (pot * (BPS - rakeBps)) / BPS;
 
         (address[] memory who, uint256[] memory amt, uint256 totalWeight) =
             _weigh(tableId, pool, charIdx, ddWins);
@@ -738,9 +808,9 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
      */
     function cancelTable(uint256 tableId) external nonReentrant {
         Table storage t = _liveTable(tableId);
-        if (block.timestamp < t.openedAt + entryWindow) revert EntryStillOpen();
-        if (t.seatCount >= SEATS_MIN) {
-            revert TableCanProceed(t.seatCount, SEATS_MIN);
+        if (block.timestamp < t.entryCloseAt) revert EntryStillOpen();
+        if (t.loadedCount >= SEATS_MIN) {
+            revert TableCanProceed(t.loadedCount, SEATS_MIN);
         }
         // Unreachable while armTable enforces SEATS_MIN, but asserted so the
         // "nothing settled" premise above can never quietly stop holding.
