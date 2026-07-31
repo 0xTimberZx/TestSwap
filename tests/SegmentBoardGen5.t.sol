@@ -161,14 +161,18 @@ contract SegmentBoardGen5Test is Test {
 
     function test_QuietClockClampsAtTheCeiling() public {
         uint256 id = _open();
-        _sitLoad(alice, id);
-        _sitLoad(bob, id);
         (uint64 openedAt,,,) = _marks(id);
+        // seats only — no clock starts, so the door stays open to the ceiling
+        vm.prank(alice); board.sit(id, bytes6("AAAAAA"));
+        vm.prank(bob);   board.sit(id, bytes6("BBBBBB"));
 
-        // keep joining right up near the ceiling: the close may never pass it
+        // quorum forms with 30 seconds left: the quiet clock would land past
+        // the ceiling, so the close (and the schedule) clamp to it instead
         vm.warp(openedAt + ENTRY_MAX - 30);
-        vm.prank(carol); board.sit(id, bytes6("CCCCCC"));
-        (, uint64 pickTime, uint64 closeAt,) = _marks(id);
+        vm.prank(alice); board.loadTokens(id, [CHIP25, CHIP25, CHIP25, CHIP25, CHIP25, CHIP25]);
+        vm.prank(bob);   board.loadTokens(id, [CHIP25, CHIP25, CHIP25, CHIP25, CHIP25, CHIP25]);
+        (, uint64 pickTime, uint64 closeAt, uint8 loaded) = _marks(id);
+        assertEq(loaded, 2);
         assertEq(closeAt, openedAt + ENTRY_MAX, "clamped to the ceiling");
         assertEq(pickTime, closeAt + PLACE_WINDOW + BETS_CLOSE);
     }
@@ -310,16 +314,17 @@ contract SegmentBoardGen5Test is Test {
         uint256 chip = 25e18;
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].topics[0] != sig) continue;
+            // pools are 0-indexed: segment s settles as pool s-1, Double-Digit as 6
             uint8 pool = uint8(uint256(logs[i].topics[2]));
             (uint256 pot, uint256 rake, uint256 distributed) =
                 abi.decode(logs[i].data, (uint256, uint256, uint256));
-            if (pool == 1) {
-                // contested: pot = 2 chips + seed share, graduated rake applies
+            if (pool == 0) {
+                // contested (segment 1): pot = 2 chips + seed share, graduated rake applies
                 assertEq(pot, 2 * chip + SEED_SHARE_WEI, "contested pot");
                 uint256 expDist = (pot * (10000 - 487)) / 10000; // rake(2) = 175 + 625/2 = 487 bps
                 assertEq(distributed, expDist, "graduated rake still taken when contested");
                 assertEq(rake, pot - distributed);
-            } else if (pool >= 2 && pool <= 6) {
+            } else if (pool >= 1 && pool <= 5) {
                 // solo: either the winner takes the WHOLE pot (par - Layer 0,
                 // was 0.92x before) or there is no winner and it all forfeits.
                 assertEq(pot, chip, "solo pot is the player's own chip, no seed");
