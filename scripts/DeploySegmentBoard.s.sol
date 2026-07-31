@@ -7,6 +7,7 @@ import "forge-std/console.sol";
 import "../contracts/PoolLedger.sol";
 import "../contracts/SeedRegistry.sol";
 import "../contracts/CommitRevealEntropy.sol";
+import "../contracts/UnderwriteReserve.sol";
 import "../contracts/SegmentBoard.sol";
 
 /**
@@ -56,6 +57,7 @@ contract DeploySegmentBoard is Script {
     PoolLedger          public ledger;
     SeedRegistry        public seedRegistry;
     CommitRevealEntropy public entropy;
+    UnderwriteReserve   public reserve;
     SegmentBoard        public board;
 
     function run() external {
@@ -98,12 +100,17 @@ contract DeploySegmentBoard is Script {
         entropy = new CommitRevealEntropy();
         console.log("CommitRevealEntropy :", address(entropy));
 
+        // 3b. Gen-6 underwrite reserve (UNDERWRITE_SPEC.md).
+        reserve = new UnderwriteReserve(timbs, treasury, guardian);
+        console.log("UnderwriteReserve   :", address(reserve));
+
         // 4. The board itself.
         board = new SegmentBoard(
             address(ledger),
             address(seedRegistry),
             address(entropy),
             timbPrize,
+            address(reserve),
             treasury,
             seedFunder,
             guardian,
@@ -115,9 +122,12 @@ contract DeploySegmentBoard is Script {
         );
         console.log("SegmentBoard        :", address(board));
 
-        // 5. Wire: the ledger only takes orders from this board, and the board
-        //    may consume seed rounds. setBoard is one-time.
+        // 5. Wire: the ledger only takes orders from this board, the board may
+        //    consume seed rounds, and the reserve grants only to this board and
+        //    lets this ledger pull its grants. setBoard is one-time on both.
         ledger.setBoard(address(board));
+        reserve.setBoard(address(board));
+        reserve.approveLedger(address(ledger));
 
         // Only the registry's owner can authorise a writer. On a reused registry
         // that may be someone else, so don't revert the whole deploy over it.
@@ -143,6 +153,10 @@ contract DeploySegmentBoard is Script {
         console.log(" 1. TIMBS.setTransferWhitelist(poolLedger, true)");
         console.log(" 2. From the SEED FUNDER: TIMBS.approve(poolLedger, seedBudget)");
         console.log(" 3. Put SegmentBoard in SwapTables/onchain/addresses.js");
+        console.log(" 4. Seed the reserve: plain TIMBS transfer to UnderwriteReserve");
+        console.log("    (initial variance cover; later support goes via fundBudgeted)");
+        console.log(" 5. TIMBS.setTransferWhitelist(reserve, true) if reserve->ledger");
+        console.log("    pulls could exceed maxTransferAmount");
         if (!registryWired) {
             console.log(" 4. ACTION REQUIRED: registry owner must call");
             console.log("    seedRegistry.addWriter(board) - deployer is not the owner,");

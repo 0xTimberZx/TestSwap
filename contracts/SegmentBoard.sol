@@ -19,6 +19,20 @@ interface IPoolLedger {
     function refund(address to, uint256 amount, uint256 tableId) external;
     function sweepTable(address to, uint256 tableId) external returns (uint256);
     function tableEscrow(uint256 tableId) external view returns (uint256);
+    // ── gen-6 ──
+    function underwriteCredit(address from,
+                              address[] calldata recipients,
+                              uint256[] calldata amounts,
+                              uint256 tableId) external;
+    function moveCredit(address from, address to, uint256 amount) external;
+    function sweepTablePartial(address to, uint256 tableId, uint256 amount) external;
+}
+
+/// @dev Gen-6 underwrite reserve (M1). `grantTopUp` clamps to its caps and
+///      NEVER reverts on shortage — settlement must always complete.
+interface IUnderwriteReserve {
+    function grantTopUp(uint256 tableId, uint256 wanted) external returns (uint256 granted);
+    function recordIncome(uint256 tableId, uint256 rakeShare, uint256 deadPots, uint256 treasuryShare) external;
 }
 
 interface ISeedRegistry {
@@ -104,6 +118,13 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     uint256 public constant RAKE_FLOOR = 175;   // 1.75% in bps
     uint256 public constant BPS        = 10_000;
 
+    // ── Gen-6 underwrite (UNDERWRITE_SPEC.md, M1) ──
+    /// @notice Uniform target RTP: every underwritten bet returns 90% of fair.
+    uint256 public constant PAYOUT_RATIO_BPS = 9000;
+    /// @notice Max top-up per winning pool; the reserve holds the per-round
+    ///         and reserve-fraction caps.
+    uint256 public constant MAX_POOL_UNDERWRITE = 1000e18;
+
     /// @notice Weight scale for fair multiples (multiple = 36/symbols - 1).
     uint256 public constant WEIGHT_SCALE = 10_000;
 
@@ -143,10 +164,13 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
     // ─── State ─────────────────────────────────────────────────────────────────
 
-    IPoolLedger   public immutable ledger;
-    ISeedRegistry public immutable seedRegistry;
-    IEntropy      public immutable entropy;
-    ITimbPrize    public immutable timbPrize;
+    IPoolLedger        public immutable ledger;
+    ISeedRegistry      public immutable seedRegistry;
+    IEntropy           public immutable entropy;
+    ITimbPrize         public immutable timbPrize;
+    /// @notice Gen-6 underwrite reserve (M1): tops thin winners up toward
+    ///         stake x fair x 0.90, funded by dead pots + half the rake.
+    IUnderwriteReserve public immutable reserve;
 
     /// @notice Where leftovers are PUSHED at retire (rake, no-winner pots, dust).
     ///         Any address works, including a contract like TimbTreasury.
@@ -211,6 +235,8 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         uint64  lastJoinAt;   // last sit OR load — resets the quiet timer
         uint64  firstLoadAt;  // starts the lone-player clock
         uint8   loadedCount;  // wallets that funded all six tokens
+        // ── gen-6 ──
+        address opener;       // the dealer: opened the table, receives tips (M6)
     }
 
     struct Seat {
@@ -232,6 +258,15 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
     mapping(uint256 => Table) public tables;
     mapping(uint256 => address[]) public seatList;
+
+    // ── Gen-6 per-table settle accounting (kept out of the Table struct so
+    //    the tables() tuple only grows by `opener`) ──
+    /// @notice True rake shaved from pools that paid winners; split half to
+    ///         the reserve, half to Treasury at retire.
+    mapping(uint256 => uint256) public rakeAccrued;
+    /// @notice Pots that settled with no winner; routed whole to the reserve
+    ///         at retire (the GAME_ECONOMY waterfall's first call).
+    mapping(uint256 => uint256) public deadPotAccrued;
     mapping(uint256 => mapping(address => Seat)) public seats;
     /// @notice tableId => poolId => bets in that pool (bounded by SEATS_HARD_MAX).
     mapping(uint256 => mapping(uint8 => Bet[])) internal _bets;
@@ -288,6 +323,12 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
     event TableRearmed(uint256 indexed tableId, uint256 staleBlock, uint256 lockBlock);
     event SegmentLocked(uint256 indexed tableId, uint8 indexed segment, bytes1 lockedChar, bool viaFallback);
     event PoolSettled(uint256 indexed tableId, uint8 indexed pool, uint256 pot, uint256 rake, uint256 distributed);
+    /// @notice A pool's winners were topped up from the reserve (M1). `wanted`
+    ///         is the capped ask; `granted` what the reserve could cover —
+    ///         the gap is the emitted shortfall the spec requires.
+    event PoolUnderwritten(uint256 indexed tableId, uint8 indexed pool, uint256 wanted, uint256 granted);
+    /// @notice A seated wallet tipped the table's opener (M6).
+    event DealerTipped(uint256 indexed tableId, address indexed from, address indexed opener, uint256 amount);
     event TableRetired(uint256 indexed tableId, uint256 sweptToTreasury);
     event TableCancelled(uint256 indexed tableId, uint8 seated, uint256 refundedWallets, uint256 sweptToTreasury);
     event GuardianSet(address indexed guardian);
@@ -313,6 +354,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         address _seedRegistry,
         address _entropy,
         address _timbPrize,
+        address _reserve,
         address _treasury,
         address _seedFunder,
         address _guardian,
@@ -325,12 +367,13 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (
             _ledger == address(0) || _seedRegistry == address(0) ||
             _entropy == address(0) || _timbPrize == address(0) ||
-            _treasury == address(0)
+            _reserve == address(0) || _treasury == address(0)
         ) revert ZeroAddress();
         ledger       = IPoolLedger(_ledger);
         seedRegistry = ISeedRegistry(_seedRegistry);
         entropy      = IEntropy(_entropy);
         timbPrize    = ITimbPrize(_timbPrize);
+        reserve      = IUnderwriteReserve(_reserve);
         treasury     = _treasury;
         seedFunder   = _seedFunder == address(0) ? _treasury : _seedFunder;
         guardian     = _guardian; // may be address(0) for a zero-privilege generation
@@ -383,6 +426,7 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         t.lastJoinAt   = uint64(block.timestamp);
         t.seedRound  = uint32(seedRound);
         t.seedString = seedString;
+        t.opener     = msg.sender; // the dealer — receives tips (M6)
 
         for (uint8 i; i < SEGMENTS; ++i) {
             commitments[tableId][i + 1] = segmentCommitments[i];
@@ -699,11 +743,79 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
                 distributed += pay;
             }
             ledger.creditWinnings(who, amt, tableId);
+            // What the pool kept from its winners is true rake (rounding dust
+            // included); at retire it splits half reserve / half Treasury.
+            rakeAccrued[tableId] += pot - distributed;
+            _underwrite(tableId, pool, who, amt);
+        } else {
+            // No winners → the whole pot is a dead pot: it stays in the
+            // table's escrow and routes to the reserve at retire (the
+            // GAME_ECONOMY waterfall's first call).
+            deadPotAccrued[tableId] += pot;
         }
-        // No winners → the whole pot stays in the table's escrow and sweeps to
-        // Treasury at retire (§7).
 
         emit PoolSettled(tableId, pool, pot, pot - distributed, distributed);
+    }
+
+    /**
+     * @dev Gen-6 M1 (UNDERWRITE_SPEC): top each winner up toward
+     *      `stake x fair x PAYOUT_RATIO`. The pool has already paid what it
+     *      could; the reserve covers the shortfall, so a joiner can only ever
+     *      raise an existing player's payout (the monotonicity law). Once the
+     *      pool alone clears the target the ask is zero and the mechanism
+     *      fades out exactly where pari-mutuel starts working on its own.
+     *
+     *      Caps: per pool here (MAX_POOL_UNDERWRITE, allocated in bet order),
+     *      per round + reserve fraction inside grantTopUp. Double-Digit is
+     *      NOT underwritten (decision 2026-07-31): it is round-wide, the
+     *      rarest outcome, and the Rolling Jackpot (M2) is its mechanism.
+     *      Never reverts — an empty or halted reserve grants zero and the
+     *      pool's own payout stands.
+     *
+     *      `amt` holds each winner's pool payout on entry and is REUSED to
+     *      carry the top-ups into underwriteCredit (losers stay zero).
+     */
+    function _underwrite(uint256 tableId, uint8 pool, address[] memory who, uint256[] memory amt) internal {
+        if (pool == DD_POOL) return;
+
+        Bet[] storage bs = _bets[tableId][pool];
+        uint256 n = who.length;
+        uint256 capLeft = MAX_POOL_UNDERWRITE;
+        uint256 wantedTotal;
+        for (uint256 i; i < n; ++i) {
+            uint256 poolPay = amt[i];
+            amt[i] = 0;                    // reuse: now the top-up slot
+            if (poolPay == 0) continue;    // loser
+            Bet storage b = bs[i];
+            uint256 stake  = CHIPS[b.chipIdx];
+            // fair total multiple = weight + 1 (both WEIGHT_SCALE-scaled)
+            uint256 target = (stake * (_weightBps(b.kind) + WEIGHT_SCALE) / WEIGHT_SCALE)
+                             * PAYOUT_RATIO_BPS / BPS;
+            if (poolPay >= target) continue;
+            uint256 wanted = target - poolPay;
+            if (wanted > capLeft) wanted = capLeft;
+            if (wanted == 0) continue;
+            amt[i] = wanted;
+            wantedTotal += wanted;
+            capLeft     -= wanted;
+        }
+        if (wantedTotal == 0) return;
+
+        uint256 granted = reserve.grantTopUp(tableId, wantedTotal);
+        if (granted < wantedTotal) {
+            // Allocate what was granted in bet order — first-settled-first-
+            // served, same rule the round cap uses across pools.
+            uint256 left = granted;
+            for (uint256 i; i < n; ++i) {
+                if (amt[i] == 0) continue;
+                if (amt[i] > left) amt[i] = left;
+                left -= amt[i];
+            }
+        }
+        if (granted > 0) {
+            ledger.underwriteCredit(address(reserve), who, amt, tableId);
+        }
+        emit PoolUnderwritten(tableId, pool, wantedTotal, granted);
     }
 
     /// @dev Pot = every chip in the pool, plus the seed share if the pool is
@@ -783,11 +895,45 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
 
         t.retired = true;
 
-        // Exactly this table's remaining escrow — rake, no-winner pots, its
-        // forfeited seed share. Another live table's stake is unreachable here.
+        // Gen-6 split (GAME_ECONOMY flow of funds): every dead pot plus half
+        // the rake routes to the reserve — the income that matches the top-up
+        // liability by activity. The rest (rake's other half, unconsumed seed
+        // shares, dust) sweeps to Treasury as before. Both figures are this
+        // table's own escrow; another live table's stake is unreachable here.
+        uint256 dead     = deadPotAccrued[tableId];
+        uint256 rakeHalf = rakeAccrued[tableId] / 2;
+        uint256 toReserve = dead + rakeHalf;
+        uint256 esc = ledger.tableEscrow(tableId);
+        if (toReserve > esc) toReserve = esc; // defensive: retire never reverts
+        if (toReserve > 0) {
+            ledger.sweepTablePartial(address(reserve), tableId, toReserve);
+        }
         uint256 leftover = ledger.sweepTable(treasury, tableId);
+        reserve.recordIncome(tableId, rakeHalf, dead, leftover);
 
         emit TableRetired(tableId, leftover);
+    }
+
+    // ─── Tip the dealer (gen-6 M6, docs/GEN6_DEALER_TIP.md) ───────────────────
+
+    /**
+     * @notice Tip the wallet that opened this table. Seated wallets only, and
+     *         only after ALL SIX segments are locked — while any segment is
+     *         unrevealed a transfer to the dealer could read as paying to
+     *         influence a reveal; after 6/6 the outcome is sealed, so a tip
+     *         can only be gratitude. Stays open after retire on purpose: a
+     *         player withdrawing next morning can still tip.
+     * @dev Credit-to-credit only (decision 2026-07-31): the ledger moves the
+     *      amount between two credit balances — no rake, no minimum, no cap,
+     *      and the escrow invariant is untouched by construction.
+     */
+    function tipDealer(uint256 tableId, uint256 amount) external {
+        Table storage t = tables[tableId];
+        if (t.openedAt == 0)      revert TableUnknown();
+        if (t.lockedMask != 0x3F) revert SegmentsOutstanding();
+        if (!seats[tableId][msg.sender].seated) revert NotSeated();
+        ledger.moveCredit(msg.sender, t.opener, amount); // reverts if credit < amount
+        emit DealerTipped(tableId, msg.sender, t.opener, amount);
     }
 
     /**

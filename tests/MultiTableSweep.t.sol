@@ -6,6 +6,7 @@ import "../contracts/SegmentBoard.sol";
 import "../contracts/PoolLedger.sol";
 import "../contracts/SeedRegistry.sol";
 import "../contracts/CommitRevealEntropy.sol";
+import "../contracts/UnderwriteReserve.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockTIMBS is ERC20 {
@@ -37,12 +38,14 @@ contract MultiTableSweepTest is Test {
         timbs = new MockTIMBS(); prize = new MockTimbPrize();
         ledger = new PoolLedger(address(timbs), treasury);
         registry = new SeedRegistry(); ent = new CommitRevealEntropy();
+        UnderwriteReserve reserve = new UnderwriteReserve(address(timbs), treasury, address(0));
         board = new SegmentBoard(address(ledger), address(registry), address(ent),
-            address(prize), treasury, treasury, address(0),
+            address(prize), address(reserve), treasury, treasury, address(0),
             // gen-5 dials chosen so the pick still lands at 45:00 and the
             // adaptive timers (== entryMax) never fire in these tests
             35 minutes, 5 minutes, 5 minutes, 35 minutes, 35 minutes);
         ledger.setBoard(address(board)); registry.addWriter(address(board));
+        reserve.setBoard(address(board)); reserve.approveLedger(address(ledger));
         timbs.mintTo(treasury, 10_000e18);
         vm.prank(treasury); timbs.approve(address(ledger), type(uint256).max);
         timbs.mintTo(alice, 10_000e18); timbs.mintTo(bob, 10_000e18);
