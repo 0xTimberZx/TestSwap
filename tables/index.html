@@ -353,6 +353,25 @@ const BOARD_ABI = [
   "error ReentrancyGuardReentrantCall()",
 ];
 
+/// ── generation detection — one console serves gen-4 and gen-5 boards ──
+/// Gen-5 appends four fields to tables() (entryCloseAt, lastJoinAt,
+/// firstLoadAt, loadedCount). Probing sitQuiet() (gen-5 only) picks the right
+/// tables() shape; on gen-4 the call returns no data and we stay on the
+/// 10-field tuple. The appended fields are trailing words, so the shared
+/// prefix decodes identically either way.
+let GEN = 4, dialEntry = 0;
+const TABLES_V5 = "function tables(uint256) view returns (uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRound,uint8 seatCount,uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars,uint64 entryCloseAt,uint64 lastJoinAt,uint64 firstLoadAt,uint8 loadedCount)";
+async function detectGen(runner){
+  try{ await new ethers.Contract(ADDR.board, ["function sitQuiet() view returns (uint64)"], runner).sitQuiet(); return 5; }
+  catch{ return 4; }
+}
+function boardAbiFor(gen){ return gen>=5 ? [TABLES_V5, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))] : BOARD_ABI; }
+/// Entry close is per-table state on gen-5 (adaptive — every join can move
+/// it); on gen-4 it is the global dial measured from openedAt.
+function entryEndOf(t){ return GEN>=5 ? Number(t.entryCloseAt) : Number(t.openedAt)+dialEntry; }
+/// "Enough players" means funded wallets on gen-5, seated wallets before it.
+function fundedOf(t){ return GEN>=5 ? Number(t.loadedCount) : Number(t.seatCount); }
+
 /// Plain-English gloss for the errors you can actually hit from this page.
 const ERR_HINT = {
   TableClosedForEntry: "entry window has closed on this table — open a new one",
@@ -575,7 +594,10 @@ $("connect").onclick = async () => {
   $("net").className = net.chainId === CHAIN ? "pill ok" : "pill bad";
   if (net.chainId !== CHAIN) return log("Switch your wallet to Arbitrum Sepolia (421614).", "l-err");
 
-  board  = new ethers.Contract(ADDR.board,  BOARD_ABI,  signer);
+  GEN = await detectGen(signer);
+  board  = new ethers.Contract(ADDR.board,  boardAbiFor(GEN),  signer);
+  dialEntry = Number(await board.entryWindow());
+  if(GEN>=5) ERR_HINT.TableClosedForEntry = "entry has closed — no new seats; seated wallets can still load until bets close";
   ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
   timbs  = new ethers.Contract(ADDR.timbs,  ERC20_ABI,  signer);
   prize  = new ethers.Contract(ADDR.prize,  PRIZE_ABI,  signer);
@@ -637,11 +659,10 @@ async function refreshTable(){
   if (id === 0n || id > count) { $("phase").textContent = "no such table"; $("phase").className="pill bad"; T=null; return; }
   const t = await board.tables(id);
   T = t;
-  const ew = await board.entryWindow();
-  const entryClose = t.openedAt + ew;
+  const entryClose = BigInt(entryEndOf(t));
   const now = BigInt(Math.floor(Date.now()/1000));
 
-  $("sSeats").textContent  = `${t.seatCount} / 12`;
+  $("sSeats").textContent  = `${t.seatCount} / 12` + (GEN>=5 ? ` · ${Number(t.loadedCount)} funded` : "");
   $("sRound").textContent  = t.seedRound.toString();
   $("sLock").textContent   = t.lockBlock === 0n ? "not armed" : t.lockBlock.toString();
   const lockedCount = [...Array(6).keys()].filter(i => (Number(t.lockedMask) >> i) & 1).length;
@@ -661,7 +682,7 @@ async function refreshTable(){
   if (t.retired)                    { ph="retired";        cls="pill"; }
   else if (lockedCount === 6)       { ph="ready to retire"; cls="pill warn"; }
   else if (t.lockBlock !== 0n)      { ph="armed — locking"; cls="pill warn"; }
-  else if (t.pickTime <= now)       { ph="ready to arm";    cls="pill warn"; }
+  else if (t.pickTime <= now)       { ph=fundedOf(t)>=2 ? "ready to arm" : "never filled — cancel"; cls="pill warn"; }
   else if (entryClose > now)        { ph="open for play";   cls="pill ok"; }
   else                              { ph="bets closed";     cls="pill"; }
   $("phase").textContent = ph; $("phase").className = cls;
@@ -925,7 +946,6 @@ async function scanTables(){
   if(!board || scanning) return; scanning=true;
   try{
     const cnt=Number(await board.tableCount());
-    const ew=Number(await board.entryWindow());
     const lead=Number(await board.betsCloseLead());
     const nowB=await provider.getBlockNumber();
     const now=Math.floor(Date.now()/1000);
@@ -933,8 +953,8 @@ async function scanTables(){
     for(let id=cnt; id>=Math.max(1,cnt-9); id--){
       const t=await board.tables(id);
       if(t.openedAt===0n || t.retired) continue;
-      const seats=Number(t.seatCount), mask=Number(t.lockedMask), locked=POP(mask);
-      const entryClose=Number(t.openedAt)+ew, betsEnd=Number(t.pickTime)-lead, pick=Number(t.pickTime);
+      const seats=Number(t.seatCount), funded=fundedOf(t), mask=Number(t.lockedMask), locked=POP(mask);
+      const entryClose=entryEndOf(t), betsEnd=Number(t.pickTime)-lead, pick=Number(t.pickTime);
       let phase, act, hot=false;
       if(mask===0x3F){ phase="all six locked"; act="RETIRE NOW — pays refunds, closes the table"; hot=true; }
       else if(t.lockBlock!==0n){
@@ -944,15 +964,16 @@ async function scanTables(){
               +(fb>0?"in ~"+Math.ceil(fb*12/60)+"m":"OPEN")+" · horizon ~"+Math.ceil(hz*12/60)+"m"; hot=true; }
       }
       else if(now>=pick){
-        if(seats>=2){ phase="ready"; act="ARM NOW — the table is waiting on you"; hot=true; }
+        if(funded>=2){ phase="ready"; act="ARM NOW — the table is waiting on you"; hot=true; }
         else { phase="never filled"; act="CANCEL — refunds everyone, returns the seed"; hot=true; }
       }
       else if(now>=betsEnd) phase="committed", act="arm in "+MMSS(pick-now);
       else if(now>=entryClose){
-        if(seats<2){ phase="under-seated"; act="entry closed with "+seats+" seat — CANCEL at pick ("+MMSS(pick-now)+")"; }
+        if(funded<2){ phase=GEN>=5?"under-funded":"under-seated"; act="entry closed with "+funded+" "+(GEN>=5?"funded":"seat")+" — CANCEL at pick ("+MMSS(pick-now)+")"; }
         else phase="betting", act="bets close in "+MMSS(betsEnd-now);
       }
-      else phase="entry open", act="sits close in "+MMSS(entryClose-now);
+      else phase="entry open", act="sits close in "+MMSS(entryClose-now)
+        +(GEN>=5? " · "+funded+" funded"+(funded>=2?" — quiet clock running":"") : "");
       rows.push('<div class="trow" data-id="'+id+'" style="display:flex;gap:12px;align-items:baseline;'
         +'padding:8px 10px;margin:4px 0;border:1px solid rgba(247,240,214,'+(hot?'.35':'.12')+');'
         +'border-radius:9px;cursor:pointer'+(hot?';background:rgba(215,179,76,.07)':'')+'">'
@@ -1010,7 +1031,7 @@ async function apTick(){
       return;
     }
     if(now>=Number(t.pickTime)){
-      if(Number(t.seatCount)<2){ apSet("under-seated — cannot arm, cancel instead"); return; }
+      if(fundedOf(t)<2){ apSet((GEN>=5?"under-funded":"under-seated")+" — cannot arm, cancel instead"); return; }
       apSet("arming…");
       if(!(await send("armTable (auto)",board,"armTable",apTid))){ apOn=false; apSet("halted on error — see log"); }
       refresh(); return;

@@ -540,6 +540,24 @@ const BOARD_ABI = [
   "error NoSuchTable(uint256 tableId)","error TableRetired(uint256 tableId)","error NotYetPickTime()",
   "error NotEnoughSeats(uint8 have,uint8 need)","error AlreadyArmed()",
 ];
+/// ── generation detection — one page serves gen-4 and gen-5 boards ──
+/// Gen-5 appends four fields to tables() (entryCloseAt, lastJoinAt,
+/// firstLoadAt, loadedCount) and exposes new dial views. Probing sitQuiet()
+/// (gen-5 only) picks the right tables() shape; on gen-4 the call returns no
+/// data and we stay on the 10-field tuple. The appended fields are trailing
+/// words, so the shared prefix decodes identically either way.
+let GEN = 4;
+const TABLES_V5 = "function tables(uint256) view returns (uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRound,uint8 seatCount,uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars,uint64 entryCloseAt,uint64 lastJoinAt,uint64 firstLoadAt,uint8 loadedCount)";
+async function detectGen(runner){
+  try{ await new ethers.Contract(ADDR.board, ["function sitQuiet() view returns (uint64)"], runner).sitQuiet(); return 5; }
+  catch{ return 4; }
+}
+function boardAbiFor(gen){ return gen>=5 ? [TABLES_V5, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))] : BOARD_ABI; }
+/// Entry close is per-table state on gen-5 (adaptive — every join can move
+/// it); on gen-4 it is the global dial measured from openedAt.
+function entryEndOf(t){ return GEN>=5 ? Number(t.entryCloseAt) : Number(t.openedAt)+dials.entry; }
+/// "Enough players" means funded wallets on gen-5, seated wallets before it.
+function fundedOf(t){ return GEN>=5 ? Number(t.loadedCount) : Number(t.seatCount); }
 const LEDGER_ABI = [
   "function credit(address) view returns (uint256)",
   "function tableEscrow(uint256) view returns (uint256)",
@@ -703,7 +721,9 @@ $("connect").onclick = async () => {
     window.ethereum.on?.("accountsChanged", ()=>location.reload());
     window.ethereum.on?.("chainChanged",  ()=>location.reload());
   }catch{}
-  board  = new ethers.Contract(ADDR.board, BOARD_ABI, signer);
+  GEN = await detectGen(signer);
+  board  = new ethers.Contract(ADDR.board, boardAbiFor(GEN), signer);
+  if(GEN>=5) ERR_HINT.TableClosedForEntry = "entry has closed on this table — no new seats; already-seated wallets can still load until bets close";
   crank  = new ethers.Contract(ADDR.crank, CRANK_ABI, signer);
   game   = new ethers.Contract(GAME, GAME_ABI, signer);
   await checkCompete();
@@ -762,7 +782,7 @@ async function refreshChain(){
     $("withdraw").disabled = cred===0n;
     $("withdraw").classList.toggle("ready", cred>0n);
     $("withdraw").textContent = cred>0n ? "Withdraw "+fmt4(cred) : "Withdraw";
-    $("seatsPill").textContent = "seats "+t.seatCount+" / 12";
+    $("seatsPill").textContent = "seats "+t.seatCount+" / 12"+(GEN>=5? " · "+Number(t.loadedCount)+" funded" : "");
     paintSeat(); tick(); await pollFeed(); relabelFeed(); await renderStakes(); paintReveal(); await updateLockTracker();
   } finally { refreshing=false; }
 }
@@ -771,7 +791,7 @@ async function refreshChain(){
 function phaseOf(){
   if(!T || T.openedAt===0n) return {key:"none", label:"no table"};
   const now = Math.floor(Date.now()/1000);
-  const entryEnd = Number(T.openedAt)+dials.entry;
+  const entryEnd = entryEndOf(T);
   const betsEnd  = Number(T.pickTime)-dials.lead;
   if(T.retired) return {key:"done", label:"settled"};
   if(Number(T.lockedMask)===0x3F) return {key:"locked", label:"all six locked"};
@@ -799,7 +819,7 @@ function drawPhases(p){
     let sub="";
     if(T && dials){
       const now=Math.floor(Date.now()/1000);
-      if(k==="entry") sub=now<Number(T.openedAt)+dials.entry? "closes "+mmss(Number(T.openedAt)+dials.entry-now):"closed";
+      if(k==="entry"){ const ee=entryEndOf(T); sub=now<ee? "closes "+mmss(ee-now):"closed"; }
       if(k==="betting") sub=now<Number(T.pickTime)-dials.lead? "closes "+mmss(Number(T.pickTime)-dials.lead-now):"closed";
       if(k==="committed") sub=now<Number(T.pickTime)? "pick in "+mmss(Number(T.pickTime)-now):"—";
       if(k==="spinning") sub=(Number(T.lockedMask).toString(2).split("1").length-1)+" / 6 locked";
@@ -885,6 +905,8 @@ function paintSeat(){
     collapsedTokens=true; $("tokensPanel").classList.add("collapsed");
   }
   const p = phaseOf();
+  // gen-5 late loading: a seated wallet can fund right up to bets-close.
+  const canLoad = GEN>=5 ? (p.key==="entry"||p.key==="betting") : p.key==="entry";
   const felt=$("felt");
   if(!seated){
     felt.classList.add("locked");
@@ -893,7 +915,7 @@ function paintSeat(){
     felt.classList.add("locked");
     const n=Object.keys(localChips).length;
     felt.dataset.lock = "Load all six tokens to open the board — "+n+" / 6 chosen";
-    $("hint").innerHTML='<b>Phase 1 — load.</b> Pick a token, then a chip, six times. One transaction loads them all — before entry closes.';
+    $("hint").innerHTML='<b>Phase 1 — load.</b> Pick a token, then a chip, six times. One transaction loads them all — before '+(GEN>=5?'bets close':'entry closes')+'.';
   } else if(p.key==="entry"||p.key==="betting"){
     felt.classList.remove("locked");
     $("hint").innerHTML='<b>Phase 2 — place.</b> Pick a token, then a board spot, then approve. Approval is a wallet transaction and it is final.';
@@ -902,10 +924,10 @@ function paintSeat(){
     felt.dataset.lock = "Betting is closed — the spin is committed";
   }
   $("chips").classList.toggle("locked", loadedOnChain);
-  $("loadBtn").disabled = loadedOnChain || Object.keys(localChips).length!==6 || p.key!=="entry";
+  $("loadBtn").disabled = loadedOnChain || Object.keys(localChips).length!==6 || !canLoad;
   $("loadHint").textContent = loadedOnChain ? "Loaded on chain ✓" :
-    (p.key!=="entry"
-      ? "Entry closed — this seat can no longer load, so it sits the round out. Nothing is at risk: you never sent chips."
+    (!canLoad
+      ? "Loading has closed for this round — this seat sits it out. Nothing is at risk: you never sent chips."
       : Object.keys(localChips).length===6 ? "Ready — one transaction, "+localTotal()+" TIMBS" :
         "Choose a chip for every token ("+Object.keys(localChips).length+"/6)");
   updateTotals();
@@ -1250,7 +1272,7 @@ function poolStats(pool){
   const n=bets.length;                       // == distinct wallets, by design
   const contested=n>=2;
   const pot=chips+(contested? SEED_SHARE:0);
-  const rakeBps=n? 175+Math.floor(625/n):0;
+  const rakeBps=(GEN>=5? contested : n>0)? 175+Math.floor(625/n):0;   // gen-5 Layer 0: an uncontested pool is never raked
   return {n, chips, contested, pot, rakeBps, dist: pot*(10000-rakeBps)/10000};
 }
 function fmt2(x){ return x.toLocaleString(undefined,{maximumFractionDigits:2}); }
@@ -1275,7 +1297,7 @@ async function renderStakes(){
         +'<span class="fseg" style="width:52px">'+(b.kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
         +'<span style="flex:1;color:#dfe7df">'+fmt2(b.amt)+' on <b style="color:var(--cream)">'+spec.name+'</b></span>'
         +'<span style="color:#9fb4a4">pool '+fmt2(st.pot)+' · '+st.n+' bet'+(st.n===1?"":"s")
-        +' · rake '+(st.rakeBps/100).toFixed(2)+'%'+(st.contested?"":" · uncontested — no seed share yet")+'</span>'
+        +' · rake '+(st.rakeBps/100).toFixed(2)+'%'+(st.contested?"":(GEN>=5?" · uncontested — rake-free, no seed share yet":" · uncontested — no seed share yet"))+'</span>'
         +'<span style="font-family:Georgia,serif;font-weight:800;color:var(--ok)">up to ~'+fmt2(st.dist)+'</span>'
         +'</div>');
     });
