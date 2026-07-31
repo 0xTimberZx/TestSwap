@@ -42,12 +42,15 @@ const ADDRESSES = {
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
 
-  // ── SwapTables segment tables — generation 4, fast dials (deployed 2026-07-30) ──
-  // Dials 900/1500/300 (entry 15:00 · bets close 20:00 · pick 25:00).
-  // Gen-3 (0x1633Fb…) retired for dial speed only; its ledger still pays withdrawals.
-  SegmentBoard:         "0x57d5BE0203Fa30f7b99853a11e4D162824895F91",
-  PoolLedger:           "0x863e37FF91cbd745CBcb063266Bf0631Ce2546b5",
-  CommitRevealEntropy:  "0xe926797b2FC03E2936092D3de2B4c7ADE2e4A5Fd",
+  // ── SwapTables segment tables — generation 5, adaptive entry (deployed 2026-07-31) ──
+  // Entry follows the players: quiet-quorum close (3m, reset by every join),
+  // lone-player wait 15m, hard ceiling 40m; board open 5m; committed drumroll 2m.
+  // Plus late loading (seated wallets fund until bets close), arm on FUNDED
+  // wallets, and Layer 0 (uncontested pools are never raked).
+  // Gen-4 (0x57d5BE…) retired 2026-07-31; its ledger still pays withdrawals.
+  SegmentBoard:         "0x7358Aa710F65B4228A7C0A56bedeD20Fd537B2ff",
+  PoolLedger:           "0x020E3A7Fde41fa4bA18a978f10DE5484594C43a0",
+  CommitRevealEntropy:  "0xb2a46fB96A8894a50341d5F162C130966ca4f895",
   SeedRegistry:         "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived — spans generations
   SegmentCrank:         "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher — generation-agnostic
   USDC:                 "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Circle canonical (6 decimals)

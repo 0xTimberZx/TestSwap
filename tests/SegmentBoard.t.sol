@@ -33,9 +33,16 @@ contract SegmentBoardTest is Test {
     address alice    = address(0xA11CE);
     address bob      = address(0xB0B);
 
-    uint64 constant ENTRY_WINDOW   = 40 minutes;
-    uint64 constant PICK_DELAY     = 45 minutes;
+    // Gen-5 dials. Quiet/solo timers equal the ceiling so the adaptive
+    // schedule degenerates to the fixed gen-4 one for this legacy suite —
+    // entryCloseAt never moves off openedAt + ENTRY_WINDOW. The adaptive
+    // behaviour itself is exercised in SegmentBoardGen5.t.sol.
+    uint64 constant ENTRY_WINDOW   = 40 minutes;              // entryMax
+    uint64 constant PLACE_WINDOW   = 5 minutes;
     uint64 constant BETS_CLOSE     = 5 minutes;
+    uint64 constant SIT_QUIET      = 40 minutes;
+    uint64 constant SOLO_WAIT      = 40 minutes;
+    uint64 constant PICK_DELAY     = ENTRY_WINDOW + PLACE_WINDOW + BETS_CLOSE; // 50 min
 
     uint256 constant SEED = 100e18;
 
@@ -59,7 +66,7 @@ contract SegmentBoardTest is Test {
         board = new SegmentBoard(
             address(ledger), address(registry), address(ent),
             address(prize), treasury, treasury, guardian,
-            ENTRY_WINDOW, PICK_DELAY, BETS_CLOSE
+            ENTRY_WINDOW, PLACE_WINDOW, BETS_CLOSE, SIT_QUIET, SOLO_WAIT
         );
 
         ledger.setBoard(address(board));
@@ -157,37 +164,48 @@ contract SegmentBoardTest is Test {
 
     /// @dev The dials are immutable, so an unusable set bricks the generation with
     ///      no recovery. These are the two ways that happens.
-    function _deployWithDials(uint64 e, uint64 p, uint64 b) internal returns (SegmentBoard) {
+    function _deployWithDials(uint64 e, uint64 pw, uint64 b, uint64 q, uint64 so)
+        internal returns (SegmentBoard)
+    {
         return new SegmentBoard(
             address(ledger), address(registry), address(ent),
-            address(prize), treasury, treasury, guardian, e, p, b
+            address(prize), treasury, treasury, guardian, e, pw, b, q, so
         );
     }
 
-    function test_BetsCloseLeadCannotSwallowTheWholeRound() public {
-        // betsCloseLead >= pickDelay: place() would revert BetsClosed from the
-        // instant a table opens, so no bet could ever be made.
+    function test_ZeroDialsRejected() public {
+        // Every dial is load-bearing: zero placeWindow closes bets the moment
+        // entry closes; zero lead lets bets ride into the entropy window; zero
+        // timers close entry the instant quorum forms.
         vm.expectRevert(abi.encodeWithSelector(SegmentBoard.BadDials.selector,
-            uint64(100), uint64(300), uint64(300)));
-        _deployWithDials(100, 300, 300);
+            uint64(0), uint64(300), uint64(120), uint64(300), uint64(900)));
+        _deployWithDials(0, 300, 120, 300, 900);
 
         vm.expectRevert(abi.encodeWithSelector(SegmentBoard.BadDials.selector,
-            uint64(100), uint64(300), uint64(400)));
-        _deployWithDials(100, 300, 400);
+            uint64(900), uint64(0), uint64(120), uint64(300), uint64(900)));
+        _deployWithDials(900, 0, 120, 300, 900);
+
+        vm.expectRevert(abi.encodeWithSelector(SegmentBoard.BadDials.selector,
+            uint64(900), uint64(300), uint64(0), uint64(300), uint64(900)));
+        _deployWithDials(900, 300, 0, 300, 900);
     }
 
-    function test_EntryCannotOutliveBetting() public {
-        // entryWindow > pickDelay - betsCloseLead: a wallet could sit and load
-        // chips it can never place.
+    function test_TimersCannotExceedTheCeiling() public {
+        // sitQuiet or soloWait beyond entryMax could only ever be clamped, so
+        // the constructor rejects the set as a mis-configuration.
         vm.expectRevert(abi.encodeWithSelector(SegmentBoard.BadDials.selector,
-            uint64(2500), uint64(2700), uint64(300)));
-        _deployWithDials(2500, 2700, 300);
+            uint64(900), uint64(300), uint64(120), uint64(901), uint64(900)));
+        _deployWithDials(900, 300, 120, 901, 900);
+
+        vm.expectRevert(abi.encodeWithSelector(SegmentBoard.BadDials.selector,
+            uint64(900), uint64(300), uint64(120), uint64(300), uint64(901)));
+        _deployWithDials(900, 300, 120, 300, 901);
     }
 
     function test_RealDialSetsAreAccepted() public {
-        _deployWithDials(2400, 2700, 300);   // generation 1, exactly on the boundary
-        _deployWithDials(2400, 3595, 295);   // production, matches §10.3
-        _deployWithDials(240,  360,  30);    // compressed test set
+        _deployWithDials(2400, 300, 300, 2400, 2400); // this legacy suite's set
+        _deployWithDials(2400, 300, 120, 300, 900);   // gen-5 production target
+        _deployWithDials(240,  60,  30,  60,  120);   // compressed test set
     }
 
     // ─── lifecycle ───────────────────────────────────────────────────────────
@@ -630,7 +648,7 @@ contract SegmentBoardTest is Test {
         SegmentBoard b2 = new SegmentBoard(
             address(l2), address(registry), address(ent),
             address(prize), coldVault, opsWallet, guardian,
-            ENTRY_WINDOW, PICK_DELAY, BETS_CLOSE
+            ENTRY_WINDOW, PLACE_WINDOW, BETS_CLOSE, SIT_QUIET, SOLO_WAIT
         );
         l2.setBoard(address(b2));
         registry.addWriter(address(b2));

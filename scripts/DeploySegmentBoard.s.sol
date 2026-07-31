@@ -69,9 +69,12 @@ contract DeploySegmentBoard is Script {
         address seedFunder = vm.envOr("SEED_FUNDER_ADDRESS", treasury);
         address guardian  = vm.envOr("GUARDIAN_ADDRESS", address(0));
 
-        uint64 entryWindow   = uint64(vm.envOr("ENTRY_WINDOW_SECONDS", uint256(40 minutes)));
-        uint64 pickDelay     = uint64(vm.envOr("PICK_DELAY_SECONDS",   uint256(45 minutes)));
-        uint64 betsCloseLead = uint64(vm.envOr("BETS_CLOSE_SECONDS",   uint256(5 minutes)));
+        // Gen-5 adaptive-entry dials (SwapTables/docs/GEN5_ADAPTIVE_ENTRY.md)
+        uint64 entryMax      = uint64(vm.envOr("ENTRY_MAX_SECONDS",    uint256(40 minutes)));
+        uint64 placeWindow   = uint64(vm.envOr("PLACE_WINDOW_SECONDS", uint256(5 minutes)));
+        uint64 betsCloseLead = uint64(vm.envOr("BETS_CLOSE_SECONDS",   uint256(2 minutes)));
+        uint64 sitQuiet      = uint64(vm.envOr("SIT_QUIET_SECONDS",    uint256(5 minutes)));
+        uint64 soloWait      = uint64(vm.envOr("SOLO_WAIT_SECONDS",    uint256(15 minutes)));
 
         address existingRegistry = vm.envOr("SEED_REGISTRY_ADDRESS", address(0));
 
@@ -104,9 +107,11 @@ contract DeploySegmentBoard is Script {
             treasury,
             seedFunder,
             guardian,
-            entryWindow,
-            pickDelay,
-            betsCloseLead
+            entryMax,
+            placeWindow,
+            betsCloseLead,
+            sitQuiet,
+            soloWait
         );
         console.log("SegmentBoard        :", address(board));
 
@@ -126,9 +131,11 @@ contract DeploySegmentBoard is Script {
 
         console.log("");
         console.log("--- SegmentBoard generation deployed ---");
-        console.log("entryWindow  (s):", entryWindow);
-        console.log("pickDelay    (s):", pickDelay);
+        console.log("entryMax     (s):", entryMax);
+        console.log("placeWindow  (s):", placeWindow);
         console.log("betsClose    (s):", betsCloseLead);
+        console.log("sitQuiet     (s):", sitQuiet);
+        console.log("soloWait     (s):", soloWait);
         console.log("guardian        :", guardian);
         console.log("seedFunder      :", seedFunder);
         console.log("");

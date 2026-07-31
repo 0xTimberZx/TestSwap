@@ -39,7 +39,9 @@ contract MultiTableSweepTest is Test {
         registry = new SeedRegistry(); ent = new CommitRevealEntropy();
         board = new SegmentBoard(address(ledger), address(registry), address(ent),
             address(prize), treasury, treasury, address(0),
-            40 minutes, 45 minutes, 5 minutes);
+            // gen-5 dials chosen so the pick still lands at 45:00 and the
+            // adaptive timers (== entryMax) never fire in these tests
+            35 minutes, 5 minutes, 5 minutes, 35 minutes, 35 minutes);
         ledger.setBoard(address(board)); registry.addWriter(address(board));
         timbs.mintTo(treasury, 10_000e18);
         vm.prank(treasury); timbs.approve(address(ledger), type(uint256).max);
