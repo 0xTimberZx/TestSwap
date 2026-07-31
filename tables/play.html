@@ -548,11 +548,27 @@ const BOARD_ABI = [
 /// words, so the shared prefix decodes identically either way.
 let GEN = 4;
 const TABLES_V5 = "function tables(uint256) view returns (uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRound,uint8 seatCount,uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars,uint64 entryCloseAt,uint64 lastJoinAt,uint64 firstLoadAt,uint8 loadedCount)";
+const TABLES_V6 = "function tables(uint256) view returns (uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRound,uint8 seatCount,uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars,uint64 entryCloseAt,uint64 lastJoinAt,uint64 firstLoadAt,uint8 loadedCount,address opener)";
+/// Gen-6 additions: dealer tips (M6) + the underwrite reserve (M1).
+const GEN6_EXTRAS = [
+  "function tipDealer(uint256 tableId,uint256 amount)",
+  "function reserve() view returns (address)",
+  "event DealerTipped(uint256 indexed tableId,address indexed from,address indexed opener,uint256 amount)",
+  "event PoolUnderwritten(uint256 indexed tableId,uint8 indexed pool,uint256 wanted,uint256 granted)",
+  "error SegmentsOutstanding()",
+  "error ExceedsCredit(address wallet,uint256 requested,uint256 held)",
+];
 async function detectGen(runner){
-  try{ await new ethers.Contract(ADDR.board, ["function sitQuiet() view returns (uint64)"], runner).sitQuiet(); return 5; }
-  catch{ return 4; }
+  const probe=async(abi,fn)=>{ try{ await new ethers.Contract(ADDR.board,[abi],runner)[fn](); return true; }catch{ return false; } };
+  if(await probe("function reserve() view returns (address)","reserve")) return 6;
+  if(await probe("function sitQuiet() view returns (uint64)","sitQuiet")) return 5;
+  return 4;
 }
-function boardAbiFor(gen){ return gen>=5 ? [TABLES_V5, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))] : BOARD_ABI; }
+function boardAbiFor(gen){
+  if(gen>=6) return [TABLES_V6, ...GEN6_EXTRAS, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))];
+  if(gen>=5) return [TABLES_V5, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))];
+  return BOARD_ABI;
+}
 /// Entry close is per-table state on gen-5 (adaptive — every join can move
 /// it); on gen-4 it is the global dial measured from openedAt.
 function entryEndOf(t){ return GEN>=5 ? Number(t.entryCloseAt) : Number(t.openedAt)+dials.entry; }
@@ -562,6 +578,7 @@ const LEDGER_ABI = [
   "function credit(address) view returns (uint256)",
   "function tableEscrow(uint256) view returns (uint256)",
   "function withdraw()",
+  "event WinningsCredited(address indexed to, uint256 indexed tableId, uint256 amount)",
   "error NothingToWithdraw()",
 ];
 const ERC20_ABI = [
@@ -724,6 +741,8 @@ $("connect").onclick = async () => {
   GEN = await detectGen(signer);
   board  = new ethers.Contract(ADDR.board, boardAbiFor(GEN), signer);
   if(GEN>=5) ERR_HINT.TableClosedForEntry = "entry has closed on this table — no new seats; already-seated wallets can still load until bets close";
+  if(GEN>=6){ ERR_HINT.SegmentsOutstanding = "tips unlock once all six segments are locked";
+              ERR_HINT.ExceedsCredit = "that is more than your withdrawable credit"; }
   crank  = new ethers.Contract(ADDR.crank, CRANK_ABI, signer);
   game   = new ethers.Contract(GAME, GAME_ABI, signer);
   await checkCompete();
@@ -1497,7 +1516,9 @@ async function paintReveal(){
     rv.appendChild(d);
   });
   $("reveal").classList.add("on");
+  if(nLocked!==6){ const _tr=document.getElementById("tipRow"); if(_tr) _tr.remove(); }
   if(nLocked===6){
+    if(GEN>=6) renderTipRow();
     const winStr=chars.join("");
     const rep=new Set(winStr).size<6;
     $("ddFlag").innerHTML = rep
@@ -1529,6 +1550,41 @@ async function paintReveal(){
       }catch{}
     }
   }
+}
+let tipBusy=false;
+async function renderTipRow(){
+  if(GEN<6 || !T || !mySeat || !mySeat.seated) return;
+  let tr=document.getElementById("tipRow");
+  if(!tr){
+    tr=document.createElement("div"); tr.id="tipRow";
+    tr.style.cssText="margin-top:10px;padding:10px 12px;border:1px solid rgba(215,179,76,.35);border-radius:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center";
+    $("reveal").appendChild(tr);
+  }
+  if(tipBusy) return; tipBusy=true;
+  try{
+    const opener=T.opener;
+    const tag=["\u2660","\u2665","\u2666","\u2663"][parseInt(opener.slice(-1),16)%4]+"\u00b7"+opener.slice(-3);
+    const latest=await provider.getBlockNumber();
+    const evs=await ledger.queryFilter(ledger.filters.WinningsCredited(me, tid), Math.max(0,latest-400000), latest);
+    let win=0n; evs.forEach(e=>{ win+=e.args.amount; });
+    const cred=await ledger.credit(me);
+    // pct of this table's payout, denominated in whole 5-chips, rounded down
+    const per=p=>((win*BigInt(p))/100n)/5000000000000000000n*5n;
+    const p5=per(5), p10=per(10);
+    const btn=n=> (n>0n && n*(10n**18n)<=cred)
+      ? '<button class="tipBtn" data-amt="'+n+'" style="background:var(--gold,#d7b34c);color:#141b17;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Tip '+n+'</button>'
+      : '<button disabled style="opacity:.35;border-radius:8px;padding:7px 12px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,.2)">Tip '+(n>0n?n:"\u2014")+'</button>';
+    tr.innerHTML='<span style="opacity:.85">Dealer <b>'+tag+'</b>'
+      +(win>0n?' \u2014 tip from your winnings':' \u2014 tips come from withdrawable credit')+'</span>'
+      +btn(p5)+btn(p10);
+    tr.querySelectorAll(".tipBtn").forEach(b=>b.onclick=async()=>{
+      const amt=ethers.parseUnits(b.dataset.amt,18);
+      if(await send("tip the dealer "+b.dataset.amt+" TIMBS", board, "tipDealer", tid, amt)){
+        rail('<span class="win">Tip sent \u2014 the dealer thanks you.</span>');
+        await refreshChain(); tipBusy=false; renderTipRow();
+      }
+    });
+  }catch{} finally{ tipBusy=false; }
 }
 function stat(k,v,cls){ return '<div class="s"><div class="k">'+k+'</div><div class="v'+(cls?" "+cls:"")+'">'+v+'</div></div>'; }
 const ticketCache={};

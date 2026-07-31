@@ -361,11 +361,33 @@ const BOARD_ABI = [
 /// prefix decodes identically either way.
 let GEN = 4, dialEntry = 0;
 const TABLES_V5 = "function tables(uint256) view returns (uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRound,uint8 seatCount,uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars,uint64 entryCloseAt,uint64 lastJoinAt,uint64 firstLoadAt,uint8 loadedCount)";
+const TABLES_V6 = TABLES_V5.replace(",uint8 loadedCount)", ",uint8 loadedCount,address opener)");
+/// Gen-6: dealer tips + the underwrite reserve. (SegmentsOutstanding is
+/// already in BOARD_ABI here, so only the genuinely new fragments appear.)
+const GEN6_EXTRAS = [
+  "function tipDealer(uint256 tableId,uint256 amount)",
+  "function reserve() view returns (address)",
+  "event DealerTipped(uint256 indexed tableId,address indexed from,address indexed opener,uint256 amount)",
+  "event PoolUnderwritten(uint256 indexed tableId,uint8 indexed pool,uint256 wanted,uint256 granted)",
+  "error ExceedsCredit(address wallet,uint256 requested,uint256 held)",
+];
 async function detectGen(runner){
-  try{ await new ethers.Contract(ADDR.board, ["function sitQuiet() view returns (uint64)"], runner).sitQuiet(); return 5; }
-  catch{ return 4; }
+  const probe=async(abi,fn)=>{ try{ await new ethers.Contract(ADDR.board,[abi],runner)[fn](); return true; }catch{ return false; } };
+  if(await probe("function reserve() view returns (address)","reserve")) return 6;
+  if(await probe("function sitQuiet() view returns (uint64)","sitQuiet")) return 5;
+  return 4;
 }
-function boardAbiFor(gen){ return gen>=5 ? [TABLES_V5, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))] : BOARD_ABI; }
+function boardAbiFor(gen){
+  if(gen>=6) return [TABLES_V6, ...GEN6_EXTRAS, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))];
+  if(gen>=5) return [TABLES_V5, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))];
+  return BOARD_ABI;
+}
+const RESERVE_ABI = [
+  "function freeFloat() view returns (uint256)",
+  "function overflowEarmark() view returns (uint256)",
+  "function halted() view returns (bool)",
+];
+let reserveAddr=null, resv=null;
 /// Entry close is per-table state on gen-5 (adaptive — every join can move
 /// it); on gen-4 it is the global dial measured from openedAt.
 function entryEndOf(t){ return GEN>=5 ? Number(t.entryCloseAt) : Number(t.openedAt)+dialEntry; }
@@ -598,6 +620,7 @@ $("connect").onclick = async () => {
   board  = new ethers.Contract(ADDR.board,  boardAbiFor(GEN),  signer);
   dialEntry = Number(await board.entryWindow());
   if(GEN>=5) ERR_HINT.TableClosedForEntry = "entry has closed — no new seats; seated wallets can still load until bets close";
+  if(GEN>=6) ERR_HINT.ExceedsCredit = "that is more than the wallet's withdrawable credit";
   ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
   timbs  = new ethers.Contract(ADDR.timbs,  ERC20_ABI,  signer);
   prize  = new ethers.Contract(ADDR.prize,  PRIZE_ABI,  signer);
@@ -652,6 +675,20 @@ async function refreshMoney(){
   $("sEscrowed").title = escrowed.toString();
   $("sCredit").title = cred.toString();
   log(`vault held ${held} | credited ${owed} | escrowed ${escrowed} | your credit ${cred}`, "l-dim");
+
+  // gen-6: the underwrite reserve, next to the vault it backstops
+  if(GEN>=6){ try{
+    if(!resv){ reserveAddr = await board.reserve(); resv = new ethers.Contract(reserveAddr, RESERVE_ABI, signer); }
+    const [rbal, rfree, rmark, rhalt] = await Promise.all([
+      timbs.balanceOf(reserveAddr), resv.freeFloat(), resv.overflowEarmark(), resv.halted(),
+    ]);
+    let n=document.getElementById("reserveNote");
+    if(!n){ n=document.createElement("p"); n.id="reserveNote"; n.className="note"; $("vaultNote").after(n); }
+    n.textContent="Underwrite reserve: "+fmt(rbal)+" TIMBS held \u00b7 "+fmt(rfree)
+      +" free float \u00b7 "+fmt(rmark)+" earmarked for jackpot/la partage"
+      +(rhalt?" \u00b7 GRANTS HALTED":"")+".";
+    n.classList.toggle("l-warn", rhalt);
+  }catch{} }
 }
 async function refreshTable(){
   const id = BigInt($("tableId").value || "1");
