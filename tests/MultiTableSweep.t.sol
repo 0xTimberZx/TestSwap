@@ -6,6 +6,7 @@ import "../contracts/SegmentBoard.sol";
 import "../contracts/PoolLedger.sol";
 import "../contracts/SeedRegistry.sol";
 import "../contracts/CommitRevealEntropy.sol";
+import "../contracts/UnderwriteReserve.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockTIMBS is ERC20 {
@@ -24,6 +25,7 @@ contract MockTimbPrize {
 ///      inversion of that: per-table escrow, proven end to end through the board.
 contract MultiTableSweepTest is Test {
     MockTIMBS timbs; MockTimbPrize prize; PoolLedger ledger;
+    UnderwriteReserve reserve;
     SeedRegistry registry; CommitRevealEntropy ent; SegmentBoard board;
 
     address treasury = address(0x7EA5);
@@ -37,12 +39,14 @@ contract MultiTableSweepTest is Test {
         timbs = new MockTIMBS(); prize = new MockTimbPrize();
         ledger = new PoolLedger(address(timbs), treasury);
         registry = new SeedRegistry(); ent = new CommitRevealEntropy();
+        reserve = new UnderwriteReserve(address(timbs), treasury, address(0));
         board = new SegmentBoard(address(ledger), address(registry), address(ent),
-            address(prize), treasury, treasury, address(0),
+            address(prize), address(reserve), treasury, treasury, address(0),
             // gen-5 dials chosen so the pick still lands at 45:00 and the
             // adaptive timers (== entryMax) never fire in these tests
             35 minutes, 5 minutes, 5 minutes, 35 minutes, 35 minutes);
         ledger.setBoard(address(board)); registry.addWriter(address(board));
+        reserve.setBoard(address(board)); reserve.approveLedger(address(ledger));
         timbs.mintTo(treasury, 10_000e18);
         vm.prank(treasury); timbs.approve(address(ledger), type(uint256).max);
         timbs.mintTo(alice, 10_000e18); timbs.mintTo(bob, 10_000e18);
@@ -150,9 +154,11 @@ contract MultiTableSweepTest is Test {
 
         assertEq(ledger.totalEscrowed(), 0);
         // Nothing was created or destroyed: every token that entered the ledger
-        // is now either a wallet's credit or in the Treasury.
+        // is now a wallet's credit, in the Treasury, or in the gen-6 reserve
+        // (which takes every dead pot plus half the rake at retire).
         assertEq(
-            ledger.totalCredited() + timbs.balanceOf(treasury) - 10_000e18 + 200e18,
+            ledger.totalCredited() + timbs.balanceOf(treasury)
+                + timbs.balanceOf(address(reserve)) - 10_000e18 + 200e18,
             800e18,
             "conservation across two parallel tables"
         );

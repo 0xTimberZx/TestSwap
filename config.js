@@ -42,15 +42,17 @@ const ADDRESSES = {
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
 
-  // ── SwapTables segment tables — generation 5, adaptive entry (deployed 2026-07-31) ──
-  // Entry follows the players: quiet-quorum close (3m, reset by every join),
-  // lone-player wait 15m, hard ceiling 40m; board open 5m; committed drumroll 2m.
-  // Plus late loading (seated wallets fund until bets close), arm on FUNDED
-  // wallets, and Layer 0 (uncontested pools are never raked).
-  // Gen-4 (0x57d5BE…) retired 2026-07-31; its ledger still pays withdrawals.
-  SegmentBoard:         "0x7358Aa710F65B4228A7C0A56bedeD20Fd537B2ff",
-  PoolLedger:           "0x020E3A7Fde41fa4bA18a978f10DE5484594C43a0",
-  CommitRevealEntropy:  "0xb2a46fB96A8894a50341d5F162C130966ca4f895",
+  // ── SwapTables segment tables — generation 6, the accounting generation (deployed 2026-07-31) ──
+  // Gen-5's adaptive timing (same five dials: 2400/300/120/180/900) plus:
+  // monotonic underwrite (thin winners topped up toward stake x fair x 0.90
+  // from the UnderwriteReserve; caps 1000/pool, 1500/round, 10% of float),
+  // rake split (half reserve / half Treasury) + dead pots to the reserve,
+  // and dealer tips (seated wallets tip the opener after the sixth lock).
+  // Gen-5 (0x7358Aa…) retired 2026-07-31; its ledger still pays withdrawals.
+  SegmentBoard:         "0x1de9889da2083F5f1693DfCf589A453E9b39EEA7",
+  PoolLedger:           "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8",
+  CommitRevealEntropy:  "0x63614173003957A3AECb6bd22C8cC491f7279F3D",
+  UnderwriteReserve:    "0xa0f88d8504D340702889C48288D8FB9329D88184", // holds the top-up float; guardian halt + drain only
   SeedRegistry:         "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived — spans generations
   SegmentCrank:         "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher — generation-agnostic
   USDC:                 "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Circle canonical (6 decimals)

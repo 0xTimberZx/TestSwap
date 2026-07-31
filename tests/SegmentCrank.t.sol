@@ -7,6 +7,7 @@ import "../contracts/SegmentCrank.sol";
 import "../contracts/PoolLedger.sol";
 import "../contracts/SeedRegistry.sol";
 import "../contracts/CommitRevealEntropy.sol";
+import "../contracts/UnderwriteReserve.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockTIMBS is ERC20 {
@@ -37,13 +38,15 @@ contract SegmentCrankTest is Test {
         timbs = new MockTIMBS(); prize = new MockTimbPrize();
         ledger = new PoolLedger(address(timbs), treasury);
         registry = new SeedRegistry(); ent = new CommitRevealEntropy();
+        UnderwriteReserve reserve = new UnderwriteReserve(address(timbs), treasury, address(0));
         board = new SegmentBoard(address(ledger), address(registry), address(ent),
-            address(prize), treasury, treasury, address(0),
+            address(prize), address(reserve), treasury, treasury, address(0),
             // gen-5 dials chosen so the pick still lands at 45:00 and the
             // adaptive timers (== entryMax) never fire in these tests
             35 minutes, 5 minutes, 5 minutes, 35 minutes, 35 minutes);
         crank = new SegmentCrank();
         ledger.setBoard(address(board)); registry.addWriter(address(board));
+        reserve.setBoard(address(board)); reserve.approveLedger(address(ledger));
         timbs.mintTo(treasury, 10_000e18);
         vm.prank(treasury); timbs.approve(address(ledger), type(uint256).max);
         timbs.mintTo(alice, 10_000e18); timbs.mintTo(bob, 10_000e18);
@@ -85,7 +88,7 @@ contract SegmentCrankTest is Test {
         vm.prank(rando); // not the operator, not a player
         crank.lockAll(ISegmentBoardCrank(address(board)), id, secs, true);
 
-        (, , , , , uint8 mask, , bool retired, , , , , , ) = board.tables(id);
+        (, , , , , uint8 mask, , bool retired, , , , , , , ) = board.tables(id);
         assertEq(mask, 0x3F, "all six locked in one call");
         assertTrue(retired, "and retired in the same call");
         assertGe(ledger.heldBalance(), ledger.totalCredited());
@@ -99,7 +102,7 @@ contract SegmentCrankTest is Test {
         bytes32[6] memory secs;
         for (uint8 i; i < 6; ++i) secs[i] = _secret(i+1);
         crank.lockAll(ISegmentBoardCrank(address(board)), id, secs, true);
-        (, , , , , uint8 mask, , bool retired, , , , , , ) = board.tables(id);
+        (, , , , , uint8 mask, , bool retired, , , , , , , ) = board.tables(id);
         assertEq(mask, 0x3F); assertTrue(retired);
     }
 
@@ -112,7 +115,7 @@ contract SegmentCrankTest is Test {
         vm.roll(vm.getBlockNumber() + 65); // past REVEAL_WINDOW, inside horizon
         vm.prank(rando);
         crank.fallbackAll(ISegmentBoardCrank(address(board)), id, true);
-        (, , , , , uint8 mask, , bool retired, , , , , , ) = board.tables(id);
+        (, , , , , uint8 mask, , bool retired, , , , , , , ) = board.tables(id);
         assertEq(mask, 0x3F, "fallback-locked all six, no secrets");
         assertTrue(retired);
     }

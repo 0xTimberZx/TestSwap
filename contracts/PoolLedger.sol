@@ -89,6 +89,9 @@ contract PoolLedger is Ownable, ReentrancyGuard {
     event Swept(address indexed to, uint256 indexed tableId, uint256 amount);
     event Withdrawn(address indexed to, uint256 amount);
     event ProtocolWithdrawn(address indexed to, uint256 amount);
+    // ── gen-6 ──
+    event UnderwriteCredited(address indexed from, uint256 indexed tableId, uint256 amount);
+    event CreditMoved(address indexed from, address indexed to, uint256 amount);
 
     // ─── Errors ──────────────────────────────────────────────────────────────
 
@@ -100,6 +103,7 @@ contract PoolLedger is Ownable, ReentrancyGuard {
     error ExceedsUnowed(uint256 requested, uint256 available);
     error ExceedsTableEscrow(uint256 tableId, uint256 requested, uint256 held);
     error NothingToWithdraw();
+    error ExceedsCredit(address wallet, uint256 requested, uint256 held);
 
     // ─── Modifiers ─────────────────────────────────────────────────────────────
 
@@ -195,6 +199,87 @@ contract PoolLedger is Ownable, ReentrancyGuard {
         credit[to]          += amount;
         totalCredited       += amount;
         emit Refunded(to, tableId, amount);
+    }
+
+    /**
+     * @notice Gen-6 underwrite intake (M1): pull a granted top-up from the
+     *         reserve and credit the pool's winners in one atomic step. The
+     *         transfer lands BEFORE any credit is recorded — the ledger never
+     *         credits against an IOU (UNDERWRITE_SPEC, accounting rules).
+     *         Top-up money is outside money: it never touches `tableEscrow`,
+     *         so the escrow-sacred invariant holds by construction
+     *         (`held += sum` and `credited += sum` move together).
+     * @dev Array bounded by the board (<= seats per pool). Zero amounts are
+     *      skipped; a fully-zero batch is a cheap no-op, matching the
+     *      settlement-never-reverts rule.
+     */
+    function underwriteCredit(
+        address from,
+        address[] calldata recipients,
+        uint256[] calldata amounts,
+        uint256 tableId
+    ) external onlyBoard {
+        uint256 len = recipients.length;
+        if (len != amounts.length) revert LengthMismatch();
+        if (from == address(0))    revert ZeroAddress();
+
+        uint256 sum;
+        for (uint256 i; i < len; ++i) {
+            if (amounts[i] == 0) continue;
+            if (recipients[i] == address(0)) revert ZeroAddress();
+            sum += amounts[i];
+        }
+        if (sum == 0) return;
+
+        timbs.safeTransferFrom(from, address(this), sum);
+        for (uint256 i; i < len; ++i) {
+            if (amounts[i] == 0) continue;
+            credit[recipients[i]] += amounts[i];
+            emit WinningsCredited(recipients[i], tableId, amounts[i]);
+        }
+        totalCredited += sum;
+        emit UnderwriteCredited(from, tableId, sum);
+    }
+
+    /**
+     * @notice Gen-6 dealer tips (M6): move credit between two wallets on the
+     *         board's instruction. Pure bookkeeping — `heldBalance`,
+     *         `totalCredited` and every escrow figure are unchanged, so the
+     *         invariant cannot be disturbed by construction. The board gates
+     *         who may move credit to whom (seated tipper -> table opener,
+     *         after the sixth lock).
+     */
+    function moveCredit(address from, address to, uint256 amount) external onlyBoard {
+        if (from == address(0) || to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        uint256 held = credit[from];
+        if (amount > held) revert ExceedsCredit(from, amount, held);
+        credit[from] = held - amount;
+        credit[to]  += amount;
+        emit CreditMoved(from, to, amount);
+    }
+
+    /**
+     * @notice Gen-6 split sweep: move `amount` of a *single* table's leftovers
+     *         to `to` (the reserve's share of a retire) ahead of the final
+     *         `sweepTable`. Capped to that table's own escrow — the per-table
+     *         bound is what made removing `sweep(to, amount)` necessary
+     *         (discovery #11 was a GLOBAL cap); a cross-table sweep is still
+     *         unrepresentable here.
+     */
+    function sweepTablePartial(address to, uint256 tableId, uint256 amount)
+        external
+        onlyBoard
+        nonReentrant
+    {
+        if (to == address(0)) revert ZeroAddress();
+        if (amount == 0)      return; // nothing routed is not an error
+        uint256 held = tableEscrow[tableId];
+        if (amount > held) revert ExceedsTableEscrow(tableId, amount, held);
+        tableEscrow[tableId] = held - amount;
+        totalEscrowed       -= amount;
+        timbs.safeTransfer(to, amount);
+        emit Swept(to, tableId, amount);
     }
 
     /**

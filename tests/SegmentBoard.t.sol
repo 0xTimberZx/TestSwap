@@ -8,6 +8,7 @@ import "../contracts/SegmentBoard.sol";
 import "../contracts/PoolLedger.sol";
 import "../contracts/SeedRegistry.sol";
 import "../contracts/CommitRevealEntropy.sol";
+import "../contracts/UnderwriteReserve.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockTIMBS is ERC20 {
@@ -27,6 +28,7 @@ contract SegmentBoardTest is Test {
     SeedRegistry        registry;
     CommitRevealEntropy ent;
     SegmentBoard        board;
+    UnderwriteReserve   reserve;
 
     address treasury = address(0x7EA5);
     address guardian = address(0x6A4D);
@@ -63,14 +65,22 @@ contract SegmentBoardTest is Test {
         registry = new SeedRegistry();
         ent      = new CommitRevealEntropy();
 
+        // Gen-6 reserve, deployed EMPTY: grantTopUp returns 0 with no float,
+        // so every payout in this legacy suite is pure pool money — the
+        // pre-underwrite behaviour this suite regression-tests. The funded
+        // reserve is exercised in SegmentBoardGen6.t.sol.
+        reserve = new UnderwriteReserve(address(timbs), treasury, guardian);
+
         board = new SegmentBoard(
             address(ledger), address(registry), address(ent),
-            address(prize), treasury, treasury, guardian,
+            address(prize), address(reserve), treasury, treasury, guardian,
             ENTRY_WINDOW, PLACE_WINDOW, BETS_CLOSE, SIT_QUIET, SOLO_WAIT
         );
 
         ledger.setBoard(address(board));
         registry.addWriter(address(board));
+        reserve.setBoard(address(board));
+        reserve.approveLedger(address(ledger));
 
         // treasury funds the seed float and approves the ledger
         timbs.mintTo(treasury, 10_000e18);
@@ -169,7 +179,7 @@ contract SegmentBoardTest is Test {
     {
         return new SegmentBoard(
             address(ledger), address(registry), address(ent),
-            address(prize), treasury, treasury, guardian, e, pw, b, q, so
+            address(prize), address(reserve), treasury, treasury, guardian, e, pw, b, q, so
         );
     }
 
@@ -647,7 +657,7 @@ contract SegmentBoardTest is Test {
         PoolLedger l2 = new PoolLedger(address(timbs), coldVault);
         SegmentBoard b2 = new SegmentBoard(
             address(l2), address(registry), address(ent),
-            address(prize), coldVault, opsWallet, guardian,
+            address(prize), address(reserve), coldVault, opsWallet, guardian,
             ENTRY_WINDOW, PLACE_WINDOW, BETS_CLOSE, SIT_QUIET, SOLO_WAIT
         );
         l2.setBoard(address(b2));

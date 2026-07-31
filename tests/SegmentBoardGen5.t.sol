@@ -14,6 +14,7 @@ import "../contracts/SegmentBoard.sol";
 import "../contracts/PoolLedger.sol";
 import "../contracts/SeedRegistry.sol";
 import "../contracts/CommitRevealEntropy.sol";
+import "../contracts/UnderwriteReserve.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockTIMBS5 is ERC20 {
@@ -33,6 +34,7 @@ contract SegmentBoardGen5Test is Test {
     SeedRegistry        registry;
     CommitRevealEntropy ent;
     SegmentBoard        board;
+    UnderwriteReserve   reserve;
 
     address treasury = address(0x7EA5);
     address alice    = address(0xA11CE);
@@ -61,13 +63,17 @@ contract SegmentBoardGen5Test is Test {
         registry = new SeedRegistry();
         ent      = new CommitRevealEntropy();
 
+        // Empty reserve: grants are 0, so gen-5 behaviour is unchanged here.
+        reserve = new UnderwriteReserve(address(timbs), treasury, address(0));
         board = new SegmentBoard(
             address(ledger), address(registry), address(ent),
-            address(prize), treasury, treasury, address(0),
+            address(prize), address(reserve), treasury, treasury, address(0),
             ENTRY_MAX, PLACE_WINDOW, BETS_CLOSE, SIT_QUIET, SOLO_WAIT
         );
         ledger.setBoard(address(board));
         registry.addWriter(address(board));
+        reserve.setBoard(address(board));
+        reserve.approveLedger(address(ledger));
 
         timbs.mintTo(treasury, 100_000e18);
         vm.prank(treasury); timbs.approve(address(ledger), type(uint256).max);
@@ -104,7 +110,7 @@ contract SegmentBoardGen5Test is Test {
     function _marks(uint256 id) internal view
         returns (uint64 openedAt, uint64 pickTime, uint64 entryCloseAt, uint8 loadedCount)
     {
-        (openedAt, pickTime,,,,,,,,, entryCloseAt,,, loadedCount) = board.tables(id);
+        (openedAt, pickTime,,,,,,,,, entryCloseAt,,, loadedCount,) = board.tables(id);
     }
 
     function _lockAllSix(uint256 id) internal {
@@ -272,7 +278,7 @@ contract SegmentBoardGen5Test is Test {
 
         // and the table is cancellable on the same test: funded count < min
         board.cancelTable(id);
-        (,,,,,,, bool retired,,,,,,) = board.tables(id);
+        (,,,,,,, bool retired,,,,,,,) = board.tables(id);
         assertTrue(retired, "under-funded table cancels");
     }
 
@@ -283,7 +289,7 @@ contract SegmentBoardGen5Test is Test {
         (, uint64 pickTime,,) = _marks(id);
         vm.warp(pickTime + 1);
         board.armTable(id);                       // must not revert
-        (,, uint64 lockBlock,,,,,,,,,,,) = board.tables(id);
+        (,, uint64 lockBlock,,,,,,,,,,,,) = board.tables(id);
         assertGt(lockBlock, 0, "armed");
     }
 
@@ -346,7 +352,7 @@ contract SegmentBoardGen5Test is Test {
         // their positions.
         uint256 id = _open();
         _sitLoad(alice, id);
-        (uint64 openedAt,,,, uint8 seatCount, uint8 lockedMask,,,,,,,,) = board.tables(id);
+        (uint64 openedAt,,,, uint8 seatCount, uint8 lockedMask,,,,,,,,,) = board.tables(id);
         assertEq(openedAt, uint64(vm.getBlockTimestamp()));
         assertEq(seatCount, 1);
         assertEq(lockedMask, 0);
