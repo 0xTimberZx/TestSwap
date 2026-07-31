@@ -390,12 +390,11 @@
   body.attract #viewCount .n{font-weight:800;color:#f7f0d6;font-variant-numeric:tabular-nums}
   body.attract #viewCount.hide{display:none}
 
-  /* segment legend — one hue per segment, so a reel, its pool row and its
-     ticker entries all read as the same thing. Deliberately tiny: the text
-     still carries the meaning; the colour is only an index. */
+  /* One hue per segment, shown only on the pools rows — the payout figures
+     are where you need to know which token is being priced. Everywhere else
+     stayed plain: the colour is an index, not decoration. */
   .segdot{display:inline-block;width:9px;height:9px;border-radius:2px;
     margin-right:7px;vertical-align:baseline;flex:0 0 auto}
-  body.attract .rlab .segdot{width:8px;height:8px;margin-right:5px}
 
   /* ── stream legibility ──────────────────────────────────────────────
      A 1080p feed re-encoded by Twitch/Kick loses exactly what this page
@@ -415,7 +414,7 @@
   body.attract #betFeed .brow{font-size:15px;padding:9px 14px;background:rgba(7,18,12,.94);
     border-color:rgba(247,240,214,.22)}
   body.attract #betFeed .bwho{color:#b9cbbe;min-width:62px}
-  body.attract #betFeed .bseg{min-width:78px;white-space:nowrap}
+  body.attract #betFeed .bseg{min-width:58px}
   body.attract #poolPanel{width:352px;background:rgba(7,18,12,.94);
     border-color:rgba(247,240,214,.26)}
   body.attract #poolPanel h3{font-size:13px;color:#b9cbbe}
@@ -1459,9 +1458,7 @@ const reelObjs=[];
   const wrap=$("reels");
   for(let s=1;s<=6;s++){
     const card=document.createElement("div"); card.className="reelcard";
-    const lab=document.createElement("div"); lab.className="rlab";
-    lab.innerHTML='<span class="segdot" style="background:'
-      +["#e2574c","#e8a33d","#43d98e","#4aa8e0","#a77bd8","#e07ab0"][s-1]+'"></span>SEG '+s;
+    const lab=document.createElement("div"); lab.className="rlab"; lab.textContent="SEG "+s;
     const reel=document.createElement("div"); reel.className="reel";
     const strip=document.createElement("div"); strip.className="reelstrip";
     let html=""; for(let k=0;k<3;k++) for(let i=0;i<NC;i++) html+='<div class="rcell">'+ALPHABET[i]+'</div>';
@@ -1875,7 +1872,7 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     const row=document.createElement("div");
     row.className="brow"+(hot?" hot":"");
     row.innerHTML='<span class="bwho">'+tagOf(wallet)+'</span>'
-      +'<span class="bseg">'+dot(pool)+(kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
+      +'<span class="bseg">'+(kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
       +'<span class="bpick">on <b>'+spec.name+'</b>'+(kind===KIND.DD?"":" · "+fair(spec.count)+"×")+'</span>'
       +'<span class="bamt">'+(amt?'<span class="dot" style="background:'+(CHIPCOLOR[amt]||"#565b66")+'"></span>'+amt:"·")+'</span>';
     bfeed.appendChild(row);
@@ -1888,7 +1885,7 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     settledS[pool]={pot,dist};
     const row=document.createElement("div");
     row.className="brow settle";
-    row.innerHTML='<span class="bseg">'+dot(pool)+(pool===6?"ROUND":"SEG "+(pool+1))+'</span>'
+    row.innerHTML='<span class="bseg">'+(pool===6?"ROUND":"SEG "+(pool+1))+'</span>'
       +'<span class="bpick">settled — <b>'+fmtC(dist)+' TIMBS</b> paid to winners</span>'
       +'<span class="bamt">✓</span>';
     bfeed.appendChild(row);
