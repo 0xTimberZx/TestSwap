@@ -25,6 +25,7 @@ contract MockTimbPrize {
 ///      inversion of that: per-table escrow, proven end to end through the board.
 contract MultiTableSweepTest is Test {
     MockTIMBS timbs; MockTimbPrize prize; PoolLedger ledger;
+    UnderwriteReserve reserve;
     SeedRegistry registry; CommitRevealEntropy ent; SegmentBoard board;
 
     address treasury = address(0x7EA5);
@@ -38,7 +39,7 @@ contract MultiTableSweepTest is Test {
         timbs = new MockTIMBS(); prize = new MockTimbPrize();
         ledger = new PoolLedger(address(timbs), treasury);
         registry = new SeedRegistry(); ent = new CommitRevealEntropy();
-        UnderwriteReserve reserve = new UnderwriteReserve(address(timbs), treasury, address(0));
+        reserve = new UnderwriteReserve(address(timbs), treasury, address(0));
         board = new SegmentBoard(address(ledger), address(registry), address(ent),
             address(prize), address(reserve), treasury, treasury, address(0),
             // gen-5 dials chosen so the pick still lands at 45:00 and the
@@ -153,9 +154,11 @@ contract MultiTableSweepTest is Test {
 
         assertEq(ledger.totalEscrowed(), 0);
         // Nothing was created or destroyed: every token that entered the ledger
-        // is now either a wallet's credit or in the Treasury.
+        // is now a wallet's credit, in the Treasury, or in the gen-6 reserve
+        // (which takes every dead pot plus half the rake at retire).
         assertEq(
-            ledger.totalCredited() + timbs.balanceOf(treasury) - 10_000e18 + 200e18,
+            ledger.totalCredited() + timbs.balanceOf(treasury)
+                + timbs.balanceOf(address(reserve)) - 10_000e18 + 200e18,
             800e18,
             "conservation across two parallel tables"
         );

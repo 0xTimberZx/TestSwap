@@ -61,6 +61,11 @@ contract SegmentBoardGen6Test is Test {
 
     uint256 nextRound = 7;
 
+    // Cached in setUp: board.KIND_EXACTLY() is an external call, and an
+    // inline getter after vm.prank would CONSUME the prank — the very bug
+    // the legacy suite's kLetter/kNumber cache exists to prevent.
+    uint8 KX;
+
     function setUp() public {
         vm.warp(1_000_000);
         vm.roll(1_000);
@@ -90,6 +95,8 @@ contract SegmentBoardGen6Test is Test {
             timbs.mintTo(p, 10_000e18);
             vm.prank(p); timbs.approve(address(ledger), type(uint256).max);
         }
+
+        KX = board.KIND_EXACTLY();
     }
 
     // ─── helpers ──────────────────────────────────────────────────────────────
@@ -172,7 +179,7 @@ contract SegmentBoardGen6Test is Test {
 
         // alice bets the KNOWN outcome, solo; bob stays off this pool
         vm.prank(alice);
-        board.place(id, 1, board.KIND_EXACTLY(), _idxOf(chars[0]));
+        board.place(id, 1, KX, _idxOf(chars[0]));
 
         _armAndLock(id, armBlock);
 
@@ -194,9 +201,9 @@ contract SegmentBoardGen6Test is Test {
         uint8 winIdx = _idxOf(chars[0]);
 
         vm.prank(alice);
-        board.place(id, 1, board.KIND_EXACTLY(), winIdx);
+        board.place(id, 1, KX, winIdx);
         vm.prank(bob);   // joins the pool and loses — contested, raked, and STILL 810
-        board.place(id, 1, board.KIND_EXACTLY(), (winIdx + 1) % 36);
+        board.place(id, 1, KX, (winIdx + 1) % 36);
 
         _armAndLock(id, armBlock);
 
@@ -216,9 +223,9 @@ contract SegmentBoardGen6Test is Test {
         bytes6 chars = _predictChars(id, armBlock);
         uint8 winIdx = _idxOf(chars[0]);
 
-        vm.prank(alice); board.place(id, 1, board.KIND_EXACTLY(), winIdx);
-        vm.prank(bob);   board.place(id, 1, board.KIND_EXACTLY(), (winIdx + 1) % 36);
-        vm.prank(carol); board.place(id, 1, board.KIND_EXACTLY(), (winIdx + 2) % 36);
+        vm.prank(alice); board.place(id, 1, KX, winIdx);
+        vm.prank(bob);   board.place(id, 1, KX, (winIdx + 1) % 36);
+        vm.prank(carol); board.place(id, 1, KX, (winIdx + 2) % 36);
 
         uint256 reserveBefore = timbs.balanceOf(address(reserve));
         _armAndLock(id, armBlock);
@@ -243,8 +250,8 @@ contract SegmentBoardGen6Test is Test {
         bytes6 chars = _predictChars(id, armBlock);
 
         vm.startPrank(alice); // solo Exactly wins on segments 1 AND 2
-        board.place(id, 1, board.KIND_EXACTLY(), _idxOf(chars[0]));
-        board.place(id, 2, board.KIND_EXACTLY(), _idxOf(chars[1]));
+        board.place(id, 1, KX, _idxOf(chars[0]));
+        board.place(id, 2, KX, _idxOf(chars[1]));
         vm.stopPrank();
 
         _armAndLock(id, armBlock);
@@ -265,7 +272,7 @@ contract SegmentBoardGen6Test is Test {
         uint256 armBlock = vm.getBlockNumber() + 50;
         bytes6 chars = _predictChars(id, armBlock);
         vm.prank(alice);
-        board.place(id, 1, board.KIND_EXACTLY(), _idxOf(chars[0]));
+        board.place(id, 1, KX, _idxOf(chars[0]));
 
         vm.recordLogs();
         _armAndLock(id, armBlock);
@@ -297,7 +304,7 @@ contract SegmentBoardGen6Test is Test {
         uint256 armBlock = vm.getBlockNumber() + 50;
         bytes6 chars = _predictChars(id, armBlock);
         vm.prank(alice);
-        board.place(id, 1, board.KIND_EXACTLY(), _idxOf(chars[0]));
+        board.place(id, 1, KX, _idxOf(chars[0]));
 
         _armAndLock(id, armBlock);
         assertEq(ledger.credit(alice), 25e18, "par only while halted");
@@ -346,10 +353,10 @@ contract SegmentBoardGen6Test is Test {
         uint8 winIdx = _idxOf(chars[0]);
 
         // pool 0: contested, alice wins -> real rake accrues
-        vm.prank(alice); board.place(id, 1, board.KIND_EXACTLY(), winIdx);
-        vm.prank(bob);   board.place(id, 1, board.KIND_EXACTLY(), (winIdx + 1) % 36);
+        vm.prank(alice); board.place(id, 1, KX, winIdx);
+        vm.prank(bob);   board.place(id, 1, KX, (winIdx + 1) % 36);
         // pool 1: alice deliberately loses solo -> a 25 dead pot
-        vm.prank(alice); board.place(id, 2, board.KIND_EXACTLY(), (_idxOf(chars[1]) + 1) % 36);
+        vm.prank(alice); board.place(id, 2, KX, (_idxOf(chars[1]) + 1) % 36);
 
         _armAndLock(id, armBlock);
 
@@ -378,7 +385,7 @@ contract SegmentBoardGen6Test is Test {
         uint256 armBlock = vm.getBlockNumber() + 50;
         bytes6 chars = _predictChars(id, armBlock);
         vm.prank(alice); // solo, deliberately wrong -> 25 dead pot
-        board.place(id, 1, board.KIND_EXACTLY(), (_idxOf(chars[0]) + 1) % 36);
+        board.place(id, 1, KX, (_idxOf(chars[0]) + 1) % 36);
 
         _armAndLock(id, armBlock);
         board.retire(id);
@@ -405,8 +412,8 @@ contract SegmentBoardGen6Test is Test {
         uint256 armBlock = vm.getBlockNumber() + 50;
         bytes6 chars = _predictChars(id, armBlock);
         uint8 winIdx = _idxOf(chars[0]);
-        vm.prank(alice); board.place(id, 1, board.KIND_EXACTLY(), winIdx);
-        vm.prank(bob);   board.place(id, 1, board.KIND_EXACTLY(), (winIdx + 1) % 36);
+        vm.prank(alice); board.place(id, 1, KX, winIdx);
+        vm.prank(bob);   board.place(id, 1, KX, (winIdx + 1) % 36);
         _armAndLock(id, armBlock);
         board.retire(id);
 
@@ -429,8 +436,8 @@ contract SegmentBoardGen6Test is Test {
         uint256 armBlock = vm.getBlockNumber() + 50;
         bytes6 chars = _predictChars(id, armBlock);
         uint8 winIdx = _idxOf(chars[0]);
-        vm.prank(alice); board.place(id, 1, board.KIND_EXACTLY(), winIdx);
-        vm.prank(bob);   board.place(id, 1, board.KIND_EXACTLY(), (winIdx + 1) % 36);
+        vm.prank(alice); board.place(id, 1, KX, winIdx);
+        vm.prank(bob);   board.place(id, 1, KX, (winIdx + 1) % 36);
 
         // before the sixth lock a tip must be impossible — while a reveal is
         // outstanding it could read as paying to influence it
@@ -467,7 +474,7 @@ contract SegmentBoardGen6Test is Test {
         uint256 armBlock = vm.getBlockNumber() + 50;
         bytes6 chars = _predictChars(id, armBlock);
         vm.prank(alice);
-        board.place(id, 1, board.KIND_EXACTLY(), _idxOf(chars[0]));
+        board.place(id, 1, KX, _idxOf(chars[0]));
         _armAndLock(id, armBlock);
 
         // spectators cannot tip — it is a table ritual
