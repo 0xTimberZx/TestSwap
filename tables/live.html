@@ -311,9 +311,150 @@
     .reels{gap:6px}
     .reel{max-width:none}
   }
+
+  /* STREAMCSS: attract/stream mode — ambient view of the reels */
+  body.attract{background:#07120c;overflow:hidden}
+  body.attract .wrap{max-width:1040px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:0 24px}
+  body.attract .wrap > *:not(#spin):not(#reveal):not(.felt-scroll){display:none !important}
+  body.attract #spin{display:none;border:none;background:transparent;margin:0;padding:0}
+  body.attract #spin.on{display:block !important}
+  body.attract #spin > h2,body.attract #spin > .note,body.attract #spin label,
+  body.attract #spin #pickTrack,body.attract #spin #lockTracker,body.attract #spin .btn{display:none !important}
+  body.attract #reels{transform:scale(1.16);transform-origin:center center;margin:0 auto}
+  body.attract #reveal{margin-top:40px}
+  #streamTitle,#streamFoot{display:none}
+  body.attract #streamTitle{display:flex;position:fixed;top:0;left:0;right:0;z-index:50;
+    align-items:center;gap:16px;padding:22px 34px;font-family:Georgia,serif;
+    background:linear-gradient(180deg,rgba(7,18,12,.97) 40%,rgba(7,18,12,0))}
+  body.attract #streamTitle .brand{font-size:24px;font-weight:800;letter-spacing:.01em;color:#e8dcae}
+  body.attract #streamTitle .brand em{color:#43d98e;font-style:normal}
+  body.attract #streamTitle .dot{width:9px;height:9px;border-radius:50%;background:#43d98e;
+    box-shadow:0 0 0 0 rgba(67,217,142,.6);animation:livepulse 1.8s infinite}
+  body.attract #streamTitle .tag{font-size:12.5px;color:#8fa295;letter-spacing:.07em;text-transform:uppercase}
+  @keyframes livepulse{0%{box-shadow:0 0 0 0 rgba(67,217,142,.55)}70%{box-shadow:0 0 0 12px rgba(67,217,142,0)}100%{box-shadow:0 0 0 0 rgba(67,217,142,0)}}
+  body.attract #streamFoot{display:block;position:fixed;bottom:16px;left:0;right:0;z-index:50;
+    text-align:center;font-family:Georgia,serif;font-size:12.5px;color:#6f8579;letter-spacing:.05em}
+  body.attract #spectateBar{display:none;position:fixed;top:76px;right:0;z-index:60;
+    margin:0 34px;padding:10px 18px;border:1px solid rgba(247,240,214,.18);border-radius:10px;
+    background:rgba(7,18,12,.88);font-family:Georgia,serif;font-size:13.5px;color:#e8dcae;
+    letter-spacing:.03em;font-variant-numeric:tabular-nums}
+  body.attract #spectateBar.on{display:block}
+  body.attract #spectateBar .lob{color:#6f8579;font-style:italic}
+  /* spectate: live bet ticker (left) + pools & odds panel (right) */
+  #betFeed,#poolPanel{display:none}
+  body.attract #betFeed{display:block;position:fixed;right:24px;top:582px;z-index:60;width:376px;
+    font-family:Georgia,serif;pointer-events:none}
+  body.attract #betFeed .brow{display:flex;gap:10px;align-items:baseline;padding:7px 12px;margin-top:6px;
+    border:1px solid rgba(247,240,214,.14);border-radius:9px;background:rgba(7,18,12,.88);
+    font-size:13px;color:#dfe7df;animation:betin .5s ease}
+  body.attract #betFeed .brow.hot{border-color:rgba(215,179,76,.65);box-shadow:0 0 14px rgba(215,179,76,.18)}
+  body.attract #betFeed .brow.settle{border-color:rgba(67,217,142,.5);color:#bfe9d2}
+  body.attract #betFeed .bwho{color:#9fb4a4;min-width:56px}
+  body.attract #betFeed .bseg{color:#e8dcae;font-weight:700;letter-spacing:.04em;min-width:52px}
+  body.attract #betFeed .bpick b{color:#f7f0d6}
+  body.attract #betFeed .bamt{margin-left:auto;font-weight:800;color:#f7f0d6}
+  body.attract #betFeed .bamt .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;
+    vertical-align:baseline}
+  @keyframes betin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  body.attract #poolPanel{display:block;position:fixed;right:24px;top:346px;z-index:60;width:322px;
+    font-family:Georgia,serif;border:1px solid rgba(247,240,214,.16);border-radius:11px;
+    background:rgba(7,18,12,.88);padding:10px 14px 12px;pointer-events:none}
+  body.attract #poolPanel h3{margin:0 0 2px;font-size:11.5px;letter-spacing:.14em;color:#8fa295;
+    text-transform:uppercase;font-weight:700}
+  body.attract #poolPanel .prow{display:flex;gap:8px;align-items:baseline;padding:5.5px 0;
+    border-bottom:1px solid rgba(247,240,214,.07);font-size:12.5px;color:#c9d6cb}
+  body.attract #poolPanel .prow:last-child{border-bottom:none}
+  body.attract #poolPanel .pseg{color:#e8dcae;font-weight:700;min-width:44px;letter-spacing:.04em}
+  body.attract #poolPanel .ppot{font-weight:800;color:#f7f0d6;min-width:64px}
+  body.attract #poolPanel .pmeta{margin-left:auto;color:#8fa295;font-size:11.5px;text-align:right}
+  body.attract #poolPanel .prow.done .pseg{color:#43d98e}
+  body.attract #poolPanel .prow.done .pmeta{color:#43d98e}
+  body.attract #betFeed,body.attract #poolPanel{opacity:0;transition:opacity .6s}
+  body.attract #betFeed.on,body.attract #poolPanel.on{opacity:1}
+  /* switching tables: dim the whole feed and say so, plainly and large */
+  #switchScrim{display:none}
+  body.attract #switchScrim{display:block;position:fixed;inset:0;z-index:80;pointer-events:none;
+    background:rgba(4,10,7,.9);opacity:0;transition:opacity .55s ease}
+  body.attract.switching #switchScrim{opacity:1}
+  #switchScrim .sw-in{position:absolute;inset:0;display:grid;place-content:center;text-align:center;
+    font-family:Georgia,serif;padding:0 40px}
+  #switchScrim .sw-k{font-size:14px;letter-spacing:.36em;text-transform:uppercase;color:#8fa295}
+  #switchScrim .sw-t{margin-top:16px;font-size:56px;font-weight:800;color:#f7f0d6;letter-spacing:.01em}
+  #switchScrim .sw-s{margin-top:18px;font-size:14.5px;color:#7d9186;font-style:italic}
+  /* live viewer count — deliberately faint, top-right */
+  #viewCount{display:none}
+  body.attract #viewCount{display:flex;position:fixed;top:23px;right:28px;z-index:70;
+    align-items:center;gap:7px;padding:5px 12px;border-radius:999px;
+    border:1px solid rgba(247,240,214,.13);background:rgba(7,18,12,.4);
+    font-family:Georgia,serif;font-size:14px;color:#cddbd0;opacity:.7;pointer-events:none}
+  body.attract #viewCount .n{font-weight:800;color:#f7f0d6;font-variant-numeric:tabular-nums}
+  body.attract #viewCount.hide{display:none}
+
+  /* One hue per segment, shown only on the pools rows — the payout figures
+     are where you need to know which token is being priced. Everywhere else
+     stayed plain: the colour is an index, not decoration. */
+  .segdot{display:inline-block;width:9px;height:9px;border-radius:2px;
+    margin-right:7px;vertical-align:baseline;flex:0 0 auto}
+
+  /* ── stream legibility ──────────────────────────────────────────────
+     A 1080p feed re-encoded by Twitch/Kick loses exactly what this page
+     was made of: thin serif text, dark-on-dark greens, and heavy motion
+     blur. Everything below trades a little elegance for text that still
+     reads after two rounds of compression. */
+  body.attract.spec .felt{opacity:.46 !important;filter:contrast(1.1) saturate(1.06)}
+  body.attract.spec .bet{font-weight:700}
+  body.attract.spec .out .lab{font-size:13px;color:#f2ead0}
+  body.attract.spec .out .sub{font-size:10px;opacity:.85}
+  body.attract #spectateBar{font-size:17.5px;letter-spacing:.015em;color:#f2ead0;
+    background:rgba(7,18,12,.9);border-color:rgba(247,240,214,.3)}
+  body.attract.spec #spectateBar{left:0;right:0;top:72px;text-align:center;border-radius:0;
+    border-left:none;border-right:none;padding:9px 24px}
+  body.attract.spec .wrap{padding-top:152px}
+  body.attract #betFeed{width:352px;right:24px}
+  body.attract #betFeed .brow{font-size:15px;padding:9px 14px;background:rgba(7,18,12,.94);
+    border-color:rgba(247,240,214,.22)}
+  body.attract #betFeed .bwho{color:#b9cbbe;min-width:62px}
+  body.attract #betFeed .bseg{min-width:58px}
+  body.attract #poolPanel{width:352px;background:rgba(7,18,12,.94);
+    border-color:rgba(247,240,214,.26)}
+  body.attract #poolPanel h3{font-size:13px;color:#b9cbbe}
+  body.attract #poolPanel .prow{font-size:14px;padding:6.5px 0}
+  body.attract #poolPanel .pseg{min-width:64px;white-space:nowrap}
+  body.attract #poolPanel .pmeta{font-size:12.5px;color:#a9bcae}
+  body.attract #streamTitle .tag{font-size:14px;color:#a9bcae}
+  body.attract #streamFoot{font-size:14px;color:#8ba093}
+  body.attract .rstat,body.attract #reels .rstat{font-size:14px;color:#c9d6cb}
+  /* spectate: the REAL board, ghosted in behind the meter — coins land from the feed */
+  body.attract .felt-scroll{display:none !important}
+  body.attract.spec .wrap{justify-content:flex-start;padding-top:96px}
+  body.attract.spec .felt-scroll{display:block !important;position:fixed;left:22px;right:404px;top:346px;
+    z-index:4;overflow:hidden;padding:0;pointer-events:none}
+  body.attract.spec .felt{opacity:.30;transform:scale(.92);transform-origin:top center;margin:0 auto}
+  body.attract.spec .felt.locked{filter:none}
+  body.attract.spec .felt.locked .board{opacity:1;pointer-events:none}
+  body.attract.spec .felt.locked::after{content:none}
+  body.attract.spec #spin{position:relative;z-index:20}
+  #coinLayer{display:none}
+  body.attract.spec #coinLayer{display:block;position:fixed;inset:0;z-index:22;pointer-events:none}
+  #coinLayer .ccoin{position:absolute;width:25px;height:25px;border-radius:50%;display:grid;place-items:center;
+    font-family:Georgia,serif;font-size:9.5px;font-weight:800;color:#fff;letter-spacing:-.02em;
+    border:2px solid rgba(255,255,255,.82);box-shadow:0 2px 6px rgba(0,0,0,.75);transform:translate(-50%,-50%)}
+  #coinLayer .ring{position:absolute;border-radius:50%;border:2px solid var(--gold);
+    transform:translate(-50%,-50%);animation:coinring 1.6s ease-out forwards}
+  #coinLayer .ccoin.new{animation:coindrop .6s cubic-bezier(.2,.9,.3,1.4)}
+  @keyframes coindrop{from{opacity:0;transform:translate(-50%,-210%) scale(.65)}
+                      to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+  @keyframes coinring{from{opacity:.85;width:26px;height:26px}to{opacity:0;width:104px;height:104px}}
+
 </style>
 </head>
 <body class="pre">
+<div id="streamTitle">
+  <span class="dot"></span>
+  <span class="brand">Swap<em>Tables</em></span>
+  <span class="tag">Live · Arbitrum Sepolia testnet · play chips, no real money</span>
+</div>
+<div id="streamFoot">timbswap.xyz — six segments lock one at a time · winners split the pot</div>
 <div class="wrap">
   <p class="eyebrow">SwapTables · Arbitrum Sepolia · pre-round segment betting</p>
   <h1>Load all six <em>tokens</em>, then play.</h1>
@@ -487,7 +628,12 @@
 </div>
 
 <script type="module">
-import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm";
+let ethers;
+try { ({ ethers } = await import("./vendor/ethers-6.13.4.min.js")); }
+catch (e1) {
+  try { ({ ethers } = await import("https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm")); }
+  catch (e2) { console.warn("[SwapTables] ethers unavailable — lobby-only mode", e2); }
+}
 
 const ADDR = {
   board:  "0x57d5BE0203Fa30f7b99853a11e4D162824895F91",
@@ -1367,7 +1513,7 @@ function driveSpin(p){
     } else {
       const v=envelope(tau,c)*(1+SPIN_D.swapNoise*(Math.random()-0.5));
       o.offset+=v*dt*34;
-      const blur=Math.min(6,v*5);
+      const blur=Math.min(document.body.classList.contains("attract")?3:6, v*5);
       o.strip.style.filter=blur>0.4? "blur("+blur.toFixed(1)+"px)":"none";
       const heldLock = hold && realChars[o.seg-1];
       o.stat.textContent = heldLock ? "● locked" :
@@ -1385,7 +1531,7 @@ function driveSpin(p){
     : "The pick is armed — each ball drops as its segment locks on chain.";
 }
 function lockedCharsArr(){
-  if(!T) return [null,null,null,null,null,null];
+  if(!T || !ethers) return [null,null,null,null,null,null];
   const mask=Number(T.lockedMask);
   const raw=ethers.getBytes(T.lockedChars);
   const out=[];
@@ -1620,6 +1766,422 @@ function updateTotals(){
   $("tTok").innerHTML=placedN+"<small>/6</small>";
   $("tDD").innerHTML=(Number(mySeat.ddChip)? CHIPS[Number(mySeat.ddChip)-1] : "—")+" <small>TIMBS</small>";
 }
+/* STREAMJS: attract/stream director.
+   ?attract          spectate a streamed table when one exists; else lobby loop
+   ?attract&lobby    lobby loop only (never spectates)
+   ?attract&table=N  pin table N (skip the registry)
+   ?attract&mock=1   fake table for offline testing
+   Opt-ins live in Supabase `stream_tables` (board, table_id, streamed). */
+if (location.hash.includes("attract") || new URLSearchParams(location.search).has("attract")) {
+  document.body.classList.add("attract");
+  // tap anywhere → toggle fullscreen (hides the browser chrome for a clean broadcast)
+  document.addEventListener("click", () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(()=>{});
+    else document.exitFullscreen?.();
+  });
+  const AQS = new URLSearchParams(location.search);
+  const LOBBY_ONLY = AQS.has("lobby"), PIN = AQS.get("table"), MOCK = AQS.has("mock");
+  const SB_URL = "https://ipyfodnidwsdvwqrcjrl.supabase.co";
+  const SB_KEY = "sb_publishable_yg4wjMwvGrlf5C9vqs2nkw_Hfks0Ux9";
+  const RPCS = [
+    "https://sepolia-rollup.arbitrum.io/rpc",
+    "https://arbitrum-sepolia-rpc.publicnode.com",
+    "https://arbitrum-sepolia.gateway.tenderly.co",
+  ];
+  let mode="lobby", specTid=null, ro=null, roBoard=null, roLedger=null, pot=null, lastBarTxt="";
+  const SB_HDRS={apikey:SB_KEY, Authorization:"Bearer "+SB_KEY};
+  const ROTATE_MS=60000;        // dwell on each live table before rotating
+  const RESULT_HOLD_MS=15000;   // keep a finished table on screen so the result is seen
+  const PICK_STALL_MS=30000;    // armed but no lock for this long → free to flip away
+  const PRE_PICK_S=180;         // never rotate away this close to pick time
+  const PICK_HOLD_MAX=480000;   // cap the run-up hold so a dead table can't wedge us
+  const SWITCH_MS=2600;         // length of the on-screen switch card
+  let holdUntil=0, lastSwitch=0, holdStart=0, liveCount=0;
+  let lastProgress=0, lastMask=-1, lastLockBlock="";
+  const flagCleared=new Set();
+
+  const bar=document.createElement("div"); bar.id="spectateBar"; document.body.appendChild(bar);
+  const scrim=document.createElement("div"); scrim.id="switchScrim";
+  scrim.innerHTML='<div class="sw-in"><div class="sw-k">Switching tables</div>'
+    +'<div class="sw-t" id="swT">—</div>'
+    +'<div class="sw-s">this feed follows one table at a time · Arbitrum Sepolia testnet · play chips, no real money</div></div>';
+  document.body.appendChild(scrim);
+  const bfeed=document.createElement("div"); bfeed.id="betFeed";  document.body.appendChild(bfeed);
+  const ppan =document.createElement("div"); ppan.id="poolPanel"; document.body.appendChild(ppan);
+  const coinLayer=document.createElement("div"); coinLayer.id="coinLayer"; document.body.appendChild(coinLayer);
+
+  // ── coins on the real board, placed from the FEED (never a separate chain read) ──
+  let coinList=[], cellCount={};
+  const abbrevS = n => n>=1000 ? ((n%1000===0? n/1000 : Math.round(n/100)/10)+"K") : String(n);
+  const coinKey = (kind,pick) => kind+":"+(kind===KIND.DD?0:pick);
+  function cellPos(rec){
+    const cell=CELLMAP[rec.key]; if(!cell) return null;
+    const r=cell.getBoundingClientRect();
+    if(!r.width || !r.height) return null;              // board hidden → hold the coin
+    const dx=(rec.idx%3)*10-10, dy=Math.floor(rec.idx/3)*10;
+    return {x:r.left+r.width/2+dx, y:r.top+r.height/2+dy};
+  }
+  function positionCoin(rec){
+    const p=cellPos(rec);
+    if(!p){ rec.el.style.display="none"; return; }
+    rec.el.style.display="grid"; rec.el.style.left=p.x+"px"; rec.el.style.top=p.y+"px";
+  }
+  function relayoutCoins(){ coinList.forEach(positionCoin); }
+  /// The pools panel grows and shrinks as rows settle (and its meta text can
+  /// wrap), so pin the ticker to its measured bottom instead of a fixed offset.
+  function layoutRightColumn(){
+    if(!document.body.classList.contains("spec")) return;
+    const r=ppan.getBoundingClientRect();
+    if(r.height) bfeed.style.top=Math.round(r.bottom+14)+"px";
+  }
+  function placeCoin(kind,pick,amt,isNew){
+    const key=coinKey(kind,pick);
+    const idx=(cellCount[key]=(cellCount[key]||0)+1)-1;
+    const el=document.createElement("div");
+    el.className="ccoin"+(isNew?" new":"");
+    el.style.background = amt ? (CHIPCOLOR[amt]||"#565b66") : "#12271b";
+    el.textContent = amt ? abbrevS(amt) : "?";
+    coinLayer.appendChild(el);
+    const rec={key,idx,el}; coinList.push(rec); positionCoin(rec);
+    if(isNew){
+      const p=cellPos(rec);
+      if(p){ const ring=document.createElement("div"); ring.className="ring";
+             ring.style.left=p.x+"px"; ring.style.top=p.y+"px";
+             coinLayer.appendChild(ring); setTimeout(()=>ring.remove(),1700); }
+      setTimeout(()=>el.classList.remove("new"),700);
+    }
+  }
+  addEventListener("resize", ()=>{ relayoutCoins(); layoutRightColumn(); });
+  setInterval(relayoutCoins, 2000);
+
+  // ── spectate book: everything the ticker + pools panel know ──
+  // index hues: SEG 1..6, then the round-wide pool
+  const SEGHUE=["#e2574c","#e8a33d","#43d98e","#4aa8e0","#a77bd8","#e07ab0"];
+  const dot = i => '<span class="segdot" style="background:'+(i>=6?"#d7b34c":SEGHUE[i])+'"></span>';
+
+  let specBook, specSeen, packCacheS, settledS;
+  function resetSpecFeed(){
+    specBook=Array.from({length:7},()=>[]); specSeen=new Set(); packCacheS={}; settledS={};
+    coinLayer.innerHTML=""; coinList=[]; cellCount={};
+    bfeed.innerHTML=""; renderPools();
+  }
+  const fmtC=x=>x.toLocaleString(undefined,{maximumFractionDigits:2});
+  function addSpecBet(wallet,pool,kind,pick,amt,hot){
+    specBook[pool].push({wallet,kind,pick,amt:amt||0});
+    const spec=specOf(kind,pick);
+    const row=document.createElement("div");
+    row.className="brow"+(hot?" hot":"");
+    row.innerHTML='<span class="bwho">'+tagOf(wallet)+'</span>'
+      +'<span class="bseg">'+(kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
+      +'<span class="bpick">on <b>'+spec.name+'</b>'+(kind===KIND.DD?"":" · "+fair(spec.count)+"×")+'</span>'
+      +'<span class="bamt">'+(amt?'<span class="dot" style="background:'+(CHIPCOLOR[amt]||"#565b66")+'"></span>'+amt:"·")+'</span>';
+    bfeed.appendChild(row);
+    while(bfeed.children.length>5) bfeed.removeChild(bfeed.firstChild);
+    if(hot) setTimeout(()=>row.classList.remove("hot"), 4200);
+    placeCoin(kind,pick,amt,hot);
+    renderPools();
+  }
+  function addSettleRow(pool,pot,dist){
+    settledS[pool]={pot,dist};
+    const row=document.createElement("div");
+    row.className="brow settle";
+    row.innerHTML='<span class="bseg">'+(pool===6?"ROUND":"SEG "+(pool+1))+'</span>'
+      +'<span class="bpick">settled — <b>'+fmtC(dist)+' TIMBS</b> paid to winners</span>'
+      +'<span class="bamt">✓</span>';
+    bfeed.appendChild(row);
+    while(bfeed.children.length>5) bfeed.removeChild(bfeed.firstChild);
+    renderPools();
+  }
+  function poolStatsS(pool){
+    const bets=specBook[pool];
+    const chips=bets.reduce((a,b)=>a+b.amt,0);
+    const n=bets.length;
+    const contested=n>=2;
+    const pot=chips+(contested? SEED_SHARE:0);
+    const rakeBps=n? 175+Math.floor(625/n):0;
+    return {n,chips,contested,pot,rakeBps,dist:pot*(10000-rakeBps)/10000};
+  }
+  function renderPools(){
+    if(!specBook) return;
+    let h="<h3>Pools · live</h3>";
+    for(let i=0;i<7;i++){
+      const st=poolStatsS(i), done=settledS[i];
+      const name=i===6?"ROUND":"SEG "+(i+1);
+      if(done){
+        h+='<div class="prow done"><span class="pseg">'+dot(i)+name+'</span>'
+          +'<span class="ppot">'+fmtC(done.pot)+'</span>'
+          +'<span class="pmeta">settled · '+fmtC(done.dist)+' paid ✓</span></div>';
+      } else if(st.n===0){
+        h+='<div class="prow"><span class="pseg">'+dot(i)+name+'</span>'
+          +'<span class="ppot">—</span><span class="pmeta">no bets yet</span></div>';
+      } else {
+        h+='<div class="prow"><span class="pseg">'+dot(i)+name+'</span>'
+          +'<span class="ppot">'+fmtC(st.pot)+'</span>'
+          +'<span class="pmeta">'+st.n+' bet'+(st.n===1?"":"s")+' · rake '+(st.rakeBps/100).toFixed(2)+"%"
+          +(st.contested?" · → ~"+fmtC(st.dist):" · uncontested")+'</span></div>';
+      }
+    }
+    ppan.innerHTML=h;
+    requestAnimationFrame(layoutRightColumn);
+  }
+  async function specAmt(wallet,pool,kind){
+    try{
+      if(kind===KIND.DD){
+        const st=await roBoard.seats(specTid,wallet);
+        return Number(st.ddChip)? CHIPS[Number(st.ddChip)-1]:0;
+      }
+      let pack=packCacheS[wallet];
+      if(pack==null){ const st=await roBoard.seats(specTid,wallet); pack=st.chipPack; packCacheS[wallet]=pack; }
+      const byte=Number(pack>>BigInt(8*pool)&0xFFn);
+      return byte? CHIPS[byte-1]:0;
+    }catch{ return 0; }
+  }
+  let betsBusy=false;
+  async function pollBets(first){
+    if(MOCK || mode!=="spectate" || specTid==null || !roBoard || betsBusy) return; betsBusy=true;
+    try{
+      const latest=await ro.getBlockNumber();
+      const from=Math.max(0, latest-400000);
+      const evs=await roBoard.queryFilter(roBoard.filters.BetPlaced(specTid), from, latest);
+      for(const ev of evs){
+        const key=ev.transactionHash+":"+ev.index;
+        if(specSeen.has(key)) continue; specSeen.add(key);
+        const pool=Number(ev.args.pool), kind=Number(ev.args.kind), pick=Number(ev.args.pick);
+        const amt=await specAmt(ev.args.wallet, pool, kind);
+        addSpecBet(ev.args.wallet, pool, kind, pick, amt, !first);
+      }
+      const sevs=await roBoard.queryFilter(roBoard.filters.PoolSettled(specTid), from, latest);
+      for(const ev of sevs){
+        const key="s:"+ev.transactionHash+":"+ev.index;
+        if(specSeen.has(key)) continue; specSeen.add(key);
+        const pool=Number(ev.args.pool);
+        addSettleRow(pool, Number(ev.args.pot/(10n**18n)), Number(ev.args.distributed/(10n**18n)));
+      }
+    }catch{}finally{ betsBusy=false; }
+  }
+  resetSpecFeed();
+
+  const relaunch = () => {
+    reelObjs.forEach(o => { o.settled = null; o.settleFrom = null; });
+    // no targets: the lobby never settles — it holds the "balls are running" state
+    preview = { t0: performance.now(), targets: [null,null,null,null,null,null] };
+  };
+  const LOBBY_HOLD = 2200; // pin the envelope in the run (tau ≈ 0.34): perpetual spin, never the wire
+  function lobbyFrame(){
+    if (!preview) relaunch();
+    else if (performance.now() - preview.t0 > LOBBY_HOLD) preview.t0 = performance.now() - LOBBY_HOLD;
+    driveSpin({key:"committed"});
+  }
+
+  async function initRO(){
+    if(!ethers) return false;
+    for(const u of RPCS){
+      try{
+        const p=new ethers.JsonRpcProvider(u, 421614, {staticNetwork:true});
+        await p.getBlockNumber(); ro=p; break;
+      }catch{}
+    }
+    if(!ro) return false;
+    roBoard =new ethers.Contract(ADDR.board,  BOARD_ABI,  ro);
+    roLedger=new ethers.Contract(ADDR.ledger, LEDGER_ABI, ro);
+    dials={ entry:Number(await roBoard.entryWindow()), lead:Number(await roBoard.betsCloseLead()) };
+    return true;
+  }
+  /// Candidate list, newest opt-in first. The director walks it and takes the
+  /// first table that is actually live on chain, so a retired table left flagged
+  /// in the registry can never block a younger one (or flap the stream).
+  async function registryPick(){
+    if(PIN!=null) return [Number(PIN)];
+    const r=await fetch(SB_URL+"/rest/v1/stream_tables"
+      +"?select=table_id,streamed,updated_at"
+      +"&board=eq."+ADDR.board.toLowerCase()
+      +"&streamed=eq.true&order=updated_at.desc&limit=8",
+      {headers:{apikey:SB_KEY, Authorization:"Bearer "+SB_KEY}});
+    if(!r.ok) return null;
+    const rows=await r.json();
+    return [...new Set(rows.map(x=>Number(x.table_id)))];
+  }
+  function dropToLobby(){ mode="lobby"; T=null; specTid=null; holdUntil=0; }
+  async function pollTable(){
+    if(MOCK || specTid==null || !roBoard) return;
+    try{
+      const [t,e]=await Promise.all([roBoard.tables(specTid), roLedger.tableEscrow(specTid)]);
+      if(t.openedAt===0n){ dropToLobby(); return; }
+      T=t; tid=specTid; pot=e; mode="spectate";
+      const mk=Number(t.lockedMask), lb=String(t.lockBlock);
+      if(mk!==lastMask || lb!==lastLockBlock){ lastProgress=Date.now(); lastMask=mk; lastLockBlock=lb; }
+      if(t.retired){
+        // runSettle lands arm + six locks + retire in ONE tx, so without this the
+        // whole payoff (the settled six-char string) would never appear on stream.
+        if(!holdUntil) holdUntil=Date.now()+RESULT_HOLD_MS;
+        if(Date.now()>holdUntil) dropToLobby();
+      } else holdUntil=0;
+    }catch{}
+  }
+  /// A retired table left flagged in the registry would otherwise sit at the head of
+  /// the candidate list forever. Only ever cleared for a table the chain says is
+  /// retired — a flag on a table that has not opened yet is deliberate (pre-opt-in).
+  async function clearFlag(id){
+    if(PIN!=null || flagCleared.has(id)) return;
+    flagCleared.add(id);
+    try{
+      await fetch(SB_URL+"/rest/v1/stream_tables?board=eq."+ADDR.board.toLowerCase()+"&table_id=eq."+id,
+        {method:"PATCH", headers:{...SB_HDRS,"Content-Type":"application/json"},
+         body:JSON.stringify({streamed:false})});
+    }catch{}
+  }
+  /// Why the feed is not allowed to move right now, or null if it is free to.
+  ///  - the run-up (bets closed → pick time) and the final PRE_PICK_S are the whole
+  ///    point of watching, so never rotate through them;
+  ///  - once armed, hold while locks are actually landing — each lock refreshes the
+  ///    timer — but release after PICK_STALL_MS of nothing so a stalled operator
+  ///    cannot wedge the stream;
+  ///  - all six locked: hold briefly so the settled string is seen, then free.
+  function holdReason(){
+    if(!(mode==="spectate" && T && !T.retired)){ holdStart=0; return null; }
+    const sinceProgress = Date.now()-lastProgress;
+    if(Number(T.lockedMask)===0x3F) return sinceProgress<RESULT_HOLD_MS ? "result" : null;
+    if(T.lockBlock!==0n)            return sinceProgress<PICK_STALL_MS  ? "locks"  : null;
+    const toPick=Number(T.pickTime)-Math.floor(Date.now()/1000);
+    const runUp = ["committed","ready"].includes(phaseOf().key) || (toPick>0 && toPick<=PRE_PICK_S);
+    if(!runUp){ holdStart=0; return null; }
+    if(!holdStart) holdStart=Date.now();
+    return Date.now()-holdStart < PICK_HOLD_MAX ? "run-up" : null;
+  }
+  function announceSwitch(id){
+    const el=document.getElementById("swT");
+    if(el) el.textContent="Now viewing TABLE "+id;
+    document.body.classList.add("switching");
+    setTimeout(()=>document.body.classList.remove("switching"), SWITCH_MS);
+  }
+  async function switchTo(id){
+    announceSwitch(id);
+    specTid=id; lastSwitch=Date.now(); holdUntil=0; holdStart=0;
+    lastProgress=Date.now(); lastMask=-1; lastLockBlock="";
+    resetSpecFeed(); await pollTable(); await pollBets(true);   // backfill quietly
+  }
+  async function director(){
+    if(LOBBY_ONLY || MOCK) return;
+    try{
+      if(!ro && !(await initRO())) return;
+      if(holdUntil && Date.now()<holdUntil) return;           // finished table on screen
+      if(holdReason()) return;                                // run-up, or locks landing
+
+      const cands=await registryPick();
+      if(cands==null) return;              // registry unreachable → keep what is on screen
+
+      const live=[];
+      for(const id of cands){
+        let t; try{ t=await roBoard.tables(id); }catch{ continue; }   // RPC hiccup: judge nothing
+        if(t.retired){ clearFlag(id); continue; }
+        if(t.openedAt===0n) continue;                                 // flagged but not opened yet
+        live.push(id);
+      }
+      liveCount=live.length;
+      if(!live.length){ if(specTid!=null) dropToLobby(); return; }
+
+      const onLive = mode==="spectate" && T && live.includes(specTid);
+      if(!onLive){ await switchTo(live[0]); return; }         // newest opt-in wins
+      if(live.length===1) return;                            // nothing to rotate to
+      if(Date.now()-lastSwitch < ROTATE_MS) return;           // dwell not elapsed
+      await switchTo(live[(live.indexOf(specTid)+1)%live.length]);
+    }catch{}
+  }
+  function paintBar(p){
+    let txt;
+    if(mode==="spectate" && T && p){
+      const potStr = pot!=null ? Number(pot/(10n**18n)).toLocaleString() : "—";
+      const now=Math.floor(Date.now()/1000);
+      const cd = p.until? " · "+mmss(p.until-now) : "";
+      const locks = Number(T.lockedMask).toString(2).split("1").length-1;
+      const lockStr = (p.key==="spinning"||p.key==="locked") ? " · "+locks+"/6 locked" : "";
+      txt="TABLE "+tid+" · seed round "+Number(T.seedRound)+" · seats "+T.seatCount+"/12 · pot "+potStr+" TIMBS · "+p.label+cd+lockStr
+           +(liveCount>1? " · "+liveCount+" tables live":"");
+    } else {
+      txt='<span class="lob">no streamed table right now — the felt spins on</span>';
+    }
+    if(txt!==lastBarTxt){ bar.innerHTML=txt; lastBarTxt=txt; }
+    bar.classList.add("on");
+  }
+  if(MOCK){
+    const now=BigInt(Math.floor(Date.now()/1000));
+    dials={entry:2400,lead:295};
+    T={ openedAt:now-3300n, pickTime:now+45n, lockBlock:0n, seedRound:7,
+        seatCount:5, lockedMask:0, ddSettled:false, retired:false,
+        seedString:"0x414243313233", lockedChars:"0x000000000000" };
+    tid=99; specTid=99; pot=1240n*(10n**18n); mode="spectate";
+  }
+  // ── live presence: one heartbeat row per open tab, counted over a 60s window ──
+  const VIEW_TTL_S=60, VIEW_HB_MS=20000, VIEW_POLL_MS=15000;
+  let sid;
+  try{
+    sid=sessionStorage.getItem("swaptables.sid");
+    if(!sid){ sid=(crypto.randomUUID? crypto.randomUUID()
+                 : "s"+Math.random().toString(36).slice(2)+Date.now().toString(36));
+              sessionStorage.setItem("swaptables.sid",sid); }
+  }catch{ sid="s"+Math.random().toString(36).slice(2); }
+
+  const eye=document.createElement("div"); eye.id="viewCount"; eye.className="hide";
+  eye.innerHTML='<span aria-hidden="true">\u{1F441}</span><span class="n">—</span>';
+  document.body.appendChild(eye);
+
+  const hereTid = () => (mode==="spectate" && specTid!=null) ? specTid : null;
+  async function beat(){
+    try{
+      await fetch(SB_URL+"/rest/v1/stream_presence",{method:"POST",
+        headers:{...SB_HDRS,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},
+        body:JSON.stringify({sid, board:ADDR.board.toLowerCase(),
+                             table_id:hereTid(), seen_at:new Date().toISOString()})});
+    }catch{}
+  }
+  async function countViewers(){
+    try{
+      const since=new Date(Date.now()-VIEW_TTL_S*1000).toISOString();
+      const r=await fetch(SB_URL+"/rest/v1/stream_presence"
+        +"?select=sid,table_id&seen_at=gt."+since+"&limit=500",{headers:SB_HDRS});
+      if(!r.ok) return;
+      const rows=await r.json();
+      const total=rows.length, t=hereTid();
+      const here=t!=null? rows.filter(x=>Number(x.table_id)===t).length : 0;
+      eye.querySelector(".n").textContent=total;
+      eye.title=total+" watching"+(t!=null? " · "+here+" on TABLE "+t : "");
+      eye.classList.toggle("hide", total<1);
+    }catch{}
+  }
+  beat(); countViewers();
+  setInterval(beat, VIEW_HB_MS); setInterval(countViewers, VIEW_POLL_MS);
+
+  let wasSpec=null;
+  (function directorLoop(){
+    const specOn = (mode==="spectate" && !!T);
+    bfeed.classList.toggle("on", specOn);
+    ppan.classList.toggle("on", specOn);
+    if(specOn!==wasSpec){ document.body.classList.toggle("spec", specOn); wasSpec=specOn; setTimeout(()=>{relayoutCoins(); layoutRightColumn();},60); }
+    if(mode==="spectate" && T){
+      const p=phaseOf();
+      if(["committed","ready","spinning","locked","done"].includes(p.key)) driveSpin(p);
+      else lobbyFrame();               /* entry/betting: ambient reels + real countdown in the bar */
+      paintBar(p);
+    } else { lobbyFrame(); paintBar(null); }
+    requestAnimationFrame(directorLoop);
+  })();
+  if(!MOCK && !LOBBY_ONLY){ setInterval(pollTable,12000); setInterval(()=>pollBets(false),12000); setInterval(director,25000); director();
+    // during the pick, poll fast so each staggered reveal lands on stream within seconds
+    setInterval(()=>{ if(mode==="spectate"&&T&&T.lockBlock!==0n&&Number(T.lockedMask)!==0x3F){ pollTable(); pollBets(false); } },4000); }
+  if(MOCK){
+    // demo drip: fake bets + a settlement so the panels can be seen without a chain
+    const W=["0x8a21f39cD47cad55f5a2E3c1b45090aeC65b21aa","0x4b7C09fA33210d8be24C11C4680891C377bBe1cd",
+             "0x9dE3aB44F210FF08c31e0a9C556677f9012Ccf3e","0x2f664411abD00Ff17690EeAa1C63920fA1c778Be"];
+    const DEMO=[[0,KIND.EXACTLY,16,50],[2,KIND.COLOR,0,25],[1,KIND.DOZEN,1,100],[0,KIND.EXACTLY,3,25],
+                [4,KIND.LOWHIGH,1,10],[6,KIND.DD,0,50],[2,KIND.EXACTLY,30,500],[3,KIND.VOWELS,0,25]];
+    let di=0;
+    setInterval(()=>{
+      if(di<DEMO.length){ const [p,k,pk,a]=DEMO[di]; addSpecBet(W[di%4],p,k,pk,a,true); di++; }
+      else if(di===DEMO.length){ addSettleRow(0, 82.3, 76.1); di++; }
+    }, 1300);
+  }
+}
+
 </script>
 </body>
 </html>
