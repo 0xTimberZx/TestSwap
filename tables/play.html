@@ -1022,7 +1022,7 @@ function railDefault(){
     return;
   }
   if(curSeg) rail("Token <b>SEG "+curSeg+"</b> carries <b>"+chipOfSeg(curSeg)+" TIMBS</b> — click a board spot to place it.");
-  else rail("Pick a token, then a board spot. The Repeats-a-Digit spot takes its own separate chip.");
+  else rail("Pick a token, then a board spot. The Repeats-a-Digit spot takes its own bonus chip.");
 }
 function chipOfSeg(s){
   const byte = Number(mySeat.chipPack >> BigInt(8*(s-1)) & 0xFFn);
@@ -1046,8 +1046,8 @@ function cellBet(o){
 }
 // Double-Digit — its own stake, one per wallet, round-wide (contract truth).
 boardEl.appendChild(cellBet({cls:"out dd",kind:KIND.DD,pick:0,count:0,
-  html:'<span class="lab">REPEATS A DIGIT</span><span class="sub">same character twice · own chip · ≈36% of rounds</span>',
-  desc:"any character shows up twice in the finished six. Separate stake from your six tokens — one per wallet",
+  html:'<span class="lab">REPEATS A DIGIT</span><span class="sub">same character twice · bonus chip · ≈36% of rounds</span>',
+  desc:"any character shows up twice in the finished six. A bonus chip, separate from your six tokens — one per wallet",
   col:"1",row:"1 / 4"}));
 // 36 pockets — colours from RED_MASK (alternating), NOT roulette's red set.
 for(let n=1;n<=36;n++){
@@ -1585,7 +1585,7 @@ async function pollJackpot(){
     // the felt shows what one hit pays, not the banner total
     p.textContent="MAX HIT "+fmt4(hit);
     p.title="Rolling Double-Digit jackpot \u2014 "+fmtT(bal)+" TIMBS on the banner; one hit pays up to "
-      +fmtT(hit)+" TIMBS, split across the Repeats-a-Digit winners (2+ wallets, capped at 10x your own chip).";
+      +fmtT(hit)+" TIMBS, split across the Repeats-a-Digit winners (2+ wallets, capped at 10x your bonus chip).";
   }catch{}
 }
 setInterval(pollJackpot, 30000);
