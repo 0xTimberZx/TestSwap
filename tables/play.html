@@ -404,8 +404,10 @@
     <h2 class="clickable" onclick="this.parentElement.classList.toggle('collapsed')">Your picks
       <span>· live payout estimates · figures move as players join</span></h2>
     <div id="picksList" style="font-size:13px;line-height:1.5"></div>
-    <p class="hint" id="picksNote" style="display:none">"Up to" assumes yours is the only winning pick in the pool —
-      pari-mutuel means co-winners split the pot by stake × weight. Rake falls as more wallets join.</p>
+    <p class="hint" id="picksNote" style="display:none">A win returns your own chip and pays you the rest of the pool —
+      the rake shaves both, which is why the figure back is a little under what you staked.
+      "Up to" assumes yours is the only winning pick in the pool — pari-mutuel means co-winners split the pot by
+      stake × weight. Rake falls as more wallets join.</p>
   </div>
 
   <div class="approve" id="approve">
@@ -1314,13 +1316,19 @@ async function renderStakes(){
       if(b.wallet.toLowerCase()!==me?.toLowerCase()) return;
       const st=poolStats(pool);
       const spec=specOf(b.kind,b.pick);
+      // A win returns your own chip and pays you the rest of the pool — the
+      // rake shaves BOTH, so state the stake net of it rather than pretending
+      // the whole cut comes out of the winnings.
+      const back = b.amt*(10000-st.rakeBps)/10000;
       rows.push('<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;'
         +'padding:7px 0;border-bottom:1px solid rgba(247,240,214,.08)">'
         +'<span class="fseg" style="width:52px">'+(b.kind===KIND.DD?"DD":"SEG "+(pool+1))+'</span>'
         +'<span style="flex:1;color:#dfe7df">'+fmt2(b.amt)+' on <b style="color:var(--cream)">'+spec.name+'</b></span>'
         +'<span style="color:#9fb4a4">pool '+fmt2(st.pot)+' · '+st.n+' bet'+(st.n===1?"":"s")
         +' · rake '+(st.rakeBps/100).toFixed(2)+'%'+(st.contested?"":(GEN>=5?" · uncontested — rake-free, no seed share yet":" · uncontested — no seed share yet"))+'</span>'
-        +'<span style="font-family:Georgia,serif;font-weight:800;color:var(--ok)">up to ~'+fmt2(st.dist)+'</span>'
+        +'<span style="font-family:Georgia,serif;font-weight:800;color:var(--ok)">up to ~'+fmt2(st.dist)
+        +'<span style="display:block;font-weight:400;font-size:.82em;color:#9fb4a4">'
+        +'~'+fmt2(back)+' back + ~'+fmt2(st.dist-back)+' won</span></span>'
         +'</div>');
     });
   });
