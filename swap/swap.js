@@ -724,6 +724,59 @@ function renderSwapInfo(amountInWei, amountOutWei, spotPrice, viaLabel = "") {
   const minReceived = amountOutWei.mul(Math.floor((100 - slippagePct) * 100)).div(10000);
   document.getElementById("info-min").textContent =
     fmt(minReceived, tokenOut.decimals, 6) + " " + tokenOut.symbol;
+
+  renderRouteDivergence(rate, impact);
+}
+
+// How far this route's price sits from the reference oracle, beyond what fee +
+// impact explain.
+//
+// The oracle prices every token through its WETH pool against one anchor
+// (config.js). A swap does NOT have to take that path — the router picks the
+// best fill, which is often a direct pair. When a direct pool and the WETH path
+// disagree, the two "≈ $" figures on this card legitimately won't reconcile,
+// because they're describing two different pools that price the same pair
+// differently. That gap is an arbitrage sitting in our own liquidity, and the
+// honest thing is to name it rather than let the card look broken.
+//
+// Expected: a route should come in BELOW reference by roughly (impact + fee).
+// Anything past DIVERGENCE_TOLERANCE_PCT beyond that is pools disagreeing.
+const DIVERGENCE_TOLERANCE_PCT = 5;
+
+async function renderRouteDivergence(rate, impactPct) {
+  const el = document.getElementById("info-divergence");
+  if (!el) return;
+  const inTok = tokenIn, outTok = tokenOut;
+  el.classList.add("hidden");
+  try {
+    const [pIn, pOut] = await Promise.all([
+      usdPriceOf(effAddr(inTok)), usdPriceOf(effAddr(outTok))
+    ]);
+    // A later edit swapped the pair out from under this resolution — drop it.
+    if (inTok !== tokenIn || outTok !== tokenOut) return;
+    if (!pIn || !pOut) return;                       // unpriceable, say nothing
+
+    const referenceRate = pIn / pOut;                // out per in, at reference
+    if (!isFinite(referenceRate) || referenceRate <= 0) return;
+
+    const divergence = (rate / referenceRate - 1) * 100;
+    const expected   = -(impactPct + 0.05);          // impact + the 0.05% fee
+    const excess     = divergence - expected;
+    if (Math.abs(excess) < DIVERGENCE_TOLERANCE_PCT) return;
+
+    const better = excess > 0;
+    el.textContent = better
+      ? `This route pays ${Math.abs(excess).toFixed(0)}% MORE than reference prices. ` +
+        `The direct ${inTok.symbol}/${outTok.symbol} pool disagrees with the ` +
+        `${inTok.symbol}→WETH→${outTok.symbol} path — the "≈ $" figures above ` +
+        `won't tie out until those pools are arbitraged level.`
+      : `This route pays ${Math.abs(excess).toFixed(0)}% LESS than reference prices. ` +
+        `A better fill may exist via another pool; the "≈ $" figures above are ` +
+        `quoted through WETH, which this route doesn't take.`;
+    el.className = "info-note" + (better ? " good" : " warn");
+  } catch {
+    /* pricing is best-effort — never block a quote on it */
+  }
 }
 
 function updateSwapButton(text) {
