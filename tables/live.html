@@ -616,7 +616,7 @@
       <div class="pt" data-i="4"><span>5</span></div><div class="pt" data-i="5"><span>6</span></div>
     </div>
     <p class="note" id="lockTracker" style="display:none;margin:10px 0 0;font-variant-numeric:tabular-nums"></p>
-    <button class="btn primary" id="finishPick" style="display:none;margin-top:10px">Finish the pick — no secret needed, you pay the gas</button>
+    <button class="btn primary" id="finishPick" style="display:none;margin-top:10px">Finish the pick and close the table — no secret needed, you pay the gas</button>
     <button class="btn primary" id="closeTable" style="display:none;margin-top:10px">Close the table — release refunds and finish the round (anyone may)</button>
   </div>
 
@@ -1158,8 +1158,9 @@ $("loadBtn").onclick = async () => {
   const total = ethers.parseUnits(String(localTotal()),18);
   const allow = await timbs.allowance(me, ADDR.ledger);
   if(allow < total){
-    rail("First: approve the vault to pull your chips ("+localTotal()+" TIMBS)…");
-    if(!await send("approve "+localTotal()+" TIMBS", timbs, "approve", ADDR.ledger, total*2n)) return;
+    rail("First: approve the vault to pull your chips — approving "+(localTotal()*2)+" TIMBS, "
+      +"double your load so the next round needs no approval…");
+    if(!await send("approve "+(localTotal()*2)+" TIMBS", timbs, "approve", ADDR.ledger, total*2n)) return;
   }
   if(await send("load six tokens ("+localTotal()+" TIMBS)", board, "loadTokens", tid, idxs)){
     rail('<span class="win">Loaded.</span> The board is open — place your tokens.');
@@ -1365,7 +1366,7 @@ $("approveBtn").onclick=async ()=>{
   if(p.dd){
     const need = ethers.parseUnits(String(CHIPS[ddPick]),18);
     const allow = await timbs.allowance(me, ADDR.ledger);
-    if(allow<need && !await send("approve "+CHIPS[ddPick]+" TIMBS", timbs, "approve", ADDR.ledger, need*2n)) return;
+    if(allow<need && !await send("approve "+(CHIPS[ddPick]*2)+" TIMBS", timbs, "approve", ADDR.ledger, need*2n)) return;
     if(await send("Double-Digit · "+CHIPS[ddPick]+" TIMBS", board, "placeDoubleDigit", tid, ddPick)){
       clearPending(); rail('<span class="win">Double-Digit placed.</span> Final.'); await refreshChain();
     }
