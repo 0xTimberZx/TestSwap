@@ -501,17 +501,22 @@ async function onAmountOutChange() {
   updateSwapUsd();
 }
 
-// "≈ $" estimates under the pay/receive amounts. Priced via the shared oracle
-// (config.js), which prices ETH through WETH — so effAddr() maps native ETH to
-// WETH for the lookup. Cached with a short TTL, so keystrokes are cheap.
-async function updateSwapUsd() {
-  const payEl = document.getElementById("pay-usd");
-  const rcvEl = document.getElementById("receive-usd");
-  const inV  = document.getElementById("amount-in")?.value;
-  const outV = document.getElementById("amount-out")?.value;
-  if (payEl) payEl.textContent = (tokenIn  && inV)  ? await usdEst(effAddr(tokenIn),  inV)  : "";
-  if (rcvEl) rcvEl.textContent = (tokenOut && outV) ? await usdEst(effAddr(tokenOut), outV) : "";
-}
+// The pay/receive "≈ $" estimates are GONE, deliberately.
+//
+// They were priced off the live pools. On this testnet nothing arbitrages
+// those pools, so USDC and USDT have drifted well off a dollar and the card
+// was rendering "5 USDC ≈ $10.43" — technically what our own liquidity says,
+// and useless to a human. Pinning stables back to $1 is worse: a constant next
+// to a pool-derived number is how "1 USDT → $0.38 at 0.75% impact" happened in
+// the first place.
+//
+// So the card now shows token amounts and the rate, which are exact, and says
+// nothing it can't stand behind. USD survives where it IS anchored — the prize
+// pot and analytics, both quoted at ETH_USD_PRICE.
+//
+// Kept as a no-op so the live tick and the input handlers don't need to know.
+// If the pools are ever arbitraged level, restoring this is a small change.
+async function updateSwapUsd() {}
 
 // Keep the quote + USD live against pool moves (other wallets' trades). Re-quote
 // to current reserves only when the user isn't mid-edit, so it never fights
@@ -734,10 +739,11 @@ function renderSwapInfo(amountInWei, amountOutWei, spotPrice, viaLabel = "") {
 // The oracle prices every token through its WETH pool against one anchor
 // (config.js). A swap does NOT have to take that path — the router picks the
 // best fill, which is often a direct pair. When a direct pool and the WETH path
-// disagree, the two "≈ $" figures on this card legitimately won't reconcile,
-// because they're describing two different pools that price the same pair
-// differently. That gap is an arbitrage sitting in our own liquidity, and the
-// honest thing is to name it rather than let the card look broken.
+// disagree, that gap is an arbitrage sitting in our own liquidity.
+//
+// This outlived the "≈ $" figures it was originally written to explain: those
+// are gone, but the divergence they exposed is real and still worth naming, so
+// the note now compares this route against the WETH route directly.
 //
 // Expected: a route should come in BELOW reference by roughly (impact + fee).
 // Anything past DIVERGENCE_TOLERANCE_PCT beyond that is pools disagreeing.
@@ -766,13 +772,12 @@ async function renderRouteDivergence(rate, impactPct) {
 
     const better = excess > 0;
     el.textContent = better
-      ? `This route pays ${Math.abs(excess).toFixed(0)}% MORE than reference prices. ` +
-        `The direct ${inTok.symbol}/${outTok.symbol} pool disagrees with the ` +
-        `${inTok.symbol}→WETH→${outTok.symbol} path — the "≈ $" figures above ` +
-        `won't tie out until those pools are arbitraged level.`
-      : `This route pays ${Math.abs(excess).toFixed(0)}% LESS than reference prices. ` +
-        `A better fill may exist via another pool; the "≈ $" figures above are ` +
-        `quoted through WETH, which this route doesn't take.`;
+      ? `This route pays ${Math.abs(excess).toFixed(0)}% MORE than the same trade ` +
+        `routed ${inTok.symbol}→WETH→${outTok.symbol}. Our own pools disagree on ` +
+        `this pair — good for you here, but it means one of them is mispriced.`
+      : `This route pays ${Math.abs(excess).toFixed(0)}% LESS than the same trade ` +
+        `routed ${inTok.symbol}→WETH→${outTok.symbol}. A better fill may exist ` +
+        `through another pool.`;
     el.className = "info-note" + (better ? " good" : " warn");
   } catch {
     /* pricing is best-effort — never block a quote on it */
@@ -1282,17 +1287,9 @@ async function _mirrorLq(fromId, toId, fromTok, toTok, invert) {
 async function onLqAmountA() { await _mirrorLq("lq-amount-a", "lq-amount-b", tokenIn, tokenOut, false); updateLqUsd(); }
 async function onLqAmountB() { await _mirrorLq("lq-amount-b", "lq-amount-a", tokenOut, tokenIn, true); updateLqUsd(); }
 
-// "≈ $" estimates under the two Deposit amounts (add-liquidity), same oracle as
-// the swap fields. Liquidity uses WETH (not native ETH), so effAddr() is a
-// no-op here, but kept for symmetry.
-async function updateLqUsd() {
-  const aEl = document.getElementById("lq-usd-a");
-  const bEl = document.getElementById("lq-usd-b");
-  const aV  = document.getElementById("lq-amount-a")?.value;
-  const bV  = document.getElementById("lq-amount-b")?.value;
-  if (aEl) aEl.textContent = (tokenIn  && aV) ? await usdEst(effAddr(tokenIn),  aV) : "";
-  if (bEl) bEl.textContent = (tokenOut && bV) ? await usdEst(effAddr(tokenOut), bV) : "";
-}
+// Deposit-amount "≈ $" estimates, removed for the same reason as the swap
+// fields above. No-op retained so callers stay unchanged.
+async function updateLqUsd() {}
 
 // True when `amountStr` parses to more than the wallet holds. Returns false
 // on anything unknown (null balance, empty/partial input, over-precise
@@ -1391,21 +1388,10 @@ function renderRemovePreview() {
   // Also show the LP amount being burned next to the "LP:" label.
   if (lpEl) lpEl.textContent = `Burn ${fmtLp(liq)} of ${fmtLp(lpBalanceWei)} LP`;
 
-  // Append the total USD of the withdrawal (async; guarded so a later drag that
-  // rewrote the preview isn't clobbered by a stale price resolution).
-  const _base = el.textContent;
-  (async () => {
-    const aF = parseFloat(ethers.utils.formatUnits(outA, tokenIn.decimals));
-    const bF = parseFloat(ethers.utils.formatUnits(outB, tokenOut.decimals));
-    const [pa, pb] = await Promise.all([usdPriceOf(effAddr(tokenIn)), usdPriceOf(effAddr(tokenOut))]);
-    let total = 0, ok = false;
-    if (pa != null) { total += aF * pa; ok = true; }
-    if (pb != null) { total += bF * pb; ok = true; }
-    if (ok && el.textContent === _base) {
-      total = total < 0.01 ? total.toPrecision(2) : total.toLocaleString("en-US", { maximumFractionDigits: 2 });
-      el.textContent = `${_base}  ·  ≈ $${total}`;
-    }
-  })();
+  // The withdrawal's total USD used to be appended here. Dropped with the rest
+  // of the pool-priced dollar figures — the preview already states both token
+  // amounts exactly, which is the number that matters when you're deciding how
+  // much LP to burn.
 }
 
 function showLqTx(hash) {
