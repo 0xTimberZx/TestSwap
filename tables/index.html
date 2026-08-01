@@ -282,6 +282,7 @@ import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm";
 
 const ADDR = {
   board:  "0x1de9889da2083F5f1693DfCf589A453E9b39EEA7",
+  jackpot: null, // DDJackpot (M2) — cross-generation, set once deployed
   ledger: "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8",
   timbs:  "0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa",
   prize:  "0x35976f4D2260127848a6274D2eC89ee054412432",
@@ -382,6 +383,12 @@ function boardAbiFor(gen){
   if(gen>=5) return [TABLES_V5, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))];
   return BOARD_ABI;
 }
+const JACKPOT_ABI = [
+  "function balance() view returns (uint256)",
+  "function strikeable(address board, uint256 tableId) view returns (bool ok, uint256 slice)",
+  "function strike(address board, uint256 tableId) returns (uint256)",
+];
+let jack=null;
 const RESERVE_ABI = [
   "function freeFloat() view returns (uint256)",
   "function overflowEarmark() view returns (uint256)",
@@ -617,6 +624,7 @@ $("connect").onclick = async () => {
   if (net.chainId !== CHAIN) return log("Switch your wallet to Arbitrum Sepolia (421614).", "l-err");
 
   GEN = await detectGen(signer);
+  if(ADDR.jackpot) jack = new ethers.Contract(ADDR.jackpot, JACKPOT_ABI, signer);
   board  = new ethers.Contract(ADDR.board,  boardAbiFor(GEN),  signer);
   dialEntry = Number(await board.entryWindow());
   if(GEN>=5) ERR_HINT.TableClosedForEntry = "entry has closed — no new seats; seated wallets can still load until bets close";
@@ -688,6 +696,14 @@ async function refreshMoney(){
       +" free float \u00b7 "+fmt(rmark)+" earmarked for jackpot/la partage"
       +(rhalt?" \u00b7 GRANTS HALTED":"")+".";
     n.classList.toggle("l-warn", rhalt);
+  }catch{} }
+
+  if(jack){ try{
+    const jbal=await jack.balance();
+    let jn=document.getElementById("jackpotNote");
+    if(!jn){ jn=document.createElement("p"); jn.id="jackpotNote"; jn.className="note";
+      (document.getElementById("reserveNote")||$("vaultNote")).after(jn); }
+    jn.textContent="DD Jackpot: "+fmt(jbal)+" TIMBS on the banner \u00b7 strikes pay 20% (floor 50), 2+ DD wallets required.";
   }catch{} }
 }
 async function refreshTable(){
@@ -1030,13 +1046,13 @@ $("tablesBoard").addEventListener("click",e=>{
 setInterval(scanTables, 15000);
 
 // ── auto-pilot: arm → staggered reveals → retire, all from this tab ──
-let apOn=false, apBusy=false, apTid=null, apLastLock=0;
+let apOn=false, apBusy=false, apTid=null, apLastLock=0, apStruck=false;
 function apSet(m){ const p=$("apState"); p.style.display=""; p.textContent=m; }
 $("autoPilot").onclick=()=>{
   if(apOn){ apOn=false; $("autoPilot").innerHTML="&#9654; Auto-pilot this table"; apSet("stopped"); log("auto-pilot stopped","l-warn"); return; }
   if(!me){ log("connect a wallet before engaging auto-pilot","l-err"); return; }
   if(!secretsFor(tid().toString())) return;   // logs its own passphrase error
-  apOn=true; apTid=tid(); apLastLock=0;
+  apOn=true; apTid=tid(); apLastLock=0; apStruck=false;
   $("autoPilot").innerHTML="&#9632; Stop auto-pilot";
   apSet("watching table "+apTid);
   log("auto-pilot engaged on table "+apTid+" — arm, six staggered reveals, retire","l-ok");
@@ -1051,7 +1067,22 @@ async function apTick(){
       log("auto-pilot complete — table "+apTid+" settled and retired","l-ok"); refresh(); return;
     }
     const now=Math.floor(Date.now()/1000), mask=Number(t.lockedMask);
-    if(mask===0x3F){ apSet("retiring…"); await send("retire (auto)",board,"retire",apTid); refresh(); return; }
+    if(mask===0x3F){
+      // gen-6 M2: the sixth reveal makes it true, auto-pilot makes it paid
+      if(jack && !apStruck){
+        apStruck=true;
+        try{
+          const r=await jack.strikeable(ADDR.board, apTid);
+          if(r.ok){
+            apSet("JACKPOT \u2014 striking\u2026");
+            if(await send("strike the DD jackpot",jack,"strike",ADDR.board,apTid)){
+              log("JACKPOT STRUCK \u2014 "+fmt(r.slice)+" TIMBS to the Double-Digit winners","l-ok");
+            }
+            refresh(); return;
+          }
+        }catch{}
+      }
+      apSet("retiring…"); await send("retire (auto)",board,"retire",apTid); refresh(); return; }
     if(t.lockBlock!==0n){
       const nowB=await provider.getBlockNumber();
       if(nowB<=Number(t.lockBlock)){ apSet("armed — waiting one block"); return; }

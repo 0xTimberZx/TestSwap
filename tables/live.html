@@ -637,6 +637,7 @@ catch (e1) {
 
 const ADDR = {
   board:  "0x1de9889da2083F5f1693DfCf589A453E9b39EEA7",
+  jackpot: null, // DDJackpot (M2) — cross-generation, set once deployed
   ledger: "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8",
   timbs:  "0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa",
   crank:  "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher, generation-agnostic
@@ -896,6 +897,7 @@ $("connect").onclick = async () => {
   timbs  = new ethers.Contract(ADDR.timbs, ERC20_ABI, signer);
   dials = { entry: Number(await board.entryWindow()), lead: Number(await board.betsCloseLead()) };
   rail("Connected. Loading the newest table…");
+  pollJackpot();
   try{ window.DebugHub && DebugHub.logCheckpoint("wallet connected · "+short(me), "pass"); }catch(e){}
   await pickNewest();
   setInterval(refreshChain, 12000);
@@ -1697,6 +1699,26 @@ async function paintReveal(){
     }
   }
 }
+const JACKPOT_ABI = [
+  "function balance() view returns (uint256)",
+  "function strikeable(address board, uint256 tableId) view returns (bool ok, uint256 slice)",
+  "function strike(address board, uint256 tableId) returns (uint256)",
+  "event JackpotStruck(address indexed board, uint256 indexed tableId, uint256 slice, uint256 winners, uint256 balanceAfter)",
+];
+let jack=null;
+async function pollJackpot(){
+  if(!ADDR.jackpot || !provider) return;
+  try{
+    if(!jack) jack=new ethers.Contract(ADDR.jackpot, JACKPOT_ABI, provider);
+    const bal=await jack.balance();
+    let p=document.getElementById("jackpotPill");
+    if(!p){ p=document.createElement("span"); p.id="jackpotPill"; p.className="pill";
+      p.style.cssText="color:var(--gold,#d7b34c);border-color:var(--gold,#d7b34c)";
+      $("phasePill").parentElement.appendChild(p); }
+    p.textContent="JACKPOT "+fmt4(bal);
+  }catch{}
+}
+setInterval(pollJackpot, 30000);
 let tipBusy=false;
 async function renderTipRow(){
   if(GEN<6 || !T || !mySeat || !mySeat.seated) return;
@@ -2006,9 +2028,23 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
           +(st.contested?" · → ~"+fmtC(st.dist):" · uncontested")+'</span></div>';
       }
     }
+    if(jackpotBal!=null){
+      h+='<div class="prow"><span class="pseg" style="color:var(--gold,#d7b34c)">JACKPOT</span>'
+        +'<span class="ppot" style="color:var(--gold,#d7b34c)">'+fmtC(jackpotBal)+'</span>'
+        +'<span class="pmeta">rolls until the Double-Digit hits \u00b7 2+ DD wallets</span></div>';
+    }
     ppan.innerHTML=h;
     requestAnimationFrame(layoutRightColumn);
   }
+  let jackpotBal=null, roJack=null;
+  async function pollJackpotRO(){
+    if(!ADDR.jackpot || !ro) return;
+    try{
+      if(!roJack) roJack=new ethers.Contract(ADDR.jackpot, JACKPOT_ABI, ro);
+      jackpotBal=Number((await roJack.balance())/(10n**18n));
+    }catch{}
+  }
+  setInterval(pollJackpotRO, 30000);
   async function specAmt(wallet,pool,kind){
     try{
       if(kind===KIND.DD){
@@ -2052,6 +2088,16 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
           if(g>0) addNoteRow(Number(ev.args.pool)===6?"ROUND":"SEG "+(Number(ev.args.pool)+1),
             'reserve topped the winners up \u2014 <b>+'+fmtC(g)+' TIMBS</b> from the house');
         }
+        if(roJack){
+          const jevs=await roJack.queryFilter(roJack.filters.JackpotStruck(ADDR.board, specTid), from, latest);
+          for(const ev of jevs){
+            const key="j:"+ev.transactionHash+":"+ev.index;
+            if(specSeen.has(key)) continue; specSeen.add(key);
+            addNoteRow("JACKPOT",'STRUCK \u2014 <b>'+fmtC(Number(ev.args.slice/(10n**18n)))
+              +' TIMBS</b> to the Double-Digit winners \u00b7 '+fmtC(Number(ev.args.balanceAfter/(10n**18n)))+' still on the banner');
+            pollJackpotRO();
+          }
+        }
         const tevs=await roBoard.queryFilter(roBoard.filters.DealerTipped(specTid), from, latest);
         for(const ev of tevs){
           const key="t:"+ev.transactionHash+":"+ev.index;
@@ -2088,6 +2134,7 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     roBoard =new ethers.Contract(ADDR.board,  boardAbiFor(GEN),  ro);
     roLedger=new ethers.Contract(ADDR.ledger, LEDGER_ABI, ro);
     dials={ entry:Number(await roBoard.entryWindow()), lead:Number(await roBoard.betsCloseLead()) };
+    pollJackpotRO();
     return true;
   }
   /// Candidate list, newest opt-in first. The director walks it and takes the
