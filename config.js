@@ -503,10 +503,6 @@ function _tokenDecimals(lc) {
   const t = DEFAULT_TOKENS.find(x => x.address.toLowerCase() === lc);
   return t ? t.decimals : 18;
 }
-function _isStableAddr(lc) {
-  return (ADDRESSES.USDC && lc === ADDRESSES.USDC.toLowerCase()) ||
-         (ADDRESSES.USDT && lc === ADDRESSES.USDT.toLowerCase());
-}
 // USD value of one whole `quote` token = quoteUsd; returns USD-per-`token`, read
 // off the token/quote pool. null if the pair doesn't exist or is empty.
 async function _priceViaPair(prov, factory, token, quote, quoteUsd) {
@@ -522,9 +518,23 @@ async function _priceViaPair(prov, factory, token, quote, quoteUsd) {
   if (tokRes <= 0 || qRes <= 0) return null;
   return (qRes / tokRes) * quoteUsd; // (quote per token) × (USD per quote)
 }
-async function _oracleEthUsd(prov, factory) {
-  return _priceViaPair(prov, factory, ADDRESSES.WETH, ADDRESSES.USDC, 1);
+// THE anchor. Every "≈ $" on the site resolves through this one number.
+//
+// It used to read the USDC/WETH pool. On a testnet that pool is unarbitraged,
+// and it had drifted to imply ETH ≈ $700 — while landing.js and compete.js were
+// using the fixed ETH_USD_PRICE ($3000) for the same currency. Two anchors ~4x
+// apart, and which one you saw depended on the page. Testnet ETH has no market
+// price to discover, so reading a pool for it was never buying us anything:
+// take the declared rate, the same one the landing page quotes the pot in.
+function _oracleEthUsd() {
+  return ETH_USD_PRICE;
 }
+// NOTE: stables are deliberately NOT pinned to $1 here. On this testnet nothing
+// arbitrages the pools, so USDC/USDT have drifted off a dollar — pinning them
+// made the swap card's two "≈ $" lines incomparable (one a constant, one read
+// from a pool), which is how a 1 USDT -> $0.38 quote could look like a 0.75%
+// price impact. Everything, stables included, is now priced off the pools
+// relative to one anchor. See _oracleEthUsd.
 // USD per 1 whole token (number), or null if unpriceable. TTL-cached.
 async function usdPriceOf(tokenAddr) {
   if (!tokenAddr) return null;
@@ -536,13 +546,18 @@ async function usdPriceOf(tokenAddr) {
   try {
     const prov    = _priceProvider();
     const factory = new ethers.Contract(ADDRESSES.TimbSwapFactory, _PRICE_FACTORY_ABI, prov);
-    if (_isStableAddr(lc)) px = 1;
-    else if (lc === ADDRESSES.WETH.toLowerCase()) px = await _oracleEthUsd(prov, factory);
-    else {
-      px = await _priceViaPair(prov, factory, tokenAddr, ADDRESSES.USDC, 1);
+    const ethUsd = _oracleEthUsd();
+    if (lc === ADDRESSES.WETH.toLowerCase()) {
+      px = ethUsd;                       // the anchor itself
+    } else {
+      // Everything hangs off WETH, so every readout shares one denominator.
+      px = await _priceViaPair(prov, factory, tokenAddr, ADDRESSES.WETH, ethUsd);
       if (px === null) {
-        const eth = await _oracleEthUsd(prov, factory);
-        px = await _priceViaPair(prov, factory, tokenAddr, ADDRESSES.WETH, eth);
+        // No direct WETH pair. Hop through USDC — but price USDC itself off its
+        // OWN WETH pool rather than assuming a dollar, or we reintroduce the
+        // mixed-denominator bug one level down.
+        const usdcUsd = await _priceViaPair(prov, factory, ADDRESSES.USDC, ADDRESSES.WETH, ethUsd);
+        px = await _priceViaPair(prov, factory, tokenAddr, ADDRESSES.USDC, usdcUsd);
       }
     }
   } catch {}
