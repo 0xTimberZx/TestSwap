@@ -760,3 +760,56 @@ and every subsequent 2-hourly run re-settled the *same* epoch — re-granting th
 farm each time. Four identical **8,725.95 TIMBS** grants (~34.9k total) landed on
 TimbFarm before it was caught. Any new keeper step that spends funds belongs in
 its own try/catch so one failing leg can't restart the whole settle.
+
+---
+
+## 17. SwapTables generations — DEPLOYED, tracked here because nothing else does
+
+The SwapTables contracts live in **this** repo's `contracts/` while the app that
+drives them lives in `0xTimberZx/SwapTables`. Neither side owned their deploy
+state, so it went unrecorded for two generations. It belongs somewhere; until
+the contracts move to sit with the app, that somewhere is here.
+
+Unlike §1–§16 these are **not** pending work — they are live. This section is a
+record, not a to-do.
+
+### Generation 6 — "the accounting generation" (deployed 2026-07-31)
+
+| Contract | Address | Scope |
+|---|---|---|
+| `SegmentBoard` | `0x1de9889da2083F5f1693DfCf589A453E9b39EEA7` | per-generation |
+| `PoolLedger` | `0x819B5074312E4ADD9D72D722D9C6a38320796Bd8` | per-generation |
+| `CommitRevealEntropy` | `0x63614173003957A3AECb6bd22C8cC491f7279F3D` | per-generation |
+| `UnderwriteReserve` | `0xa0f88d8504D340702889C48288D8FB9329D88184` | holds the top-up float; guardian halt + drain only |
+| `DDJackpot` | `0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9` | deploy-once, **cross-generation** |
+| `SeedRegistry` | `0x2460C8ed63414F36838542982A5Ab263C9Fcb914` | long-lived, **spans generations** |
+| `SegmentCrank` | `0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D` | stateless batcher, generation-agnostic |
+
+Carries gen-5's adaptive timing (the same five dials: 2400/300/120/180/900),
+plus three additions:
+
+- **Monotonic underwrite** — thin winners topped up toward `stake × fair × 0.90`
+  out of the `UnderwriteReserve`. Caps: 1000/pool, 1500/round, 10% of float.
+- **Rake split** — half to the reserve, half to the Treasury; dead pots to the
+  reserve.
+- **Dealer tips** — seated wallets tip the opener after the sixth lock.
+
+**Gen-5 (`0x7358Aa…`) retired 2026-07-31. Its ledger still pays withdrawals** —
+do not treat a retired generation as dead until its `PoolLedger` is drained.
+
+### Rules that carry across a generation cutover
+
+Learned the hard way on the GameRegistry v4→v5 prize-game cutover
+(`REGISTRY_MIGRATION_NOTES.md`), and they apply identically here:
+
+1. **Id spaces restart.** Anything keyed by a per-generation counter collides
+   with the previous generation's ids unless the new deployment is seeded from
+   the outgoing one. On the prize game this stranded vault weight AND silently
+   dropped new registrations, because `register()` early-returns on an occupied
+   slot while `remove()` doesn't check provenance.
+2. **A retired contract can still hold funds.** Gen-5's ledger paying
+   withdrawals is the same shape as v4's stranded escrow. Check it's empty
+   before considering a generation finished.
+3. **Cross-generation contracts must NOT be redeployed** with the rest.
+   `SeedRegistry` and `DDJackpot` are deploy-once by design — redeploying either
+   loses the history that makes it meaningful.
