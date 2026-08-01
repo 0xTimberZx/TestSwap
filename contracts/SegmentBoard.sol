@@ -558,8 +558,16 @@ contract SegmentBoard is Ownable, ReentrancyGuard {
         if (chipIdx >= CHIPS.length) revert BadChip();
 
         Seat storage s = seats[tableId][msg.sender];
-        if (!s.seated)     revert NotSeated();
-        if (s.ddChip != 0) revert AlreadyPlaced(DD_POOL);
+        if (!s.seated)       revert NotSeated();
+        // Gen-7: the Repeats-a-Digit stake is a BONUS chip — it rides a full
+        // load, it is not a way to play the round-wide pool on its own. Until
+        // now `place` required a load (NotLoaded) but this did not, so a
+        // seated wallet that never funded could still buy into the DD pool
+        // and, with the jackpot live, into a jackpot strike. Same rule for
+        // both bet paths now; late loading (gen-5) still applies, so funding
+        // any time before bets close earns the bonus chip.
+        if (s.chipPack == 0) revert NotLoaded();
+        if (s.ddChip != 0)   revert AlreadyPlaced(DD_POOL);
 
         s.ddChip = chipIdx + 1;
         ledger.collect(msg.sender, CHIPS[chipIdx], tableId);

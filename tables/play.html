@@ -388,6 +388,8 @@
     <span class="wstat"><span class="k">ON THE TABLE</span><span class="v" id="potEscrow">—</span></span>
     <span class="wstat"><span class="k">SEED ON OFFER</span><span class="v" id="potSeed">100</span></span>
     <span class="wstat" title="a pool draws its 14.29 seed share once two wallets contest it"><span class="k">POOLS CONTESTED</span><span class="v" id="potPools">0/7</span></span>
+    <span class="wstat" id="potNetWrap" style="display:none"
+          title="every chip you have placed this round against everything credited back to you so far"><span class="k" id="potNetLab">LOST THIS ROUND</span><span class="v" id="potNet">—</span></span>
     <span class="hint" style="margin:0;flex:1 1 220px">Everything here is the prize: every chip placed plus the seed —
       minus the graduated rake — pays back out to winners.</span>
   </div>
@@ -404,8 +406,10 @@
     <h2 class="clickable" onclick="this.parentElement.classList.toggle('collapsed')">Your picks
       <span>· live payout estimates · figures move as players join</span></h2>
     <div id="picksList" style="font-size:13px;line-height:1.5"></div>
-    <p class="hint" id="picksNote" style="display:none">"Up to" assumes yours is the only winning pick in the pool —
-      pari-mutuel means co-winners split the pot by stake × weight. Rake falls as more wallets join.</p>
+    <p class="hint" id="picksNote" style="display:none">A win returns your own chip and pays you the rest of the pool —
+      the rake shaves both, which is why the figure back is a little under what you staked.
+      "Up to" assumes yours is the only winning pick in the pool — pari-mutuel means co-winners split the pot by
+      stake × weight. Rake falls as more wallets join.</p>
   </div>
 
   <div class="approve" id="approve">
@@ -1022,7 +1026,7 @@ function railDefault(){
     return;
   }
   if(curSeg) rail("Token <b>SEG "+curSeg+"</b> carries <b>"+chipOfSeg(curSeg)+" TIMBS</b> — click a board spot to place it.");
-  else rail("Pick a token, then a board spot. The Repeats-a-Digit spot takes its own separate chip.");
+  else rail("Pick a token, then a board spot. The Repeats-a-Digit spot takes its own bonus chip.");
 }
 function chipOfSeg(s){
   const byte = Number(mySeat.chipPack >> BigInt(8*(s-1)) & 0xFFn);
@@ -1046,8 +1050,8 @@ function cellBet(o){
 }
 // Double-Digit — its own stake, one per wallet, round-wide (contract truth).
 boardEl.appendChild(cellBet({cls:"out dd",kind:KIND.DD,pick:0,count:0,
-  html:'<span class="lab">REPEATS A DIGIT</span><span class="sub">same character twice · own chip · ≈36% of rounds</span>',
-  desc:"any character shows up twice in the finished six. Separate stake from your six tokens — one per wallet",
+  html:'<span class="lab">REPEATS A DIGIT</span><span class="sub">same character twice · bonus chip · ≈36% of rounds</span>',
+  desc:"any character shows up twice in the finished six. A bonus chip, separate from your six tokens — one per wallet",
   col:"1",row:"1 / 4"}));
 // 36 pockets — colours from RED_MASK (alternating), NOT roulette's red set.
 for(let n=1;n<=36;n++){
@@ -1307,6 +1311,32 @@ async function renderStakes(){
   }catch{}
   const contested=poolBook.filter((_,i)=>poolStats(i).contested).length;
   $("potPools").textContent=contested+"/7";
+
+  // ── net this round ────────────────────────────────────────────────────
+  // Everything you have PLACED against everything credited back so far, so
+  // the figure is a real position rather than a projection: it opens at the
+  // full stake (nothing has settled yet), climbs as pools land, and the
+  // label flips the moment the round turns profitable. Loaded-but-unplaced
+  // chips are excluded — those come home as refunds at retire either way.
+  let placed=0;
+  poolBook.forEach(bets=>bets.forEach(b=>{ if(b.wallet.toLowerCase()===me?.toLowerCase()) placed+=b.amt; }));
+  if(placed>0){
+    let credited=0;
+    try{
+      const latest=await provider.getBlockNumber();
+      const evs=await ledger.queryFilter(ledger.filters.WinningsCredited(me, tid),
+                                         Math.max(0,latest-400000), latest);
+      evs.forEach(e=>{ credited+=Number(e.args.amount/(10n**16n))/100; });
+    }catch{}
+    const net=credited-placed, up=net>=0;
+    $("potNetWrap").style.display="";
+    $("potNetLab").textContent=(up?"GAINED":"LOST")+" THIS ROUND";
+    $("potNet").textContent=(up?"+":"\u2212")+fmt2(Math.abs(net));
+    $("potNet").style.color=up?"var(--ok)":"#e0a3a3";
+    $("potNetWrap").title=fmt2(placed)+" placed \u00b7 "+fmt2(credited)+" credited back so far";
+  }else{
+    $("potNetWrap").style.display="none";
+  }
   // your picks, priced off the CURRENT pool composition
   const rows=[];
   poolBook.forEach((bets,pool)=>{
@@ -1314,13 +1344,19 @@ async function renderStakes(){
       if(b.wallet.toLowerCase()!==me?.toLowerCase()) return;
       const st=poolStats(pool);
       const spec=specOf(b.kind,b.pick);
+      // A win returns your own chip and pays you the rest of the pool — the
+      // rake shaves BOTH, so state the stake net of it rather than pretending
+      // the whole cut comes out of the winnings.
+      const back = b.amt*(10000-st.rakeBps)/10000;
       rows.push('<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;'
         +'padding:7px 0;border-bottom:1px solid rgba(247,240,214,.08)">'
         +'<span class="fseg" style="width:52px">'+(b.kind===KIND.DD?"DD":"SEG "+(pool+1))+'</span>'
         +'<span style="flex:1;color:#dfe7df">'+fmt2(b.amt)+' on <b style="color:var(--cream)">'+spec.name+'</b></span>'
         +'<span style="color:#9fb4a4">pool '+fmt2(st.pot)+' · '+st.n+' bet'+(st.n===1?"":"s")
         +' · rake '+(st.rakeBps/100).toFixed(2)+'%'+(st.contested?"":(GEN>=5?" · uncontested — rake-free, no seed share yet":" · uncontested — no seed share yet"))+'</span>'
-        +'<span style="font-family:Georgia,serif;font-weight:800;color:var(--ok)">up to ~'+fmt2(st.dist)+'</span>'
+        +'<span style="font-family:Georgia,serif;font-weight:800;color:var(--ok)">up to ~'+fmt2(st.dist)
+        +'<span style="display:block;font-weight:400;font-size:.82em;color:#9fb4a4">'
+        +'~'+fmt2(back)+' back + ~'+fmt2(st.dist-back)+' won</span></span>'
         +'</div>');
     });
   });
@@ -1585,7 +1621,7 @@ async function pollJackpot(){
     // the felt shows what one hit pays, not the banner total
     p.textContent="MAX HIT "+fmt4(hit);
     p.title="Rolling Double-Digit jackpot \u2014 "+fmtT(bal)+" TIMBS on the banner; one hit pays up to "
-      +fmtT(hit)+" TIMBS, split across the Repeats-a-Digit winners (2+ wallets, capped at 10x your own chip).";
+      +fmtT(hit)+" TIMBS, split across the Repeats-a-Digit winners (2+ wallets, capped at 10x your bonus chip).";
   }catch{}
 }
 setInterval(pollJackpot, 30000);
