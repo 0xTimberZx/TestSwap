@@ -114,9 +114,11 @@
       <div class="stat"><div class="k">Credit (withdrawable)</div><div class="v" id="sCredit">—</div></div>
     </div>
     <div class="row" style="margin-top:12px">
-      <button id="approve" class="ghost" disabled>Approve 1000 TIMBS</button>
+      <button id="approve" class="ghost" disabled
+              title="Sets the allowance to exactly 5,000 — it REPLACES the current one, it does not add to it.">Approve 5,000 TIMBS</button>
       <button id="withdraw" disabled>Withdraw my credit</button>
     </div>
+    <p class="note" id="allowNote"></p>
   </div>
 
   <!-- ── vault ─────────────────────────────────────────── -->
@@ -653,6 +655,26 @@ async function refreshMoney(){
   $("timbsBox").textContent = `TIMBS ${fmt(bal)}`;
   $("withdraw").disabled = cred === 0n;
 
+  // ── allowance runway ───────────────────────────────────
+  // ONE allowance serves BOTH roles from this wallet, and it is eaten from
+  // both ends: openTable pulls the 100 TIMBS seed by transferFrom, and
+  // loading six tokens (+ a Double-Digit chip) pulls the player's chips the
+  // same way. Approve SETS the number rather than adding to it, so playing a
+  // round and re-approving can silently clip the seed budget — which fails
+  // mid-transaction, on stream. Surface the runway before it bites.
+  {
+    const ONE = 10n ** 18n;
+    const chip = BigInt(CHIPS[Number(($("chip") || {}).value ?? 2)] ?? 25);
+    const perRound = (100n + chip * 7n) * ONE;   // seed + six tokens + DD
+    const rounds = allow / perRound;
+    const note = $("allowNote");
+    note.textContent =
+      `One allowance, both roles: each table you open pulls 100 seed, each round you play pulls `
+      + `6 x ${chip} + a ${chip} Double-Digit chip (${perRound / ONE} per open-and-play round). `
+      + `About ${rounds} left at this chip size. Approve replaces this number — it does not add to it.`;
+    note.className = "note " + (rounds === 0n ? "l-err" : rounds < 3n ? "l-warn" : "l-dim");
+  }
+
   // The gen-3 escrow-sacred invariant, read straight off the ledger:
   // held >= credited + escrowed, and the difference is genuine surplus only.
   const [held, owed, escrowed] = await Promise.all([
@@ -760,7 +782,7 @@ setInterval(()=>{ if(me && T && !T.retired) refreshTable().catch(()=>{}); }, 500
 
 // ── money actions ──────────────────────────────────────
 $("approve").onclick = async () => {
-  if (await send("approve 1000 TIMBS", timbs, "approve", ADDR.ledger, ethers.parseUnits("1000",18))) refresh();
+  if (await send("approve 5,000 TIMBS", timbs, "approve", ADDR.ledger, ethers.parseUnits("5000",18))) refresh();
 };
 $("withdraw").onclick = async () => { if (await send("withdraw", ledger, "withdraw")) refresh(); };
 
