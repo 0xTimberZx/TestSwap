@@ -31,21 +31,13 @@ const FACTORY_MIN_ABI = ["function getPairAddress(address tokenA, address tokenB
 // Best-effort ETH→USD from the USDC/WETH pool, cached module-wide so any table
 // (not just the metrics grid) can value ETH-denominated rows. Returns null when
 // the pool doesn't exist / is empty.
-let _ethUsd = null;
-async function ethUsdPrice(prov) {
-  try {
-    const factory  = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_MIN_ABI, prov);
-    const usdcPair = await factory.getPairAddress(ADDRESSES.USDC, ADDRESSES.WETH);
-    if (usdcPair !== ethers.constants.AddressZero) {
-      const pc = new ethers.Contract(usdcPair, PAIR_ABI, prov);
-      const [ur, ut0] = await Promise.all([pc.getReserves(), pc.token0()]);
-      const usdcIs0 = ut0.toLowerCase() === ADDRESSES.USDC.toLowerCase();
-      const usdc = parseFloat(ethers.utils.formatUnits(usdcIs0 ? ur.reserve0 : ur.reserve1, 6));
-      const weth = parseFloat(ethers.utils.formatUnits(usdcIs0 ? ur.reserve1 : ur.reserve0, 18));
-      if (usdc > 0 && weth > 0) _ethUsd = usdc / weth;
-    }
-  } catch {}
-  return _ethUsd;
+// This used to read the USDC/WETH pool itself — a private third copy of the
+// anchor, alongside config.js's oracle and landing/compete's ETH_USD_PRICE.
+// Unarbitraged, that pool had drifted to ~$700/ETH, so analytics valued the
+// same TIMBS differently from the swap card AND from the landing pot. Defer to
+// the shared oracle so the whole site quotes one dollar.
+async function ethUsdPrice(_prov) {
+  return usdPriceOf(ADDRESSES.WETH);
 }
 function fmtUsd2(v) {
   if (v === null || v === undefined) return "—";
