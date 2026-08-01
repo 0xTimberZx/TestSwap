@@ -388,6 +388,8 @@
     <span class="wstat"><span class="k">ON THE TABLE</span><span class="v" id="potEscrow">—</span></span>
     <span class="wstat"><span class="k">SEED ON OFFER</span><span class="v" id="potSeed">100</span></span>
     <span class="wstat" title="a pool draws its 14.29 seed share once two wallets contest it"><span class="k">POOLS CONTESTED</span><span class="v" id="potPools">0/7</span></span>
+    <span class="wstat" id="potNetWrap" style="display:none"
+          title="every chip you have placed this round against everything credited back to you so far"><span class="k" id="potNetLab">LOST THIS ROUND</span><span class="v" id="potNet">—</span></span>
     <span class="hint" style="margin:0;flex:1 1 220px">Everything here is the prize: every chip placed plus the seed —
       minus the graduated rake — pays back out to winners.</span>
   </div>
@@ -1309,6 +1311,32 @@ async function renderStakes(){
   }catch{}
   const contested=poolBook.filter((_,i)=>poolStats(i).contested).length;
   $("potPools").textContent=contested+"/7";
+
+  // ── net this round ────────────────────────────────────────────────────
+  // Everything you have PLACED against everything credited back so far, so
+  // the figure is a real position rather than a projection: it opens at the
+  // full stake (nothing has settled yet), climbs as pools land, and the
+  // label flips the moment the round turns profitable. Loaded-but-unplaced
+  // chips are excluded — those come home as refunds at retire either way.
+  let placed=0;
+  poolBook.forEach(bets=>bets.forEach(b=>{ if(b.wallet.toLowerCase()===me?.toLowerCase()) placed+=b.amt; }));
+  if(placed>0){
+    let credited=0;
+    try{
+      const latest=await provider.getBlockNumber();
+      const evs=await ledger.queryFilter(ledger.filters.WinningsCredited(me, tid),
+                                         Math.max(0,latest-400000), latest);
+      evs.forEach(e=>{ credited+=Number(e.args.amount/(10n**16n))/100; });
+    }catch{}
+    const net=credited-placed, up=net>=0;
+    $("potNetWrap").style.display="";
+    $("potNetLab").textContent=(up?"GAINED":"LOST")+" THIS ROUND";
+    $("potNet").textContent=(up?"+":"\u2212")+fmt2(Math.abs(net));
+    $("potNet").style.color=up?"var(--ok)":"#e0a3a3";
+    $("potNetWrap").title=fmt2(placed)+" placed \u00b7 "+fmt2(credited)+" credited back so far";
+  }else{
+    $("potNetWrap").style.display="none";
+  }
   // your picks, priced off the CURRENT pool composition
   const rows=[];
   poolBook.forEach((bets,pool)=>{
