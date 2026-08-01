@@ -151,7 +151,10 @@ contract DDJackpotTest is Test {
 
         (bool ok, uint256 preview) = jackpot.strikeable(address(board), id);
         assertTrue(ok, "eligible after the sixth lock");
-        assertEq(preview, 200e18, "meter: 20% of 1000");
+        // preview is the true post-cap payout: the floored pro-rata shares of
+        // the 200 slice (the 1-wei rounding dust stays on the banner)
+        assertEq(preview, uint256(200e18) * 25 / 75 + uint256(200e18) * 50 / 75,
+            "preview equals what the strike will actually pay");
 
         uint256 aBefore = timbs.balanceOf(alice);
         uint256 bBefore = timbs.balanceOf(bob);
