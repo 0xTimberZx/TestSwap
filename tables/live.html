@@ -446,6 +446,50 @@
                       to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
   @keyframes coinring{from{opacity:.85;width:26px;height:26px}to{opacity:0;width:104px;height:104px}}
 
+  /* ── narrow portrait (phones) ──────────────────────────────────────────
+     The attract view is authored for a 16:9 stream canvas, so on a tall thin
+     viewport three things broke: the 1.16 upscale pushed SEG 6 past the right
+     edge, the tagline wrapped to three lines and grew the fixed header down
+     over the viewer badge and the status bar, and the 14px reel labels were
+     wider than their columns so the "spinning" captions ran together.
+     Reel and cell HEIGHTS are deliberately untouched — the strip's translateY
+     math is pinned to RCELL=40 in JS, so only widths and type scale here. */
+  @media (max-width:560px){
+    body.attract .wrap{padding:0 10px}
+    body.attract #reels{transform:none}          /* was scale(1.16) */
+    body.attract .reels{gap:3px}
+    body.attract .rcell{font-size:17px}
+    body.attract .reelcard .rlab{font-size:8px;letter-spacing:.05em}
+    body.attract .rstat,body.attract #reels .rstat{font-size:8.5px;letter-spacing:.01em}
+    /* dot + wordmark stay on one line; the tagline drops to its own row, and
+       the right padding keeps it clear of the viewer badge */
+    body.attract #streamTitle{flex-wrap:wrap;gap:5px 9px;padding:11px 58px 13px 13px}
+    body.attract #streamTitle .brand{font-size:17px}
+    body.attract #streamTitle .tag{flex-basis:100%;font-size:9.5px;line-height:1.35;letter-spacing:.05em}
+    body.attract #viewCount{top:10px;right:10px;font-size:12px;padding:3px 7px}
+    /* the .spec rule below sets top:72px at higher specificity, so pin BOTH
+       edges here — setting only one left the bar stretched 734px tall, which
+       is what dropped the table headline over the SEG captions */
+    body.attract #spectateBar,body.attract.spec #spectateBar{
+      top:74px;bottom:auto;left:0;right:0;margin:0 10px;padding:7px 10px;
+      font-size:11.5px;line-height:1.35;text-align:center}
+    body.attract.spec .wrap{padding-top:128px}
+    /* the ghosted board is a landscape-canvas feature: its fixed frame
+       (left:22px right:404px) computes to ZERO width here, and the coin layer
+       then places chips off the cells' garbage coordinates — so drop both and
+       let the phone show the meter, pools and ticker cleanly */
+    body.attract.spec .felt-scroll,body.attract.spec #coinLayer{display:none !important}
+    /* a stream canvas never scrolls, but a phone viewer should: the stacked
+       pools panel and ticker run past the fold and were being clipped */
+    body.attract{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+    body.attract.spec .wrap{min-height:0;justify-content:flex-start;padding-bottom:62px}
+    /* now that content scrolls under it, the footer needs the header's scrim
+       so the last ticker row stays legible passing beneath */
+    body.attract #streamFoot{font-size:10px;bottom:0;padding:12px 12px 13px;
+      background:linear-gradient(0deg,rgba(7,18,12,.97) 45%,rgba(7,18,12,0))}
+    body.attract #reveal{margin-top:20px}
+  }
+
 </style>
 </head>
 <body class="pre">
