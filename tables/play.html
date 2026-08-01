@@ -467,7 +467,7 @@
     <div class="stat"><div class="k">Loaded</div><div class="v" id="tLoad">0<small>/6</small></div></div>
     <div class="stat"><div class="k">On the board</div><div class="v" id="tOn">0 <small>TIMBS</small></div></div>
     <div class="stat"><div class="k">Tokens placed</div><div class="v" id="tTok">0<small>/6</small></div></div>
-    <div class="stat"><div class="k">Double-Digit</div><div class="v" id="tDD">— <small>TIMBS</small></div></div>
+    <div class="stat"><div class="k">Repeats a Digit</div><div class="v" id="tDD">— <small>TIMBS</small></div></div>
     <div class="actions">
       <a class="btn" href="index.html">Open the console</a>
     </div>
@@ -475,7 +475,7 @@
 
   <p class="foot">
     Every placement is a wallet <b>approval</b>, and once mined it can't be undone.
-    <b>Payout is pari-mutuel</b>: each of the seven pools (six segments + Double-Digit) forms its own
+    <b>Payout is pari-mutuel</b>: each of the seven pools (six segments + Repeats a Digit) forms its own
     pot — every chip in the pool, plus a <b>seed share</b> when at least two wallets contest it — and
     when the round locks its six characters, the pot minus rake splits among winners in proportion
     to <b>stake × fair-multiple</b>. The printed odds (36 ÷ symbols − 1) are relative weights, not a
@@ -594,7 +594,7 @@ const ERR_HINT = {
   NotSeated:"sit at the table first",
   AlreadyLoaded:"your six tokens are already loaded",
   NotLoaded:"load your six tokens before placing",
-  AlreadyPlaced:"that token (or your Double-Digit) is already on the board",
+  AlreadyPlaced:"that token (or your Repeats-a-Digit stake) is already on the board",
   BadChip:"that chip size does not exist",
   TableFull:"all 12 seats are taken",
   NotYetPickTime:"too early to start the pick",
@@ -634,7 +634,7 @@ function specOf(kind,pick,ticket){
     case KIND.NUMBER:  return {name:"Numbers", count:10};
     case KIND.LOWHIGH: return {name:pick===0?"Low (A–R)":"High (S–9)", count:18};
     case KIND.TICKET:  return {name:"Your Ticket", count:1};
-    case KIND.DD:      return {name:"Double-Digit", count:0};
+    case KIND.DD:      return {name:"Repeats a Digit", count:0};
   }
   return {name:"?",count:1};
 }
@@ -1022,7 +1022,7 @@ function railDefault(){
     return;
   }
   if(curSeg) rail("Token <b>SEG "+curSeg+"</b> carries <b>"+chipOfSeg(curSeg)+" TIMBS</b> — click a board spot to place it.");
-  else rail("Pick a token, then a board spot. The Double-Digit spot takes its own separate chip.");
+  else rail("Pick a token, then a board spot. The Repeats-a-Digit spot takes its own separate chip.");
 }
 function chipOfSeg(s){
   const byte = Number(mySeat.chipPack >> BigInt(8*(s-1)) & 0xFFn);
@@ -1046,8 +1046,8 @@ function cellBet(o){
 }
 // Double-Digit — its own stake, one per wallet, round-wide (contract truth).
 boardEl.appendChild(cellBet({cls:"out dd",kind:KIND.DD,pick:0,count:0,
-  html:'<span class="lab">DOUBLE DIGIT</span><span class="sub">a repeat · own chip · ≈38% of rounds</span>',
-  desc:"the finished six-character string contains a repeated symbol. Separate stake from your six tokens — one per wallet",
+  html:'<span class="lab">REPEATS A DIGIT</span><span class="sub">same character twice · own chip · ≈36% of rounds</span>',
+  desc:"any character shows up twice in the finished six. Separate stake from your six tokens — one per wallet",
   col:"1",row:"1 / 4"}));
 // 36 pockets — colours from RED_MASK (alternating), NOT roulette's red set.
 for(let n=1;n<=36;n++){
@@ -1103,7 +1103,7 @@ function describe(el){
   const kind=+el.dataset.kind, count=+el.dataset.count;
   const spec=specOf(kind,+el.dataset.pick);
   if(kind===KIND.DD){
-    rail("<b>Double-Digit</b> — pays if "+el.dataset.desc+". Pari-mutuel pot like every pool; ≈38% of rounds repeat.");
+    rail("<b>Repeats a Digit</b> — pays if "+el.dataset.desc+". Pari-mutuel pot like every pool; ≈36% of rounds repeat.");
     return;
   }
   const odds=fair(count);
@@ -1133,7 +1133,7 @@ function stageFromCell(el){
   if(kind!==KIND.DD && mySeat.chipPack===0n) return rail("Load your six tokens first — the board opens after the load lands.");
   if(!(p.key==="entry"||p.key==="betting")) return rail("Betting is closed on this table.");
   if(kind===KIND.DD){
-    if(Number(mySeat.ddChip)!==0) return rail("Your Double-Digit stake is already down.");
+    if(Number(mySeat.ddChip)!==0) return rail("Your Repeats-a-Digit stake is already down.");
     stage({dd:true, el, kind, pick:0});
     return;
   }
@@ -1165,7 +1165,7 @@ function stage(p){
   rail("Awaiting your approval — <b>"+spec.name+"</b>. Approve to send, or choose another spot.");
 }
 function paintApproveMsg(){
-  approveMsg.innerHTML='Stake the <b>Double-Digit</b> — <b>pick its chip on the right →</b> currently <b>'+CHIPS[ddPick]+' TIMBS</b>. '
+  approveMsg.innerHTML='Stake <b>Repeats a Digit</b> — <b>pick its chip on the right →</b> currently <b>'+CHIPS[ddPick]+' TIMBS</b>. '
     +'Separate from your six tokens, one per wallet, round-wide. '
     +'<span class="warn">Approving sends the transaction — once mined, it\'s final.</span>';
 }
@@ -1177,8 +1177,8 @@ $("approveBtn").onclick=async ()=>{
     const need = ethers.parseUnits(String(CHIPS[ddPick]),18);
     const allow = await timbs.allowance(me, ADDR.ledger);
     if(allow<need && !await send("approve "+(CHIPS[ddPick]*2)+" TIMBS", timbs, "approve", ADDR.ledger, need*2n)) return;
-    if(await send("Double-Digit · "+CHIPS[ddPick]+" TIMBS", board, "placeDoubleDigit", tid, ddPick)){
-      clearPending(); rail('<span class="win">Double-Digit placed.</span> Final.'); await refreshChain();
+    if(await send("Repeats a Digit · "+CHIPS[ddPick]+" TIMBS", board, "placeDoubleDigit", tid, ddPick)){
+      clearPending(); rail('<span class="win">Repeats-a-Digit stake placed.</span> Final.'); await refreshChain();
     }
   } else {
     const spec=specOf(p.kind,p.pick);
@@ -1235,7 +1235,7 @@ async function addFeedRow(wallet, pool, kind, pick){
   li.innerHTML=
     '<span class="who"><span class="av">'+(isMe?"★":SUITS[parseInt(wallet.slice(-1),16)%4])+'</span>'
     +'<span class="nm'+(isMe?" self":"")+'">'+(isMe?"You · "+tagOf(wallet):tagOf(wallet))+'</span></span>'
-    +'<span class="fseg">'+(kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
+    +'<span class="fseg">'+(kind===KIND.DD?"DD":"SEG "+(pool+1))+'</span>'
     +'<span class="fbet">on <b>'+spec.name+'</b>'+(kind===KIND.DD?"":" · "+fair(spec.count)+"×")+'</span>'
     +'<span class="famt">'+(amt||"·")+'</span>'
     +'<span class="tail"></span>';
@@ -1316,7 +1316,7 @@ async function renderStakes(){
       const spec=specOf(b.kind,b.pick);
       rows.push('<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;'
         +'padding:7px 0;border-bottom:1px solid rgba(247,240,214,.08)">'
-        +'<span class="fseg" style="width:52px">'+(b.kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
+        +'<span class="fseg" style="width:52px">'+(b.kind===KIND.DD?"DD":"SEG "+(pool+1))+'</span>'
         +'<span style="flex:1;color:#dfe7df">'+fmt2(b.amt)+' on <b style="color:var(--cream)">'+spec.name+'</b></span>'
         +'<span style="color:#9fb4a4">pool '+fmt2(st.pot)+' · '+st.n+' bet'+(st.n===1?"":"s")
         +' · rake '+(st.rakeBps/100).toFixed(2)+'%'+(st.contested?"":(GEN>=5?" · uncontested — rake-free, no seed share yet":" · uncontested — no seed share yet"))+'</span>'
@@ -1525,8 +1525,8 @@ async function paintReveal(){
     const winStr=chars.join("");
     const rep=new Set(winStr).size<6;
     $("ddFlag").innerHTML = rep
-      ? '<span class="hit">Double-Digit ✓ — a character repeats</span>'
-      : '<span class="miss">No repeat — Double-Digit misses</span>';
+      ? '<span class="hit">Repeats a Digit ✓ — a character shows twice</span>'
+      : '<span class="miss">No repeat — Repeats a Digit misses</span>';
     await stampFeed(winStr);
     if(T.retired && !revealDone){
       revealDone=true;
@@ -1556,22 +1556,36 @@ async function paintReveal(){
 }
 const JACKPOT_ABI = [
   "function balance() view returns (uint256)",
+  "function sliceBps() view returns (uint256)",
+  "function sliceFloor() view returns (uint256)",
   "function strikeable(address board, uint256 tableId) view returns (bool ok, uint256 slice)",
   "function strike(address board, uint256 tableId) returns (uint256)",
   "event JackpotStruck(address indexed board, uint256 indexed tableId, uint256 slice, uint256 winners, uint256 balanceAfter)",
 ];
+/// What a single strike actually pays out — sliceBps of the banner, lifted to
+/// the floor, clamped to what is there. This is the number a player cares
+/// about; the banner total is context, not the prize.
+function maxHitOf(bal,bps,floor){
+  let s = bal*bps/10000n;
+  if(s<floor) s=floor;
+  if(s>bal)   s=bal;
+  return s;
+}
 let jack=null;
 async function pollJackpot(){
   if(!ADDR.jackpot || !provider) return;
   try{
     if(!jack) jack=new ethers.Contract(ADDR.jackpot, JACKPOT_ABI, provider);
-    const bal=await jack.balance();
+    const [bal,bps,floor]=await Promise.all([jack.balance(),jack.sliceBps(),jack.sliceFloor()]);
+    const hit=maxHitOf(bal,bps,floor);
     let p=document.getElementById("jackpotPill");
     if(!p){ p=document.createElement("span"); p.id="jackpotPill"; p.className="pill";
       p.style.cssText="color:var(--gold,#d7b34c);border-color:var(--gold,#d7b34c)";
       $("phasePill").parentElement.appendChild(p); }
-    p.textContent="JACKPOT "+fmt4(bal);
-    p.title="Rolling Double-Digit jackpot - hits pay a metered slice on top of the DD pool (2+ DD wallets required)";
+    // the felt shows what one hit pays, not the banner total
+    p.textContent="MAX HIT "+fmt4(hit);
+    p.title="Rolling Double-Digit jackpot \u2014 "+fmtT(bal)+" TIMBS on the banner; one hit pays up to "
+      +fmtT(hit)+" TIMBS, split across the Repeats-a-Digit winners (2+ wallets, capped at 10x your own chip).";
   }catch{}
 }
 setInterval(pollJackpot, 30000);

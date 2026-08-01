@@ -343,7 +343,12 @@
   /* spectate: live bet ticker (left) + pools & odds panel (right) */
   #betFeed,#poolPanel{display:none}
   body.attract #betFeed{display:block;position:fixed;right:24px;top:582px;z-index:60;width:376px;
-    font-family:Georgia,serif;pointer-events:none}
+    font-family:Georgia,serif;pointer-events:none;overflow:hidden}
+  body.attract #betFeedInner{will-change:transform}
+  /* a row that has aged out slides left rather than popping */
+  body.attract #betFeed .brow.gone{animation:browout .45s cubic-bezier(.4,0,.7,.2) forwards}
+  @keyframes browout{to{opacity:0;transform:translateX(-54px)}}
+  body.attract #betFeed .brow:first-child{margin-top:0}
   body.attract #betFeed .brow{display:flex;gap:10px;align-items:baseline;padding:7px 12px;margin-top:6px;
     border:1px solid rgba(247,240,214,.14);border-radius:9px;background:rgba(7,18,12,.88);
     font-size:13px;color:#dfe7df;animation:betin .5s ease}
@@ -438,7 +443,7 @@
   body.attract.spec #coinLayer{display:block;position:fixed;inset:0;z-index:22;pointer-events:none}
   #coinLayer .ccoin{position:absolute;width:25px;height:25px;border-radius:50%;display:grid;place-items:center;
     font-family:Georgia,serif;font-size:9.5px;font-weight:800;color:#fff;letter-spacing:-.02em;
-    border:2px solid rgba(255,255,255,.82);box-shadow:0 2px 6px rgba(0,0,0,.75);transform:translate(-50%,-50%)}
+    border:2px dashed rgba(255,255,255,.82);box-shadow:0 2px 6px rgba(0,0,0,.75);transform:translate(-50%,-50%)}
   #coinLayer .ring{position:absolute;border-radius:50%;border:2px solid var(--gold);
     transform:translate(-50%,-50%);animation:coinring 1.6s ease-out forwards}
   #coinLayer .ccoin.new{animation:coindrop .6s cubic-bezier(.2,.9,.3,1.4)}
@@ -652,7 +657,7 @@
     <div class="stat"><div class="k">Loaded</div><div class="v" id="tLoad">0<small>/6</small></div></div>
     <div class="stat"><div class="k">On the board</div><div class="v" id="tOn">0 <small>TIMBS</small></div></div>
     <div class="stat"><div class="k">Tokens placed</div><div class="v" id="tTok">0<small>/6</small></div></div>
-    <div class="stat"><div class="k">Double-Digit</div><div class="v" id="tDD">— <small>TIMBS</small></div></div>
+    <div class="stat"><div class="k">Repeats a Digit</div><div class="v" id="tDD">— <small>TIMBS</small></div></div>
     <div class="actions">
       <a class="btn" href="index.html">Open the console</a>
     </div>
@@ -660,7 +665,7 @@
 
   <p class="foot">
     Every placement is a wallet <b>approval</b>, and once mined it can't be undone.
-    <b>Payout is pari-mutuel</b>: each of the seven pools (six segments + Double-Digit) forms its own
+    <b>Payout is pari-mutuel</b>: each of the seven pools (six segments + Repeats a Digit) forms its own
     pot — every chip in the pool, plus a <b>seed share</b> when at least two wallets contest it — and
     when the round locks its six characters, the pot minus rake splits among winners in proportion
     to <b>stake × fair-multiple</b>. The printed odds (36 ÷ symbols − 1) are relative weights, not a
@@ -784,7 +789,7 @@ const ERR_HINT = {
   NotSeated:"sit at the table first",
   AlreadyLoaded:"your six tokens are already loaded",
   NotLoaded:"load your six tokens before placing",
-  AlreadyPlaced:"that token (or your Double-Digit) is already on the board",
+  AlreadyPlaced:"that token (or your Repeats-a-Digit stake) is already on the board",
   BadChip:"that chip size does not exist",
   TableFull:"all 12 seats are taken",
   NotYetPickTime:"too early to start the pick",
@@ -824,7 +829,7 @@ function specOf(kind,pick,ticket){
     case KIND.NUMBER:  return {name:"Numbers", count:10};
     case KIND.LOWHIGH: return {name:pick===0?"Low (A–R)":"High (S–9)", count:18};
     case KIND.TICKET:  return {name:"Your Ticket", count:1};
-    case KIND.DD:      return {name:"Double-Digit", count:0};
+    case KIND.DD:      return {name:"Repeats a Digit", count:0};
   }
   return {name:"?",count:1};
 }
@@ -1212,7 +1217,7 @@ function railDefault(){
     return;
   }
   if(curSeg) rail("Token <b>SEG "+curSeg+"</b> carries <b>"+chipOfSeg(curSeg)+" TIMBS</b> — click a board spot to place it.");
-  else rail("Pick a token, then a board spot. The Double-Digit spot takes its own separate chip.");
+  else rail("Pick a token, then a board spot. The Repeats-a-Digit spot takes its own separate chip.");
 }
 function chipOfSeg(s){
   const byte = Number(mySeat.chipPack >> BigInt(8*(s-1)) & 0xFFn);
@@ -1236,8 +1241,8 @@ function cellBet(o){
 }
 // Double-Digit — its own stake, one per wallet, round-wide (contract truth).
 boardEl.appendChild(cellBet({cls:"out dd",kind:KIND.DD,pick:0,count:0,
-  html:'<span class="lab">DOUBLE DIGIT</span><span class="sub">a repeat · own chip · ≈38% of rounds</span>',
-  desc:"the finished six-character string contains a repeated symbol. Separate stake from your six tokens — one per wallet",
+  html:'<span class="lab">REPEATS A DIGIT</span><span class="sub">same character twice · own chip · ≈36% of rounds</span>',
+  desc:"any character shows up twice in the finished six. Separate stake from your six tokens — one per wallet",
   col:"1",row:"1 / 4"}));
 // 36 pockets — colours from RED_MASK (alternating), NOT roulette's red set.
 for(let n=1;n<=36;n++){
@@ -1293,7 +1298,7 @@ function describe(el){
   const kind=+el.dataset.kind, count=+el.dataset.count;
   const spec=specOf(kind,+el.dataset.pick);
   if(kind===KIND.DD){
-    rail("<b>Double-Digit</b> — pays if "+el.dataset.desc+". Pari-mutuel pot like every pool; ≈38% of rounds repeat.");
+    rail("<b>Repeats a Digit</b> — pays if "+el.dataset.desc+". Pari-mutuel pot like every pool; ≈36% of rounds repeat.");
     return;
   }
   const odds=fair(count);
@@ -1323,7 +1328,7 @@ function stageFromCell(el){
   if(kind!==KIND.DD && mySeat.chipPack===0n) return rail("Load your six tokens first — the board opens after the load lands.");
   if(!(p.key==="entry"||p.key==="betting")) return rail("Betting is closed on this table.");
   if(kind===KIND.DD){
-    if(Number(mySeat.ddChip)!==0) return rail("Your Double-Digit stake is already down.");
+    if(Number(mySeat.ddChip)!==0) return rail("Your Repeats-a-Digit stake is already down.");
     stage({dd:true, el, kind, pick:0});
     return;
   }
@@ -1355,7 +1360,7 @@ function stage(p){
   rail("Awaiting your approval — <b>"+spec.name+"</b>. Approve to send, or choose another spot.");
 }
 function paintApproveMsg(){
-  approveMsg.innerHTML='Stake the <b>Double-Digit</b> — <b>pick its chip on the right →</b> currently <b>'+CHIPS[ddPick]+' TIMBS</b>. '
+  approveMsg.innerHTML='Stake <b>Repeats a Digit</b> — <b>pick its chip on the right →</b> currently <b>'+CHIPS[ddPick]+' TIMBS</b>. '
     +'Separate from your six tokens, one per wallet, round-wide. '
     +'<span class="warn">Approving sends the transaction — once mined, it\'s final.</span>';
 }
@@ -1367,8 +1372,8 @@ $("approveBtn").onclick=async ()=>{
     const need = ethers.parseUnits(String(CHIPS[ddPick]),18);
     const allow = await timbs.allowance(me, ADDR.ledger);
     if(allow<need && !await send("approve "+(CHIPS[ddPick]*2)+" TIMBS", timbs, "approve", ADDR.ledger, need*2n)) return;
-    if(await send("Double-Digit · "+CHIPS[ddPick]+" TIMBS", board, "placeDoubleDigit", tid, ddPick)){
-      clearPending(); rail('<span class="win">Double-Digit placed.</span> Final.'); await refreshChain();
+    if(await send("Repeats a Digit · "+CHIPS[ddPick]+" TIMBS", board, "placeDoubleDigit", tid, ddPick)){
+      clearPending(); rail('<span class="win">Repeats-a-Digit stake placed.</span> Final.'); await refreshChain();
     }
   } else {
     const spec=specOf(p.kind,p.pick);
@@ -1425,7 +1430,7 @@ async function addFeedRow(wallet, pool, kind, pick){
   li.innerHTML=
     '<span class="who"><span class="av">'+(isMe?"★":SUITS[parseInt(wallet.slice(-1),16)%4])+'</span>'
     +'<span class="nm'+(isMe?" self":"")+'">'+(isMe?"You · "+tagOf(wallet):tagOf(wallet))+'</span></span>'
-    +'<span class="fseg">'+(kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
+    +'<span class="fseg">'+(kind===KIND.DD?"DD":"SEG "+(pool+1))+'</span>'
     +'<span class="fbet">on <b>'+spec.name+'</b>'+(kind===KIND.DD?"":" · "+fair(spec.count)+"×")+'</span>'
     +'<span class="famt">'+(amt||"·")+'</span>'
     +'<span class="tail"></span>';
@@ -1506,7 +1511,7 @@ async function renderStakes(){
       const spec=specOf(b.kind,b.pick);
       rows.push('<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;'
         +'padding:7px 0;border-bottom:1px solid rgba(247,240,214,.08)">'
-        +'<span class="fseg" style="width:52px">'+(b.kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
+        +'<span class="fseg" style="width:52px">'+(b.kind===KIND.DD?"DD":"SEG "+(pool+1))+'</span>'
         +'<span style="flex:1;color:#dfe7df">'+fmt2(b.amt)+' on <b style="color:var(--cream)">'+spec.name+'</b></span>'
         +'<span style="color:#9fb4a4">pool '+fmt2(st.pot)+' · '+st.n+' bet'+(st.n===1?"":"s")
         +' · rake '+(st.rakeBps/100).toFixed(2)+'%'+(st.contested?"":(GEN>=5?" · uncontested — rake-free, no seed share yet":" · uncontested — no seed share yet"))+'</span>'
@@ -1715,8 +1720,8 @@ async function paintReveal(){
     const winStr=chars.join("");
     const rep=new Set(winStr).size<6;
     $("ddFlag").innerHTML = rep
-      ? '<span class="hit">Double-Digit ✓ — a character repeats</span>'
-      : '<span class="miss">No repeat — Double-Digit misses</span>';
+      ? '<span class="hit">Repeats a Digit ✓ — a character shows twice</span>'
+      : '<span class="miss">No repeat — Repeats a Digit misses</span>';
     await stampFeed(winStr);
     if(T.retired && !revealDone){
       revealDone=true;
@@ -1746,21 +1751,36 @@ async function paintReveal(){
 }
 const JACKPOT_ABI = [
   "function balance() view returns (uint256)",
+  "function sliceBps() view returns (uint256)",
+  "function sliceFloor() view returns (uint256)",
   "function strikeable(address board, uint256 tableId) view returns (bool ok, uint256 slice)",
   "function strike(address board, uint256 tableId) returns (uint256)",
   "event JackpotStruck(address indexed board, uint256 indexed tableId, uint256 slice, uint256 winners, uint256 balanceAfter)",
 ];
+/// What a single strike actually pays out — sliceBps of the banner, lifted to
+/// the floor, clamped to what is there. This is the number a player cares
+/// about; the banner total is context, not the prize.
+function maxHitOf(bal,bps,floor){
+  let s = bal*bps/10000n;
+  if(s<floor) s=floor;
+  if(s>bal)   s=bal;
+  return s;
+}
 let jack=null;
 async function pollJackpot(){
   if(!ADDR.jackpot || !provider) return;
   try{
     if(!jack) jack=new ethers.Contract(ADDR.jackpot, JACKPOT_ABI, provider);
-    const bal=await jack.balance();
+    const [bal,bps,floor]=await Promise.all([jack.balance(),jack.sliceBps(),jack.sliceFloor()]);
+    const hit=maxHitOf(bal,bps,floor);
     let p=document.getElementById("jackpotPill");
     if(!p){ p=document.createElement("span"); p.id="jackpotPill"; p.className="pill";
       p.style.cssText="color:var(--gold,#d7b34c);border-color:var(--gold,#d7b34c)";
       $("phasePill").parentElement.appendChild(p); }
-    p.textContent="JACKPOT "+fmt4(bal);
+    // the felt shows what one hit pays, not the banner total
+    p.textContent="MAX HIT "+fmt4(hit);
+    p.title="Rolling Double-Digit jackpot \u2014 "+fmtT(bal)+" TIMBS on the banner; one hit pays up to "
+      +fmtT(hit)+" TIMBS, split across the Repeats-a-Digit winners (2+ wallets, capped at 10x your own chip).";
   }catch{}
 }
 setInterval(pollJackpot, 30000);
@@ -1952,6 +1972,44 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     +'<div class="sw-s">this feed follows one table at a time · Arbitrum Sepolia testnet · play chips, no real money</div></div>';
   document.body.appendChild(scrim);
   const bfeed=document.createElement("div"); bfeed.id="betFeed";  document.body.appendChild(bfeed);
+  /// Rows live in an inner wrapper so the card can hold more history than it
+  /// shows: the wrapper is translated, the card clips. Pinned to the newest
+  /// row by default; when the feed goes quiet it walks back up through the
+  /// older rows, then returns to the latest and waits again.
+  const binner=document.createElement("div"); binner.id="betFeedInner"; bfeed.appendChild(binner);
+  const FEED_MAX=24, FEED_IDLE_MS=10000, FEED_REVEAL_MS=30000;
+  let feedActive=Date.now(), feedRevealing=false, feedRevealStart=0;
+  function feedHidden(){ return binner.scrollHeight - bfeed.clientHeight; }
+  function feedPin(instant){
+    const y=Math.min(0,-feedHidden());
+    binner.style.transition = instant ? "none" : "transform .45s cubic-bezier(.2,.8,.3,1)";
+    binner.style.transform  = "translateY("+y+"px)";
+  }
+  function feedPush(row){
+    binner.appendChild(row);
+    const live=[...binner.children].filter(c=>!c.classList.contains("gone"));
+    while(live.length>FEED_MAX){
+      const old=live.shift();
+      old.classList.add("gone");
+      setTimeout(()=>old.remove(),460);
+    }
+    feedActive=Date.now(); feedRevealing=false;   // new traffic always wins
+    feedPin(false);
+  }
+  function feedTick(){
+    if(!document.body.classList.contains("spec")) return;
+    if(feedHidden()<=0) return;                    // nothing hidden to reveal
+    const now=Date.now();
+    if(!feedRevealing && now-feedActive>FEED_IDLE_MS){
+      feedRevealing=true; feedRevealStart=now;
+      binner.style.transition="transform "+(FEED_REVEAL_MS/1000)+"s linear";
+      binner.style.transform="translateY(0px)";    // drift back through history
+    }else if(feedRevealing && now-feedRevealStart>=FEED_REVEAL_MS){
+      feedRevealing=false; feedActive=now;         // home to the latest, wait again
+      feedPin(false);
+    }
+  }
+  setInterval(feedTick,1000);
   const ppan =document.createElement("div"); ppan.id="poolPanel"; document.body.appendChild(ppan);
   const coinLayer=document.createElement("div"); coinLayer.id="coinLayer"; document.body.appendChild(coinLayer);
 
@@ -1977,20 +2035,31 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
   function layoutRightColumn(){
     if(!document.body.classList.contains("spec")) return;
     const r=ppan.getBoundingClientRect();
-    if(r.height) bfeed.style.top=Math.round(r.bottom+14)+"px";
+    if(!r.height) return;
+    const top=Math.round(r.bottom+8);              // was +14: buys most of a row
+    bfeed.style.top=top+"px";
+    bfeed.style.height=Math.max(96, Math.round(innerHeight-top-54))+"px";
+    feedPin(true);
   }
-  function placeCoin(kind,pick,amt,isNew){
+  // index hues: SEG 1..6, then the round-wide pool (gold)
+  const SEGHUE=["#e2574c","#e8a33d","#43d98e","#4aa8e0","#a77bd8","#e07ab0"];
+  const hueOf = i => (i==null||i>=6) ? "#d7b34c" : SEGHUE[i];
+  function placeCoin(kind,pick,amt,isNew,pool){
     const key=coinKey(kind,pick);
     const idx=(cellCount[key]=(cellCount[key]||0)+1)-1;
     const el=document.createElement("div");
     el.className="ccoin"+(isNew?" new":"");
     el.style.background = amt ? (CHIPCOLOR[amt]||"#565b66") : "#12271b";
+    // the ring around the chip says which segment it is counting toward, so a
+    // glance at the felt reads as the pools panel does
+    el.style.borderColor = hueOf(pool);
     el.textContent = amt ? abbrevS(amt) : "?";
     coinLayer.appendChild(el);
     const rec={key,idx,el}; coinList.push(rec); positionCoin(rec);
     if(isNew){
       const p=cellPos(rec);
       if(p){ const ring=document.createElement("div"); ring.className="ring";
+             ring.style.borderColor=hueOf(pool);
              ring.style.left=p.x+"px"; ring.style.top=p.y+"px";
              coinLayer.appendChild(ring); setTimeout(()=>ring.remove(),1700); }
       setTimeout(()=>el.classList.remove("new"),700);
@@ -2001,14 +2070,13 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
 
   // ── spectate book: everything the ticker + pools panel know ──
   // index hues: SEG 1..6, then the round-wide pool
-  const SEGHUE=["#e2574c","#e8a33d","#43d98e","#4aa8e0","#a77bd8","#e07ab0"];
   const dot = i => '<span class="segdot" style="background:'+(i>=6?"#d7b34c":SEGHUE[i])+'"></span>';
 
   let specBook, specSeen, packCacheS, settledS;
   function resetSpecFeed(){
     specBook=Array.from({length:7},()=>[]); specSeen=new Set(); packCacheS={}; settledS={};
     coinLayer.innerHTML=""; coinList=[]; cellCount={};
-    bfeed.innerHTML=""; renderPools();
+    binner.innerHTML=""; feedActive=Date.now(); feedRevealing=false; feedPin(true); renderPools();
   }
   const fmtC=x=>x.toLocaleString(undefined,{maximumFractionDigits:2});
   function addSpecBet(wallet,pool,kind,pick,amt,hot){
@@ -2017,32 +2085,29 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     const row=document.createElement("div");
     row.className="brow"+(hot?" hot":"");
     row.innerHTML='<span class="bwho">'+tagOf(wallet)+'</span>'
-      +'<span class="bseg">'+(kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
+      +'<span class="bseg">'+(kind===KIND.DD?"DD":"SEG "+(pool+1))+'</span>'
       +'<span class="bpick">on <b>'+spec.name+'</b>'+(kind===KIND.DD?"":" · "+fair(spec.count)+"×")+'</span>'
       +'<span class="bamt">'+(amt?'<span class="dot" style="background:'+(CHIPCOLOR[amt]||"#565b66")+'"></span>'+amt:"·")+'</span>';
-    bfeed.appendChild(row);
-    while(bfeed.children.length>5) bfeed.removeChild(bfeed.firstChild);
+    feedPush(row);
     if(hot) setTimeout(()=>row.classList.remove("hot"), 4200);
-    placeCoin(kind,pick,amt,hot);
+    placeCoin(kind,pick,amt,hot,pool);
     renderPools();
   }
   function addSettleRow(pool,pot,dist){
     settledS[pool]={pot,dist};
     const row=document.createElement("div");
     row.className="brow settle";
-    row.innerHTML='<span class="bseg">'+(pool===6?"ROUND":"SEG "+(pool+1))+'</span>'
+    row.innerHTML='<span class="bseg">'+(pool===6?"DD":"SEG "+(pool+1))+'</span>'
       +'<span class="bpick">settled — <b>'+fmtC(dist)+' TIMBS</b> paid to winners</span>'
       +'<span class="bamt">✓</span>';
-    bfeed.appendChild(row);
-    while(bfeed.children.length>5) bfeed.removeChild(bfeed.firstChild);
+    feedPush(row);
     renderPools();
   }
   function addNoteRow(label, html){
     const row=document.createElement("div");
     row.className="brow settle";
     row.innerHTML='<span class="bseg">'+label+'</span><span class="bpick">'+html+'</span><span class="bamt">\u2713</span>';
-    bfeed.appendChild(row);
-    while(bfeed.children.length>5) bfeed.removeChild(bfeed.firstChild);
+    feedPush(row);
   }
   function poolStatsS(pool){
     const bets=specBook[pool];
@@ -2058,7 +2123,7 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     let h="<h3>Pools · live</h3>";
     for(let i=0;i<7;i++){
       const st=poolStatsS(i), done=settledS[i];
-      const name=i===6?"ROUND":"SEG "+(i+1);
+      const name=i===6?"DD":"SEG "+(i+1);
       if(done){
         h+='<div class="prow done"><span class="pseg">'+dot(i)+name+'</span>'
           +'<span class="ppot">'+fmtC(done.pot)+'</span>'
@@ -2076,17 +2141,19 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     if(jackpotBal!=null){
       h+='<div class="prow"><span class="pseg" style="color:var(--gold,#d7b34c)">JACKPOT</span>'
         +'<span class="ppot" style="color:var(--gold,#d7b34c)">'+fmtC(jackpotBal)+'</span>'
-        +'<span class="pmeta">rolls until the Double-Digit hits \u00b7 2+ DD wallets</span></div>';
+        +'<span class="pmeta">pays up to '+fmtC(jackpotHit||0)+' a hit \u00b7 2+ DD wallets</span></div>';
     }
     ppan.innerHTML=h;
     requestAnimationFrame(layoutRightColumn);
   }
-  let jackpotBal=null, roJack=null;
+  let jackpotBal=null, jackpotHit=null, roJack=null;
   async function pollJackpotRO(){
     if(!ADDR.jackpot || !ro) return;
     try{
       if(!roJack) roJack=new ethers.Contract(ADDR.jackpot, JACKPOT_ABI, ro);
-      jackpotBal=Number((await roJack.balance())/(10n**18n));
+      const [b,bp,fl]=await Promise.all([roJack.balance(),roJack.sliceBps(),roJack.sliceFloor()]);
+      jackpotBal=Number(b/(10n**18n));
+      jackpotHit=Number(maxHitOf(b,bp,fl)/(10n**18n));
     }catch{}
   }
   setInterval(pollJackpotRO, 30000);
@@ -2130,7 +2197,7 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
           const key="u:"+ev.transactionHash+":"+ev.index;
           if(specSeen.has(key)) continue; specSeen.add(key);
           const g=Number(ev.args.granted/(10n**18n));
-          if(g>0) addNoteRow(Number(ev.args.pool)===6?"ROUND":"SEG "+(Number(ev.args.pool)+1),
+          if(g>0) addNoteRow(Number(ev.args.pool)===6?"DD":"SEG "+(Number(ev.args.pool)+1),
             'reserve topped the winners up \u2014 <b>+'+fmtC(g)+' TIMBS</b> from the house');
         }
         if(roJack){
@@ -2139,7 +2206,7 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
             const key="j:"+ev.transactionHash+":"+ev.index;
             if(specSeen.has(key)) continue; specSeen.add(key);
             addNoteRow("JACKPOT",'STRUCK \u2014 <b>'+fmtC(Number(ev.args.slice/(10n**18n)))
-              +' TIMBS</b> to the Double-Digit winners \u00b7 '+fmtC(Number(ev.args.balanceAfter/(10n**18n)))+' still on the banner');
+              +' TIMBS</b> to the Repeats-a-Digit winners \u00b7 '+fmtC(Number(ev.args.balanceAfter/(10n**18n)))+' still on the banner');
             pollJackpotRO();
           }
         }
