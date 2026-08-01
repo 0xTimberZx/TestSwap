@@ -2290,7 +2290,11 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
       const cd = p.until? " · "+mmss(p.until-now) : "";
       const locks = Number(T.lockedMask).toString(2).split("1").length-1;
       const lockStr = (p.key==="spinning"||p.key==="locked") ? " · "+locks+"/6 locked" : "";
-      txt="TABLE "+tid+" · seed round "+Number(T.seedRound)+" · seats "+T.seatCount+"/12 · pot "+potStr+" TIMBS · "+p.label+cd+lockStr
+      // No seed round here: which TimbPrize round seeded the string is
+      // operator plumbing (the console still shows it, and openTable needs
+      // it). On the watch page a second number next to TABLE n only reads as
+      // a contradiction — "TABLE 11 but it's round 10".
+      txt="TABLE "+tid+" · seats "+T.seatCount+"/12 · pot "+potStr+" TIMBS · "+p.label+cd+lockStr
            +(liveCount>1? " · "+liveCount+" tables live":"");
     } else {
       txt='<span class="lob">no streamed table right now — the felt spins on</span>';
