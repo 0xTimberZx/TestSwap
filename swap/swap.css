@@ -238,6 +238,14 @@
 .info-val.warn   { color: #f59e0b; }
 .info-val.danger { color: #ef4444; }
 
+/* Route-vs-reference divergence. Full width and wrapping, not a right-aligned
+   value — it's a sentence, and on a phone it needs the whole row. */
+.info-note { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+             font-size: 11px; line-height: 1.5; font-family: var(--mono);
+             color: var(--text-3); overflow-wrap: anywhere; }
+.info-note.good { color: #22c55e; }
+.info-note.warn { color: #f59e0b; }
+
 /* ─── Swap Button ────────────────────────────────────────────────────────── */
 .btn-swap {
   width: 100%;
