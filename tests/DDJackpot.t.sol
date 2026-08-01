@@ -246,13 +246,36 @@ contract DDJackpotTest is Test {
         assertEq(jackpot.balance(), 0);
     }
 
+    /// The operator's question, answered in code: a 5-chip DD bet can carry
+    /// at most 10x its own chip out of the banner. Two 5-chips on a 1000
+    /// jackpot draw 50 each — not the full 200 slice a 1000-chip table would.
+    function test_SmallChipsCannotDrainTheBanner() public {
+        jackpot.donate(1_000e18);
+        uint256 id = _openWithRepeat(true);
+        _placeDD(alice, id, 0);                // 5-TIMBS chips
+        _placeDD(bob,   id, 0);
+        _armAndLock(id);
+
+        (bool ok, uint256 preview) = jackpot.strikeable(address(board), id);
+        assertTrue(ok);
+        assertEq(preview, 100e18, "stake cap: 2 x (10 x 5), not the 200 slice");
+
+        uint256 aBefore = timbs.balanceOf(alice);
+        jackpot.strike(address(board), id);
+        assertEq(timbs.balanceOf(alice) - aBefore, 50e18, "10x your chip, no more");
+        assertEq(jackpot.balance(), 900e18, "the uncollected slice stays on the banner");
+    }
+
     function test_MeterBoundsEnforced() public {
         vm.expectRevert(abi.encodeWithSelector(DDJackpot.BadMeter.selector, 6_000));
-        jackpot.setMeter(6_000, 50e18);        // >50% refused
-        jackpot.setMeter(2_500, 100e18);       // fine
+        jackpot.setMeter(6_000, 50e18, 10);    // >50% refused
+        vm.expectRevert(abi.encodeWithSelector(DDJackpot.BadMeter.selector, 2_000));
+        jackpot.setMeter(2_000, 50e18, 0);     // zero stake cap refused
+        jackpot.setMeter(2_500, 100e18, 8);    // fine
         assertEq(jackpot.sliceBps(), 2_500);
+        assertEq(jackpot.stakeCapMult(), 8);
         vm.prank(alice);
         vm.expectRevert();                     // OwnableUnauthorizedAccount
-        jackpot.setMeter(1_000, 1e18);
+        jackpot.setMeter(1_000, 1e18, 10);
     }
 }

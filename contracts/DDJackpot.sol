@@ -76,6 +76,14 @@ contract DDJackpot is Ownable, ReentrancyGuard {
     uint256 public sliceBps   = 2_000;  // 20%
     uint256 public sliceFloor = 50e18;  // 50 TIMBS
 
+    /// @notice Stake gate: a winner's share of the slice is capped at
+    ///         `stakeCapMult x` their own DD chip, and the uncollected
+    ///         remainder STAYS on the banner. A 5-chip wallet can carry at
+    ///         most 50 out of the pot while a 1000-chip carries its full
+    ///         pro-rata — the encore plan's min-chip scaling, applied here:
+    ///         small chips cannot drain what big chips built.
+    uint256 public stakeCapMult = 10;
+
     /// @notice board => tableId => already struck.
     mapping(address => mapping(uint256 => bool)) public struck;
 
@@ -158,6 +166,8 @@ contract DDJackpot is Ownable, ReentrancyGuard {
         uint256 paid;
         for (uint256 i; i < n; ++i) {
             uint256 amt = (slice * stakes[i]) / totalStake; // dust stays in the pot
+            uint256 cap = stakes[i] * stakeCapMult;         // your chip is your ceiling
+            if (amt > cap) amt = cap;
             if (amt == 0) continue;
             address w = b.betAt(tableId, DD_POOL, i).wallet;
             timbs.safeTransfer(w, amt);
@@ -168,20 +178,34 @@ contract DDJackpot is Ownable, ReentrancyGuard {
         return paid;
     }
 
-    /// @notice What a strike would pay right now, and whether it can fire —
-    ///         the apps' one-call eligibility check.
-    function strikeable(address board, uint256 tableId) external view returns (bool ok, uint256 slice) {
+    /// @notice What a strike would actually pay right now (stake caps
+    ///         included), and whether it can fire — the apps' one-call
+    ///         eligibility check.
+    function strikeable(address board, uint256 tableId) external view returns (bool ok, uint256 payable_) {
         if (halted || !trustedBoard[board] || struck[board][tableId]) return (false, 0);
         ISegmentBoardView b = ISegmentBoardView(board);
         (,,,,,, bool ddSettled,,, bytes6 lockedChars) = b.tables(tableId);
-        if (!ddSettled || !b.hasRepeat(lockedChars))          return (false, 0);
-        if (b.betCount(tableId, DD_POOL) < MIN_DD_WALLETS)    return (false, 0);
+        if (!ddSettled || !b.hasRepeat(lockedChars))       return (false, 0);
+        uint256 n = b.betCount(tableId, DD_POOL);
+        if (n < MIN_DD_WALLETS) return (false, 0);
         uint256 bal = timbs.balanceOf(address(this));
         if (bal == 0) return (false, 0);
-        slice = (bal * sliceBps) / BPS;
+        uint256 slice = (bal * sliceBps) / BPS;
         if (slice < sliceFloor) slice = sliceFloor;
         if (slice > bal)        slice = bal;
-        return (true, slice);
+
+        uint256 totalStake;
+        uint256[] memory stakes = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            stakes[i] = b.CHIPS(b.betAt(tableId, DD_POOL, i).chipIdx);
+            totalStake += stakes[i];
+        }
+        for (uint256 i; i < n; ++i) {
+            uint256 amt = (slice * stakes[i]) / totalStake;
+            uint256 cap = stakes[i] * stakeCapMult;
+            payable_ += amt > cap ? cap : amt;
+        }
+        return (true, payable_);
     }
 
     // ─── Funding ───────────────────────────────────────────────────────────
@@ -206,11 +230,13 @@ contract DDJackpot is Ownable, ReentrancyGuard {
 
     /// @notice Retune the meter. Slice capped at 50% so a single strike can
     ///         never gut the banner; the floor is what keeps small pots
-    ///         feeling real.
-    function setMeter(uint256 _sliceBps, uint256 _sliceFloor) external onlyOwner {
-        if (_sliceBps == 0 || _sliceBps > 5_000) revert BadMeter(_sliceBps);
-        sliceBps   = _sliceBps;
-        sliceFloor = _sliceFloor;
+    ///         feeling real; the stake cap keeps small chips from draining
+    ///         what big chips built.
+    function setMeter(uint256 _sliceBps, uint256 _sliceFloor, uint256 _stakeCapMult) external onlyOwner {
+        if (_sliceBps == 0 || _sliceBps > 5_000 || _stakeCapMult == 0) revert BadMeter(_sliceBps);
+        sliceBps     = _sliceBps;
+        sliceFloor   = _sliceFloor;
+        stakeCapMult = _stakeCapMult;
         emit MeterSet(_sliceBps, _sliceFloor);
     }
 
