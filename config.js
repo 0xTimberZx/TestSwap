@@ -53,6 +53,7 @@ const ADDRESSES = {
   PoolLedger:           "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8",
   CommitRevealEntropy:  "0x63614173003957A3AECb6bd22C8cC491f7279F3D",
   UnderwriteReserve:    "0xa0f88d8504D340702889C48288D8FB9329D88184", // holds the top-up float; guardian halt + drain only
+  DDJackpot:            "0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9", // M2 rolling jackpot — deploy-once, cross-generation
   SeedRegistry:         "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived — spans generations
   SegmentCrank:         "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher — generation-agnostic
   USDC:                 "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Circle canonical (6 decimals)
