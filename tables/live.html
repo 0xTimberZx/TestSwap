@@ -173,12 +173,17 @@
   .swatch.r{background:var(--red)}.swatch.b{background:var(--black);border:1px solid rgba(255,255,255,.3)}
   .bet.redbet{border-color:var(--red-hi)}.bet.redbet .lab{color:#ef9aa1}
   .bet.blackbet{border-color:#50535c}.bet.blackbet .lab{color:#d6dfd8}
-  .coins{position:absolute;top:-7px;right:-7px;display:flex;flex-direction:row-reverse;pointer-events:none;z-index:2}
-  .coin{width:22px;height:22px;border-radius:50%;margin-left:-9px;display:grid;place-items:center;
-    font-size:8.5px;font-weight:800;color:#fff;border:2px solid rgba(255,255,255,.7);box-shadow:0 2px 4px rgba(0,0,0,.6);
+  /* The pile lives INSIDE its spot. Anchored outside (the old top:-7px/right:-7px)
+     it hung over the neighbouring cell, and on the right-hand column it hung off
+     the felt entirely. Bounded to one face + the total, it can never grow wider
+     than the cell no matter how many wallets pile onto a spot. */
+  .coins{position:absolute;top:3px;right:3px;max-width:calc(100% - 6px);
+    display:flex;flex-direction:row-reverse;align-items:center;pointer-events:none;z-index:2}
+  .coin{width:20px;height:20px;flex:none;border-radius:50%;margin-left:-8px;display:grid;place-items:center;
+    font-size:8px;font-weight:800;color:#fff;border:2px solid rgba(255,255,255,.7);box-shadow:0 2px 4px rgba(0,0,0,.6);
     font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-  .coins .sum{height:16px;align-self:center;margin-left:-6px;padding:0 5px;border-radius:8px;display:grid;place-items:center;
-    font-size:8.5px;font-weight:800;color:var(--ink);background:var(--gold);box-shadow:0 2px 4px rgba(0,0,0,.6);z-index:1}
+  .coins .sum{height:15px;flex:none;padding:0 4px;border-radius:8px;display:grid;place-items:center;
+    font-size:8px;font-weight:800;color:var(--ink);background:var(--gold);box-shadow:0 2px 4px rgba(0,0,0,.6);z-index:1}
   .bet.pending{box-shadow:0 0 0 2px var(--cream) inset,0 0 22px -2px rgba(243,236,216,.75);animation:pend 1s ease-in-out infinite;z-index:4}
   @keyframes pend{50%{box-shadow:0 0 0 2px var(--gold) inset,0 0 26px 0 rgba(215,179,76,.7)}}
 
@@ -305,7 +310,9 @@
     .pocket{font-size:16px}
     .out .lab{font-size:9px}.out .sub{font-size:7px}
     .dd .lab{font-size:12px}.dd .sub{margin-top:3px}
-    .coin{width:16px;height:16px;font-size:7px}
+    .coins{top:2px;right:2px}
+    .coin{width:15px;height:15px;font-size:6.5px;margin-left:-6px;border-width:1.5px}
+    .coins .sum{height:12px;padding:0 3px;font-size:6.5px}
     /* the meter spans the full width too: reels widen to fill (native cell
        height kept — the strip's translateY math is pinned to RCELL=40 in JS). */
     .reels{gap:6px}
@@ -985,9 +992,25 @@ async function checkCompete(){
 }
 
 // ── chain refresh ──────────────────────────────────────
+/// Switching tables has to wipe the felt with it. The feed, the pile totals and
+/// the chip-pack cache are all per-table; left standing, table 12's chips sit on
+/// the board while table 13's bets stack on top of them.
+let shownTid=null;
+function resetTableView(){
+  feedSeen.clear();
+  poolBook.forEach(a => a.length=0);
+  for(const k of Object.keys(packCache)) delete packCache[k];
+  $("feed").innerHTML="";
+  document.querySelectorAll(".coins").forEach(c => {
+    c.innerHTML=""; delete c.dataset.n; delete c.dataset.total;
+    delete c.dataset.mine; delete c.dataset.who;
+  });
+}
+
 let refreshing=false;
 async function refreshChain(){
   if(!board || !tid || refreshing) return; refreshing=true;
+  if(shownTid !== tid){ resetTableView(); shownTid = tid; }
   try{
     const [t, seat, bal, cred] = await Promise.all([
       board.tables(tid), board.seats(tid, me),
@@ -1443,29 +1466,41 @@ async function addFeedRow(wallet, pool, kind, pick){
   // The coin face is the STAKE, super-abbreviated — colour + number both say
   // denomination; the tooltip carries who/segment/spot.
   const cell = CELLMAP[kind+":"+(kind===KIND.DD?0:pick)];
-  if(cell){
-    const coins=cell.querySelector(".coins");
-    const coin=document.createElement("div");
-    coin.className="coin";
-    coin.style.background = amt? CHIPCOLOR[amt] : "#12271b";
-    if(isMe){ coin.style.borderColor="var(--gold)"; }
-    // yours: segment number (you track your tokens; the gold ring marks them).
-    // everyone else's: the monetary value, super-abbreviated.
-    coin.textContent = isMe
-      ? (kind===KIND.DD? "DD" : String(pool+1))
-      : (amt? abbrev(amt) : (kind===KIND.DD? "DD" : "?"));
-    coin.title=(isMe?"You":tagOf(wallet))+" · "+(kind===KIND.DD?"round":"SEG "+(pool+1))+(amt?" · "+amt+" TIMBS":"")+" on "+spec.name;
-    coins?.appendChild(coin);
-    // 2+ coins on a spot → a tiny running total so the pile reads at a glance
-    if(coins && amt){
-      const tot=(Number(coins.dataset.total||0))+amt;
-      coins.dataset.total=tot;
-      if(coins.querySelectorAll(".coin").length>1){
-        let sum=coins.querySelector(".sum");
-        if(!sum){ sum=document.createElement("div"); sum.className="sum"; coins.prepend(sum); }
-        sum.textContent="="+abbrev(tot);
-        sum.title=tot+" TIMBS on this spot";
-      }
+  const coins = cell?.querySelector(".coins");
+  if(coins){
+    // A spot can carry a bet from every seat at the table. Fanning one coin per
+    // bet ran the pile clean off the felt, so the pile is bounded: ONE face plus
+    // a running total, which is what a dealer's stack looks like from above.
+    const n = (Number(coins.dataset.n||0)) + 1;
+    const tot = (Number(coins.dataset.total||0)) + (amt||0);
+    const wasMine = coins.dataset.mine==="1";
+    coins.dataset.n = n; coins.dataset.total = tot;
+    if(isMe) coins.dataset.mine = "1";
+
+    let coin=coins.querySelector(".coin");
+    if(!coin){ coin=document.createElement("div"); coin.className="coin"; coins.appendChild(coin); }
+    // Your chip holds the face whenever you are in the pile — "where are my
+    // tokens" is the read that matters. Otherwise the newest bet shows.
+    if(isMe || !wasMine){
+      coin.style.background = amt? CHIPCOLOR[amt] : "#12271b";
+      // yours: segment number (the gold ring marks them). Everyone else's: the
+      // monetary value, super-abbreviated.
+      coin.textContent = isMe
+        ? (kind===KIND.DD? "DD" : String(pool+1))
+        : (amt? abbrev(amt) : (kind===KIND.DD? "DD" : "?"));
+    }
+    coin.style.borderColor = (isMe||wasMine)? "var(--gold)" : "";
+
+    const line=(isMe?"You":tagOf(wallet))+" · "+(kind===KIND.DD?"round":"SEG "+(pool+1))+(amt?" · "+amt+" TIMBS":"");
+    coins.dataset.who = (coins.dataset.who? coins.dataset.who+"\n":"") + line;
+    coin.title = coins.dataset.who + (n>1? "\n— "+n+" bets · "+tot+" TIMBS on "+spec.name : " on "+spec.name);
+
+    // 2+ bets on a spot → a tiny running total so the pile reads at a glance
+    if(n>1 && tot>0){
+      let sum=coins.querySelector(".sum");
+      if(!sum){ sum=document.createElement("div"); sum.className="sum"; coins.prepend(sum); }
+      sum.textContent="="+abbrev(tot);
+      sum.title=n+" bets · "+tot+" TIMBS on this spot";
     }
   }
 }
