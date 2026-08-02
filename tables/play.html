@@ -347,6 +347,7 @@
     <input id="tableId" inputmode="numeric" style="width:70px;background:#0b1a12;border:1px solid var(--felt-line);border-radius:6px;color:var(--cream);font-size:15px;font-weight:800;padding:7px 10px;text-align:center">
     <button class="btn" id="loadTable">Load</button>
     <button class="btn" id="newest">Newest</button>
+    <a class="btn" href="games.html" style="text-decoration:none">All games</a>
     <span class="pill" id="phasePill">—</span>
     <span class="pill" id="seatsPill">seats —</span>
     <button class="btn" id="armBtn" style="display:none">Start the pick</button>
@@ -754,10 +755,11 @@ $("connect").onclick = async () => {
   ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
   timbs  = new ethers.Contract(ADDR.timbs, ERC20_ABI, signer);
   dials = { entry: Number(await board.entryWindow()), lead: Number(await board.betsCloseLead()) };
-  rail("Connected. Loading the newest table…");
+  rail(requestedTable() ? "Connected. Loading table " + requestedTable() + "…"
+                        : "Connected. Loading the newest table…");
   pollJackpot();
   try{ window.DebugHub && DebugHub.logCheckpoint("wallet connected · "+short(me), "pass"); }catch(e){}
-  await pickNewest();
+  await openRequestedOrNewest();
   setInterval(refreshChain, 12000);
   setInterval(tick, 1000);
   (function loop(){ if(T&&dials) driveSpin(phaseOf()); requestAnimationFrame(loop); })();
@@ -768,6 +770,19 @@ async function pickNewest(){
   if(n===0){ rail("No tables have ever been opened on this board."); return; }
   tid = n; $("tableId").value = n;
   await refreshChain();
+}
+
+/// `play.html?table=12` — the deep link the games dashboard hands out, so a
+/// player who picked a table out of the shop window lands on THAT table
+/// instead of whichever one happens to be newest. No param, old behaviour.
+function requestedTable(){
+  const want = Number(new URLSearchParams(location.search).get("table"));
+  return Number.isInteger(want) && want > 0 ? want : null;
+}
+async function openRequestedOrNewest(){
+  const want = requestedTable();
+  if(want){ tid = want; $("tableId").value = want; await refreshChain(); return; }
+  await pickNewest();
 }
 $("newest").onclick = pickNewest;
 $("loadTable").onclick = async () => { tid = Number($("tableId").value||"0")||null; if(tid) await refreshChain(); };
