@@ -22,7 +22,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT  = path.resolve(__dirname, "..");
-const PAGES = ["tables/index.html", "tables/play.html", "tables/live.html"];
+const PAGES = ["tables/index.html", "tables/play.html", "tables/live.html",
+               "tables/games.html"];
 
 // ADDR key in the pages  ->  name in config.js ADDRESSES
 const KEYMAP = {
