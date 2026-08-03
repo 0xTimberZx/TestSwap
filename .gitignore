@@ -30,3 +30,6 @@ artifacts/
 
 # ─── Local scratch / generated exports (not part of the site) ─────────────────
 scratchpad/
+
+# ─── Scratch (was tracked once by accident; regenerable or dead) ──────────────
+tmp/

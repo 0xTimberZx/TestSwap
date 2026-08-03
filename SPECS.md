@@ -36,6 +36,36 @@
 | LINK (Chainlink canonical) | 0xb1D4538B4571d411F07960EF2838Ce337FE1E80E | — |
 | DAPP Token | 0x3d0cB8929c22F93A9dd33921E6f43C1621FCfC04 | — |
 
+### SwapTables — generation 7 (live)
+
+Boards are immutable and redeployed per generation; the registry, crank and jackpot span all of
+them. The bonus-chip rule is gen-7's only change from gen-6: the Repeats-a-Digit stake now
+requires a full six-token load.
+
+| Contract | Address | Notes |
+|---|---|---|
+| SegmentBoard (gen 7) | 0xf3FF34488D472b89497Cf31631c77bE85524A65a | Sourcify ✅ `exact_match` — state machine + pari-mutuel settlement |
+| PoolLedger (gen 7) | 0xAA4f4303b747bEa63F9818Bc9C38dAe5aebDe218 | Sourcify ✅ — custodies chips PER TABLE; pays winners |
+| UnderwriteReserve (gen 7) | 0x73b7fBbA866859e241e87e39e2aDC81711902D7A | Sourcify ✅ — top-up float; income = dead pots + half rake |
+| CommitRevealEntropy (gen 7) | 0x57A1F889A30178b62Bc39844D73B68d0f8a274d6 | Sourcify ✅ — swappable; VRF replaces it in gen 8 |
+| SeedRegistry | 0x2460C8ed63414F36838542982A5Ab263C9Fcb914 | **Cross-generation** — never redeploy; stops a winning string seeding two tables |
+| SegmentCrank | 0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D | **Generation-agnostic** — stateless lock/retire batcher |
+| DDJackpot | 0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9 | **Cross-generation** — metered strikes, stake-capped, §9 two-wallet guard |
+
+| Parameter | Value |
+|---|---|
+| Seats | 2 minimum to arm, 12 hard cap |
+| Pools | 7 = six segment pools + round-wide Repeats a Digit |
+| Chips | 5 / 10 / 25 / 50 / 100 / 500 / 1000 TIMBS |
+| Table seed | 100 TIMBS, split 7 ways; a pool draws its share only if contested (§9) |
+| Rake | 1.75% + 6.25%/n, n = distinct wallets; **0% uncontested** |
+| Underwrite | toward `stake × fair × 0.90`; caps 1000/pool, 1500/round, 10% of free float |
+| Dials (gen 7) | entry ≤ 40 min, place 5 min, bets close 2 min before the pick, sit-quiet 3 min, solo wait 15 min |
+| Jackpot slice | 20% of the banner, floor 50 TIMBS, ≤ 50% cap, your own chip × 10 as a per-wallet ceiling |
+
+Retired boards keep paying withdrawals from their own ledgers — retiring a generation never
+strands credit. Gen 6 (`0x1de9889da2083F5f1693DfCf589A453E9b39EEA7`) retired 2026-08-03.
+
 ### Router Version History
 
 | Version | Address | Status |
