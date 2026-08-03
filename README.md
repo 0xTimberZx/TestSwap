@@ -105,6 +105,18 @@ Each is a gear in the engine above, not a standalone feature.
 
 **Prize Game** — Perpetual round-based game. Each round = 6 segments of 60 min (59 min 45 s open + 15 s settlement). Players hold a **ticket** — a 6-character string (A–Z, 0–9, no repeats) that plays the next round. Every eligible swap nudges the active segment's digit upward on a continuous meter; when a segment closes its digit locks and the next becomes active. After all 6 lock, an exact match wins the pot. Segments settle **permissionlessly** once the open window elapses (anyone can call `settleSegment`). Entry can be paid in ETH or TIMBS; **extra rounds** cost `entryCostTIMBS` each (up to 12, non-refundable). Ticket principal stays refundable for **4 rounds** after the ticket's last eligible round (and if you win near the end, the refund window starts *after* your claim window closes — up to LER+6) and, while active, earns yield via the **TimbYieldVault** that grows the pot. Winners claim their prize on a separate, shorter clock — **2 rounds from the match** — and a lapsed prize recycles into the pot without touching the winner's principal window. At each segment close the locked letter is the nudge counter **jittered with the settling block's hash**, so swaps influence the outcome but nobody can aim it. The registry is keyed by a **game generation**: when a new TimbPrize is deployed and `startGame` runs, the generation bumps and every prior-game ticket goes inert — its principal is recoverable any time via **Reclaim principal** on the compete page — so a redeploy never contaminates the new game and never needs a fresh registry again.
 
+**SwapTables** — Pari-mutuel roulette on TIMBS play-chips, run live on stream. A table seats up
+to 12 wallets; each loads six chips, one per segment, and places them across seven pools (six
+segment pools plus the round-wide **Repeats a Digit**). The six characters lock one at a time —
+the drumroll — and each pool pays its winners pro-rata as it locks. Rake is graduated (8% solo
+down to 1.75% crowded, and **0% on an uncontested pool**), so the house earns most exactly when
+tables are busy. Thin winning pools are topped up from the **UnderwriteReserve** toward
+`stake × fair × 0.90`, funded by dead pots and half the rake — the rule being that more players
+must never make any player's outcome worse. Unclaimed Repeats-a-Digit money rolls into a
+cross-generation **DDJackpot** that pays a metered slice, stake-capped so a 5-chip bet cannot
+drain what 1,000-chip bets built. Boards are immutable and redeployed per generation; the
+SeedRegistry, SegmentCrank and DDJackpot span every generation. **Generation 7** is live.
+
 **LP Farming** — Stake TIMBS/ETH LP tokens to earn TIMBS emissions.
 
 **Single-Asset Staking** — Stake TIMBS to earn distributions from protocol buybacks.
@@ -132,6 +144,11 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 ├── analytics/           ← Live metrics + event history      → /analytics/
 ├── explore/             ← V2 Pools explorer                 → /explore/
 ├── docs/                ← User-facing documentation page    → /docs/
+├── tables/              ← SwapTables: console, felt, watch, lobby → /tables/
+│   ├── index.html       ←   operator console (open / arm / reveal / retire)
+│   ├── play.html        ←   the felt — sit, load, place
+│   ├── live.html        ←   the stream page (spectate, no wallet)
+│   └── games.html       ←   every running table, read-only
 ├── CNAME                ← Custom domain (timbswap.xyz) for GitHub Pages
 ├── dev-docs/            ← Internal design specs (not the /docs/ web page)
 ├── scripts/
