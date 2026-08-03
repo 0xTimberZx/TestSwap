@@ -42,17 +42,23 @@ const ADDRESSES = {
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
 
-  // ── SwapTables segment tables — generation 6, the accounting generation (deployed 2026-07-31) ──
+  // ── SwapTables segment tables — generation 7, the bonus-chip generation (deployed 2026-08-03) ──
+  // One rule change: the Repeats-a-Digit stake now requires a full six-token
+  // load. A seated-but-unfunded wallet could previously buy the DD stake — and
+  // with the jackpot live, buy into a strike — while contributing nothing to
+  // the six segment pools. No new ABI surface, so the apps read it as gen-6.
+  // Gen-6 (0x1de9889d…) retired 2026-08-03; its ledger still pays withdrawals.
+  // The gen-6 mechanics below are unchanged:
   // Gen-5's adaptive timing (same five dials: 2400/300/120/180/900) plus:
   // monotonic underwrite (thin winners topped up toward stake x fair x 0.90
   // from the UnderwriteReserve; caps 1000/pool, 1500/round, 10% of float),
   // rake split (half reserve / half Treasury) + dead pots to the reserve,
   // and dealer tips (seated wallets tip the opener after the sixth lock).
   // Gen-5 (0x7358Aa…) retired 2026-07-31; its ledger still pays withdrawals.
-  SegmentBoard:         "0x1de9889da2083F5f1693DfCf589A453E9b39EEA7",
-  PoolLedger:           "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8",
-  CommitRevealEntropy:  "0x63614173003957A3AECb6bd22C8cC491f7279F3D",
-  UnderwriteReserve:    "0xa0f88d8504D340702889C48288D8FB9329D88184", // holds the top-up float; guardian halt + drain only
+  SegmentBoard:         "0xf3FF34488D472b89497Cf31631c77bE85524A65a",
+  PoolLedger:           "0xAA4f4303b747bEa63F9818Bc9C38dAe5aebDe218",
+  CommitRevealEntropy:  "0x57A1F889A30178b62Bc39844D73B68d0f8a274d6",
+  UnderwriteReserve:    "0x73b7fBbA866859e241e87e39e2aDC81711902D7A", // holds the top-up float; guardian halt + drain only
   DDJackpot:            "0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9", // M2 rolling jackpot — deploy-once, cross-generation
   SeedRegistry:         "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived — spans generations
   SegmentCrank:         "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher — generation-agnostic
