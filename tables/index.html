@@ -439,6 +439,13 @@ const RESERVE_ABI = [
   "function freeFloat() view returns (uint256)",
   "function overflowEarmark() view returns (uint256)",
   "function halted() view returns (bool)",
+  // The solvency counters. Their DIFFERENCE is the only number that decides how
+  // much fundBudgeted will accept — it reverts ExceedsBudget above it — and it
+  // is the whole "no minting, only recycling" rule in one figure: Treasury can
+  // give the reserve nothing the game has not already earned it.
+  "function treasuryEarned() view returns (uint256)",
+  "function treasurySupport() view returns (uint256)",
+  "function floatTarget() view returns (uint256)",
 ];
 let reserveAddr=null, resv=null;
 /// Entry close is per-table state on gen-5 (adaptive — every join can move
@@ -766,15 +773,30 @@ async function refreshMoney(){
   // gen-6: the underwrite reserve, next to the vault it backstops
   if(GEN>=6){ try{
     if(!resv){ reserveAddr = await board.reserve(); resv = new ethers.Contract(reserveAddr, RESERVE_ABI, signer); }
-    const [rbal, rfree, rmark, rhalt] = await Promise.all([
+    const [rbal, rfree, rmark, rhalt, rearned, rsupport, rtarget] = await Promise.all([
       timbs.balanceOf(reserveAddr), resv.freeFloat(), resv.overflowEarmark(), resv.halted(),
+      resv.treasuryEarned(), resv.treasurySupport(), resv.floatTarget(),
     ]);
+    const headroom = rearned > rsupport ? rearned - rsupport : 0n;
     let n=document.getElementById("reserveNote");
     if(!n){ n=document.createElement("p"); n.id="reserveNote"; n.className="note"; $("vaultNote").after(n); }
     n.textContent="Underwrite reserve: "+fmt(rbal)+" TIMBS held \u00b7 "+fmt(rfree)
-      +" free float \u00b7 "+fmt(rmark)+" earmarked for jackpot/la partage"
+      +" free float of "+fmt(rtarget)+" target \u00b7 "+fmt(rmark)+" earmarked for jackpot/la partage"
       +(rhalt?" \u00b7 GRANTS HALTED":"")+".";
     n.classList.toggle("l-warn", rhalt);
+
+    // What fundBudgeted would accept right now. Worth surfacing because the
+    // reserve is income-bound in busy rounds — it grants roughly what it takes
+    // in — and this is the one lever that adds to it without minting anything.
+    let b=document.getElementById("budgetNote");
+    if(!b){ b=document.createElement("p"); b.id="budgetNote"; b.className="note"; n.after(b); }
+    b.textContent = headroom > 0n
+      ? "Treasury may top the reserve up by " + fmt(headroom) + " TIMBS via fundBudgeted "
+        + "(earned " + fmt(rearned) + ", already given back " + fmt(rsupport)
+        + ") \u2014 approve the reserve for TIMBS first."
+      : "No budgeted support available: the game has earned " + fmt(rearned)
+        + " and Treasury has already returned " + fmt(rsupport)
+        + ". fundBudgeted would revert \u2014 only earned revenue is recycled, never minted.";
   }catch{} }
 
   if(jack){ try{
