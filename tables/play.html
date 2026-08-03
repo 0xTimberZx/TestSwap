@@ -563,6 +563,10 @@ const BOARD_ABI = [
 let GEN = 4;
 const TABLES_V5 = "function tables(uint256) view returns (uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRound,uint8 seatCount,uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars,uint64 entryCloseAt,uint64 lastJoinAt,uint64 firstLoadAt,uint8 loadedCount)";
 const TABLES_V6 = "function tables(uint256) view returns (uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRound,uint8 seatCount,uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars,uint64 entryCloseAt,uint64 lastJoinAt,uint64 firstLoadAt,uint8 loadedCount,address opener)";
+/// Gen-8 appends armedMask. `lockBlock` in slot 3 is `armedAt` there — same
+/// type, same slot, still "0 means not armed" — so armed/not-armed reads and
+/// every earlier decoder keep working untouched.
+const TABLES_V8 = TABLES_V6.replace(",address opener)", ",address opener,uint8 armedMask)");
 /// Gen-6 additions: dealer tips (M6) + the underwrite reserve (M1).
 const GEN6_EXTRAS = [
   "function tipDealer(uint256 tableId,uint256 amount)",
@@ -572,15 +576,38 @@ const GEN6_EXTRAS = [
   "error SegmentsOutstanding()",
   "error ExceedsCredit(address wallet,uint256 requested,uint256 held)",
 ];
+/// Gen-8: VRF entropy. One draw per segment; no secrets, no fallback path.
+const GEN8_EXTRAS = [
+  "function armSegment(uint256 tableId,uint8 segment)",
+  "function rearmSegment(uint256 tableId,uint8 segment)",
+  "function lockSegment(uint256 tableId,uint8 segment)",
+  "function segmentState(uint256 tableId,uint8 segment) view returns (bool armed,bool locked,bool drawIn,bool lockable,bool replaceable)",
+  "error SegmentNotArmed(uint8 segment)",
+  "error SegmentAlreadyArmed(uint8 segment)",
+  "error DrawNotIn(uint8 segment)",
+];
+/// Signatures that exist only up to gen-7 and would collide on gen-8.
+const PRE8_ONLY = [
+  "function armTable(uint256 tableId)",
+  "function lockSegment(uint256 tableId,uint8 segment,bytes32 secret)",
+  "function lockSegmentFallback(uint256 tableId,uint8 segment)",
+  "function rearmTable(uint256 tableId)",
+];
 async function detectGen(runner){
-  const probe=async(abi,fn)=>{ try{ await new ethers.Contract(ADDR.board,[abi],runner)[fn](); return true; }catch{ return false; } };
+  const probe=async(abi,fn,args=[])=>{ try{ await new ethers.Contract(ADDR.board,[abi],runner)[fn](...args); return true; }catch{ return false; } };
+  // Positive test: segmentState exists only on the VRF board, so an RPC hiccup
+  // reads as an older generation rather than a newer one.
+  if(await probe("function segmentState(uint256,uint8) view returns (bool,bool,bool,bool,bool)","segmentState",[1,1])) return 8;
   if(await probe("function reserve() view returns (address)","reserve")) return 6;
   if(await probe("function sitQuiet() view returns (uint64)","sitQuiet")) return 5;
   return 4;
 }
 function boardAbiFor(gen){
-  if(gen>=6) return [TABLES_V6, ...GEN6_EXTRAS, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))];
-  if(gen>=5) return [TABLES_V5, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))];
+  const base = BOARD_ABI.filter(f=>!f.startsWith("function tables("));
+  if(gen>=8) return [TABLES_V8, ...GEN6_EXTRAS, ...GEN8_EXTRAS,
+                     ...base.filter(f=>!PRE8_ONLY.includes(f))];
+  if(gen>=6) return [TABLES_V6, ...GEN6_EXTRAS, ...base];
+  if(gen>=5) return [TABLES_V5, ...base];
   return BOARD_ABI;
 }
 /// Entry close is per-table state on gen-5 (adaptive — every join can move
@@ -899,6 +926,18 @@ try{
   hr.onchange = ()=>{ try{ localStorage.setItem("swaptables.holdReveal", hr.checked?"1":"0"); }catch{} };
 }catch{}
 $("armBtn").onclick = async () => {
+  if(GEN>=8){
+    // One VRF draw per segment, so "start the pick" starts the FIRST one; the
+    // console's auto-pilot paces the rest.
+    const armed=Number(T.armedMask||0), locked=Number(T.lockedMask);
+    const seg=[1,2,3,4,5,6].find(n=>!((armed|locked)&(1<<(n-1))));
+    if(!seg) return rail("Every segment already has its draw.");
+    if(await send("start the pick", board, "armSegment", tid, seg)){
+      rail("SEG "+seg+" is drawing — Chainlink VRF decides it, and anyone can lock it once the word lands.");
+      await refreshChain();
+    }
+    return;
+  }
   if(await send("start the pick", board, "armTable", tid)){ rail("The table is armed — the lock block is set. Locks land from the console."); await refreshChain(); }
 };
 
@@ -1584,6 +1623,15 @@ $("finishPick").onclick = async () => {
   if(!T) return;
   $("finishPick").disabled=true;
   try{
+    if(GEN>=8){
+      // SegmentCrank's fallbackAll derives chars from the lock block — a path
+      // gen-8 does not have, and removing it was the point. Locking is
+      // permissionless here, so anyone can finish a stalled table segment by
+      // segment; that lives in the console.
+      rail("On the VRF board there is no fallback lock. Each segment locks itself once "
+         + "its draw lands, and a draw that never lands can be re-armed from the console.");
+      return;
+    }
     // one approval: SegmentCrank fallback-locks every open segment AND retires
     if(await send("finish the pick (one approval)", crank, "fallbackAll", ADDR.board, tid, true)){
       await refreshChain();

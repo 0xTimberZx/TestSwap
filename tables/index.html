@@ -223,7 +223,7 @@
   <div class="card">
     <h2>Operator</h2>
     <div class="row">
-      <div><label>Passphrase (derives the 6 secrets — save it)</label><input id="phrase" placeholder="something private"></div>
+      <div id="phraseBox"><label>Passphrase (derives the 6 secrets — save it)</label><input id="phrase" placeholder="something private"></div>
     </div>
     <div class="row" style="margin-top:10px">
       <div style="flex:0 0 140px"><label>Seed round</label><input id="round" type="number" placeholder="56"></div>
@@ -261,7 +261,14 @@
       <button id="lockFallback" class="ghost" disabled>Fallback-lock the rest</button>
       <button id="rearm" class="ghost" disabled>Re-arm (lock block aged out)</button>
     </div>
-    <p class="note">Fallback needs no secret and works once the reveal window (64 blocks)
+    <p class="note" id="vrfNote" style="display:none">
+      <b>VRF board.</b> There are no secrets, so the passphrase is not used and there is no
+      fallback lock — that second path was exactly what let a table's opener choose between
+      two outcomes. <b>Arm</b> fires one Chainlink draw for the next segment; <b>Lock 6</b>
+      locks whatever has come back; <b>Re-arm</b> replaces a draw that never landed, and only
+      an unfulfilled one — a landed draw is final for everyone, this wallet included.
+      Auto-pilot paces the <i>arms</i>, since the arm is what starts each beat.</p>
+    <p class="note" id="crNote">Fallback needs no secret and works once the reveal window (64 blocks)
       has passed, but only while the lock block is still inside the 256-block hash horizon.
       On Arbitrum <code>block.number</code> is the <b>L1</b> block number, so those are L1
       blocks: roughly <b>13 minutes</b> until the fallback opens and <b>51 minutes</b> until
@@ -365,6 +372,10 @@ const BOARD_ABI = [
 let GEN = 4, dialEntry = 0;
 const TABLES_V5 = "function tables(uint256) view returns (uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRound,uint8 seatCount,uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars,uint64 entryCloseAt,uint64 lastJoinAt,uint64 firstLoadAt,uint8 loadedCount)";
 const TABLES_V6 = TABLES_V5.replace(",uint8 loadedCount)", ",uint8 loadedCount,address opener)");
+/// Gen-8 appends armedMask. Note `lockBlock` in slot 3 is `armedAt` on gen-8 —
+/// same type, same slot, and still "0 means not armed", so every existing
+/// armed/not-armed read keeps working without a branch.
+const TABLES_V8 = TABLES_V6.replace(",address opener)", ",address opener,uint8 armedMask)");
 /// Gen-6: dealer tips + the underwrite reserve. (SegmentsOutstanding is
 /// already in BOARD_ABI here, so only the genuinely new fragments appear.)
 const GEN6_EXTRAS = [
@@ -374,15 +385,48 @@ const GEN6_EXTRAS = [
   "event PoolUnderwritten(uint256 indexed tableId,uint8 indexed pool,uint256 wanted,uint256 granted)",
   "error ExceedsCredit(address wallet,uint256 requested,uint256 held)",
 ];
+/// Gen-8: VRF entropy. No commitments, no secrets, no fallback path — a segment
+/// is armed on its own (one VRF draw each) and locked by anyone once the draw
+/// lands. See SwapTables/docs/GEN8_VRF.md.
+const GEN8_EXTRAS = [
+  "function openTable(uint256 seedRound) returns (uint256)",
+  "function armSegment(uint256 tableId,uint8 segment)",
+  "function rearmSegment(uint256 tableId,uint8 segment)",
+  "function lockSegment(uint256 tableId,uint8 segment)",
+  "function segmentState(uint256 tableId,uint8 segment) view returns (bool armed,bool locked,bool drawIn,bool lockable,bool replaceable)",
+  "function saltFor(uint256 tableId,uint8 segment) pure returns (bytes32)",
+  "error SegmentNotArmed(uint8 segment)",
+  "error SegmentAlreadyArmed(uint8 segment)",
+  "error DrawNotIn(uint8 segment)",
+];
+/// Fragments that only exist up to gen-7 and would collide with the gen-8
+/// signatures of the same name.
+const PRE8_ONLY = [
+  "function commitmentsFor(bytes32[6] secrets,uint256 tableId) view returns (bytes32[6])",
+  "function openTable(uint256 seedRound,bytes32[6] c) returns (uint256)",
+  "function armTable(uint256 tableId)",
+  "function lockSegment(uint256 tableId,uint8 segment,bytes32 secret)",
+  "function lockSegmentFallback(uint256 tableId,uint8 segment)",
+  "function rearmTable(uint256 tableId)",
+  "function REVEAL_WINDOW() view returns (uint256)",
+  "function BLOCKHASH_HORIZON() view returns (uint256)",
+];
 async function detectGen(runner){
-  const probe=async(abi,fn)=>{ try{ await new ethers.Contract(ADDR.board,[abi],runner)[fn](); return true; }catch{ return false; } };
+  const probe=async(abi,fn,args=[])=>{ try{ await new ethers.Contract(ADDR.board,[abi],runner)[fn](...args); return true; }catch{ return false; } };
+  // Positive test, not "REVEAL_WINDOW is missing": segmentState exists only on
+  // the VRF board, so a bad RPC reads as an older generation rather than a
+  // newer one — the safe direction to be wrong in.
+  if(await probe("function segmentState(uint256,uint8) view returns (bool,bool,bool,bool,bool)","segmentState",[1,1])) return 8;
   if(await probe("function reserve() view returns (address)","reserve")) return 6;
   if(await probe("function sitQuiet() view returns (uint64)","sitQuiet")) return 5;
   return 4;
 }
 function boardAbiFor(gen){
-  if(gen>=6) return [TABLES_V6, ...GEN6_EXTRAS, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))];
-  if(gen>=5) return [TABLES_V5, ...BOARD_ABI.filter(f=>!f.startsWith("function tables("))];
+  const base = BOARD_ABI.filter(f=>!f.startsWith("function tables("));
+  if(gen>=8) return [TABLES_V8, ...GEN6_EXTRAS, ...GEN8_EXTRAS,
+                     ...base.filter(f=>!PRE8_ONLY.includes(f))];
+  if(gen>=6) return [TABLES_V6, ...GEN6_EXTRAS, ...base];
+  if(gen>=5) return [TABLES_V5, ...base];
   return BOARD_ABI;
 }
 const JACKPOT_ABI = [
@@ -629,6 +673,19 @@ $("connect").onclick = async () => {
   if(ADDR.jackpot) jack = new ethers.Contract(ADDR.jackpot, JACKPOT_ABI, signer);
   board  = new ethers.Contract(ADDR.board,  boardAbiFor(GEN),  signer);
   dialEntry = Number(await board.entryWindow());
+  if(GEN>=8){
+    // The VRF board has no secrets and no fallback path, so leaving either
+    // control on screen would be an invitation to a dead end.
+    $("phraseBox").style.display = "none";
+    $("lockFallback").style.display = "none";
+    $("crNote").style.display = "none";
+    $("vrfNote").style.display = "";
+    $("arm").textContent   = "Arm next segment";
+    $("rearm").textContent = "Re-arm a stuck draw";
+    ERR_HINT.DrawNotIn           = "that segment's VRF draw has not landed yet — nothing to lock";
+    ERR_HINT.SegmentNotArmed     = "arm that segment first — arming is what fires its draw";
+    ERR_HINT.SegmentAlreadyArmed = "that segment already has a draw in flight";
+  }
   if(GEN>=5) ERR_HINT.TableClosedForEntry = "entry has closed — no new seats; seated wallets can still load until bets close";
   if(GEN>=6) ERR_HINT.ExceedsCredit = "that is more than the wallet's withdrawable credit";
   ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
@@ -881,22 +938,42 @@ $("open").onclick = async () => {
     }
   }catch{}
   const next = await board.nextTableId();
-  const secs = secretsFor(next.toString());
-  if (!secs) return;
-  log(`opening table ${next} (secrets bound to id ${next})`, "l-dim");
-  // commitmentsFor returns an ethers Result — a frozen array proxy. Passing it
-  // straight back in makes the encoder try to write to it and throw
-  // "Cannot assign to read only property '0'", which is what stopped this
-  // button working. Copy it into a plain array first.
-  const cs = Array.from(await board.commitmentsFor(secs, next));
-  if (await send(`openTable round ${$("round").value}`, board, "openTable", BigInt($("round").value), cs)){
+  let ok;
+  if (GEN >= 8){
+    // No commitments: gen-8 has no secret to commit to, so the opener holds
+    // nothing the room does not. The passphrase is not consulted at all.
+    log(`opening table ${next} (VRF board — no secrets to bind)`, "l-dim");
+    ok = await send(`openTable round ${$("round").value}`, board, "openTable", BigInt($("round").value));
+  } else {
+    const secs = secretsFor(next.toString());
+    if (!secs) return;
+    log(`opening table ${next} (secrets bound to id ${next})`, "l-dim");
+    // commitmentsFor returns an ethers Result — a frozen array proxy. Passing it
+    // straight back in makes the encoder try to write to it and throw
+    // "Cannot assign to read only property '0'", which is what stopped this
+    // button working. Copy it into a plain array first.
+    const cs = Array.from(await board.commitmentsFor(secs, next));
+    ok = await send(`openTable round ${$("round").value}`, board, "openTable", BigInt($("round").value), cs);
+  }
+  if (ok){
     $("tableId").value = next.toString();
     refresh();
   }
 };
 
 // ── settle ─────────────────────────────────────────────
-async function doArm(){ return send("armTable", board, "armTable", tid()); }
+/// Gen-8 arms one segment at a time — that staggering IS the drumroll, because
+/// a fulfilled VRF word is public the moment its callback lands. Arming all six
+/// at once would publish the whole round in one go, so this arms the first
+/// unarmed segment and leaves the pacing to auto-pilot (or to you).
+async function doArm(){
+  if (GEN < 8) return send("armTable", board, "armTable", tid());
+  const t = await board.tables(tid());
+  const armed = Number(t.armedMask || 0), locked = Number(t.lockedMask);
+  const seg = [1,2,3,4,5,6].find(n => !((armed | locked) & (1 << (n-1))));
+  if (!seg){ log("every segment is already armed", "l-warn"); return false; }
+  return send("armSegment " + seg, board, "armSegment", tid(), seg);
+}
 /// The L1 block height as the contract sees it. Arbitrum tags each L2 block
 /// with the L1 block it derives from; that is what block.number returns.
 async function l1BlockNumber(){
@@ -910,6 +987,7 @@ async function l1BlockNumber(){
 /// transaction (and optionally retires). The per-segment path stayed in the
 /// contract; this is just the batched way to call it.
 async function doLocks(alsoRetire){
+  if (GEN >= 8) return doLocksVRF(alsoRetire);
   const secs = secretsFor(tid().toString());
   if (!secs) return false;
   // one block must pass after arming
@@ -917,6 +995,32 @@ async function doLocks(alsoRetire){
   while (await provider.getBlockNumber() === start) await new Promise(r=>setTimeout(r,300));
   return send(`lock all six${alsoRetire ? " + retire" : ""} (one approval)`,
               crank, "lockAll", ADDR.board, tid(), secs, !!alsoRetire);
+}
+
+/// SegmentCrank's lockAll takes six secrets, so it cannot serve gen-8 at all.
+/// Per-segment is the honest replacement anyway: batching six locks into one
+/// transaction would collapse the staggered reveal the per-segment VRF design
+/// exists to protect. Locks whatever is ready right now and reports the rest.
+async function doLocksVRF(alsoRetire){
+  const id = tid();
+  let done = 0, waiting = [];
+  for (const seg of [1,2,3,4,5,6]){
+    const st = await board.segmentState(id, seg);
+    if (st.locked) { done++; continue; }
+    if (!st.armed) { waiting.push(seg + " (not armed)"); continue; }
+    if (!st.drawIn){
+      waiting.push(seg + (st.replaceable ? " (draw stuck — re-arm it)" : " (waiting on VRF)"));
+      continue;
+    }
+    if (await send("lock SEG " + seg, board, "lockSegment", id, seg)) done++;
+    else return false;
+  }
+  if (waiting.length){
+    log("locked " + done + "/6 — still outstanding: " + waiting.join(", "), "l-warn");
+    return false;
+  }
+  if (alsoRetire) return send("retire", board, "retire", id);
+  return true;
 }
 /// The sixth reveal makes the jackpot strikeable; somebody still has to make it
 /// paid. Auto-pilot did — the manual buttons did not, so a hand-settled table
@@ -950,6 +1054,7 @@ $("retire").onclick = async () => {
 $("rearm").onclick = async () => {
   await refreshTable();
   if (!T) { log("load a table first", "l-err"); return; }
+  if (GEN >= 8) return rearmVRF();
   if (T.lockBlock === 0n) { log("not armed — nothing to re-arm", "l-err"); return; }
   const now = await l1BlockNumber();
   if (now !== null){
@@ -962,6 +1067,28 @@ $("rearm").onclick = async () => {
   }
   refresh();
 };
+
+/// Gen-8's re-arm replaces ONE stuck VRF draw, and only an unfulfilled one —
+/// a landed draw is final and the module refuses. So this is a stall fix, never
+/// a reroll, and it needs no warning about losing a live hash.
+async function rearmVRF(){
+  const id = tid();
+  const stuck = [];
+  for (const seg of [1,2,3,4,5,6]){
+    const st = await board.segmentState(id, seg);
+    if (st.replaceable) stuck.push(seg);
+  }
+  if (!stuck.length){
+    log("no stuck draws — a segment is only replaceable once its request has "
+      + "sat unfulfilled past the module's delay", "l-warn");
+    refresh(); return;
+  }
+  for (const seg of stuck){
+    if (!await send(`rearmSegment ${seg}`, board, "rearmSegment", id, seg)) break;
+    log(`SEG ${seg} re-drawn — a fresh VRF request is in flight`, "l-ok");
+  }
+  refresh();
+}
 $("cancel").onclick = async () => {
   await refreshTable();
   if (!T) { log("load a table first", "l-err"); return; }
@@ -1100,7 +1227,8 @@ function apSet(m){ const p=$("apState"); p.style.display=""; p.textContent=m; }
 $("autoPilot").onclick=()=>{
   if(apOn){ apOn=false; $("autoPilot").innerHTML="&#9654; Auto-pilot this table"; apSet("stopped"); log("auto-pilot stopped","l-warn"); return; }
   if(!me){ log("connect a wallet before engaging auto-pilot","l-err"); return; }
-  if(!secretsFor(tid().toString())) return;   // logs its own passphrase error
+  // Gen-8 holds no secrets, so there is no passphrase to check.
+  if(GEN<8 && !secretsFor(tid().toString())) return;   // logs its own passphrase error
   apOn=true; apTid=tid(); apLastLock=0; apStruck=false;
   $("autoPilot").innerHTML="&#9632; Stop auto-pilot";
   apSet("watching table "+apTid);
@@ -1125,6 +1253,7 @@ async function apTick(){
         if(await tryStrike(apTid)){ refresh(); return; }
       }
       apSet("retiring…"); await send("retire (auto)",board,"retire",apTid); refresh(); return; }
+    if(GEN>=8){ await apTickVRF(t, now, mask); return; }
     if(t.lockBlock!==0n){
       const nowB=await provider.getBlockNumber();
       if(nowB<=Number(t.lockBlock)){ apSet("armed — waiting one block"); return; }
@@ -1150,6 +1279,53 @@ async function apTick(){
   }catch{ apSet("rpc hiccup — retrying"); }
   finally{ apBusy=false; }
 }
+/// Gen-8 auto-pilot. Three states per segment instead of one reveal:
+///   arm it (fires the VRF draw) -> wait for the callback -> lock it.
+/// Only ONE segment is ever in flight, because that is what keeps the round
+/// from becoming public all at once — and the reveal gap now spaces the ARMS,
+/// since the arm is what starts the next beat of the drumroll.
+async function apTickVRF(t, now, mask){
+  const armed = Number(t.armedMask || 0);
+
+  // 1. anything already drawn is locked immediately — the room can compute it
+  //    the moment the callback lands, so sitting on it buys nothing but suspicion
+  for (const seg of [1,2,3,4,5,6]){
+    if (mask & (1 << (seg-1))) continue;
+    if (!(armed & (1 << (seg-1)))) continue;
+    const st = await board.segmentState(apTid, seg);
+    if (st.drawIn){
+      apSet("revealing SEG "+seg+"…");
+      if(await send("lock SEG "+seg+" (auto)",board,"lockSegment",apTid,seg)){
+        apLastLock=Date.now(); refresh();
+      } else { apOn=false; apSet("halted on error — see log"); }
+      return;
+    }
+    if (st.replaceable){
+      apSet("SEG "+seg+" draw stuck — re-drawing");
+      if(!(await send("rearmSegment "+seg+" (auto)",board,"rearmSegment",apTid,seg))){
+        apOn=false; apSet("halted on error — see log");
+      }
+      return;
+    }
+    apSet("SEG "+seg+" armed — waiting on the VRF draw");
+    return;                       // one in flight at a time
+  }
+
+  // 2. nothing in flight: arm the next segment, paced by the reveal gap
+  if(now < Number(t.pickTime)){ apSet("pick in "+MMSS(Number(t.pickTime)-now)); return; }
+  if(fundedOf(t)<2){ apSet("under-funded — cannot arm, cancel instead"); return; }
+  const gap=Math.max(0,Number($("apGap").value||15))*1000;
+  const wait=gap-(Date.now()-apLastLock);
+  if(apLastLock && wait>0){ apSet("next draw in "+Math.ceil(wait/1000)+"s"); return; }
+  const next=[1,2,3,4,5,6].find(n=>!((armed|mask)&(1<<(n-1))));
+  if(next==null){ apSet("all six drawn — waiting"); return; }
+  apSet("drawing SEG "+next+"…");
+  if(!(await send("armSegment "+next+" (auto)",board,"armSegment",apTid,next))){
+    apOn=false; apSet("halted on error — see log");
+  }
+  refresh();
+}
+
 setInterval(apTick, 4000);
 
 </script>
