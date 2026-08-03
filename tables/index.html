@@ -918,9 +918,35 @@ async function doLocks(alsoRetire){
   return send(`lock all six${alsoRetire ? " + retire" : ""} (one approval)`,
               crank, "lockAll", ADDR.board, tid(), secs, !!alsoRetire);
 }
+/// The sixth reveal makes the jackpot strikeable; somebody still has to make it
+/// paid. Auto-pilot did — the manual buttons did not, so a hand-settled table
+/// left its Double-Digit winners waiting on a strike nobody was going to fire.
+///
+/// Safe to call after the retire: DDJackpot reads `ddSettled`, the locked string
+/// and the DD pool's bets, none of which retire touches, and it pushes TIMBS
+/// straight to the winners rather than through the ledger. Costs an approval
+/// only when the jackpot actually hit — `strikeable` is a view, and it turns
+/// false the moment the table has been struck, so the extra calls on the other
+/// buttons never double-pay.
+async function tryStrike(id){
+  if (!jack) return false;
+  let r;
+  try { r = await jack.strikeable(ADDR.board, id); }
+  catch(e){ log("jackpot check failed: " + (e.message || e), "l-warn"); return false; }
+  if (!r.ok) return false;
+  log(`Double-Digit hit — the jackpot pays ${fmt(r.slice)} TIMBS`, "l-ok");
+  if (await send("strike the DD jackpot", jack, "strike", ADDR.board, id)){
+    log("JACKPOT STRUCK — paid to the Double-Digit winners", "l-ok");
+    return true;
+  }
+  return false;
+}
+
 $("arm").onclick    = async () => { await doArm(); refresh(); };
-$("lockAll").onclick= async () => { await doLocks(false); refresh(); };
-$("retire").onclick = async () => { if (await send("retire", board, "retire", tid())) refresh(); };
+$("lockAll").onclick= async () => { if (await doLocks(false)) await tryStrike(tid()); refresh(); };
+$("retire").onclick = async () => {
+  if (await send("retire", board, "retire", tid())){ await tryStrike(tid()); refresh(); }
+};
 $("rearm").onclick = async () => {
   await refreshTable();
   if (!T) { log("load a table first", "l-err"); return; }
@@ -968,6 +994,7 @@ $("runSettle").onclick = async () => {
     await refreshTable();
     if (T && T.lockBlock === 0n) { if (!await doArm()) return; }
     if (!await doLocks(true)) return; // locks + retire ride one crank call
+    await tryStrike(tid());
     log("round closed — winners can now Withdraw", "l-ok");
   } finally { btn.disabled = false; refresh(); }
 };
@@ -1090,19 +1117,12 @@ async function apTick(){
     }
     const now=Math.floor(Date.now()/1000), mask=Number(t.lockedMask);
     if(mask===0x3F){
-      // gen-6 M2: the sixth reveal makes it true, auto-pilot makes it paid
+      // gen-6 M2: the sixth reveal makes it true, auto-pilot makes it paid \u2014
+      // same helper the manual settle buttons use, so the two cannot drift.
       if(jack && !apStruck){
         apStruck=true;
-        try{
-          const r=await jack.strikeable(ADDR.board, apTid);
-          if(r.ok){
-            apSet("JACKPOT \u2014 striking\u2026");
-            if(await send("strike the DD jackpot",jack,"strike",ADDR.board,apTid)){
-              log("JACKPOT STRUCK \u2014 "+fmt(r.slice)+" TIMBS to the Double-Digit winners","l-ok");
-            }
-            refresh(); return;
-          }
-        }catch{}
+        apSet("checking the jackpot\u2026");
+        if(await tryStrike(apTid)){ refresh(); return; }
       }
       apSet("retiring…"); await send("retire (auto)",board,"retire",apTid); refresh(); return; }
     if(t.lockBlock!==0n){
