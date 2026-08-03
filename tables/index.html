@@ -159,14 +159,6 @@
 
   <!-- ── table state ───────────────────────────────────── -->
   <div class="card" data-live>
-    <h2>Every live table</h2>
-    <p class="why-wallet">Connect a wallet — every unretired table shows here with the one thing it is waiting for.</p>
-    <div id="tablesBoard"><span class="hint">connect a wallet — every unretired table shows here with its next step.</span></div>
-    <p class="note">One line per live table: phase, seats, and the action it is waiting for.
-      Tap a row to load it below.</p>
-  </div>
-
-  <div class="card" data-live>
     <h2>Table</h2>
     <p class="why-wallet">Connect a wallet, then load a table by its id.</p>
     <div class="row" style="margin-bottom:12px">
@@ -916,7 +908,7 @@ async function refreshTable(){
          + `<span>${kind}</span></div>`;
   }).join("");
 }
-async function refresh(){ if(!me) return; try{ await refreshMoney(); await refreshTable(); await scanTables(); }catch(e){ log(e.message,"l-err"); } }
+async function refresh(){ if(!me) return; try{ await refreshMoney(); await refreshTable(); }catch(e){ log(e.message,"l-err"); } }
 $("refresh").onclick = refresh;
 $("load").onclick = refresh;
 setInterval(()=>{ if(me && T && !T.retired) refreshTable().catch(()=>{}); }, 5000);
@@ -1251,59 +1243,11 @@ $("tableId").addEventListener("change", streamStatus);
 streamStatus(); setInterval(streamStatus, 30000);
 
 
-// ── tables board: every unretired table and the action it waits for ──
-const POP=m=>{let c=0;for(let i=0;i<6;i++) if(m&(1<<i))c++;return c;}
+/// The lobby that used to sit here — one row per live table — moved out to
+/// games.html, which does the same job for players and does it better. The
+/// console operates ONE table at a time; it does not need a view of the room.
+/// POP went with it; MMSS stays, auto-pilot counts down with it.
 const MMSS=d=>{d=Math.max(0,d);return Math.floor(d/60)+":"+String(d%60).padStart(2,"0");}
-let scanning=false;
-async function scanTables(){
-  if(!board || scanning) return; scanning=true;
-  try{
-    const cnt=Number(await board.tableCount());
-    const lead=Number(await board.betsCloseLead());
-    const nowB=await provider.getBlockNumber();
-    const now=Math.floor(Date.now()/1000);
-    const rows=[];
-    for(let id=cnt; id>=Math.max(1,cnt-9); id--){
-      const t=await board.tables(id);
-      if(t.openedAt===0n || t.retired) continue;
-      const seats=Number(t.seatCount), funded=fundedOf(t), mask=Number(t.lockedMask), locked=POP(mask);
-      const entryClose=entryEndOf(t), betsEnd=Number(t.pickTime)-lead, pick=Number(t.pickTime);
-      let phase, act, hot=false;
-      if(mask===0x3F){ phase="all six locked"; act="RETIRE NOW — pays refunds, closes the table"; hot=true; }
-      else if(t.lockBlock!==0n){
-        const lb=Number(t.lockBlock), fb=lb+64-nowB, hz=lb+256-nowB;
-        if(hz<=0){ phase="lock block aged out"; act="RE-ARM NOW — new lock block, new draw"; hot=true; }
-        else { phase="picking · "+locked+"/6"; act="REVEAL "+(6-locked)+" left · fallback "
-              +(fb>0?"in ~"+Math.ceil(fb*12/60)+"m":"OPEN")+" · horizon ~"+Math.ceil(hz*12/60)+"m"; hot=true; }
-      }
-      else if(now>=pick){
-        if(funded>=2){ phase="ready"; act="ARM NOW — the table is waiting on you"; hot=true; }
-        else { phase="never filled"; act="CANCEL — refunds everyone, returns the seed"; hot=true; }
-      }
-      else if(now>=betsEnd) phase="committed", act="arm in "+MMSS(pick-now);
-      else if(now>=entryClose){
-        if(funded<2){ phase=GEN>=5?"under-funded":"under-seated"; act="entry closed with "+funded+" "+(GEN>=5?"funded":"seat")+" — CANCEL at pick ("+MMSS(pick-now)+")"; }
-        else phase="betting", act="bets close in "+MMSS(betsEnd-now);
-      }
-      else phase="entry open", act="sits close in "+MMSS(entryClose-now)
-        +(GEN>=5? " · "+funded+" funded"+(funded>=2?" — quiet clock running":"") : "");
-      rows.push('<div class="trow" data-id="'+id+'" style="display:flex;gap:12px;align-items:baseline;'
-        +'padding:8px 10px;margin:4px 0;border:1px solid rgba(247,240,214,'+(hot?'.35':'.12')+');'
-        +'border-radius:9px;cursor:pointer'+(hot?';background:rgba(215,179,76,.07)':'')+'">'
-        +'<b style="min-width:74px">TABLE '+id+'</b>'
-        +'<span style="min-width:78px">'+seats+' / 12 seats</span>'
-        +'<span style="min-width:110px;color:#e8dcae">'+phase+'</span>'
-        +'<span style="flex:1;color:'+(hot?'var(--gold)':'#9fb4a4')+'">'+act+'</span></div>');
-    }
-    $("tablesBoard").innerHTML=rows.length? rows.join("")
-      : '<span class="hint">no live tables — everything is settled.</span>';
-  }catch{} finally{ scanning=false; }
-}
-$("tablesBoard").addEventListener("click",e=>{
-  const r=e.target.closest(".trow"); if(!r) return;
-  $("tableId").value=r.dataset.id; refresh();
-});
-setInterval(scanTables, 15000);
 
 // ── auto-pilot: arm → staggered reveals → retire, all from this tab ──
 let apOn=false, apBusy=false, apTid=null, apLastLock=0, apStruck=false;
