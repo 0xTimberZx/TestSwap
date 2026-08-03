@@ -258,6 +258,12 @@
   .frow{display:flex;align-items:center;gap:12px;padding:9px 16px;border-bottom:1px solid rgba(247,240,214,.06);font-size:13px;animation:drop .35s ease}
   @keyframes drop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
   .frow.me{background:rgba(215,179,76,.07)}
+  /* A play that can no longer win fades back as its segment locks, so the felt
+     narrows toward what is still standing. Faint, not gone: the money is real
+     and stays in the pot until the pool settles, and a player wants to find
+     their own dead chip as readily as their live one. Hover restores it. */
+  .frow.dead,.bet.dead .coins{opacity:.15;transition:opacity .7s ease}
+  .frow.dead:hover,.bet.dead:hover .coins{opacity:1}
   .who{flex:none;display:inline-flex;align-items:center;gap:7px;width:110px;font-variant-numeric:tabular-nums}
   .who .av{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;flex:none;background:#12271b;border:1px solid var(--gold-dim);color:var(--gold)}
   .who .nm{color:#cdd8cf;font-size:12px;letter-spacing:.02em}
@@ -855,6 +861,7 @@ function resetTableView(){
     c.innerHTML=""; delete c.dataset.n; delete c.dataset.total;
     delete c.dataset.mine; delete c.dataset.who;
   });
+  document.querySelectorAll(".dead").forEach(el=>el.classList.remove("dead"));
 }
 
 async function refreshChain(){
@@ -875,7 +882,7 @@ async function refreshChain(){
     $("withdraw").classList.toggle("ready", cred>0n);
     $("withdraw").textContent = cred>0n ? "Withdraw "+fmt4(cred) : "Withdraw";
     $("seatsPill").textContent = "seats "+t.seatCount+" / 12"+(GEN>=5? " · "+Number(t.loadedCount)+" funded" : "");
-    paintSeat(); tick(); await pollFeed(); relabelFeed(); await renderStakes(); paintReveal(); await updateLockTracker();
+    paintSeat(); tick(); await pollFeed(); relabelFeed(); await renderStakes(); paintReveal(); paintDead(); await updateLockTracker();
   } finally { refreshing=false; }
 }
 
@@ -1554,6 +1561,61 @@ function driveSpin(p){
     ? "Bets are closed — six balls running on the "+n+"-seat envelope. Display only: the chain decides from the lock-block hash (§10.1)."
     : p.key==="ready" ? "At the wire — waiting for the pick to be started (anyone may)."
     : "The pick is armed — each ball drops as its segment locks on chain.";
+}
+/// ── the felt narrows as it locks ────────────────────────────────────────────
+/// Every lock kills the plays that needed a different character, and the room
+/// should be able to see that without reading anything. Losers fade to a
+/// whisper rather than disappearing — the stake is still on the table until the
+/// pool settles, and finding your own dead chip matters as much as your live
+/// one.
+///
+/// Two rules, because the two surfaces are not the same shape:
+///   • a feed row is ONE bet on ONE segment, so it fades the moment that
+///     segment lands;
+///   • a felt spot carries bets from all six segments on one bounded pile, so
+///     it fades only once EVERY bet stacked on it is dead. Fading it while a
+///     later segment still has money there would be a lie the viewer has no
+///     way to check.
+async function paintDead(){
+  const chars = T ? lockedCharsArr() : [];
+  // "hold the drop" withholds the outcome until all six are in. A felt-wide
+  // fade is a louder tell than the reels are, so it waits for the same moment.
+  const hold = $("holdReveal")?.checked && T && Number(T.lockedMask)!==0x3F;
+  if(!chars.some(Boolean) || hold){
+    document.querySelectorAll(".dead").forEach(el=>el.classList.remove("dead"));
+    return;
+  }
+  const idx    = chars.map(c => c==null ? -1 : ALPHABET.indexOf(c));
+  const all    = chars.every(Boolean);
+  const winStr = all ? chars.join("") : "";
+
+  // Proven lost, or nothing. Anything unresolved stays lit: dimming a play that
+  // might still pay is the one error the eye cannot walk back mid-round.
+  const isDead = async (kind,pick,pool,wallet) => {
+    if(kind===KIND.DD) return all && new Set(winStr).size===6;  // needs all six to miss
+    if(!(idx[pool]>=0)) return false;                           // segment not in yet
+    if(kind===KIND.TICKET){
+      const t = await ticketOf(wallet);
+      return t ? chars[pool]!==t[pool] : false;                 // unknown ticket: leave lit
+    }
+    return !winsAgainst(kind,pick,idx[pool],null,winStr);
+  };
+
+  for(const li of document.querySelectorAll(".frow")){
+    li.classList.toggle("dead", await isDead(
+      +li.dataset.kind, +li.dataset.pick, +li.dataset.pool, li.dataset.wallet));
+  }
+
+  const seen=new Set(), alive=new Set();
+  for(let pool=0; pool<poolBook.length; pool++){
+    for(const b of poolBook[pool]){
+      const key = b.kind+":"+(b.kind===KIND.DD?0:b.pick);
+      seen.add(key);
+      if(!(await isDead(b.kind,b.pick,pool,b.wallet))) alive.add(key);
+    }
+  }
+  for(const [key,cell] of Object.entries(CELLMAP))
+    cell.classList.toggle("dead", seen.has(key) && !alive.has(key));
 }
 function lockedCharsArr(){
   if(!T) return [null,null,null,null,null,null];
