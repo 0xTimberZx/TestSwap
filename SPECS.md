@@ -38,7 +38,7 @@
 
 ### SwapTables — generation 8 (live)
 
-Boards are immutable and redeployed per generation; the registry, crank and jackpot span all of
+Boards are immutable and redeployed per generation; the seed registry and jackpot span all of
 them. Gen-8 changes the entropy module and nothing else.
 
 Gens 1–7 drew each character from a commit-reveal with a 64-block blockhash fallback. That gave
@@ -64,7 +64,7 @@ not a second way to produce a character, since an unfulfilled request has no kno
 | PoolLedger (gen 7) | 0xAA4f4303b747bEa63F9818Bc9C38dAe5aebDe218 | Retired board, **live ledger** — old credit is payable forever |
 | CommitRevealEntropy (gen 7) | 0x57A1F889A30178b62Bc39844D73B68d0f8a274d6 | Superseded by VRFEntropy; kept for reading old rounds |
 | SeedRegistry | 0x2460C8ed63414F36838542982A5Ab263C9Fcb914 | **Cross-generation** — never redeploy; stops a winning string seeding two tables |
-| SegmentCrank | 0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D | **Generation-agnostic** — stateless lock/retire batcher |
+| SegmentCrank | 0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D | Stateless lock/retire batcher, **generations 4-7 only** — its `lockSegment` takes a secret and gen-8 has none. Apps gate every crank path; `retire` is all gen-8 shares |
 | DDJackpot | 0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9 | **Cross-generation** — metered strikes, stake-capped, §9 two-wallet guard |
 
 | Parameter | Value |
@@ -75,7 +75,7 @@ not a second way to produce a character, since an unfulfilled request has no kno
 | Table seed | 100 TIMBS, split 7 ways; a pool draws its share only if contested (§9) |
 | Rake | 1.75% + 6.25%/n, n = distinct wallets; **0% uncontested** |
 | Underwrite | toward `stake × fair × 0.90`; caps 1000/pool, 1500/round, 10% of free float |
-| Dials (gen 7) | entry ≤ 40 min, place 5 min, bets close 2 min before the pick, sit-quiet 3 min, solo wait 15 min |
+| Dials (gen 8) | entry ≤ 40 min, place 5 min, bets close 2 min before the pick, sit-quiet 3 min, solo wait 15 min |
 | Jackpot slice | 20% of the banner, floor 50 TIMBS, ≤ 50% cap, your own chip × 10 as a per-wallet ceiling |
 
 Retired boards keep paying withdrawals from their own ledgers — retiring a generation never
