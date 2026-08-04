@@ -151,6 +151,7 @@
     font-family:Georgia,serif;font-size:15px;letter-spacing:.03em;color:var(--gold);text-align:center;
     background:rgba(5,15,10,.34);border-radius:10px;padding:16px}
   .board{display:grid;grid-template-columns:1.25fr repeat(12,1fr) 1.15fr;grid-template-rows:repeat(3,54px) 42px 46px 46px 46px;gap:5px}
+  .board>.bet{grid-column:var(--col,auto);grid-row:var(--row,auto)}
   .cell{display:flex;align-items:center;justify-content:center;border:1px solid var(--felt-line);border-radius:4px;color:var(--cream);user-select:none;position:relative;text-align:center}
   .bet{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:box-shadow .12s ease, filter .12s ease}
   .bet:hover{filter:brightness(1.12);box-shadow:0 0 0 1px var(--gold) inset;z-index:3}
@@ -301,6 +302,40 @@
   .actions{margin-left:auto;display:flex;gap:10px;align-self:center}
   .foot{margin-top:20px;font-size:12px;color:#8fa295;line-height:1.6;font-family:Georgia,serif;font-style:italic;max-width:82ch}
   .foot b{color:var(--gold);font-style:normal;font-family:"Arial Narrow",Arial,sans-serif}
+
+  /* ── Phone, portrait ───────────────────────────────────────────────────────
+     A 780px felt inside a ~360px viewport was technically a side-scroller, but
+     an undiscoverable one: iOS only paints the scrollbar mid-gesture, so the
+     board just looked cut off, and less than half of it was ever on screen.
+
+     So the felt turns a quarter turn instead. The three 2-to-1 COLUMN rows
+     become three columns of twelve, which is the one rearrangement that keeps
+     the bets honest — a column bet still terminates the twelve pockets it pays
+     on, and each dozen is still four contiguous rows. Rewrapping the 36
+     characters into a squarer block would have stranded those cells beside
+     characters they have nothing to do with.
+
+     Nothing here reaches the stream or the desktop felt: this applies only to a
+     narrow viewport held upright. */
+  @media (orientation: portrait) and (max-width: 620px) {
+    .felt-scroll{overflow-x:visible}
+    .felt{min-width:0;width:100%;padding:10px;
+      box-shadow:0 0 0 5px var(--wood),0 0 0 7px #14100a,0 12px 30px -14px rgba(0,0,0,.8),inset 0 0 50px rgba(0,0,0,.35)}
+    .board{grid-template-columns:repeat(3,1fr) .8fr;
+           grid-template-rows:repeat(12,38px) 34px 46px 36px 36px 34px 34px;gap:4px}
+    .board>.bet{grid-column:var(--pcol,var(--col,auto));grid-row:var(--prow,var(--row,auto))}
+    .pocket{font-size:19px}
+    .out .lab{font-size:9.5px}.out .sub{font-size:7.5px}
+    .colbet .lab{font-size:9px}.colbet .sub{font-size:7px}
+    /* the bonus stake is a band now, so its two lines sit side by side */
+    .dd{flex-direction:row}
+    .dd .lab{font-size:12px}
+    .dd .sub{font-size:7.5px;margin-top:2px}
+    .coins{top:2px;right:2px}
+    .coin{width:16px;height:16px;font-size:7px;margin-left:-6px;border-width:1.5px}
+    .coins .sum{height:13px;padding:0 3px;font-size:7px}
+    .reel{max-width:none}
+  }
 
   /* ── Mobile landscape ──────────────────────────────────────────────────────
      The roulette grid is already fluid (fr columns); only .felt's min-width
@@ -1120,6 +1155,10 @@ function chipOfSeg(s){
 }
 
 // ── felt build ─────────────────────────────────────────
+/// True while the felt is in its rotated phone layout. The 2-to-1 bets sit at
+/// the end of a ROW on the wide felt and at the foot of a COLUMN on a phone,
+/// and the hint text has to say which one the player is actually looking at.
+const portrait = () => matchMedia("(orientation: portrait) and (max-width: 620px)").matches;
 const boardEl=$("board");
 function cellBet(o){
   const el=document.createElement("div");
@@ -1127,8 +1166,14 @@ function cellBet(o){
   el.dataset.kind=o.kind; el.dataset.pick=o.pick; el.dataset.desc=o.desc; el.dataset.count=o.count||0;
   el.tabIndex=0;
   el.innerHTML=(o.html||"")+'<span class="coins"></span>';
-  if(o.col) el.style.gridColumn=o.col;
-  if(o.row) el.style.gridRow=o.row;
+  // Positions travel as custom properties, not inline grid-column/grid-row.
+  // Inline styles beat any media query, which is why the felt could only ever
+  // drop its min-width on a phone instead of rearranging. Publishing both the
+  // landscape and the portrait coordinates lets CSS choose the layout.
+  if(o.col)  el.style.setProperty("--col",  o.col);
+  if(o.row)  el.style.setProperty("--row",  o.row);
+  if(o.pcol) el.style.setProperty("--pcol", o.pcol);
+  if(o.prow) el.style.setProperty("--prow", o.prow);
   el.addEventListener("mouseenter",()=>describe(el));
   el.addEventListener("focus",()=>describe(el));
   el.addEventListener("click",()=>stageFromCell(el));
@@ -1138,56 +1183,70 @@ function cellBet(o){
 boardEl.appendChild(cellBet({cls:"out dd",kind:KIND.DD,pick:0,count:0,
   html:'<span class="lab">REPEATS A DIGIT</span><span class="sub">same character twice · bonus chip · ≈36% of rounds</span>',
   desc:"any character shows up twice in the finished six. A bonus chip, separate from your six tokens — one per wallet",
-  col:"1",row:"1 / 4"}));
+  col:"1",row:"1 / 4",pcol:"1 / 5",prow:"14"}));
 // 36 pockets — colours from RED_MASK (alternating), NOT roulette's red set.
 for(let n=1;n<=36;n++){
   const c=Math.ceil(n/3), row=(n%3===0)?1:(n%3===2)?2:3, idx=n-1, ch=ALPHABET[idx];
   const glyph = ch==="O" ? '<span class="g">O</span>' : ch;
   boardEl.appendChild(cellBet({cls:"pocket "+(RED(idx)?"red":"black")+(ch==="0"?" zero":"")+(ch==="O"?" oh":""),
     kind:KIND.EXACTLY,pick:idx,count:1,html:glyph,
-    desc:"the segment locks exactly on "+ch, col:String(c+1),row:String(row)}));
+    desc:"the segment locks exactly on "+ch,
+    col:String(c+1),row:String(row), pcol:String(4-row),prow:String(c)}));
 }
 // 2-to-1 columns. Felt row → contract pick: bottom row idx%3==0, middle ==1, top ==2.
 [[1,2],[2,1],[3,0]].forEach(([row,pick])=>{
   boardEl.appendChild(cellBet({cls:"out colbet",kind:KIND.COLUMN,pick,count:12,
     html:'<span class="lab">2 to 1</span><span class="sub">column</span>',
-    desc:"the segment locks on any of the 12 characters in this row",col:"14",row:String(row)}));
+    desc:"the segment locks on any of the 12 characters in this "+(portrait()?"column":"row"),
+    col:"14",row:String(row), pcol:String(4-row),prow:"13"}));
 });
 // dozens
 [["1st 12","A–L"],["2nd 12","M–X"],["3rd 12","Y–9"]].forEach((d,i)=>{
   boardEl.appendChild(cellBet({cls:"out",kind:KIND.DOZEN,pick:i,count:12,
     html:'<span class="lab">'+d[0]+'</span><span class="sub">'+d[1]+'</span>',
-    desc:"the segment locks on any of these twelve ("+d[1]+")",col:(2+i*4)+" / "+(6+i*4),row:"4"}));
+    desc:"the segment locks on any of these twelve ("+d[1]+")",col:(2+i*4)+" / "+(6+i*4),row:"4", pcol:"4",prow:(1+i*4)+" / "+(5+i*4)}));
 });
 // group rows
 boardEl.appendChild(cellBet({cls:"out",kind:KIND.VOWELS,pick:0,count:6,
   html:'<span class="lab">Vowels</span><span class="sub">A E I O U Y</span>',
-  desc:"the segment locks on a vowel (A E I O U Y)",col:"2 / 8",row:"5"}));
+  desc:"the segment locks on a vowel (A E I O U Y)",col:"2 / 8",row:"5",pcol:"1 / 3",prow:"15"}));
 boardEl.appendChild(cellBet({cls:"out",kind:KIND.TICKET,pick:0,count:1,
   html:'<span class="lab">Your&nbsp;Ticket</span><span class="sub">your char for that segment</span>',
-  desc:"the segment locks on your own ticket's character for it",col:"8 / 14",row:"5"}));
+  desc:"the segment locks on your own ticket's character for it",col:"8 / 14",row:"5",pcol:"3 / 5",prow:"15"}));
 boardEl.appendChild(cellBet({cls:"out redbet",kind:KIND.COLOR,pick:0,count:18,
   html:'<span class="lab">Red <span class="swatch r"></span></span><span class="sub">18 characters · alternating</span>',
-  desc:"the segment locks on a red character (18 of 36, alternating from A)",col:"2 / 8",row:"6"}));
+  desc:"the segment locks on a red character (18 of 36, alternating from A)",col:"2 / 8",row:"6",pcol:"1 / 3",prow:"16"}));
 boardEl.appendChild(cellBet({cls:"out blackbet",kind:KIND.COLOR,pick:1,count:18,
   html:'<span class="lab">Black <span class="swatch b"></span></span><span class="sub">18 characters · alternating</span>',
-  desc:"the segment locks on a black character (18 of 36)",col:"8 / 14",row:"6"}));
+  desc:"the segment locks on a black character (18 of 36)",col:"8 / 14",row:"6",pcol:"3 / 5",prow:"16"}));
 // full-kind row: letters / numbers / low / high
 boardEl.appendChild(cellBet({cls:"out",kind:KIND.LETTER,pick:0,count:26,
   html:'<span class="lab">Letters</span><span class="sub">A–Z · 26 of 36</span>',
-  desc:"the segment locks on a letter",col:"2 / 5",row:"7"}));
+  desc:"the segment locks on a letter",col:"2 / 5",row:"7",pcol:"1 / 3",prow:"17"}));
 boardEl.appendChild(cellBet({cls:"out",kind:KIND.NUMBER,pick:0,count:10,
   html:'<span class="lab">Numbers</span><span class="sub">0–9 · 10 of 36</span>',
-  desc:"the segment locks on a digit",col:"5 / 8",row:"7"}));
+  desc:"the segment locks on a digit",col:"5 / 8",row:"7",pcol:"3 / 5",prow:"17"}));
 boardEl.appendChild(cellBet({cls:"out",kind:KIND.LOWHIGH,pick:0,count:18,
   html:'<span class="lab">Low</span><span class="sub">A–R · first 18</span>',
-  desc:"the segment locks on A through R",col:"8 / 11",row:"7"}));
+  desc:"the segment locks on A through R",col:"8 / 11",row:"7",pcol:"1 / 3",prow:"18"}));
 boardEl.appendChild(cellBet({cls:"out",kind:KIND.LOWHIGH,pick:1,count:18,
   html:'<span class="lab">High</span><span class="sub">S–9 · last 18</span>',
-  desc:"the segment locks on S through 9",col:"11 / 14",row:"7"}));
+  desc:"the segment locks on S through 9",col:"11 / 14",row:"7",pcol:"3 / 5",prow:"18"}));
 
 const CELLMAP={};
 document.querySelectorAll(".bet").forEach(el=>{ CELLMAP[el.dataset.kind+":"+el.dataset.pick]=el; });
+
+/// The 2-to-1 hint names the axis the player is looking at, and a phone can be
+/// turned after the page loads — so it follows the rotation instead of freezing
+/// at build time and telling someone in landscape about a "column".
+const AXIS_MQ = matchMedia("(orientation: portrait) and (max-width: 620px)");
+const relabelColumnBets = () => {
+  const axis = AXIS_MQ.matches ? "column" : "row";
+  document.querySelectorAll(".colbet").forEach(el=>{
+    el.dataset.desc = "the segment locks on any of the 12 characters in this "+axis;
+  });
+};
+AXIS_MQ.addEventListener("change", relabelColumnBets);
 
 function describe(el){
   const kind=+el.dataset.kind, count=+el.dataset.count;
