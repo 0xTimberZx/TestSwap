@@ -38,7 +38,8 @@ contract SegmentBoardTest is Test {
     // Gen-5 dials. Quiet/solo timers equal the ceiling so the adaptive
     // schedule degenerates to the fixed gen-4 one for this legacy suite —
     // entryCloseAt never moves off openedAt + ENTRY_WINDOW. The adaptive
-    // behaviour itself is exercised in SegmentBoardGen5.t.sol.
+    // behaviour itself is exercised in SegmentBoardVRFTiming.t.sol, against the
+    // board that is actually deployed.
     uint64 constant ENTRY_WINDOW   = 40 minutes;              // entryMax
     uint64 constant PLACE_WINDOW   = 5 minutes;
     uint64 constant BETS_CLOSE     = 5 minutes;
@@ -68,7 +69,8 @@ contract SegmentBoardTest is Test {
         // Gen-6 reserve, deployed EMPTY: grantTopUp returns 0 with no float,
         // so every payout in this legacy suite is pure pool money — the
         // pre-underwrite behaviour this suite regression-tests. The funded
-        // reserve is exercised in SegmentBoardGen6.t.sol.
+        // reserve is exercised in SegmentBoardVRFEconomics.t.sol, against the board
+        // that is actually deployed.
         reserve = new UnderwriteReserve(address(timbs), treasury, guardian);
 
         board = new SegmentBoard(
