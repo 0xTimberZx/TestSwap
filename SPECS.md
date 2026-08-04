@@ -9,7 +9,7 @@
 **Pragma:** `pragma solidity 0.8.24` — exact, never `^`  
 **Compiler:** viaIR enabled, optimizer 200 runs, EVM paris  
 **Verification:** Sourcify preferred  
-**Last updated:** July 2026
+**Last updated:** August 2026
 
 ---
 
@@ -56,10 +56,10 @@ not a second way to produce a character, since an unfulfilled request has no kno
 
 | Contract | Address | Notes |
 |---|---|---|
-| SegmentBoard (gen 8) | 0x89eE2553AD7c72700A7BfD7A095440cc8BE55227 | VRF board — state machine + pari-mutuel settlement |
-| PoolLedger (gen 8) | 0x9195803ecA9A0F4F813502A110b32C842330fD0D | custodies chips PER TABLE; pays winners |
-| UnderwriteReserve (gen 8) | 0x69C9E840aEc4368016038bF54e603E345ede1063 | top-up float; income = dead pots + half rake |
-| VRFEntropy (gen 8) | 0xD982C7218cBD3c395a0A1461732ADEc99A3A87c0 | Chainlink VRF v2.5 consumer, one word per segment |
+| SegmentBoard (gen 8) | 0x89eE2553AD7c72700A7BfD7A095440cc8BE55227 | Sourcify ✅ `exact_match` — VRF board — state machine + pari-mutuel settlement |
+| PoolLedger (gen 8) | 0x9195803ecA9A0F4F813502A110b32C842330fD0D | Sourcify ✅ — custodies chips PER TABLE; pays winners |
+| UnderwriteReserve (gen 8) | 0x69C9E840aEc4368016038bF54e603E345ede1063 | Sourcify ✅ — top-up float; income = dead pots + half rake |
+| VRFEntropy (gen 8) | 0xD982C7218cBD3c395a0A1461732ADEc99A3A87c0 | Sourcify ✅ `exact_match` — Chainlink VRF v2.5 consumer, one word per segment |
 | SegmentBoard (gen 7) | 0xf3FF34488D472b89497Cf31631c77bE85524A65a | Retired 2026-08-04 — reserve drained, ledger still pays withdrawals |
 | PoolLedger (gen 7) | 0xAA4f4303b747bEa63F9818Bc9C38dAe5aebDe218 | Retired board, **live ledger** — old credit is payable forever |
 | CommitRevealEntropy (gen 7) | 0x57A1F889A30178b62Bc39844D73B68d0f8a274d6 | Superseded by VRFEntropy; kept for reading old rounds |
