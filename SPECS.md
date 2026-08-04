@@ -99,7 +99,7 @@ strands credit. Gen 6 (`0x1de9889da2083F5f1693DfCf589A453E9b39EEA7`) retired 202
 |---------|--------|
 | 0x06aebE938113524D9E29C51BacE7d7A155051a60 | Old factory — no bytecode redeployed |
 | 0xefFea3C2D1aA32eE9D93Cc0E888647E6A168293f | Phantom pair — 500k TIMBS permanently locked (treated as burned) |
-| 0x486Fa4D8351EF81136E83340eA1e3aa2272c9955 | Treasury v1 — retired; ~6,532 TIMBS fee revenue permanently stranded (no working ERC20 exit in v1; treated as burned) |
+| 0x486Fa4D8351EF81136E83340eA1e3aa2272c9955 | Treasury v1 — retired; **9,117.798 TIMBS unrecoverable**, confirmed by trace 2026-08-04. Its only token-moving function, `distributeToStaking`, calls `safeTransfer(address,uint256)` (`423f6cef`) on the token — a SafeERC20 *library* function that was mistakenly declared in v1's token interface. TIMBS has no such selector, so the call reverts in 247 gas before the destination matters. Nothing an owner can set fixes it: the failure precedes every configurable address. See `dev-docs/TREASURY_V1_RECOVERY.md` |
 | 0x566395B9FAd004520e39FCacbA7E5e805ae97889 | Treasury v2 — retired same-day (held nothing); superseded by v3's ERC20 fee exits |
 | 0x4d74F2111fB12f64F39A285251075cf455B84201 | GameRegistry v3 — retired; superseded by v5 (forfeiture after later of claim/active) |
 | 0x35490DA1A7FF75C09eF90235Fdde700Fb04DB03F | TimbPrize v5 — retired; superseded by v6 (class-preserving jitter: letter→letter, digit→digit). Old rounds readable here |
