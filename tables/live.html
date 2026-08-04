@@ -1087,6 +1087,12 @@ let shownTid=null;
 /// does that a client-side character check would have to re-derive and could get
 /// wrong.
 const deadPools = new Set();
+/// Wallets the ledger actually credited on this table. WinningsCredited carries
+/// no pool -- only (to, tableId, amount) -- so the chain cannot attribute a
+/// payout to a particular bet. What it CAN say, once every segment is in, is
+/// that a wallet was paid nothing at all: then every bet that wallet placed is
+/// dead, definitively, and that verdict outranks any character arithmetic.
+const paidWallets = new Set();
 /// Queried per refresh so the fade can key off what settlement DID, not what we
 /// predict it should have done. Cheap: one filtered log read, same window the
 /// bet feed already uses.
@@ -1100,6 +1106,15 @@ async function pollSettled(){
       if(ev.args.pot > 0n && ev.args.distributed === 0n) deadPools.add(Number(ev.args.pool));
     }
   }catch{ /* RPC log limits — the character check below still covers it */ }
+  try{
+    const latest = await provider.getBlockNumber();
+    // no `to` filter: we want every wallet on the table, not just ours
+    const cevs = await ledger.queryFilter(ledger.filters.WinningsCredited(null, tid),
+                                          Math.max(0, latest-400000), latest);
+    for(const ev of cevs){
+      if(ev.args.amount > 0n) paidWallets.add(ev.args.to.toLowerCase());
+    }
+  }catch{ /* same fallback */ }
 }
 function resetTableView(){
   feedSeen.clear();
@@ -1112,7 +1127,7 @@ function resetTableView(){
   });
   document.querySelectorAll(".frow.dead").forEach(el=>el.classList.remove("dead"));
   document.querySelectorAll(".bet").forEach(el=>el.style.removeProperty("--live"));
-  deadPools.clear();
+  deadPools.clear(); paidWallets.clear();
 }
 
 let refreshing=false;
@@ -1872,6 +1887,11 @@ async function paintDead(){
     // The chain's verdict first: a pool that settled paying nobody took every
     // bet in it, whatever the characters say.
     if(deadPools.has(pool)) return true;
+    // Retired, not merely all-six-locked. The Repeats-a-Digit pool settles at
+    // RETIRE, so between the sixth lock and the close there is a real window
+    // where credits legitimately do not exist yet -- keying off `all` there
+    // would flash every bet on the table dead and then bring the winners back.
+    if(T?.retired && wallet && !paidWallets.has(wallet.toLowerCase())) return true;
     if(kind===KIND.DD) return all && new Set(winStr).size===6;  // needs all six to miss
     if(!(idx[pool]>=0)) return false;                           // segment not in yet
     if(kind===KIND.TICKET){
@@ -1900,11 +1920,18 @@ async function paintDead(){
       if(!(await isDead(b.kind,b.pick,pool,b.wallet))) live[key] = (live[key]||0) + w;
     }
   }
-  const FLOOR = 0.15;
+  // Two floors, one code path. A dead pile the viewer has no stake in sinks to
+  // 0.15 -- gone, so the surviving plays own the screen. A dead pile holding
+  // the CONNECTED wallet's own chip stops at 0.40: still clearly beaten, still
+  // findable, because "where did my money go" is the question the felt has to
+  // keep answering after it has lost. On the stream nothing is ever `mine`, so
+  // every loser there reads a flat 0.15 without a second rule to maintain.
   for(const [key,cell] of Object.entries(CELLMAP)){
     if(!stake[key]){ cell.style.removeProperty("--live"); continue; }
+    const mine  = cell.querySelector(".coins")?.dataset.mine === "1";
+    const floor = mine ? 0.40 : 0.15;
     const share = (live[key]||0) / stake[key];
-    cell.style.setProperty("--live", (FLOOR + (1 - FLOOR) * share).toFixed(3));
+    cell.style.setProperty("--live", (floor + (1 - floor) * share).toFixed(3));
   }
 }
 function lockedCharsArr(){
