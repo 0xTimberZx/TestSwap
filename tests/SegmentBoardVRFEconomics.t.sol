@@ -78,6 +78,11 @@ contract SegmentBoardVRFEconomicsTest is Test {
     uint8 constant CHIP5    = 0;
     uint8 constant CHIP25   = 2;
     uint8 constant CHIP500  = 5;
+    uint8 constant CHIP1000 = 6;
+
+    /// A table seed is 100 TIMBS split seven ways; a pool draws its share
+    /// only if contested (the anti-farm rule).
+    uint256 constant SEED_SHARE = uint256(100e18) / 7;
 
     uint8 KX;   // KIND_EXACTLY, cached — reading it inline would eat a vm.prank
 
@@ -422,5 +427,114 @@ contract SegmentBoardVRFEconomicsTest is Test {
         vm.prank(stranger); board.armSegment(id, 1);
 
         assertEq(timbs.balanceOf(address(reserve)), 10_000e18, "reserve untouched");
+    }
+
+    // ─── where the underwrite stops ──────────────────────────────────────────
+
+    /// A pool that already clears the target draws nothing. The mechanism fades
+    /// out exactly where pari-mutuel starts working on its own, so the reserve
+    /// subsidises thin rounds and never busy ones.
+    function test_BusyPoolBeyondTargetDrawsNothing() public {
+        _fund(10_000e18);
+        uint256 id = _open();
+        _sitLoad(alice, id, CHIP5);
+        _sitLoad(bob,   id, CHIP500);
+        _sitLoad(carol, id, CHIP500);
+
+        uint8 winIdx = _charIdxFor(id, 1, W1);
+        vm.prank(alice); board.place(id, 1, KX, winIdx);
+        vm.prank(bob);   board.place(id, 1, KX, (winIdx + 1) % 36);
+        vm.prank(carol); board.place(id, 1, KX, (winIdx + 2) % 36);
+
+        uint256 reserveBefore = timbs.balanceOf(address(reserve));
+        _runRound(id);
+
+        // pot = 5 + 500 + 500 + seed share; rake(3) = 175 + 625/3 = 383 bps
+        uint256 pot = 1005e18 + SEED_SHARE;
+        uint256 pay = (pot * (10000 - 383)) / 10000;
+        assertGt(pay, _exactlyTarget(5e18), "sanity: the pool alone beats the target");
+        assertEq(ledger.credit(alice), pay, "winner takes the whole pool, unbounded by the target");
+        assertEq(timbs.balanceOf(address(reserve)), reserveBefore, "reserve untouched");
+        _assertSolvent();
+    }
+
+    /// Two caps, applied in order: per-pool first, then what the round has left.
+    /// The second win is clamped by the round cap's remainder, not by its own
+    /// pool cap -- ordering that only shows up when one round wins twice.
+    function test_PoolAndRoundCapsClampInOrder() public {
+        _fund(30_000e18);
+        uint256 id = _open();
+        _sitLoad(alice, id, CHIP1000);
+        _sitLoad(bob,   id, CHIP25);
+
+        vm.startPrank(alice);              // solo Exactly wins on segments 1 AND 2
+        board.place(id, 1, KX, _charIdxFor(id, 1, W1));
+        board.place(id, 2, KX, _charIdxFor(id, 2, W2));
+        vm.stopPrank();
+
+        _runRound(id);
+
+        // each pool pays par 1000 from the pot; wanted 31,400 clamps to the
+        // 1000 pool cap, and pool 2 then hits the round cap's remaining 500
+        assertEq(ledger.credit(alice), 2000e18 + 1500e18, "two pars + 1000 + 500");
+        assertEq(reserve.roundUsed(id), 1500e18, "round cap exhausted");
+        _assertSolvent();
+    }
+
+    /// Income beyond the float target is parked in the overflow earmark rather
+    /// than swelling the grantable float, so a windfall round cannot quietly
+    /// raise every later payout.
+    function test_WaterfallParksOverflowBeyondFloatTarget() public {
+        reserve.setFloatTarget(10e18);
+        uint256 id = _open();
+        _sitLoad(alice, id, CHIP25);
+        _sitLoad(bob,   id, CHIP25);
+
+        vm.prank(alice);                   // solo and deliberately wrong -> 25 dead pot
+        board.place(id, 1, KX, (_charIdxFor(id, 1, W1) + 1) % 36);
+
+        _runRound(id);
+        board.retire(id);
+
+        assertEq(timbs.balanceOf(address(reserve)), 25e18);
+        assertEq(reserve.overflowEarmark(), 15e18, "everything past the float target is parked");
+        assertEq(reserve.freeFloat(), 10e18, "grants may only touch the float");
+        _assertSolvent();
+    }
+
+    /// The no-minting rule, in one number: Treasury can give the reserve nothing
+    /// the game has not already earned it. Before any retire the budget is zero,
+    /// and afterwards it is exactly what was swept -- one wei past is refused.
+    function test_BudgetedSupportCannotExceedGameEarnings() public {
+        timbs.mintTo(address(this), 1_000e18);
+        timbs.approve(address(reserve), type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(
+            UnderwriteReserve.ExceedsBudget.selector, uint256(1e18), uint256(0), uint256(0)));
+        reserve.fundBudgeted(1e18);
+
+        uint256 id = _open();
+        _sitLoad(alice, id, CHIP25);
+        _sitLoad(bob,   id, CHIP25);
+        uint8 winIdx = _charIdxFor(id, 1, W1);
+        vm.prank(alice); board.place(id, 1, KX, winIdx);
+        vm.prank(bob);   board.place(id, 1, KX, (winIdx + 1) % 36);
+        _runRound(id);
+        board.retire(id);
+
+        uint256 earned = reserve.treasuryEarned();
+        assertGt(earned, 0);
+        reserve.fundBudgeted(earned);      // exactly the budget: allowed
+        vm.expectRevert(abi.encodeWithSelector(
+            UnderwriteReserve.ExceedsBudget.selector, uint256(1), earned, earned));
+        reserve.fundBudgeted(1);           // one wei past: refused
+    }
+
+    /// Credit moves between wallets only at the board's instruction. Without
+    /// this the tip mechanism would be an open transfer rail into anyone's
+    /// balance.
+    function test_MoveCreditIsBoardOnly() public {
+        vm.prank(alice);
+        vm.expectRevert(PoolLedger.NotBoard.selector);
+        ledger.moveCredit(alice, bob, 1e18);
     }
 }
