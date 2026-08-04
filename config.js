@@ -70,7 +70,13 @@ const ADDRESSES = {
   UnderwriteReserve:    "0x69C9E840aEc4368016038bF54e603E345ede1063", // holds the top-up float; guardian halt + drain only
   DDJackpot:            "0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9", // M2 rolling jackpot — deploy-once, cross-generation
   SeedRegistry:         "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived — spans generations
-  SegmentCrank:         "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher — generation-agnostic
+  // Stateless lock/retire batcher for generations 4-7 ONLY. It calls
+  // lockSegment(uint256,uint8,bytes32) and lockSegmentFallback, neither of
+  // which exists on the gen-8 VRF board — batching six locks into one
+  // transaction would also collapse the staggered reveal the per-segment
+  // design exists to produce. Every crank path in the apps is gen-gated;
+  // retire(uint256) is the only call still shared with gen-8.
+  SegmentCrank:         "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D",
   USDC:                 "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Circle canonical (6 decimals)
   LINK:                 "0xb1D4538B4571d411F07960EF2838Ce337FE1E80E", // Chainlink canonical (18 decimals)
   USDT:                 "0xbEEa6bc48adb31831bFCe5e91E48E08B3a836163", // TestUSDT — 6 decimals, 1M supply

@@ -115,7 +115,7 @@ tables are busy. Thin winning pools are topped up from the **UnderwriteReserve**
 must never make any player's outcome worse. Unclaimed Repeats-a-Digit money rolls into a
 cross-generation **DDJackpot** that pays a metered slice, stake-capped so a 5-chip bet cannot
 drain what 1,000-chip bets built. Boards are immutable and redeployed per generation; the
-SeedRegistry, SegmentCrank and DDJackpot span every generation. **Generation 8** is live — each
+SeedRegistry and DDJackpot span every generation; SegmentCrank batches locks for generations 4-7 only. **Generation 8** is live — each
 character now comes from its own Chainlink VRF draw, which closes the selection edge the
 commit-reveal fallback gave whoever opened the table.
 

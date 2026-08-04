@@ -264,7 +264,7 @@
       <span class="pill" id="apState" style="display:none">idle</span>
       <div style="flex:1"></div>
       <label style="flex:0 0 auto">Reveal spacing&nbsp;</label>
-      <input id="apGap" type="number" min="0" max="60" value="15" style="width:70px">
+      <input id="apGap" type="number" min="0" max="60" value="7" style="width:70px">
       <span class="hint" style="flex:0 0 auto">&nbsp;seconds</span>
     </div>
     <p class="note">Arms at pick time, reveals the six <b>one at a time</b> at the spacing
@@ -1285,7 +1285,7 @@ async function apTick(){
     if(t.lockBlock!==0n){
       const nowB=await provider.getBlockNumber();
       if(nowB<=Number(t.lockBlock)){ apSet("armed — waiting one block"); return; }
-      const gap=Math.max(0,Number($("apGap").value||15))*1000;
+      const gap=Math.max(0,Number($("apGap").value||7))*1000;
       const wait=gap-(Date.now()-apLastLock);
       if(apLastLock && wait>0){ apSet("next reveal in "+Math.ceil(wait/1000)+"s"); return; }
       const seg=[1,2,3,4,5,6].find(n=>!(mask&(1<<(n-1))));
@@ -1342,7 +1342,7 @@ async function apTickVRF(t, now, mask){
   // 2. nothing in flight: arm the next segment, paced by the reveal gap
   if(now < Number(t.pickTime)){ apSet("pick in "+MMSS(Number(t.pickTime)-now)); return; }
   if(fundedOf(t)<2){ apSet("under-funded — cannot arm, cancel instead"); return; }
-  const gap=Math.max(0,Number($("apGap").value||15))*1000;
+  const gap=Math.max(0,Number($("apGap").value||7))*1000;
   const wait=gap-(Date.now()-apLastLock);
   if(apLastLock && wait>0){ apSet("next draw in "+Math.ceil(wait/1000)+"s"); return; }
   const next=[1,2,3,4,5,6].find(n=>!((armed|mask)&(1<<(n-1))));
