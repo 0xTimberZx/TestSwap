@@ -19,8 +19,9 @@ pragma solidity 0.8.24;
 // `_predictChars`. Here the test picks the VRF word, so the character is chosen
 // rather than predicted — the assertions get sharper and the helper disappears.
 //
-// Once this lands, `SegmentBoardGen5/6/7.t.sol` have nothing left to guard that
-// is not guarded here against the board that is actually running.
+// `SegmentBoardGen5/6/7.t.sol` were retired once this and
+// `SegmentBoardVRFTiming.t.sol` covered everything they held — see git history
+// if you need what the commit-reveal board's own suites asserted.
 
 import "forge-std/Test.sol";
 import "../contracts/SegmentBoardVRF.sol";
