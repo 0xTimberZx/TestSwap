@@ -490,8 +490,14 @@ contract SegmentBoardVRFEconomicsTest is Test {
         _sitLoad(alice, id, CHIP25);
         _sitLoad(bob,   id, CHIP25);
 
+        // Resolve the character BEFORE the prank. _charIdxFor makes an external
+        // staticcall to saltFor, and a single vm.prank only survives to the next
+        // call -- so computing it inline spends the prank on the helper and
+        // place() arrives from the test contract, which is not seated. The KX
+        // field is cached in this fixture for exactly the same reason.
+        uint8 missIdx = (_charIdxFor(id, 1, W1) + 1) % 36;
         vm.prank(alice);                   // solo and deliberately wrong -> 25 dead pot
-        board.place(id, 1, KX, (_charIdxFor(id, 1, W1) + 1) % 36);
+        board.place(id, 1, KX, missIdx);
 
         _runRound(id);
         board.retire(id);
