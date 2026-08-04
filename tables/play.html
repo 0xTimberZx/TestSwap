@@ -903,6 +903,27 @@ let refreshing=false;
 /// the board while table 13's bets stack on top of them. Matters more now that
 /// the games dashboard deep-links straight into a chosen table.
 let shownTid=null;
+/// Pools the chain settled with nothing distributed — the pot forfeits whole and
+/// the house sweeps it. Every bet in such a pool is dead by the chain's own
+/// account rather than by our arithmetic, which is a stronger claim: it survives
+/// la partage, forfeits, the uncontested-pool rule and anything else settlement
+/// does that a client-side character check would have to re-derive and could get
+/// wrong.
+const deadPools = new Set();
+/// Queried per refresh so the fade can key off what settlement DID, not what we
+/// predict it should have done. Cheap: one filtered log read, same window the
+/// bet feed already uses.
+async function pollSettled(){
+  if(!board || !tid) return;
+  try{
+    const latest = await provider.getBlockNumber();
+    const evs = await board.queryFilter(board.filters.PoolSettled(tid),
+                                        Math.max(0, latest-400000), latest);
+    for(const ev of evs){
+      if(ev.args.pot > 0n && ev.args.distributed === 0n) deadPools.add(Number(ev.args.pool));
+    }
+  }catch{ /* RPC log limits — the character check below still covers it */ }
+}
 function resetTableView(){
   feedSeen.clear();
   poolBook.forEach(a => a.length=0);
@@ -914,6 +935,7 @@ function resetTableView(){
   });
   document.querySelectorAll(".frow.dead").forEach(el=>el.classList.remove("dead"));
   document.querySelectorAll(".bet").forEach(el=>el.style.removeProperty("--live"));
+  deadPools.clear();
 }
 
 async function refreshChain(){
@@ -934,7 +956,7 @@ async function refreshChain(){
     $("withdraw").classList.toggle("ready", cred>0n);
     $("withdraw").textContent = cred>0n ? "Withdraw "+fmt4(cred) : "Withdraw";
     $("seatsPill").textContent = "seats "+t.seatCount+" / 12"+(GEN>=5? " · "+Number(t.loadedCount)+" funded" : "");
-    paintSeat(); tick(); await pollFeed(); relabelFeed(); await renderStakes(); paintReveal(); paintDead(); await updateLockTracker();
+    paintSeat(); tick(); await pollFeed(); relabelFeed(); await renderStakes(); paintReveal(); await pollSettled(); paintDead(); await updateLockTracker();
   } finally { refreshing=false; }
 }
 
@@ -1669,6 +1691,9 @@ async function paintDead(){
   // Proven lost, or nothing. Anything unresolved stays lit: dimming a play that
   // might still pay is the one error the eye cannot walk back mid-round.
   const isDead = async (kind,pick,pool,wallet) => {
+    // The chain's verdict first: a pool that settled paying nobody took every
+    // bet in it, whatever the characters say.
+    if(deadPools.has(pool)) return true;
     if(kind===KIND.DD) return all && new Set(winStr).size===6;  // needs all six to miss
     if(!(idx[pool]>=0)) return false;                           // segment not in yet
     if(kind===KIND.TICKET){
