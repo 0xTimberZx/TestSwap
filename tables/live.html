@@ -145,11 +145,19 @@
   .felt{position:relative;min-width:780px;border-radius:14px;padding:20px;border:3px solid var(--gold-dim);
     background:radial-gradient(140% 120% at 30% 0%, #0d6b3f 0%, var(--felt) 42%, var(--felt-deep) 100%);
     box-shadow:0 0 0 10px var(--wood),0 0 0 12px #14100a,0 24px 56px -18px rgba(0,0,0,.8),inset 0 0 90px rgba(0,0,0,.35)}
-  .felt.locked{filter:saturate(.55) brightness(.72)}
-  .felt.locked .board{pointer-events:none;opacity:.5}
-  .felt.locked::after{content:attr(data-lock);position:absolute;inset:20px;display:grid;place-items:center;
-    font-family:Georgia,serif;font-size:15px;letter-spacing:.03em;color:var(--gold);text-align:center;
-    background:rgba(5,15,10,.34);border-radius:10px;padding:16px}
+  /* Betting closed is not the same as nothing to look at. The felt at this
+     point is the most interesting it gets — chips are down, characters are
+     landing, and the losing piles are fading as they go. The old treatment
+     desaturated the whole board, halved the grid's opacity and dropped a full
+     slab over it, which hid exactly what viewers on the stream were watching.
+     Now: keep the board readable, take away only the affordance to click, and
+     put the notice in a banner across the top instead of over the play. */
+  .felt.locked .board{pointer-events:none}
+  .felt.locked .bet{cursor:default}
+  .felt.locked::after{content:attr(data-lock);position:absolute;left:20px;right:20px;top:20px;
+    display:grid;place-items:center;pointer-events:none;
+    font-family:Georgia,serif;font-size:13.5px;letter-spacing:.03em;color:var(--gold);text-align:center;
+    background:rgba(5,15,10,.72);border:1px solid var(--gold-dim);border-radius:8px;padding:7px 14px}
   .board{display:grid;grid-template-columns:1.25fr repeat(12,1fr) 1.15fr;grid-template-rows:repeat(3,54px) 42px 46px 46px 46px;gap:5px}
   .board>.bet{grid-column:var(--col,auto);grid-row:var(--row,auto)}
   .cell{display:flex;align-items:center;justify-content:center;border:1px solid var(--felt-line);border-radius:4px;color:var(--cream);user-select:none;position:relative;text-align:center}
@@ -262,8 +270,16 @@
      narrows toward what is still standing. Faint, not gone: the money is real
      and stays in the pot until the pool settles, and a player wants to find
      their own dead chip as readily as their live one. Hover restores it. */
-  .frow.dead,.bet.dead .coins{opacity:.15;transition:opacity .7s ease}
-  .frow.dead:hover,.bet.dead:hover .coins{opacity:1}
+  /* A feed row is one bet, so its fade is binary. A felt spot pools bets from
+     all six segments onto one coin, so binary was the wrong shape: on a
+     six-segment round every even-money spot wins at least once, which meant
+     "fade only when everything on it died" could essentially never fire. The
+     pile now carries --live, the share of its stake still standing, and fades
+     in proportion — a spot that lost four of six sits near 0.4. */
+  .frow.dead{opacity:.15;transition:opacity .7s ease}
+  .frow.dead:hover{opacity:1}
+  .bet .coins{opacity:var(--live,1);transition:opacity .7s ease}
+  .bet:hover .coins{opacity:1}
   .who{flex:none;display:inline-flex;align-items:center;gap:7px;width:110px;font-variant-numeric:tabular-nums}
   .who .av{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;flex:none;background:#12271b;border:1px solid var(--gold-dim);color:var(--gold)}
   .who .nm{color:#cdd8cf;font-size:12px;letter-spacing:.02em}
@@ -1064,6 +1080,42 @@ async function checkCompete(){
 /// the chip-pack cache are all per-table; left standing, table 12's chips sit on
 /// the board while table 13's bets stack on top of them.
 let shownTid=null;
+/// Pools the chain settled with nothing distributed — the pot forfeits whole and
+/// the house sweeps it. Every bet in such a pool is dead by the chain's own
+/// account rather than by our arithmetic, which is a stronger claim: it survives
+/// la partage, forfeits, the uncontested-pool rule and anything else settlement
+/// does that a client-side character check would have to re-derive and could get
+/// wrong.
+const deadPools = new Set();
+/// Wallets the ledger actually credited on this table. WinningsCredited carries
+/// no pool -- only (to, tableId, amount) -- so the chain cannot attribute a
+/// payout to a particular bet. What it CAN say, once every segment is in, is
+/// that a wallet was paid nothing at all: then every bet that wallet placed is
+/// dead, definitively, and that verdict outranks any character arithmetic.
+const paidWallets = new Set();
+/// Queried per refresh so the fade can key off what settlement DID, not what we
+/// predict it should have done. Cheap: one filtered log read, same window the
+/// bet feed already uses.
+async function pollSettled(){
+  if(!board || !tid) return;
+  try{
+    const latest = await provider.getBlockNumber();
+    const evs = await board.queryFilter(board.filters.PoolSettled(tid),
+                                        Math.max(0, latest-400000), latest);
+    for(const ev of evs){
+      if(ev.args.pot > 0n && ev.args.distributed === 0n) deadPools.add(Number(ev.args.pool));
+    }
+  }catch{ /* RPC log limits — the character check below still covers it */ }
+  try{
+    const latest = await provider.getBlockNumber();
+    // no `to` filter: we want every wallet on the table, not just ours
+    const cevs = await ledger.queryFilter(ledger.filters.WinningsCredited(null, tid),
+                                          Math.max(0, latest-400000), latest);
+    for(const ev of cevs){
+      if(ev.args.amount > 0n) paidWallets.add(ev.args.to.toLowerCase());
+    }
+  }catch{ /* same fallback */ }
+}
 function resetTableView(){
   feedSeen.clear();
   poolBook.forEach(a => a.length=0);
@@ -1073,7 +1125,9 @@ function resetTableView(){
     c.innerHTML=""; delete c.dataset.n; delete c.dataset.total;
     delete c.dataset.mine; delete c.dataset.who;
   });
-  document.querySelectorAll(".dead").forEach(el=>el.classList.remove("dead"));
+  document.querySelectorAll(".frow.dead").forEach(el=>el.classList.remove("dead"));
+  document.querySelectorAll(".bet").forEach(el=>el.style.removeProperty("--live"));
+  deadPools.clear(); paidWallets.clear();
 }
 
 let refreshing=false;
@@ -1095,7 +1149,7 @@ async function refreshChain(){
     $("withdraw").classList.toggle("ready", cred>0n);
     $("withdraw").textContent = cred>0n ? "Withdraw "+fmt4(cred) : "Withdraw";
     $("seatsPill").textContent = "seats "+t.seatCount+" / 12"+(GEN>=5? " · "+Number(t.loadedCount)+" funded" : "");
-    paintSeat(); tick(); await pollFeed(); relabelFeed(); await renderStakes(); paintReveal(); paintDead(); await updateLockTracker();
+    paintSeat(); tick(); await pollFeed(); relabelFeed(); await renderStakes(); paintReveal(); await pollSettled(); paintDead(); await updateLockTracker();
   } finally { refreshing=false; }
 }
 
@@ -1819,7 +1873,8 @@ async function paintDead(){
   // fade is a louder tell than the reels are, so it waits for the same moment.
   const hold = $("holdReveal")?.checked && T && Number(T.lockedMask)!==0x3F;
   if(!chars.some(Boolean) || hold){
-    document.querySelectorAll(".dead").forEach(el=>el.classList.remove("dead"));
+    document.querySelectorAll(".frow.dead").forEach(el=>el.classList.remove("dead"));
+    document.querySelectorAll(".bet").forEach(el=>el.style.removeProperty("--live"));
     return;
   }
   const idx    = chars.map(c => c==null ? -1 : ALPHABET.indexOf(c));
@@ -1829,6 +1884,14 @@ async function paintDead(){
   // Proven lost, or nothing. Anything unresolved stays lit: dimming a play that
   // might still pay is the one error the eye cannot walk back mid-round.
   const isDead = async (kind,pick,pool,wallet) => {
+    // The chain's verdict first: a pool that settled paying nobody took every
+    // bet in it, whatever the characters say.
+    if(deadPools.has(pool)) return true;
+    // Retired, not merely all-six-locked. The Repeats-a-Digit pool settles at
+    // RETIRE, so between the sixth lock and the close there is a real window
+    // where credits legitimately do not exist yet -- keying off `all` there
+    // would flash every bet on the table dead and then bring the winners back.
+    if(T?.retired && wallet && !paidWallets.has(wallet.toLowerCase())) return true;
     if(kind===KIND.DD) return all && new Set(winStr).size===6;  // needs all six to miss
     if(!(idx[pool]>=0)) return false;                           // segment not in yet
     if(kind===KIND.TICKET){
@@ -1843,16 +1906,33 @@ async function paintDead(){
       +li.dataset.kind, +li.dataset.pick, +li.dataset.pool, li.dataset.wallet));
   }
 
-  const seen=new Set(), alive=new Set();
+  // Proportional, not binary. A spot carries bets from every segment on one
+  // bounded pile, and there is no per-segment element to fade — so the pile
+  // fades by the share of its STAKE that is dead. All six alive reads 1; all
+  // six dead reads the 0.15 floor; anything between lands between, which is
+  // the common case and the one a binary rule could never show.
+  const stake = {}, live = {};
   for(let pool=0; pool<poolBook.length; pool++){
     for(const b of poolBook[pool]){
       const key = b.kind+":"+(b.kind===KIND.DD?0:b.pick);
-      seen.add(key);
-      if(!(await isDead(b.kind,b.pick,pool,b.wallet))) alive.add(key);
+      const w   = (b.amt||0) || 1;          // an unknown stake still counts as one bet
+      stake[key] = (stake[key]||0) + w;
+      if(!(await isDead(b.kind,b.pick,pool,b.wallet))) live[key] = (live[key]||0) + w;
     }
   }
-  for(const [key,cell] of Object.entries(CELLMAP))
-    cell.classList.toggle("dead", seen.has(key) && !alive.has(key));
+  // Two floors, one code path. A dead pile the viewer has no stake in sinks to
+  // 0.15 -- gone, so the surviving plays own the screen. A dead pile holding
+  // the CONNECTED wallet's own chip stops at 0.40: still clearly beaten, still
+  // findable, because "where did my money go" is the question the felt has to
+  // keep answering after it has lost. On the stream nothing is ever `mine`, so
+  // every loser there reads a flat 0.15 without a second rule to maintain.
+  for(const [key,cell] of Object.entries(CELLMAP)){
+    if(!stake[key]){ cell.style.removeProperty("--live"); continue; }
+    const mine  = cell.querySelector(".coins")?.dataset.mine === "1";
+    const floor = mine ? 0.40 : 0.15;
+    const share = (live[key]||0) / stake[key];
+    cell.style.setProperty("--live", (floor + (1 - floor) * share).toFixed(3));
+  }
 }
 function lockedCharsArr(){
   if(!T || !ethers) return [null,null,null,null,null,null];
