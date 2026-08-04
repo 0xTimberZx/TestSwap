@@ -145,11 +145,19 @@
   .felt{position:relative;min-width:780px;border-radius:14px;padding:20px;border:3px solid var(--gold-dim);
     background:radial-gradient(140% 120% at 30% 0%, #0d6b3f 0%, var(--felt) 42%, var(--felt-deep) 100%);
     box-shadow:0 0 0 10px var(--wood),0 0 0 12px #14100a,0 24px 56px -18px rgba(0,0,0,.8),inset 0 0 90px rgba(0,0,0,.35)}
-  .felt.locked{filter:saturate(.55) brightness(.72)}
-  .felt.locked .board{pointer-events:none;opacity:.5}
-  .felt.locked::after{content:attr(data-lock);position:absolute;inset:20px;display:grid;place-items:center;
-    font-family:Georgia,serif;font-size:15px;letter-spacing:.03em;color:var(--gold);text-align:center;
-    background:rgba(5,15,10,.34);border-radius:10px;padding:16px}
+  /* Betting closed is not the same as nothing to look at. The felt at this
+     point is the most interesting it gets — chips are down, characters are
+     landing, and the losing piles are fading as they go. The old treatment
+     desaturated the whole board, halved the grid's opacity and dropped a full
+     slab over it, which hid exactly what viewers on the stream were watching.
+     Now: keep the board readable, take away only the affordance to click, and
+     put the notice in a banner across the top instead of over the play. */
+  .felt.locked .board{pointer-events:none}
+  .felt.locked .bet{cursor:default}
+  .felt.locked::after{content:attr(data-lock);position:absolute;left:20px;right:20px;top:20px;
+    display:grid;place-items:center;pointer-events:none;
+    font-family:Georgia,serif;font-size:13.5px;letter-spacing:.03em;color:var(--gold);text-align:center;
+    background:rgba(5,15,10,.72);border:1px solid var(--gold-dim);border-radius:8px;padding:7px 14px}
   .board{display:grid;grid-template-columns:1.25fr repeat(12,1fr) 1.15fr;grid-template-rows:repeat(3,54px) 42px 46px 46px 46px;gap:5px}
   .board>.bet{grid-column:var(--col,auto);grid-row:var(--row,auto)}
   .cell{display:flex;align-items:center;justify-content:center;border:1px solid var(--felt-line);border-radius:4px;color:var(--cream);user-select:none;position:relative;text-align:center}
@@ -263,8 +271,16 @@
      narrows toward what is still standing. Faint, not gone: the money is real
      and stays in the pot until the pool settles, and a player wants to find
      their own dead chip as readily as their live one. Hover restores it. */
-  .frow.dead,.bet.dead .coins{opacity:.15;transition:opacity .7s ease}
-  .frow.dead:hover,.bet.dead:hover .coins{opacity:1}
+  /* A feed row is one bet, so its fade is binary. A felt spot pools bets from
+     all six segments onto one coin, so binary was the wrong shape: on a
+     six-segment round every even-money spot wins at least once, which meant
+     "fade only when everything on it died" could essentially never fire. The
+     pile now carries --live, the share of its stake still standing, and fades
+     in proportion — a spot that lost four of six sits near 0.4. */
+  .frow.dead{opacity:.15;transition:opacity .7s ease}
+  .frow.dead:hover{opacity:1}
+  .bet .coins{opacity:var(--live,1);transition:opacity .7s ease}
+  .bet:hover .coins{opacity:1}
   .who{flex:none;display:inline-flex;align-items:center;gap:7px;width:110px;font-variant-numeric:tabular-nums}
   .who .av{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;flex:none;background:#12271b;border:1px solid var(--gold-dim);color:var(--gold)}
   .who .nm{color:#cdd8cf;font-size:12px;letter-spacing:.02em}
@@ -896,7 +912,8 @@ function resetTableView(){
     c.innerHTML=""; delete c.dataset.n; delete c.dataset.total;
     delete c.dataset.mine; delete c.dataset.who;
   });
-  document.querySelectorAll(".dead").forEach(el=>el.classList.remove("dead"));
+  document.querySelectorAll(".frow.dead").forEach(el=>el.classList.remove("dead"));
+  document.querySelectorAll(".bet").forEach(el=>el.style.removeProperty("--live"));
 }
 
 async function refreshChain(){
@@ -1641,7 +1658,8 @@ async function paintDead(){
   // fade is a louder tell than the reels are, so it waits for the same moment.
   const hold = $("holdReveal")?.checked && T && Number(T.lockedMask)!==0x3F;
   if(!chars.some(Boolean) || hold){
-    document.querySelectorAll(".dead").forEach(el=>el.classList.remove("dead"));
+    document.querySelectorAll(".frow.dead").forEach(el=>el.classList.remove("dead"));
+    document.querySelectorAll(".bet").forEach(el=>el.style.removeProperty("--live"));
     return;
   }
   const idx    = chars.map(c => c==null ? -1 : ALPHABET.indexOf(c));
@@ -1665,16 +1683,26 @@ async function paintDead(){
       +li.dataset.kind, +li.dataset.pick, +li.dataset.pool, li.dataset.wallet));
   }
 
-  const seen=new Set(), alive=new Set();
+  // Proportional, not binary. A spot carries bets from every segment on one
+  // bounded pile, and there is no per-segment element to fade — so the pile
+  // fades by the share of its STAKE that is dead. All six alive reads 1; all
+  // six dead reads the 0.15 floor; anything between lands between, which is
+  // the common case and the one a binary rule could never show.
+  const stake = {}, live = {};
   for(let pool=0; pool<poolBook.length; pool++){
     for(const b of poolBook[pool]){
       const key = b.kind+":"+(b.kind===KIND.DD?0:b.pick);
-      seen.add(key);
-      if(!(await isDead(b.kind,b.pick,pool,b.wallet))) alive.add(key);
+      const w   = (b.amt||0) || 1;          // an unknown stake still counts as one bet
+      stake[key] = (stake[key]||0) + w;
+      if(!(await isDead(b.kind,b.pick,pool,b.wallet))) live[key] = (live[key]||0) + w;
     }
   }
-  for(const [key,cell] of Object.entries(CELLMAP))
-    cell.classList.toggle("dead", seen.has(key) && !alive.has(key));
+  const FLOOR = 0.15;
+  for(const [key,cell] of Object.entries(CELLMAP)){
+    if(!stake[key]){ cell.style.removeProperty("--live"); continue; }
+    const share = (live[key]||0) / stake[key];
+    cell.style.setProperty("--live", (FLOOR + (1 - FLOOR) * share).toFixed(3));
+  }
 }
 function lockedCharsArr(){
   if(!T) return [null,null,null,null,null,null];
