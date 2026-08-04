@@ -124,20 +124,53 @@ contract DeploySegmentBoardVRF is Script {
         console.log("subscription    :", subId);
         console.log("confirmations   :", confs);
         console.log("callback gas    :", cbGas);
+        // ── the two roles that are silently wrong until something reverts ──
+        // Both default to values that look harmless and are not. Print who
+        // actually holds them, loudly, while the terminal is still open.
+        console.log("seed funder     :", seedFunder);
+        console.log("guardian        :", guardian);
+        console.log("deployer        :", vm.addr(pk));
+        if (seedFunder != vm.addr(pk)) {
+            console.log("");
+            console.log(" !! SEED FUNDER IS NOT THE DEPLOYER.");
+            console.log("    openTable pulls the 100 TIMBS seed from the seed funder,");
+            console.log("    so the approve in step 4 must be signed by the address");
+            console.log("    printed above - NOT by this deployer. Approving from the");
+            console.log("    wrong wallet is what made gen-7's first openTable revert");
+            console.log("    ERC20InsufficientAllowance. Either approve from it, or");
+            console.log("    call board.setSeedFunder(<the wallet holding the budget>).");
+        }
+        if (guardian == address(0)) {
+            console.log("");
+            console.log(" !! GUARDIAN IS ZERO. Nobody can halt this reserve, and");
+            console.log("    nobody can drainToTreasury() it at generation end - its");
+            console.log("    whole float would be stranded when gen-9 arrives.");
+            console.log("    Fix now with reserve.setGuardian(...) and");
+            console.log("    board.setGuardian(...), or redeploy with GUARDIAN_ADDRESS");
+            console.log("    set. Only deliberate for a zero-privilege generation.");
+        }
+
         console.log("");
-        console.log("REQUIRED next steps:");
-        console.log(" 1. ADD VRFEntropy AS A CONSUMER on VRF subscription");
+        console.log("REQUIRED next steps, in this order:");
+        console.log(" 0. Drain the OLD reserve BEFORE abandoning it:");
+        console.log("    oldReserve.drainToTreasury() from its guardian. Skip this");
+        console.log("    and the previous generation's float is stranded.");
+        console.log(" 1. ADD VRFEntropy AS A CONSUMER on the VRF subscription");
         console.log("    (vrf.chain.link) - until then every armSegment reverts");
-        console.log(" 2. FUND the subscription with LINK (testnet LINK is free");
-        console.log("    from Chainlink's faucet). 6 requests per round.");
-        console.log(" 3. TIMBS.setTransferWhitelist(poolLedger, true)");
-        console.log(" 4. TIMBS.setTransferWhitelist(reserve, true)");
-        console.log(" 5. From the SEED FUNDER: TIMBS.approve(poolLedger, seedBudget)");
-        console.log(" 6. Seed the reserve by PLAIN TRANSFER (fundBudgeted reverts");
-        console.log("    on a fresh reserve - its earned counter starts at zero)");
-        console.log(" 7. Drain the OLD reserve first: drainToTreasury() as guardian");
-        console.log(" 8. DDJackpot.setBoard(newBoard, true)");
-        console.log(" 9. Record addresses in config.js + onchain/addresses.js, and");
+        console.log("    inside the coordinator, whatever the LINK balance says.");
+        console.log(" 2. FUND the subscription with LINK. 6 requests per round.");
+        console.log(" 3. TIMBS.setTransferWhitelist(poolLedger, true) and");
+        console.log("    TIMBS.setTransferWhitelist(reserve, true) - large payouts");
+        console.log("    and reserve pulls both trip maxTransferAmount without it.");
+        console.log(" 4. From the SEED FUNDER printed above:");
+        console.log("    TIMBS.approve(poolLedger, seedBudget)");
+        console.log(" 5. Seed the reserve by PLAIN TRANSFER. NOT fundBudgeted -");
+        console.log("    it reverts on a fresh reserve, whose earned counter is 0.");
+        console.log(" 6. DDJackpot.setBoard(newBoard, true) - an untrusted board");
+        console.log("    reverts BoardNotTrusted at the strike.");
+        console.log(" 7. Arm ONE segment and watch it fulfil before opening to");
+        console.log("    anyone. Measure the latency: it sets the reveal gap.");
+        console.log(" 8. Record addresses in config.js + onchain/addresses.js, and");
         console.log("    the ADDR block of all four pages");
         if (!registryWired) {
             console.log(" !! registry owner must call seedRegistry.addWriter(board)");
