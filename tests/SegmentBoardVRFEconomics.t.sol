@@ -300,9 +300,6 @@ contract SegmentBoardVRFEconomicsTest is Test {
     /// both have to survive the entropy swap untouched.
     function test_RetireSplitsRakeAndRoutesDeadPots() public {
         _fund(1_000e18);
-        uint256 reserveBefore  = timbs.balanceOf(address(reserve));
-        uint256 treasuryBefore = timbs.balanceOf(treasury);
-
         uint256 id = _open();
         _sitLoad(alice, id, CHIP25);
         _sitLoad(bob,   id, CHIP25);
@@ -320,6 +317,15 @@ contract SegmentBoardVRFEconomicsTest is Test {
         vm.warp(uint256(pickTime));
         uint256[6] memory w = _words();
         for (uint8 s = 1; s <= 6; ++s) _armLock(id, s, w[s - 1]);
+
+        // Snapshot AFTER settlement, not before the round. The reserve is not a
+        // one-way account: it paid alice's monotonic top-up while the segments
+        // were settling, and that grant can exceed the income retire brings
+        // back -- so measuring across the whole round tests the net of two
+        // unrelated mechanisms and fails on a board that is behaving correctly.
+        // This test is about what RETIRE routes, so it measures only retire.
+        uint256 reserveBefore  = timbs.balanceOf(address(reserve));
+        uint256 treasuryBefore = timbs.balanceOf(treasury);
 
         board.retire(id);
 
