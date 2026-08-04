@@ -42,23 +42,32 @@ const ADDRESSES = {
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
 
-  // ── SwapTables segment tables — generation 7, the bonus-chip generation (deployed 2026-08-03) ──
-  // One rule change: the Repeats-a-Digit stake now requires a full six-token
-  // load. A seated-but-unfunded wallet could previously buy the DD stake — and
-  // with the jackpot live, buy into a strike — while contributing nothing to
-  // the six segment pools. No new ABI surface, so the apps read it as gen-6.
-  // Gen-6 (0x1de9889d…) retired 2026-08-03; its ledger still pays withdrawals.
-  // The gen-6 mechanics below are unchanged:
-  // Gen-5's adaptive timing (same five dials: 2400/300/120/180/900) plus:
-  // monotonic underwrite (thin winners topped up toward stake x fair x 0.90
-  // from the UnderwriteReserve; caps 1000/pool, 1500/round, 10% of float),
-  // rake split (half reserve / half Treasury) + dead pots to the reserve,
-  // and dealer tips (seated wallets tip the opener after the sixth lock).
-  // Gen-5 (0x7358Aa…) retired 2026-07-31; its ledger still pays withdrawals.
-  SegmentBoard:         "0xf3FF34488D472b89497Cf31631c77bE85524A65a",
-  PoolLedger:           "0xAA4f4303b747bEa63F9818Bc9C38dAe5aebDe218",
-  CommitRevealEntropy:  "0x57A1F889A30178b62Bc39844D73B68d0f8a274d6",
-  UnderwriteReserve:    "0x73b7fBbA866859e241e87e39e2aDC81711902D7A", // holds the top-up float; guardian halt + drain only
+  // ── SwapTables segment tables — generation 8, the VRF generation (deployed 2026-08-04) ──
+  // The entropy module changes and nothing else does. Gens 1-7 drew a character
+  // from a commit-reveal with a 64-block blockhash fallback, which handed the
+  // wallet holding the secret a SELECTION EDGE: once the lock block was public
+  // it could compute both the reveal outcome and the fallback outcome, then
+  // choose between them by acting or not acting (docs/ENTROPY_TRUST.md — a
+  // Colour bet worth 50% honestly became 75% with the pick). Gen-8 removes the
+  // second path rather than policing it: one Chainlink VRF v2.5 draw per
+  // segment, no secret, no fallback, so there is nothing to choose between.
+  //
+  // armSegment(id, seg) fires one draw; lockSegment(id, seg) is permissionless
+  // and argument-free. One request per SEGMENT, not per round — a fulfilled
+  // word is public the instant the callback lands, so six at once would publish
+  // the whole round and kill the drumroll.
+  //
+  // New ABI surface: segmentState(uint256,uint8) is how the pages detect gen-8.
+  // Gen-7 (0xf3FF3448…) retired 2026-08-04; its ledger still pays withdrawals.
+  // Everything below gen-7 is unchanged: the bonus-chip full-load rule, gen-5's
+  // adaptive timing (2400/300/120/180/900), monotonic underwrite (caps
+  // 1000/pool, 1500/round, 10% of float), rake split (half reserve / half
+  // Treasury), dead pots to the reserve, and dealer tips.
+  SegmentBoard:         "0x89eE2553AD7c72700A7BfD7A095440cc8BE55227",
+  PoolLedger:           "0x9195803ecA9A0F4F813502A110b32C842330fD0D",
+  VRFEntropy:           "0xD982C7218cBD3c395a0A1461732ADEc99A3A87c0", // gen-8 — one VRF draw per segment
+  CommitRevealEntropy:  "0x57A1F889A30178b62Bc39844D73B68d0f8a274d6", // gen-7's, retired — kept for reading old rounds
+  UnderwriteReserve:    "0x69C9E840aEc4368016038bF54e603E345ede1063", // holds the top-up float; guardian halt + drain only
   DDJackpot:            "0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9", // M2 rolling jackpot — deploy-once, cross-generation
   SeedRegistry:         "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived — spans generations
   SegmentCrank:         "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher — generation-agnostic
