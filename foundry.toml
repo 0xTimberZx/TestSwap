@@ -39,12 +39,22 @@ remappings = [
 arb_sepolia = "${ARB_SEPOLIA_RPC}"
 localhost   = "http://127.0.0.1:8545"
 
-[etherscan]
-arb_sepolia = { key = "${ARBISCAN_API_KEY}", url = "https://api-sepolia.arbiscan.io/api" }
-
-# ─── Sourcify (preferred verifier) ───────────────────────────────────────────
-# Use: --verify --verifier sourcify
-# Sourcify does not require an API key
+# ─── Verification: Sourcify, and ONLY Sourcify ───────────────────────────────
+# There is deliberately no [etherscan] table here. Forge resolves that table
+# whenever it builds verification config -- including for `verify-contract
+# --verifier sourcify`, which needs no key at all -- so a block interpolating
+# ${ARBISCAN_API_KEY} fails every Sourcify verification the moment the variable
+# is unset. That cost the gen-7 deploy a run that had already broadcast
+# successfully (it read as a failed deploy) and blocked gen-8's verification
+# twice more. An unused config that breaks the verifier we actually use is
+# worse than no config.
+#
+#   forge verify-contract <addr> <path>:<name> --chain-id 421614 \
+#     --verifier sourcify --verifier-url https://sourcify.dev/server \
+#     --guess-constructor-args --rpc-url $ARB_SEPOLIA_RPC --watch
+#
+# If Arbiscan verification is ever wanted, add the table back for that run only
+# and export the key alongside it -- do not leave it here.
 
 # ─── Profiles ─────────────────────────────────────────────────────────────────
 
