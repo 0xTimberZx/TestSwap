@@ -200,8 +200,11 @@ contract SeedFarmClosedTest is Test {
             board.place(id, seg, KX, (_charFor(id, seg, words[seg - 1]) + 1) % 36);
         }
         vm.stopPrank();
-        // B: make seg 1 contested with a losing Exactly.
-        vm.prank(walletB); board.place(id, 1, KX, (_charFor(id, 1, words[0]) + 1) % 36);
+        // B: make seg 1 contested with a losing Exactly. Compute the pick BEFORE
+        // the prank — vm.prank only covers the next external call, and _charFor's
+        // saltFor() would otherwise consume it, sending place() as the test.
+        uint8 bPick = (_charFor(id, 1, words[0]) + 1) % 36;
+        vm.prank(walletB); board.place(id, 1, KX, bPick);
 
         vm.warp(uint256(_pickTime(id)));
         for (uint8 seg = 1; seg <= 6; ++seg) _armLock(id, seg, words[seg - 1]);
