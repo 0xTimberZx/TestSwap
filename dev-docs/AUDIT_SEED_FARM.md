@@ -75,10 +75,67 @@ approve. The guardian can `setNewTablesHalted(true)` to stop it dead. Testnet
 play-chips. But it is a real, repeatable, risk-free extraction by the mechanism
 explicitly named "anti-farm," so it is worth fixing rather than tolerating.
 
-### Same gate, same flaw: DDJackpot
+### Same gate, same flaw: DDJackpot (quantified — accepted, not fixed)
 
-`DDJackpot`'s "2+ DD wallets" strike gate is the identical construction and has
-the identical weakness. Not quantified here; fold it into the same gen-9 change.
+`DDJackpot`'s "2+ DD wallets" strike gate (`MIN_DD_WALLETS = 2`) is the identical
+§9 construction and has the identical Sybil weakness: two free wallets clear it.
+Unlike the seed, this one is **accepted as bounded operational risk** rather than
+reworked. The reasoning, quantified:
+
+**The farm.** Two wallets each load segment tokens (to hold a seat) but *place*
+nothing on the segments — unplaced loads refund at `retire`, so they cost
+nothing — and each places one Double-Digit chip. On the two attacker wallets
+being the only DD bettors, a strike pays them the whole metered slice. Their only
+at-risk capital is the two DD chips, lost as a dead pot when the DD misses.
+
+**The math (`sliceBps = 20%`, `sliceFloor = 50`, `stakeCapMult = 10`, min chip = 5),
+confirmed by simulation:**
+
+- **P(DD hit) = 0.3557 per table.** The winning string is six symbols over an
+  alphabet of 36; a DD needs a repeat. `P = 1 − ∏_{k=0}^{5}(36−k)/36 = 0.3557`
+  (exact and 5M-draw Monte-Carlo agree). Not rare — ~1 table in 2.8.
+- **It is +EV at every jackpot balance.** With minimum chips the per-round edge
+  runs from **+11.3 TIMBS** (pot at/near the floor, strike pays the 50 floor) to
+  **+29.1 TIMBS** (fat pot, strike capped at `2 × 10 × chip = 100`). Break-even
+  would need the strike to pay under 18.1 TIMBS; the 50 floor is far above it.
+  **Rarity does not save us here** — the hit is common and the expectation is
+  positive, so this is genuinely +EV, unlike a true "needs a rare event" hurdle.
+
+**Why it is nonetheless acceptable — and why there is no on-chain fix that keeps
+the feature:**
+
+- **No reroute exists.** The seed fix worked because the seed's *job* (sweeten
+  thin winners) could move to the capped underwrite. The jackpot payout *is* the
+  feature — there is nothing to reroute it to. Any Sybil defence reduces to a
+  bigger wallet threshold, which fails identically (Sybil-resistance is
+  impossible on-chain).
+- **The edge is small and does not scale super-linearly.** Bigger DD chips raise
+  the payout but the per-wallet cap (`stakeCapMult × chip`) and the larger
+  at-risk stake on the 64% miss keep the edge roughly proportional, not runaway.
+- **It requires attacker-controlled empty tables.** The slice is split pro-rata
+  with every DD bettor; once honest players sit in the DD pool, the cap collapses
+  the attacker's share to "just another DD player." The clean farm only exists on
+  tables the attacker fully owns — which is the legible signature below.
+- **Worst case is a slow bleed of donated float, never insolvency.** The pot only
+  ever holds recycled/donated TIMBS (no minting, no player escrow, no reserve
+  float). An attacker can at most drain what was donated to the banner.
+- **The meter bounds the rate but not the sign.** `setMeter` can lower `sliceBps`
+  and raise `stakeCapMult`, shrinking the edge, but only `stakeCapMult = 1`
+  (payout = one chip = a wash) removes it — and that guts the prize for honest
+  players too. There is no meter setting that keeps a real jackpot and is −EV to
+  the farmer.
+
+**Decision (2026-08): accept with controls, do not redeploy.**
+
+- Fund the banner modestly from recycled TIMBS; treat any drained float as a
+  marketing cost, not a solvency event.
+- Monitor for the signature: the same wallet pair striking repeatedly on
+  otherwise-empty tables is fully legible on-chain (`JackpotStruck` +
+  `betCount(tableId, DD_POOL) == 2` with both bets from linked wallets).
+- Guardian `setHalted(true)` stops all strikes instantly if abuse appears; the
+  banner keeps climbing while halted, so honest play resumes cleanly on unhalt.
+- Revisit only if a future generation finds a payout mechanic that isn't a
+  distributable pot (as the seed reroute did for the seed).
 
 ---
 
@@ -124,20 +181,49 @@ The seed stops being a per-pool special case in `_potOf` and `_settlePool`. It
 becomes one call at open (reserve income) and the pari-mutuel math reduces to
 "distribute the chips." Less surface, not more.
 
-### Sketch
+### As shipped (`contracts/SegmentBoardVRF9.sol`)
 
-- `openTable`: replace `ledger.fundSeed(seedFunder, TABLE_SEED, tableId)` with a
-  transfer of `TABLE_SEED` into the reserve (a new `reserve.fundSeed`-style
-  intake, booked as float income — it may raise `floatTarget` behaviour, decide
-  during design).
-- `_potOf`: drop the `if (n >= SEED_MIN_WALLETS) pot += SEED_SHARE` line. `SEED_SHARE`
-  and `SEED_MIN_WALLETS` disappear from the board.
-- `retire`: the seed no longer sits in table escrow, so there is no unconsumed
-  seed to sweep; the sweep is now purely rake + dead pots, unchanged otherwise.
-- `DDJackpot`: apply the same principle to its strike funding.
+The reroute is smaller and safer than the first sketch (which transferred the
+seed straight to the reserve at `openTable`). Keeping the seed in table escrow
+until `retire` means a cancelled table refunds it to the seed funder with no
+special case. Three surgical changes to a gen-8 copy:
 
-This changes the board's constructor/settlement surface, so it ships with the
-next board deploy, verified fresh on Sourcify.
+- `openTable`: **unchanged** — `ledger.fundSeed(seedFunder, TABLE_SEED, tableId)`
+  still parks the 100 TIMBS in *table escrow*. It is now simply never added to a
+  pot, so it sits untouched through settlement.
+- `_potOf`: the `if (n >= SEED_MIN_WALLETS) pot += SEED_SHARE` line is **gone**.
+  `SEED_SHARE` is removed entirely; pots are the players' own chips only.
+  `SEED_MIN_WALLETS` stays, now gating only the rake (an uncontested pool is
+  rake-free), no longer any seed.
+- `retire`: the whole seed is swept to the reserve alongside dead pots and half
+  the rake — `toReserve = dead + rakeHalf + TABLE_SEED`. It moves *physically*
+  via `sweepTablePartial`; it is deliberately **not** reported through
+  `recordIncome`, so `gameIncome` stays a measure of what the game earned (rake +
+  dead pots) while the seed is house-provided float. The reserve's waterfall keys
+  off its balance, not `gameIncome`, so the seed parks into float/overflow
+  correctly regardless.
+- `cancelTable`: **unchanged** — the untouched seed is part of the leftover it
+  already sweeps back to the seed funder. A cancelled table returns the seed
+  automatically.
+- `DDJackpot`: **not** changed — see the quantified accept-with-controls decision
+  above. Its payout is the feature, so there is nothing to reroute.
+
+`PoolLedger`, `VRFEntropy` and `UnderwriteReserve` bytecode are untouched but are
+redeployed fresh per generation (immutable board pointer);
+`scripts/DeploySegmentBoardVRF9.s.sol` wires the set. `SegmentBoardVRF9` verifies
+fresh on Sourcify at deploy.
+
+### Proof it works
+
+`tests/SeedFarmClosed.t.sol` runs the *identical* two-wallet Red/Black hedge from
+`SeedFarmExploit` against gen-9:
+
+- `test_HedgeNoLongerFarmsTheSeed` — the operator now nets a small **loss** (the
+  rake), not the +78 seed harvest; the whole seed lands in the reserve.
+- `test_HonestContestedWinnerStillToppedToTarget` — a genuine contested winner
+  still reaches `stake × fair × 0.90` (25-chip → 810), unchanged from gen-8.
+- `test_FullRoundSettlesAndLedgerDrains` — escrow-sacred holds, table escrow
+  resolves to zero, and every credit withdraws.
 
 ---
 
