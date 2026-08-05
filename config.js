@@ -47,7 +47,7 @@ const ADDRESSES = {
   // from a commit-reveal with a 64-block blockhash fallback, which handed the
   // wallet holding the secret a SELECTION EDGE: once the lock block was public
   // it could compute both the reveal outcome and the fallback outcome, then
-  // choose between them by acting or not acting (docs/ENTROPY_TRUST.md — a
+  // choose between them by acting or not acting (a
   // Colour bet worth 50% honestly became 75% with the pick). Gen-8 removes the
   // second path rather than policing it: one Chainlink VRF v2.5 draw per
   // segment, no secret, no fallback, so there is nothing to choose between.

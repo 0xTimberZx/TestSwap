@@ -36,15 +36,19 @@
 | LINK (Chainlink canonical) | 0xb1D4538B4571d411F07960EF2838Ce337FE1E80E | — |
 | DAPP Token | 0x3d0cB8929c22F93A9dd33921E6f43C1621FCfC04 | — |
 
-### SwapTables — generation 8 (live)
+### SwapTables — generation 9 (live)
 
 Boards are immutable and redeployed per generation; the seed registry and jackpot span all of
-them. Gen-8 changes the entropy module and nothing else.
+them. Gen-9 keeps gen-8's Chainlink VRF entropy and its entire external ABI unchanged — it changes
+only where the table seed goes: the 100-TIMBS seed no longer enters any pool (two wallets hedging
+Red/Black could Sybil-farm ~79% of it, `dev-docs/AUDIT_SEED_FARM.md`) and is swept whole to the
+UnderwriteReserve at retire. Honest winners still land on `stake × fair × 0.90`. The VRF entropy
+design carried over from gen-8:
 
 Gens 1–7 drew each character from a commit-reveal with a 64-block blockhash fallback. That gave
 the wallet holding the secret a **selection edge**: once the lock block was public it could
 compute both the reveal outcome and the fallback outcome, then choose between them by acting or
-not acting — a Colour bet worth 50% honestly became 75% with the pick (`ENTROPY_TRUST.md`).
+not acting — a Colour bet worth 50% honestly became 75% with the pick.
 Gen-8 deletes the second path rather than policing it. One Chainlink VRF v2.5 draw per segment,
 no secret, no fallback, nothing to choose between.
 
@@ -56,15 +60,19 @@ not a second way to produce a character, since an unfulfilled request has no kno
 
 | Contract | Address | Notes |
 |---|---|---|
-| SegmentBoard (gen 8) | 0x89eE2553AD7c72700A7BfD7A095440cc8BE55227 | Sourcify ✅ `exact_match` — VRF board — state machine + pari-mutuel settlement |
-| PoolLedger (gen 8) | 0x9195803ecA9A0F4F813502A110b32C842330fD0D | Sourcify ✅ — custodies chips PER TABLE; pays winners |
-| UnderwriteReserve (gen 8) | 0x69C9E840aEc4368016038bF54e603E345ede1063 | Sourcify ✅ — top-up float; income = dead pots + half rake |
-| VRFEntropy (gen 8) | 0xD982C7218cBD3c395a0A1461732ADEc99A3A87c0 | Sourcify ✅ `exact_match` — Chainlink VRF v2.5 consumer, one word per segment |
+| SegmentBoard (gen 9) | 0xB2D10cA505909b909835f4b5684B205b157b5Bf2 | Sourcify ✅ `exact_match` — VRF board; seed routed whole to the reserve (§9 farm closed) |
+| PoolLedger (gen 9) | 0xE7dE0Fc722369Bd96b98453676E331EB24d9161b | Sourcify ✅ — custodies chips PER TABLE; pays winners |
+| UnderwriteReserve (gen 9) | 0x3c4E9fF78e9017b23aA97F6FfeDdDb73cF79F040 | Sourcify ✅ — top-up float **+ the whole table seed**; income = dead pots + half rake |
+| VRFEntropy (gen 9) | 0xa5Fde993ec0a38a57249E06F5A0BF93e2C6093A6 | Sourcify ✅ `exact_match` — Chainlink VRF v2.5 consumer, one word per segment |
+| SegmentBoard (gen 8) | 0x89eE2553AD7c72700A7BfD7A095440cc8BE55227 | Retired 2026-08-05 — superseded by gen 9; ledger still pays withdrawals |
+| PoolLedger (gen 8) | 0x9195803ecA9A0F4F813502A110b32C842330fD0D | Retired board, **live ledger** — old credit is payable forever |
+| UnderwriteReserve (gen 8) | 0x69C9E840aEc4368016038bF54e603E345ede1063 | Retired 2026-08-05 — drained to treasury at gen-9 cutover |
+| VRFEntropy (gen 8) | 0xD982C7218cBD3c395a0A1461732ADEc99A3A87c0 | Superseded by the gen-9 VRFEntropy; kept for reading old rounds |
 | SegmentBoard (gen 7) | 0xf3FF34488D472b89497Cf31631c77bE85524A65a | Retired 2026-08-04 — reserve drained, ledger still pays withdrawals |
 | PoolLedger (gen 7) | 0xAA4f4303b747bEa63F9818Bc9C38dAe5aebDe218 | Retired board, **live ledger** — old credit is payable forever |
 | CommitRevealEntropy (gen 7) | 0x57A1F889A30178b62Bc39844D73B68d0f8a274d6 | Superseded by VRFEntropy; kept for reading old rounds |
 | SeedRegistry | 0x2460C8ed63414F36838542982A5Ab263C9Fcb914 | **Cross-generation** — never redeploy; stops a winning string seeding two tables |
-| SegmentCrank | 0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D | Stateless lock/retire batcher, **generations 4-7 only** — its `lockSegment` takes a secret and gen-8 has none. Apps gate every crank path; `retire` is all gen-8 shares |
+| SegmentCrank | 0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D | Stateless lock/retire batcher, **generations 4-7 only** — its `lockSegment` takes a secret and the VRF boards (gen-8/9) have none. Apps gate every crank path; `retire` is all the VRF boards share |
 | DDJackpot | 0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9 | **Cross-generation** — metered strikes, stake-capped, §9 two-wallet guard |
 
 | Parameter | Value |
@@ -72,10 +80,10 @@ not a second way to produce a character, since an unfulfilled request has no kno
 | Seats | 2 minimum to arm, 12 hard cap |
 | Pools | 7 = six segment pools + round-wide Repeats a Digit |
 | Chips | 5 / 10 / 25 / 50 / 100 / 500 / 1000 TIMBS |
-| Table seed | 100 TIMBS, split 7 ways; a pool draws its share only if contested (§9) |
+| Table seed | 100 TIMBS, routed **whole to the UnderwriteReserve** at retire (gen-9); never enters a pool. (Gen-8 split it 7 ways among contested pools — Sybil-farmable, closed in gen-9.) |
 | Rake | 1.75% + 6.25%/n, n = distinct wallets; **0% uncontested** |
 | Underwrite | toward `stake × fair × 0.90`; caps 1000/pool, 1500/round, 10% of free float |
-| Dials (gen 8) | entry ≤ 40 min, place 5 min, bets close 2 min before the pick, sit-quiet 3 min, solo wait 15 min |
+| Dials (gen 9) | entry ≤ 40 min, place 5 min, bets close 2 min before the pick, sit-quiet 3 min, solo wait 15 min |
 | Jackpot slice | 20% of the banner, floor 50 TIMBS, ≤ 50% cap, your own chip × 10 as a per-wallet ceiling |
 
 Retired boards keep paying withdrawals from their own ledgers — retiring a generation never

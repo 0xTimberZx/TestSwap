@@ -406,7 +406,7 @@ const GEN6_EXTRAS = [
 ];
 /// Gen-8: VRF entropy. No commitments, no secrets, no fallback path — a segment
 /// is armed on its own (one VRF draw each) and locked by anyone once the draw
-/// lands. See SwapTables/docs/GEN8_VRF.md.
+/// lands.
 const GEN8_EXTRAS = [
   "function openTable(uint256 seedRound) returns (uint256)",
   "function armSegment(uint256 tableId,uint8 segment)",
