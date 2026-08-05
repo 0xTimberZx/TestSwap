@@ -3,7 +3,12 @@ src            = "contracts"
 out            = "out"
 libs           = ["lib"]
 test           = "tests"
-script         = "scripts"
+# NOTE: left as "script" (a nonexistent dir) on purpose for now — pointing this
+# at the real "scripts" dir pulls the legacy scripts/Deploy.s.sol into the build,
+# which fails to compile (duplicate `interface IWETH` across TimbSwapRouter.sol
+# and TimbTreasury.sol). Getting the current deploy scripts into CI needs those
+# legacy interface collisions cleaned up first — tracked as a follow-up.
+script         = "script"
 cache_path     = "cache"
 
 # Compiler
