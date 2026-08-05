@@ -115,9 +115,10 @@ tables are busy. Thin winning pools are topped up from the **UnderwriteReserve**
 must never make any player's outcome worse. Unclaimed Repeats-a-Digit money rolls into a
 cross-generation **DDJackpot** that pays a metered slice, stake-capped so a 5-chip bet cannot
 drain what 1,000-chip bets built. Boards are immutable and redeployed per generation; the
-SeedRegistry and DDJackpot span every generation; SegmentCrank batches locks for generations 4-7 only. **Generation 8** is live — each
-character now comes from its own Chainlink VRF draw, which closes the selection edge the
-commit-reveal fallback gave whoever opened the table.
+SeedRegistry and DDJackpot span every generation; SegmentCrank batches locks for generations 4-7 only. **Generation 9** is live — each
+character comes from its own Chainlink VRF draw (closing the selection edge the commit-reveal
+fallback gave whoever opened the table), and the 100-TIMBS table seed is routed whole to the
+UnderwriteReserve rather than split across pools, closing a two-wallet seed farm.
 
 **LP Farming** — Stake TIMBS/ETH LP tokens to earn TIMBS emissions.
 
