@@ -28,7 +28,7 @@
 | TimbStaking | 0xe776c7b700B190ED8248741F9b518B08d8733C8F | Sourcify ✅ |
 | TimbFarm | 0xE319E2206F71A5cD8dd2c411C6F29712935f9011 | Sourcify ✅ |
 | TimbLockVault | 0x0157086E7670D1eFb15DC6b5158eE78279927a41 | Sourcify ✅ |
-| TimbTreasury v3 | 0x05D47F639F8E76BD12Cfc9647F6CcaCe21C10A33 | Sourcify ✅ |
+| TimbTreasury v4 | 0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c | Sourcify ✅ — three-way buyback split (burn/reserve/waterfall) + protocol-owned liquidity; live per config.js and confirmed by on-chain drains |
 | TimbGovernance | 0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061 | Sourcify ✅ |
 | TIMBS/ETH Pair | 0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95 | via Factory ✅ |
 | WETH (Arb Sepolia) | 0x980B62Da83eFf3D4576C647993b0c1D7faf17c73 | — |
@@ -125,6 +125,7 @@ guardian can halt strikes instantly. Reasoning and numbers in `dev-docs/AUDIT_SE
 | 0xefFea3C2D1aA32eE9D93Cc0E888647E6A168293f | Phantom pair — 500k TIMBS permanently locked (treated as burned) |
 | 0x486Fa4D8351EF81136E83340eA1e3aa2272c9955 | Treasury v1 — retired; **9,117.798 TIMBS unrecoverable**, confirmed by trace 2026-08-04. Its only token-moving function, `distributeToStaking`, calls `safeTransfer(address,uint256)` (`423f6cef`) on the token — a SafeERC20 *library* function that was mistakenly declared in v1's token interface. TIMBS has no such selector, so the call reverts in 247 gas before the destination matters. Nothing an owner can set fixes it: the failure precedes every configurable address. See `dev-docs/TREASURY_V1_RECOVERY.md` |
 | 0x566395B9FAd004520e39FCacbA7E5e805ae97889 | Treasury v2 — retired same-day (held nothing); superseded by v3's ERC20 fee exits |
+| 0x05D47F639F8E76BD12Cfc9647F6CcaCe21C10A33 | Treasury v3 — retired; superseded by v4 (three-way buyback split + protocol-owned liquidity). Old fee history readable here |
 | 0x4d74F2111fB12f64F39A285251075cf455B84201 | GameRegistry v3 — retired; superseded by v5 (forfeiture after later of claim/active) |
 | 0x35490DA1A7FF75C09eF90235Fdde700Fb04DB03F | TimbPrize v5 — retired; superseded by v6 (class-preserving jitter: letter→letter, digit→digit). Old rounds readable here |
 | 0xD69a518f04900762F460563d71Bdc8DdF86FB350 | TimbPrize v4 — retired; superseded by v5 |
