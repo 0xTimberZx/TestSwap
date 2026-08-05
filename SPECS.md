@@ -81,6 +81,13 @@ not a second way to produce a character, since an unfulfilled request has no kno
 Retired boards keep paying withdrawals from their own ledgers — retiring a generation never
 strands credit. Gen 6 (`0x1de9889da2083F5f1693DfCf589A453E9b39EEA7`) retired 2026-08-03.
 
+**Known finding (gen-8), remediation queued for gen-9.** The §9 two-distinct-wallets gate is
+Sybil-farmable: two wallets hedging Red/Black harvest ~79% of every table seed risk-free
+(~78.6 TIMBS on a 100 seed). Escrow accounting is sound and no player credit is reachable — this
+is an economic leak of house seed, bounded per table and haltable via the guardian. The gen-9 fix
+routes the whole seed to the UnderwriteReserve so it never enters a distributable pot. Full
+audit, math and reproduction: `dev-docs/AUDIT_SEED_FARM.md` + `tests/SeedFarmExploit.t.sol`.
+
 ### Router Version History
 
 | Version | Address | Status |
