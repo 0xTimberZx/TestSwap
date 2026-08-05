@@ -595,6 +595,33 @@
       background:linear-gradient(0deg,rgba(7,18,12,.97) 45%,rgba(7,18,12,0))}
   }
 
+  /* ── minimized / restored landscape windows (laptop & desktop) ──────────
+     A windowed browser at an odd landscape size — not a full 1280+ broadcast
+     canvas — is too narrow for the fixed layout: the felt (W-426) shrinks and
+     #betFeed (top:560) is clipped. Any landscape viewport under 1024 wide and
+     taller than the phone-landscape band (>600) reflows to the same scroll +
+     stacked-panels layout. Real broadcast/laptop canvases (>=1280 wide, incl.
+     the 720p/1080p targets) keep the fixed broadcast layout. */
+  @media (orientation: landscape) and (min-height: 601px) and (max-width: 1024px) {
+    body.attract{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+    body.attract.spec .felt-scroll,body.attract.spec #coinLayer{display:none !important}
+    body.attract #poolPanel,body.attract #betFeed{
+      position:static;inset:auto;width:auto;max-width:640px;margin:14px auto 0}
+    body.attract.spec .wrap{min-height:0;justify-content:flex-start;padding-top:120px;padding-bottom:64px}
+    body.attract #streamFoot{bottom:0;padding:12px 16px 14px;
+      background:linear-gradient(0deg,rgba(7,18,12,.97) 45%,rgba(7,18,12,0))}
+  }
+
+  /* ── large canvases: 1440p, 4K ──────────────────────────────────────────
+     The attract layout is tuned in fixed px for a 1920x1080 canvas, so on a
+     2560 or 3840 screen everything sits small and hugged to the edges. `zoom`
+     scales the whole thing — fixed overlays included — while preserving the
+     tuned geometry (and the 28px felt-to-pool gap); `transform` would break
+     position:fixed. These canvases are 16:9 like 1080p, so the factor is just
+     the width ratio (2560/1920 ≈ 1.333, 3840/1920 = 2). */
+  @media (min-width: 2560px) { body.attract{ zoom: 1.333 } }
+  @media (min-width: 3840px) { body.attract{ zoom: 2 } }
+
 </style>
 </head>
 <body class="pre">
