@@ -3,6 +3,11 @@ src            = "contracts"
 out            = "out"
 libs           = ["lib"]
 test           = "tests"
+# NOTE: left as "script" (a nonexistent dir) on purpose for now — pointing this
+# at the real "scripts" dir pulls the legacy scripts/Deploy.s.sol into the build,
+# which fails to compile (duplicate `interface IWETH` across TimbSwapRouter.sol
+# and TimbTreasury.sol). Getting the current deploy scripts into CI needs those
+# legacy interface collisions cleaned up first — tracked as a follow-up.
 script         = "script"
 cache_path     = "cache"
 
@@ -21,8 +26,6 @@ evm_version    = "cancun"
 
 # Testing
 verbosity      = 2
-fuzz_runs      = 1000
-fuzz_seed      = 0x1234
 
 # Gas reporting
 gas_reports    = ["*"]
@@ -59,9 +62,20 @@ localhost   = "http://127.0.0.1:8545"
 # ─── Profiles ─────────────────────────────────────────────────────────────────
 
 [profile.ci]
-fuzz_runs = 5000
 verbosity = 3
 
 [profile.lite]
 optimizer      = false
-fuzz_runs      = 100
+
+# ─── Fuzzing ──────────────────────────────────────────────────────────────────
+# Modern [fuzz] tables. The old profile-root fuzz_runs/fuzz_seed keys are not
+# recognized by current Foundry and logged "unknown config" warnings per profile.
+[fuzz]
+runs = 1000
+seed = "0x1234"
+
+[profile.ci.fuzz]
+runs = 5000
+
+[profile.lite.fuzz]
+runs = 100

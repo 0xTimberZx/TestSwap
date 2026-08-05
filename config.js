@@ -68,7 +68,7 @@ const ADDRESSES = {
   //   0xD982C721…) retired 2026-08-05; its ledger still pays withdrawals.
   // Gen-7 (0xf3FF3448…) retired 2026-08-04; its ledger still pays withdrawals.
   // Everything below gen-7 is unchanged: the bonus-chip full-load rule, gen-5's
-  // adaptive timing (2400/300/120/180/900), monotonic underwrite (caps
+  // adaptive timing (gen-9 dials 2400/300/120/300/900), monotonic underwrite (caps
   // 1000/pool, 1500/round, 10% of float), rake split (half reserve / half
   // Treasury), dead pots to the reserve, and dealer tips.
   SegmentBoard:         "0xB2D10cA505909b909835f4b5684B205b157b5Bf2", // gen-9 — seed routed to the reserve (§9 farm closed)

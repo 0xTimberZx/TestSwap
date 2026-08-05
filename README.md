@@ -108,8 +108,8 @@ Each is a gear in the engine above, not a standalone feature.
 **SwapTables** — Pari-mutuel roulette on TIMBS play-chips, run live on stream. A table seats up
 to 12 wallets; each loads six chips, one per segment, and places them across seven pools (six
 segment pools plus the round-wide **Repeats a Digit**). The six characters lock one at a time —
-the drumroll — and each pool pays its winners pro-rata as it locks. Rake is graduated (8% solo
-down to 1.75% crowded, and **0% on an uncontested pool**), so the house earns most exactly when
+the drumroll — and each pool pays its winners pro-rata as it locks. Rake is graduated: **0% on an
+uncontested pool**, ~4.87% at two wallets, easing toward 1.75% as more join — so the house earns most exactly when
 tables are busy. Thin winning pools are topped up from the **UnderwriteReserve** toward
 `stake × fair × 0.90`, funded by dead pots and half the rake — the rule being that more players
 must never make any player's outcome worse. Unclaimed Repeats-a-Digit money rolls into a
@@ -216,7 +216,7 @@ forge script scripts/Deploy.s.sol \
   --broadcast --verify --verifier sourcify
 ```
 
-**Compiler:** Solidity 0.8.24, viaIR, optimizer 200 runs, EVM paris.  
+**Compiler:** Solidity 0.8.24, viaIR, optimizer 200 runs, EVM cancun.  
 **Remix:** Enable viaIR in Advanced Configurations before compiling Router or TimbPrize.
 
 ---

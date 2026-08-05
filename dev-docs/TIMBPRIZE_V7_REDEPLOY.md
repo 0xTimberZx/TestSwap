@@ -31,7 +31,7 @@ Live addresses (Arbitrum Sepolia, 421614) — these are **reused**:
 ## 1. Compile (Remix)
 
 - File: `contracts/TimbPrize.sol`
-- Compiler **0.8.24**, optimizer **enabled, 200 runs**, **viaIR = true**, EVM **paris**.
+- Compiler **0.8.24**, optimizer **enabled, 200 runs**, **viaIR = true**, EVM **cancun**.
 - (These match `foundry.toml`. viaIR is required.)
 
 ## 2. Deploy `TimbPrize`

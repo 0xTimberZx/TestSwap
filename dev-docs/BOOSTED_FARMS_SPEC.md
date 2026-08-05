@@ -2,7 +2,7 @@
 
 Status: **BUILT — awaiting deploy.** All three decisions locked (§5).
 Artifacts: `contracts/TimbBoostFarm.sol` (compile-verified, solc 0.8.24
-viaIR/optimizer-200/paris, ~7.1 KB bytecode), `scripts/epoch.js` (keeper),
+viaIR/optimizer-200/cancun, ~7.1 KB bytecode), `scripts/epoch.js` (keeper),
 `.github/workflows/epoch.yml`. Deploy checklist in §9.
 
 Extends `FARM_FUNDING.md` (which is the manual owner-funding reference). This doc

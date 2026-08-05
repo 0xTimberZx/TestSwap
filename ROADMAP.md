@@ -15,7 +15,7 @@ The full incentive engine runs end-to-end, unattended.
   4-round principal refund window, 2-round claim window, block-hash jitter.
 - **SwapTables** — pari-mutuel roulette on play-chips, seven pools a table, graduated rake,
   monotonic underwrite from a solvency-capped reserve, and a cross-generation rolling jackpot.
-  Seven board generations shipped; contracts verified `exact_match` on Sourcify.
+  Nine board generations shipped; contracts verified `exact_match` on Sourcify.
 - **Emissions** — single-asset staking, LP farm, boosted farms, all on the epoch waterfall with a
   99% solvency stop and self-retargeting rates.
 - **Autonomy** — a GitHub Actions keeper settles segments every ~10 min and runs the reward sweep
