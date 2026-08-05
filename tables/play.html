@@ -1791,6 +1791,18 @@ async function updateLockTracker(){
   $("closeTable").style.display = (T && Number(T.lockedMask)===0x3F && !T.retired) ? "" : "none";
   const armed = T && T.lockBlock!==0n && !T.retired && Number(T.lockedMask)!==0x3F;
   if(!armed){ el.style.display="none"; return; }
+  if(GEN>=8){
+    // VRF board (gen-8/9): there is no commit-reveal window, no blockhash
+    // fallback and no 256-block horizon — the slot-3 value is `armedAt`, not a
+    // lock block. Each segment arms, its Chainlink VRF draw lands async, then
+    // anyone locks it. Show progress + that plain fact; the fallback "finish"
+    // path below is commit-reveal only, so keep it hidden here.
+    const nLocked=Number(T.lockedMask).toString(2).split("1").length-1;
+    el.style.display=""; el.style.color="#6fe0a0";
+    el.textContent="The pick · "+nLocked+" / 6 locked · segments arm one at a time; each locks when its Chainlink VRF draw lands — permissionless, no secret";
+    $("finishPick").style.display="none";
+    return;
+  }
   try{
     const blk = await provider.send("eth_getBlockByNumber",["latest",false]);
     const l1  = Number(BigInt(blk.l1BlockNumber || blk.number));
