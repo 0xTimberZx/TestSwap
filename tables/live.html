@@ -640,12 +640,12 @@
 
   <div class="top wbar prehide" id="potbar" style="margin-bottom:12px">
     <span class="wstat"><span class="k">ON THE TABLE</span><span class="v" id="potEscrow">—</span></span>
-    <span class="wstat"><span class="k">SEED ON OFFER</span><span class="v" id="potSeed">100</span></span>
-    <span class="wstat" title="a pool draws its 14.29 seed share once two wallets contest it"><span class="k">POOLS CONTESTED</span><span class="v" id="potPools">0/7</span></span>
+    <span class="wstat" title="the table's 100-TIMBS seed now funds the reserve that tops up thin winners — it no longer enters any pool"><span class="k">SEED &rarr; RESERVE</span><span class="v" id="potSeed">100</span></span>
+    <span class="wstat" title="a pool is rake-free until two distinct wallets contest it"><span class="k">POOLS CONTESTED</span><span class="v" id="potPools">0/7</span></span>
     <span class="wstat" id="potNetWrap" style="display:none"
           title="every chip you have placed this round against everything credited back to you so far"><span class="k" id="potNetLab">LOST THIS ROUND</span><span class="v" id="potNet">—</span></span>
-    <span class="hint" style="margin:0;flex:1 1 220px">Everything here is the prize: every chip placed plus the seed —
-      minus the graduated rake — pays back out to winners.</span>
+    <span class="hint" style="margin:0;flex:1 1 220px">The prize is every chip placed, minus the graduated rake,
+      split among winners — and thin pools are topped up from the reserve, which the table's 100 seed now funds.</span>
   </div>
   <div class="felt-scroll prehide">
     <div class="felt locked" id="felt" data-lock="Connect, sit and load to open the board"><div class="board" id="board"></div></div>
@@ -734,7 +734,7 @@
   <p class="foot">
     Every placement is a wallet <b>approval</b>, and once mined it can't be undone.
     <b>Payout is pari-mutuel</b>: each of the seven pools (six segments + Repeats a Digit) forms its own
-    pot — every chip in the pool, plus a <b>seed share</b> when at least two wallets contest it — and
+    pot — every chip in the pool — and
     when the round locks its six characters, the pot minus rake splits among winners in proportion
     to <b>stake × fair-multiple</b>. The printed odds (36 ÷ symbols − 1) are relative weights, not a
     fixed house payout; the actual return floats with how the table bet. <b>Rake is graduated</b>:
@@ -901,7 +901,7 @@ let curSeg=null, curChip=null, pending=null;
 const localChips={};                 // seg -> chipIdx picked before the load tx
 const feedSeen=new Set();
 const poolBook=[[],[],[],[],[],[],[]];   // pool 0-5 = segments, 6 = Double-Digit
-const SEED_SHARE=100/7;
+// gen-9: no per-pool seed share — the table seed routes whole to the reserve
 const packCache={};                  // wallet -> chipPack
 
 const fmtT = wei => { const s = ethers.formatUnits(wei,18); return s.endsWith(".0")? s.slice(0,-2): s; };
@@ -1686,7 +1686,7 @@ function poolStats(pool){
   const chips=bets.reduce((a,b)=>a+b.amt,0);
   const n=bets.length;                       // == distinct wallets, by design
   const contested=n>=2;
-  const pot=chips+(contested? SEED_SHARE:0);
+  const pot=chips; // gen-9: the seed is not in the pot
   const rakeBps=(GEN>=5? contested : n>0)? 175+Math.floor(625/n):0;   // gen-5 Layer 0: an uncontested pool is never raked
   return {n, chips, contested, pot, rakeBps, dist: pot*(10000-rakeBps)/10000};
 }
@@ -1742,7 +1742,7 @@ async function renderStakes(){
         +'<span class="fseg" style="width:52px">'+(b.kind===KIND.DD?"DD":"SEG "+(pool+1))+'</span>'
         +'<span style="flex:1;color:#dfe7df">'+fmt2(b.amt)+' on <b style="color:var(--cream)">'+spec.name+'</b></span>'
         +'<span style="color:#9fb4a4">pool '+fmt2(st.pot)+' · '+st.n+' bet'+(st.n===1?"":"s")
-        +' · rake '+(st.rakeBps/100).toFixed(2)+'%'+(st.contested?"":(GEN>=5?" · uncontested — rake-free, no seed share yet":" · uncontested — no seed share yet"))+'</span>'
+        +' · rake '+(st.rakeBps/100).toFixed(2)+'%'+(st.contested?"":(GEN>=5?" · uncontested — rake-free":" · uncontested"))+'</span>'
         +'<span style="font-family:Georgia,serif;font-weight:800;color:var(--ok)">up to ~'+fmt2(st.dist)
         +'<span style="display:block;font-weight:400;font-size:.82em;color:#9fb4a4">'
         +'~'+fmt2(back)+' back + ~'+fmt2(st.dist-back)+' won</span></span>'
@@ -2434,7 +2434,7 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     const chips=bets.reduce((a,b)=>a+b.amt,0);
     const n=bets.length;
     const contested=n>=2;
-    const pot=chips+(contested? SEED_SHARE:0);
+    const pot=chips; // gen-9: the seed is not in the pot
     const rakeBps=(GEN>=5? contested : n>0)? 175+Math.floor(625/n):0;   // gen-5 Layer 0: an uncontested pool is never raked
     return {n,chips,contested,pot,rakeBps,dist:pot*(10000-rakeBps)/10000};
   }
