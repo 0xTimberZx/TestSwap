@@ -83,7 +83,7 @@ not a second way to produce a character, since an unfulfilled request has no kno
 | Table seed | 100 TIMBS, routed **whole to the UnderwriteReserve** at retire (gen-9); never enters a pool. (Gen-8 split it 7 ways among contested pools — Sybil-farmable, closed in gen-9.) |
 | Rake | 1.75% + 6.25%/n, n = distinct wallets; **0% uncontested** |
 | Underwrite | toward `stake × fair × 0.90`; caps 1000/pool, 1500/round, 10% of free float |
-| Dials (gen 9) | entry ≤ 40 min, place 5 min, bets close 2 min before the pick, sit-quiet 3 min, solo wait 15 min |
+| Dials (gen 9) | entry ≤ 40 min, place 5 min, bets close 2 min before the pick, sit-quiet 5 min, solo wait 15 min |
 | Jackpot slice | 20% of the banner, floor 50 TIMBS, ≤ 50% cap, your own chip × 10 as a per-wallet ceiling |
 
 Retired boards keep paying withdrawals from their own ledgers — retiring a generation never
