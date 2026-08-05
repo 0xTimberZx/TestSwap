@@ -4,18 +4,24 @@ pragma solidity 0.8.24;
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 
-import "../contracts/TIMBSToken.sol";
-import "../contracts/PrizeEscrow.sol";
-import "../contracts/TimbSwapFactory.sol";
-import "../contracts/TimbSwapRouter.sol";
-import "../contracts/EligibleTokenRegistry.sol";
-import "../contracts/GameRegistry.sol";
-import "../contracts/TimbPrize.sol";
-import "../contracts/TimbStaking.sol";
-import "../contracts/TimbFarm.sol";
-import "../contracts/TimbLockVault.sol";
-import "../contracts/TimbTreasury.sol";
-import "../contracts/TimbGovernance.sol";
+// Selective imports (contract types only). Several of these files declare their
+// own file-level `interface IWETH` / `interface ITimbSwapPair` (Router, Factory
+// and Treasury each carry a private copy); wildcard-importing all of them into
+// one script collides on those identifiers. Named imports pull just the contract
+// (and its nested types), never the ambient interfaces — and touch no deployed
+// contract source.
+import {TIMBSToken} from "../contracts/TIMBSToken.sol";
+import {PrizeEscrow} from "../contracts/PrizeEscrow.sol";
+import {TimbSwapFactory} from "../contracts/TimbSwapFactory.sol";
+import {TimbSwapRouter} from "../contracts/TimbSwapRouter.sol";
+import {EligibleTokenRegistry} from "../contracts/EligibleTokenRegistry.sol";
+import {GameRegistry} from "../contracts/GameRegistry.sol";
+import {TimbPrize} from "../contracts/TimbPrize.sol";
+import {TimbStaking} from "../contracts/TimbStaking.sol";
+import {TimbFarm} from "../contracts/TimbFarm.sol";
+import {TimbLockVault} from "../contracts/TimbLockVault.sol";
+import {TimbTreasury} from "../contracts/TimbTreasury.sol";
+import {TimbGovernance} from "../contracts/TimbGovernance.sol";
 
 /**
  * @title Deploy
