@@ -42,7 +42,7 @@ const ADDRESSES = {
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
 
-  // ── SwapTables segment tables — generation 8, the VRF generation (deployed 2026-08-04) ──
+  // ── SwapTables segment tables — generation 9, the seed-reroute generation (deployed 2026-08-05) ──
   // The entropy module changes and nothing else does. Gens 1-7 drew a character
   // from a commit-reveal with a 64-block blockhash fallback, which handed the
   // wallet holding the secret a SELECTION EDGE: once the lock block was public
@@ -57,17 +57,25 @@ const ADDRESSES = {
   // word is public the instant the callback lands, so six at once would publish
   // the whole round and kill the drumroll.
   //
-  // New ABI surface: segmentState(uint256,uint8) is how the pages detect gen-8.
+  // Gen-9 keeps gen-8's VRF entropy and its ENTIRE external ABI unchanged — the
+  // only difference is internal fund flow: the 100-TIMBS table seed no longer
+  // enters any pool (two wallets hedging Red/Black would Sybil-farm it, see
+  // dev-docs/AUDIT_SEED_FARM.md) and is swept whole to the UnderwriteReserve at
+  // retire. Honest winners still land on stake x fair x 0.90. Because the ABI is
+  // identical, segmentState(uint256,uint8) still detects the board as gen-8-shaped
+  // and the pages need no logic change — only these addresses.
+  // Gen-8 (board 0x89eE2553…, ledger 0x9195803e…, reserve 0x69C9E840…, entropy
+  //   0xD982C721…) retired 2026-08-05; its ledger still pays withdrawals.
   // Gen-7 (0xf3FF3448…) retired 2026-08-04; its ledger still pays withdrawals.
   // Everything below gen-7 is unchanged: the bonus-chip full-load rule, gen-5's
   // adaptive timing (2400/300/120/180/900), monotonic underwrite (caps
   // 1000/pool, 1500/round, 10% of float), rake split (half reserve / half
   // Treasury), dead pots to the reserve, and dealer tips.
-  SegmentBoard:         "0x89eE2553AD7c72700A7BfD7A095440cc8BE55227",
-  PoolLedger:           "0x9195803ecA9A0F4F813502A110b32C842330fD0D",
-  VRFEntropy:           "0xD982C7218cBD3c395a0A1461732ADEc99A3A87c0", // gen-8 — one VRF draw per segment
+  SegmentBoard:         "0xB2D10cA505909b909835f4b5684B205b157b5Bf2", // gen-9 — seed routed to the reserve (§9 farm closed)
+  PoolLedger:           "0xE7dE0Fc722369Bd96b98453676E331EB24d9161b", // gen-9
+  VRFEntropy:           "0xa5Fde993ec0a38a57249E06F5A0BF93e2C6093A6", // gen-9 — one VRF draw per segment
   CommitRevealEntropy:  "0x57A1F889A30178b62Bc39844D73B68d0f8a274d6", // gen-7's, retired — kept for reading old rounds
-  UnderwriteReserve:    "0x69C9E840aEc4368016038bF54e603E345ede1063", // holds the top-up float; guardian halt + drain only
+  UnderwriteReserve:    "0x3c4E9fF78e9017b23aA97F6FfeDdDb73cF79F040", // gen-9 — top-up float + the whole table seed now; guardian halt + drain only
   DDJackpot:            "0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9", // M2 rolling jackpot — deploy-once, cross-generation
   SeedRegistry:         "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived — spans generations
   // Stateless lock/retire batcher for generations 4-7 ONLY. It calls
