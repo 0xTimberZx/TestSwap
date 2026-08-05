@@ -48,7 +48,7 @@ design carried over from gen-8:
 Gens 1–7 drew each character from a commit-reveal with a 64-block blockhash fallback. That gave
 the wallet holding the secret a **selection edge**: once the lock block was public it could
 compute both the reveal outcome and the fallback outcome, then choose between them by acting or
-not acting — a Colour bet worth 50% honestly became 75% with the pick (`ENTROPY_TRUST.md`).
+not acting — a Colour bet worth 50% honestly became 75% with the pick.
 Gen-8 deletes the second path rather than policing it. One Chainlink VRF v2.5 draw per segment,
 no secret, no fallback, nothing to choose between.
 
