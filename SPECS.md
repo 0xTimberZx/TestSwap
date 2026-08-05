@@ -81,12 +81,21 @@ not a second way to produce a character, since an unfulfilled request has no kno
 Retired boards keep paying withdrawals from their own ledgers — retiring a generation never
 strands credit. Gen 6 (`0x1de9889da2083F5f1693DfCf589A453E9b39EEA7`) retired 2026-08-03.
 
-**Known finding (gen-8), remediation queued for gen-9.** The §9 two-distinct-wallets gate is
-Sybil-farmable: two wallets hedging Red/Black harvest ~79% of every table seed risk-free
-(~78.6 TIMBS on a 100 seed). Escrow accounting is sound and no player credit is reachable — this
-is an economic leak of house seed, bounded per table and haltable via the guardian. The gen-9 fix
-routes the whole seed to the UnderwriteReserve so it never enters a distributable pot. Full
-audit, math and reproduction: `dev-docs/AUDIT_SEED_FARM.md` + `tests/SeedFarmExploit.t.sol`.
+**Seed-farm finding — fixed in gen-9.** The gen-8 §9 two-distinct-wallets gate was
+Sybil-farmable: two wallets hedging Red/Black harvested ~79% of every table seed risk-free
+(~78.6 TIMBS on a 100 seed). Escrow accounting was sound and no player credit was ever reachable —
+it was an economic leak of house seed, bounded per table and haltable via the guardian. **Gen-9
+(`contracts/SegmentBoardVRF9.sol`) closes it**: the whole seed is routed to the UnderwriteReserve
+at retire so it never enters a distributable pot; honest winners still reach `stake × fair × 0.90`.
+Full audit, math and both regression tests: `dev-docs/AUDIT_SEED_FARM.md`,
+`tests/SeedFarmExploit.t.sol` (drains gen-8), `tests/SeedFarmClosed.t.sol` (proves gen-9 dead).
+
+**DDJackpot Sybil gate — accepted, not fixed.** The same §9 construction on the jackpot's
+2-DD-wallet gate is +EV to a two-wallet farmer (P(DD hit)=0.3557; +11.3 to +29.1 TIMBS/round at
+min chips, simulation-confirmed). It is accepted as bounded operational risk: no on-chain fix keeps
+the feature (the payout *is* the jackpot — nothing to reroute), the pot holds only recycled/donated
+TIMBS so the worst case is a slow float bleed, the farm signature is legible on-chain, and the
+guardian can halt strikes instantly. Reasoning and numbers in `dev-docs/AUDIT_SEED_FARM.md`.
 
 ### Router Version History
 
