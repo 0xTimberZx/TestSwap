@@ -770,10 +770,14 @@ drives them lives in `0xTimberZx/SwapTables`. Neither side owned their deploy
 state, so it went unrecorded for two generations. It belongs somewhere; until
 the contracts move to sit with the app, that somewhere is here.
 
-Unlike §1–§16 these are **not** pending work — they are live. This section is a
-record, not a to-do.
+The **canonical, maintained deployed-contracts and generation record now lives in
+`SPECS.md`** — gen-9 is live (2026-08-05); gen-6/7/8 are retired but their ledgers
+still pay withdrawals. This section is retained only as the original gen-6-era
+note; **do not treat it as current** — consult SPECS.md for live addresses.
 
-### Generation 6 — "the accounting generation" (deployed 2026-07-31)
+Unlike §1–§16 this is **not** pending work — it is a historical record, not a to-do.
+
+### Generation 6 — "the accounting generation" (deployed 2026-07-31, RETIRED 2026-08-03)
 
 | Contract | Address | Scope |
 |---|---|---|

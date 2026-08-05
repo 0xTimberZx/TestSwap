@@ -34,9 +34,16 @@ for (const [, name, addr] of cfg.matchAll(/^\s{2}(\w+):\s*"(0x[a-fA-F0-9]{40})"/
  * owner on one of those is a live exposure, not history.
  */
 const RETIRED = {
-  "gen-6 SegmentBoard":      "0x1de9889da2083F5f1693DfCf589A453E9b39EEA7",
-  "gen-6 PoolLedger":        "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8",
-  "gen-6 UnderwriteReserve": "0xa0f88d8504D340702889C48288D8FB9329D88184",
+  "gen-8 SegmentBoard":       "0x89eE2553AD7c72700A7BfD7A095440cc8BE55227",
+  "gen-8 PoolLedger":         "0x9195803ecA9A0F4F813502A110b32C842330fD0D",
+  "gen-8 UnderwriteReserve":  "0x69C9E840aEc4368016038bF54e603E345ede1063",
+  "gen-8 VRFEntropy":         "0xD982C7218cBD3c395a0A1461732ADEc99A3A87c0",
+  "gen-7 SegmentBoard":       "0xf3FF34488D472b89497Cf31631c77bE85524A65a",
+  "gen-7 PoolLedger":         "0xAA4f4303b747bEa63F9818Bc9C38dAe5aebDe218",
+  "gen-7 CommitRevealEntropy":"0x57A1F889A30178b62Bc39844D73B68d0f8a274d6",
+  "gen-6 SegmentBoard":       "0x1de9889da2083F5f1693DfCf589A453E9b39EEA7",
+  "gen-6 PoolLedger":         "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8",
+  "gen-6 UnderwriteReserve":  "0xa0f88d8504D340702889C48288D8FB9329D88184",
 };
 
 const OWNABLE  = "function owner() view returns (address)";

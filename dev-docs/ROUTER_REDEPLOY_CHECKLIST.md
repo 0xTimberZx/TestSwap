@@ -20,7 +20,7 @@ Current live addresses (Arbitrum Sepolia, 421614):
 
 - File: `contracts/TimbSwapRouter.sol`
 - Compiler **0.8.24**, **Enable optimization = 200**, and **Advanced → viaIR = true** (Router needs viaIR).
-- EVM version: paris.
+- EVM version: cancun.
 
 ## 2. Deploy `TimbSwapRouter`
 

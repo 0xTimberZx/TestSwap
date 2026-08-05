@@ -7,7 +7,7 @@
 **Live:** 0xtimberzx.github.io/TimbSwap/  
 **DebugHub:** 0xtimberzx.github.io/MyDapp/debughub/  
 **Pragma:** `pragma solidity 0.8.24` — exact, never `^`  
-**Compiler:** viaIR enabled, optimizer 200 runs, EVM paris  
+**Compiler:** viaIR enabled, optimizer 200 runs, EVM cancun  
 **Verification:** Sourcify preferred  
 **Last updated:** August 2026
 

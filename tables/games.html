@@ -128,8 +128,9 @@ const T_CORE = "uint64 openedAt,uint64 pickTime,uint64 lockBlock,uint32 seedRoun
              + "uint8 lockedMask,bool ddSettled,bool retired,bytes6 seedString,bytes6 lockedChars";
 const T_GEN5 = ",uint64 entryCloseAt,uint64 lastJoinAt,uint64 firstLoadAt,uint8 loadedCount";
 const T_GEN6 = ",address opener";
+const T_GEN8 = ",uint8 armedMask"; // gen-8/9 (VRF): lockBlock slot 3 is armedAt here
 const tablesFrag = gen => "function tables(uint256) view returns ("
-  + T_CORE + (gen >= 5 ? T_GEN5 : "") + (gen >= 6 ? T_GEN6 : "") + ")";
+  + T_CORE + (gen >= 5 ? T_GEN5 : "") + (gen >= 6 ? T_GEN6 : "") + (gen >= 8 ? T_GEN8 : "") + ")";
 const BASE_ABI = [
   "function tableCount() view returns (uint256)",
   "function betsCloseLead() view returns (uint64)",
@@ -156,10 +157,13 @@ async function connect(){
   }
   if (!ro) throw new Error("no RPC reachable");
 
-  const probe = async (frag, fn) => {
-    try{ await new ethers.Contract(ADDR.board, [frag], ro)[fn](); return true; }catch{ return false; }
+  const probe = async (frag, fn, args=[]) => {
+    try{ await new ethers.Contract(ADDR.board, [frag], ro)[fn](...args); return true; }catch{ return false; }
   };
-  GEN = await probe("function reserve() view returns (address)", "reserve") ? 6
+  // Positive test first: segmentState exists only on the VRF board (gen-8/9), so
+  // an RPC hiccup reads as an older generation rather than a newer one.
+  GEN = await probe("function segmentState(uint256,uint8) view returns (bool,bool,bool,bool,bool)", "segmentState", [1,1]) ? 8
+      : await probe("function reserve() view returns (address)", "reserve") ? 6
       : await probe("function sitQuiet() view returns (uint64)", "sitQuiet") ? 5 : 4;
 
   board  = new ethers.Contract(ADDR.board, [tablesFrag(GEN), ...BASE_ABI], ro);

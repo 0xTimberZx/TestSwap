@@ -4,7 +4,7 @@ Internal, pre-external-audit gas review. Not a substitute for a formal audit;
 a scope of findings we can act on ourselves and measure. Findings reference
 `file:line` at the time of writing — re-check after any refactor.
 
-- **Build:** solc 0.8.24, `via_ir = true`, `optimizer_runs = 200`, `evm_version = paris`.
+- **Build:** solc 0.8.24, `via_ir = true`, `optimizer_runs = 200`, `evm_version = cancun`.
 - **Target chain: UNDECIDED** — this reorders every priority (see §0).
 - **Measure, don't guess:** `gas_reports = ["*"]` is already set. Run
   `forge test --gas-report` and `forge snapshot` / `forge snapshot --diff`

@@ -1,7 +1,8 @@
 # Audit finding: the table seed is Sybil-farmable (§9 gate)
 
-**Scope:** the live generation-8 board (`SegmentBoardVRF`), `PoolLedger`,
-`UnderwriteReserve`. Read against deployed source, not from memory.
+**Scope:** the (now retired) generation-8 board (`SegmentBoardVRF`), `PoolLedger`,
+`UnderwriteReserve` — the generation live when this was found; gen-9 shipped the fix.
+Read against deployed source, not from memory.
 **Status:** confirmed, reproducible (`tests/SeedFarmExploit.t.sol`).
 **Severity:** economic — a repeatable, risk-free extraction of house funds. Not
 a custody bug: the escrow accounting is sound and no player credit is reachable.
@@ -233,7 +234,8 @@ fresh on Sourcify at deploy.
 forge test --match-contract SeedFarmExploitTest -vvv
 ```
 
-`test_TwoWalletHedgeFarmsTheSeed` passes today — green means the vulnerability is
-present exactly as described. When the gen-9 reroute lands it flips red (the
-operator no longer profits), which is the regression signal that the fix worked.
-The two "already safe" tests must stay green across the change.
+`test_TwoWalletHedgeFarmsTheSeed` runs against the retired gen-8 board and stays
+green — proof the vulnerability was present exactly as described. The gen-9 fix
+has shipped: `tests/SeedFarmClosed.t.sol` runs the same hedge against
+`SegmentBoardVRF9` and the operator no longer profits (a small rake loss). The
+two "already safe" tests remain green across both.
