@@ -374,7 +374,17 @@
        height kept — the strip's translateY math is pinned to RCELL=40 in JS). */
     .reels{gap:6px}
     .reel{max-width:none}
-  }
+    /* attract/stream on a short landscape (a phone rotated): the fixed
+       broadcast layout puts #betFeed (top:560) and most of #poolPanel below a
+       ~375–414px-tall viewport with no scroll, so they're lost. Same un-fix +
+       scroll remedy as portrait. */
+    body.attract{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+    body.attract #reels{transform:none}
+    body.attract.spec .felt-scroll,body.attract.spec #coinLayer{display:none !important}
+    body.attract #poolPanel,body.attract #betFeed{
+      position:static;inset:auto;width:auto;max-width:640px;margin:12px auto 0}
+    body.attract.spec .wrap{min-height:0;justify-content:flex-start;padding-top:88px;padding-bottom:56px}
+    body.attract #streamFoot{position:static;text-align:center;padding:10px}
 
   /* STREAMCSS: attract/stream mode — ambient view of the reels */
   body.attract{background:#07120c;overflow:hidden}
@@ -552,12 +562,65 @@
        pools panel and ticker run past the fold and were being clipped */
     body.attract{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
     body.attract.spec .wrap{min-height:0;justify-content:flex-start;padding-bottom:62px}
+    /* un-fix the pools + ticker so they scroll into the column instead of
+       staying fixed and clipped off the left edge (352px > phone width) */
+    body.attract #poolPanel,body.attract #betFeed{
+      position:static;inset:auto;width:auto;max-width:100%;margin:12px 0 0}
     /* now that content scrolls under it, the footer needs the header's scrim
        so the last ticker row stays legible passing beneath */
     body.attract #streamFoot{font-size:10px;bottom:0;padding:12px 12px 13px;
       background:linear-gradient(0deg,rgba(7,18,12,.97) 45%,rgba(7,18,12,0))}
     body.attract #reveal{margin-top:20px}
   }
+
+  /* ── portrait tablets (561–1280px, portrait) ───────────────────────────
+     Between the phone rules (≤560) and the 16:9 stream canvas: a portrait
+     tablet fell through to the landscape layout, so the ghosted felt
+     (left:22 right:404) and the right-pinned pools/ticker cramped into two
+     columns on a tall screen. Same remedy as phones — drop the
+     landscape-only board and let it scroll — but keep the reels and type at
+     full size (the tablet has the room) and let the pools + ticker leave
+     their fixed right rail to stack full-width down the column. Gated on
+     orientation:portrait (landscape broadcast untouched) AND min-aspect-ratio
+     3/5, so a 9:16 VERTICAL broadcast canvas (1080x1920, ratio .5625) is
+     excluded — it stays on the fixed layout instead of being made to scroll
+     with the board hidden. Real tablets sit at ~0.62–0.75 and still match. */
+  @media (orientation: portrait) and (min-width: 561px) and (max-width: 1280px) and (min-aspect-ratio: 3 / 5) {
+    body.attract{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+    body.attract.spec .felt-scroll,body.attract.spec #coinLayer{display:none !important}
+    body.attract.spec .wrap{min-height:0;justify-content:flex-start;padding-top:128px;padding-bottom:72px}
+    body.attract #poolPanel,body.attract #betFeed{
+      position:static;inset:auto;width:auto;max-width:640px;margin:16px auto 0}
+    body.attract #streamFoot{bottom:0;padding:12px 16px 14px;
+      background:linear-gradient(0deg,rgba(7,18,12,.97) 45%,rgba(7,18,12,0))}
+  }
+
+  /* ── minimized / restored landscape windows (laptop & desktop) ──────────
+     A windowed browser at an odd landscape size — not a full 1280+ broadcast
+     canvas — is too narrow for the fixed layout: the felt (W-426) shrinks and
+     #betFeed (top:560) is clipped. Any landscape viewport under 1024 wide and
+     taller than the phone-landscape band (>600) reflows to the same scroll +
+     stacked-panels layout. Real broadcast/laptop canvases (>=1280 wide, incl.
+     the 720p/1080p targets) keep the fixed broadcast layout. */
+  @media (orientation: landscape) and (min-height: 601px) and (max-width: 1024px) {
+    body.attract{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+    body.attract.spec .felt-scroll,body.attract.spec #coinLayer{display:none !important}
+    body.attract #poolPanel,body.attract #betFeed{
+      position:static;inset:auto;width:auto;max-width:640px;margin:14px auto 0}
+    body.attract.spec .wrap{min-height:0;justify-content:flex-start;padding-top:120px;padding-bottom:64px}
+    body.attract #streamFoot{bottom:0;padding:12px 16px 14px;
+      background:linear-gradient(0deg,rgba(7,18,12,.97) 45%,rgba(7,18,12,0))}
+  }
+
+  /* ── large canvases: 1440p, 4K ──────────────────────────────────────────
+     The attract layout is tuned in fixed px for a 1920x1080 canvas, so on a
+     2560 or 3840 screen everything sits small and hugged to the edges. `zoom`
+     scales the whole thing — fixed overlays included — while preserving the
+     tuned geometry (and the 28px felt-to-pool gap); `transform` would break
+     position:fixed. These canvases are 16:9 like 1080p, so the factor is just
+     the width ratio (2560/1920 ≈ 1.333, 3840/1920 = 2). */
+  @media (min-width: 2560px) { body.attract{ zoom: 1.333 } }
+  @media (min-width: 3840px) { body.attract{ zoom: 2 } }
 
 </style>
 </head>
