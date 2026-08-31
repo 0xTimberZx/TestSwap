@@ -2,7 +2,16 @@
 
 **Protocol:** TimbSwap  
 **Token:** TIMBS  
-**Last updated:** June 2026
+**Last updated:** August 2026
+
+> **Supply-model correction (Aug 2026):** the original §1.1/§1.2 below described a
+> 1B cap with inflationary on-demand minting. That never matched the code. The
+> live token is a **100M hard cap, fully minted at genesis** — `mintEmissions`
+> reverts (cap full), and every reward source **streams from a pre-funded
+> reserve**, not new mint. Mainnet adds a **halving release schedule** (locked
+> supply → treasury at rounds 1000·2ⁿ). Authoritative: `SPECS.md` and
+> `dev-docs/EMISSIONS_SCHEDULE.md`. §1.1/§1.2 are corrected inline; the
+> game-theory sections below are unaffected.
 
 ---
 
@@ -15,10 +24,11 @@
 | Token name | TimbSwap Token |
 | Symbol | TIMBS |
 | Decimals | 18 |
-| Hard cap | 1,000,000,000 TIMBS (1B) |
-| Initial mint | 100% to treasury at deploy |
-| Emissions | Inflationary — minted on-demand for staking/farm rewards |
-| Deflationary pressure | Buyback/burn (future), out-of-circulation prize sinks |
+| Hard cap | 100,000,000 TIMBS (100M) |
+| Initial mint | 100% at genesis — mainnet splits 50M treasury / 50M release vault |
+| Emissions | Fixed supply — NO ongoing mint; rewards redistribute the genesis supply from pre-funded reserves |
+| Supply schedule | Halving release: locked → treasury at rounds 1000·2ⁿ (see EMISSIONS_SCHEDULE.md) |
+| Deflationary pressure | Buyback (50% burn/lock), out-of-circulation prize sinks |
 
 The initial supply is fully controlled by the treasury. No team allocation,
 no vesting cliffs, no pre-sale tranches at launch. Owner distributes from
@@ -35,10 +45,11 @@ Deploy
          ├── Seed prize game operations
          └── Reserve for governance / airdrop
 
-Ongoing emissions (minted to pools by owner-set APR):
-  TimbStaking.sol  ← mintEmissions() ← TIMBSToken
-  TimbFarm.sol     ← mintEmissions() ← TIMBSToken
-  (Hard cap enforced on every mint — 1B ceiling total)
+Ongoing rewards (NO mint — redistribution of the genesis 100M):
+  TimbStaking.sol  ← notifyRewardAmount() ← treasury/buyback reserve
+  TimbFarm.sol     ← notifyRewardAmount() ← treasury/buyback reserve
+  TimbBoostFarm.sol← notifyRewardAmount() ← keeper 5%-of-farm-claim draw
+  (mintEmissions() reverts — totalSupply already == 100M cap)
 
 Out-of-circulation sinks (TIMBS removed from active supply):
   └── Entry replacement: old additional-round fees kept by protocol
