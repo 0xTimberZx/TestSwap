@@ -12,10 +12,18 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
  *
  * Architecture:
  *   - Each pair is its own ERC20 (LP token), deployed by TimbSwapFactory.
- *   - 0.3% total fee per swap: 0.25% stays in reserves (LPs), 0.05% sent
- *     to feeTo address (TimbTreasury) on mint/burn.
- *   - Partner pool mode: when enabled by factory, LP fee portion is routed
- *     to a designated external destination (e.g. BlockpotDAO PrizeVault).
+ *   - In-pool fee: 0.30% per swap stays in reserves; of that, ~0.05% is taken
+ *     as protocol fee via the lazy LP-dilution mint on mint/burn (Uniswap-v2
+ *     `feeTo` pattern), leaving ~0.25% to LPs.
+ *   - NOTE: the Router additionally charges a SEPARATE 0.05% protocol fee,
+ *     transferred straight to the treasury on every router swap (see
+ *     TimbSwapRouter._collectProtocolFee). So a swap ROUTED through the router
+ *     costs ~0.35% total (0.30% in-pool + 0.05% router) and the protocol's
+ *     total take is ~0.10%. A caller hitting swap() directly pays only the
+ *     0.30% in-pool fee. If a true 0.30% total is intended, one of the two
+ *     mechanisms must be removed — that is a tokenomics decision, not a bug.
+ *   - Partner-pool / emissions-whitelist config on the factory is RESERVED —
+ *     currently not read by the pair (no LP-fee rerouting is in effect).
  *
  * Security (defiSKILL):
  *   - ReentrancyGuard on mint(), burn(), swap().
@@ -28,7 +36,9 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
  *     prevents ERC4626-style inflation attack on LP share rounding.
  *   - Protocol fee collected lazily on mint/burn (Uniswap v2 pattern) —
  *     no per-swap storage write for the protocol fee.
- *   - Only factory-registered router can call swap() and collect fees.
+ *   - swap() is PERMISSIONLESS (safe under the K invariant enforced after fee
+ *     deduction). The router's extra 0.05% fee and the prize-nudge apply only
+ *     to swaps routed through the router; a direct swap() caller bypasses them.
  *
  * TWAP:
  *   - price0CumulativeLast and price1CumulativeLast updated on every
