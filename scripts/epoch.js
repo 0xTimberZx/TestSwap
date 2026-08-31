@@ -74,8 +74,15 @@ const STAKE_BOOTSTRAP_BPS = BigInt(process.env.STAKE_BOOTSTRAP_BPS || "2000"); /
 // the epoch grants. All knobs have defaults — no new required secrets.
 const BUYBACK_ENABLED  = (process.env.BUYBACK_ENABLED ?? "true") !== "false";
 const BUYBACK_MIN_ETH  = ethers.parseEther(process.env.BUYBACK_MIN_ETH || "0.001"); // skip dust
-const BUYBACK_SPEND_BPS = BigInt(process.env.BUYBACK_SPEND_BPS || "10000"); // % of available ETH (100%)
-const BUYBACK_SLIP_BPS  = BigInt(process.env.BUYBACK_SLIPPAGE_BPS || "1500"); // 15% — thin testnet pools
+// Buyback safety knobs are CHAIN-AWARE. On Arbitrum One (mainnet) a 100%-spend
+// at 15% slippage is a standing sandwich-MEV tax on protocol funds, so mainnet
+// defaults to a smaller fraction, tight slippage, and a per-run ETH cap
+// (chunking). The thin-pool values are kept for Arbitrum Sepolia. Env vars still
+// win on either chain; resolved per-run in the buyback block once chain is known.
+const BUYBACK_SPEND_BPS_ENV = process.env.BUYBACK_SPEND_BPS    ? BigInt(process.env.BUYBACK_SPEND_BPS)    : null;
+const BUYBACK_SLIP_BPS_ENV  = process.env.BUYBACK_SLIPPAGE_BPS ? BigInt(process.env.BUYBACK_SLIPPAGE_BPS) : null;
+const BUYBACK_MAX_ETH_ENV   = process.env.BUYBACK_MAX_ETH      ? ethers.parseEther(process.env.BUYBACK_MAX_ETH) : null;
+const ARB_ONE_CHAIN_ID = 42161n;
 
 // Addresses from config.js — same single source of truth as the settler.
 function addrFromConfig(key, { optional = false } = {}) {
@@ -235,6 +242,13 @@ async function main() {
   // buyback here mines after `nowBlock`, so it's counted at the NEXT epoch's
   // z-scan — never this run's — which avoids any double-count.
   if (BUYBACK_ENABLED) {
+    // Chain-aware safety defaults (env overrides win). Mainnet: chunked spend,
+    // tight slippage, per-run cap. Testnet (thin pools): the original values.
+    const isMainnet = (await provider.getNetwork()).chainId === ARB_ONE_CHAIN_ID;
+    const spendBps  = BUYBACK_SPEND_BPS_ENV ?? (isMainnet ? 2500n : 10000n); // 25% vs 100%
+    const slipBps   = BUYBACK_SLIP_BPS_ENV  ?? (isMainnet ?  300n :  1500n); // 3%  vs 15%
+    const maxEth    = BUYBACK_MAX_ETH_ENV   ?? (isMainnet ? ethers.parseEther("0.5") : 0n); // 0 = uncapped
+
     const pairAddr = await treasury.timbsEthPair();
     const wethAddr = await treasury.weth();
 
@@ -249,8 +263,11 @@ async function main() {
       }
     }
 
-    const ethBal    = await treasury.ethBalance();
-    const spendable = (ethBal * BUYBACK_SPEND_BPS) / 10_000n;
+    const ethBal      = await treasury.ethBalance();
+    const spendableRaw = (ethBal * spendBps) / 10_000n;
+    // Per-run cap (chunking): bounds a single swap so a sandwich bot can extract
+    // at most ~slipBps of a capped notional, not of the whole treasury float.
+    const spendable   = (maxEth > 0n && spendableRaw > maxEth) ? maxEth : spendableRaw;
 
     if (ethBal < BUYBACK_MIN_ETH || spendable === 0n) {
       console.log(`BUYBACK  skip — treasury ETH ${fmt(ethBal)} < min ${fmt(BUYBACK_MIN_ETH)}`);
@@ -271,7 +288,7 @@ async function main() {
         // is a true floor around the expected fill.
         const amountInWithFee = spendable * 997n;
         const expectedOut = (amountInWithFee * reserveOut) / (reserveIn * 1_000n + amountInWithFee);
-        const minOut = (expectedOut * (10_000n - BUYBACK_SLIP_BPS)) / 10_000n;
+        const minOut = (expectedOut * (10_000n - slipBps)) / 10_000n;
 
         console.log(`BUYBACK  spend=${fmt(spendable)} ETH expectedOut=${fmt(expectedOut)} minOut=${fmt(minOut)} TIMBS`);
         if (expectedOut === 0n) {
