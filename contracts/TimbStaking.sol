@@ -387,8 +387,12 @@ contract TimbStaking is Ownable, ReentrancyGuard {
      * @notice Emergency withdraw — allows user to recover staked TIMBS
      *         even when paused. Forfeits pending rewards.
      * @dev Safety valve only. Rewards are NOT paid on emergency withdraw.
+     *      updateReward settles the global accumulator at the CURRENT totalStaked
+     *      before it shrinks below — otherwise the elapsed reward window is
+     *      retroactively re-divided across the remaining (fewer) stakers,
+     *      over-crediting them and over-draining the reward reserve.
      */
-    function emergencyWithdraw() external nonReentrant {
+    function emergencyWithdraw() external nonReentrant updateReward(msg.sender) {
         uint256 staked = stakedBalance[msg.sender];
         if (staked == 0) revert ZeroAmount();
 

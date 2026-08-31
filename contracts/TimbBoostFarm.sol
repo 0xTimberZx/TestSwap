@@ -745,6 +745,13 @@ contract TimbBoostFarm is Ownable, ReentrancyGuard {
         uint256 staked = user.amount;
         if (staked == 0) revert ZeroAmount();
 
+        // Settle the pool accumulator at the current pool.totalStaked and this
+        // user's accrual BEFORE totalStaked shrinks below. Without this the
+        // elapsed window is re-divided across fewer stakers (over-credit), and
+        // the forfeited amount released below would be a stale figure.
+        _updatePool(pid);
+        _snapshotUser(pid, msg.sender);
+
         // Forfeited pending is no longer owed to anyone — release it from
         // the solvency ledger so it can be re-emitted.
         uint256 forfeited = user.pending;

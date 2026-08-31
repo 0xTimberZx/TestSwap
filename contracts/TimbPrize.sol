@@ -177,6 +177,11 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     /// @notice Owner-set protocol cut % from round settlement (basis points).
     uint256 public protocolCutBps;
 
+    /// @notice Cumulative protocol cut deducted from settled pots and held in
+    ///         PrizeEscrow, awaiting delivery via withdrawProtocolCut(). Without
+    ///         this the cut left the tracked pot but was never accounted or paid.
+    uint256 public protocolCutAccrued;
+
     /// @notice Frozen winning string for each round.
     mapping(uint256 => bytes6) public roundWinningString;
 
@@ -223,6 +228,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     event YieldHarvested(uint256 indexed round, uint256 amount);
     event UnclaimedRecycled(uint256 indexed round, uint256 amount);
     event ProtocolCutTaken(uint256 amount);
+    event ProtocolCutWithdrawn(address indexed to, uint256 amount);
     event SettlerUpdated(address indexed newSettler);
     event WinnersPerRoundSet(uint256 count);
     event ProtocolCutSet(uint256 bps);
@@ -608,6 +614,16 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             if (!valid) continue;
             if (validString != winningString) continue;
 
+            // Dedup: a wallet that replaced its entry to the SAME string can be
+            // double-listed in stringEntrants and pass both layers twice. Count
+            // it once, or winnerCount inflates and the extra per-winner share
+            // strands permanently in gameUnclaimed_winningsPool.
+            bool already = false;
+            for (uint256 j = 0; j < winnerCount; j++) {
+                if (verified[j] == candidate) { already = true; break; }
+            }
+            if (already) continue;
+
             verified[winnerCount++] = candidate;
         }
 
@@ -634,6 +650,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         if (protocolCutBps > 0 && pot > 0) {
             uint256 cut = (pot * protocolCutBps) / 10_000;
             pot -= cut;
+            protocolCutAccrued += cut;   // tracked; delivered via withdrawProtocolCut()
             emit ProtocolCutTaken(cut);
         }
 
@@ -763,6 +780,20 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         currentAccumulatedRewards += msg.value;
         IPrizeEscrow(prizeEscrow).deposit{value: msg.value}();
         emit PotFunded(msg.value, msg.sender);
+    }
+
+    /// @notice Deliver the accrued protocol cut (2% of each settled pot, held in
+    ///         PrizeEscrow) to a revenue address. Fixes the prior path where the
+    ///         cut was deducted from the pot but never paid out or accounted.
+    /// @dev    CEI: the accumulator is zeroed before the external pay(); the pay
+    ///         is the same TimbPrize-authorized escrow path used for winners.
+    function withdrawProtocolCut(address to) external onlyOwner nonReentrant {
+        if (to == address(0))         revert ZeroAddress();
+        uint256 amount = protocolCutAccrued;
+        if (amount == 0)              revert ZeroAmount();
+        protocolCutAccrued = 0;
+        IPrizeEscrow(prizeEscrow).pay(to, amount, currentRound);
+        emit ProtocolCutWithdrawn(to, amount);
     }
 
     // ─── View: Round State ────────────────────────────────────────────────────

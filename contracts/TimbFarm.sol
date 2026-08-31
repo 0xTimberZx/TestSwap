@@ -114,6 +114,7 @@ contract TimbFarm is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error LpTokenNotSet();
     error LpTokenAlreadyLocked();
+    error LpTokenIsRewardToken();
     error InsufficientStake(uint256 requested, uint256 available);
     error NotAuthorised();
     error ContractPaused();
@@ -373,6 +374,10 @@ contract TimbFarm is Ownable, ReentrancyGuard {
      */
     function setLpToken(address _lpToken) external onlyOwner {
         if (_lpToken == address(0)) revert ZeroAddress();
+        // The LP token must never be the reward token: claimRewards/exit treat
+        // the whole TIMBS balance as reward, so lp==TIMBS would pay staked
+        // principal out as rewards. (TimbBoostFarm.addPool guards this too.)
+        if (_lpToken == address(timbsToken)) revert LpTokenIsRewardToken();
         if (lpTokenLocked) revert LpTokenAlreadyLocked();
         lpToken = IERC20(_lpToken);
         emit LpTokenSet(_lpToken);
@@ -408,8 +413,12 @@ contract TimbFarm is Ownable, ReentrancyGuard {
     /**
      * @notice Emergency withdraw — recovers LP tokens even when paused.
      *         Forfeits all pending TIMBS rewards.
+     * @dev    updateReward settles the global accumulator at the CURRENT
+     *         totalStaked before it shrinks — otherwise the elapsed reward
+     *         window is retroactively re-divided across the remaining (fewer)
+     *         stakers, over-crediting them and over-draining the reserve.
      */
-    function emergencyWithdraw() external nonReentrant {
+    function emergencyWithdraw() external nonReentrant updateReward(msg.sender) {
         uint256 staked = stakedBalance[msg.sender];
         if (staked == 0) revert ZeroAmount();
 
