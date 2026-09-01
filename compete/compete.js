@@ -1017,6 +1017,22 @@ function bytes6ToStr(b6) {
   return s;
 }
 
+// A prior-epoch ticket belongs to a retired game generation. Its round numbers
+// no longer apply to the live game, so the only meaningful action is
+// reclaimFromPastGame(). Prefer the on-chain generation; if that read hasn't
+// landed (RPC hiccup, first paint) fall back to round geometry: a new game
+// resets the round to 1, so a ticket whose play window sits far above the live
+// round can only be a retired-epoch record. Without this fallback a failed
+// generation() read left old tickets classified as current — flooding the list
+// and hiding their Reclaim button.
+const PRIOR_EPOCH_ROUND_GAP = 20; // buffer above any legit extra-rounds carry
+function isPriorEpoch(t, roundNow) {
+  const gen = t.generation ? t.generation.toNumber() : 0;
+  if (currentGen !== null) return gen < currentGen;
+  if (roundNow === null)   return false;
+  return t.playRound.toNumber() > roundNow + PRIOR_EPOCH_ROUND_GAP;
+}
+
 // Renders one ticket card. Conceded ancestors render tethered beneath their
 // replacement, dimmed, so the chain aiming for victory stays readable.
 function renderTicketRow(t, displayStatus, opts) {
@@ -1035,15 +1051,14 @@ function renderTicketRow(t, displayStatus, opts) {
   // round numbers no longer apply to the live game, so none of the current-game
   // actions (withdraw / refund-window / carried-over) are meaningful — the only
   // action is reclaimFromPastGame(), which returns the principal immediately.
-  const gen        = t.generation ? t.generation.toNumber() : 0;
-  const isPastGen  = currentGen !== null && gen < currentGen;
-
   // Prefer the round the loader resolved (it falls back to the registry's own
   // currentRound when the 4s poll hasn't landed) over the module global, which
   // can still be null on first paint. Reading the null global made an expired
   // ticket render as "Active / earning yield" with NO Refund button — so it
   // looked permanently stuck even though its principal was refundable.
   const roundNow = (opts && opts.round != null) ? opts.round : currentRoundNum;
+
+  const isPastGen  = isPriorEpoch(t, roundNow);
 
   const notYetPlaying = roundNow !== null && roundNow < playRound;
   const carriedOver   = notYetPlaying && t.status === 1 && !isPastGen;
@@ -1204,12 +1219,14 @@ async function loadMyEntries() {
     // be played or refunded, so drop those heads. Live/pending and
     // still-refundable tickets stay.
     const withinRelevance = (t) => {
-      // A prior-generation ticket that still holds principal stays relevant no
-      // matter the current round — it's reclaimable, and its forfeitRound is in
-      // a retired generation's numbering that no longer applies.
-      if (currentGen !== null && t.generation.toNumber() < currentGen &&
-          (t.status === 0 || t.status === 1) && !t.escrowAmount.isZero()) {
-        return true;
+      // A prior-epoch ticket is governed EXCLUSIVELY by whether it still holds
+      // reclaimable principal — never by a round comparison. Its round numbers
+      // live in a retired generation, so comparing them against the live round
+      // (which resets to 1 on a new game) would keep every stale ticket forever
+      // (1 <= forfeitRound≈205 is always true). Keep it only if there's a
+      // deposit left to reclaim; otherwise it's dead history — drop it.
+      if (isPriorEpoch(t, relRound)) {
+        return (t.status === 0 || t.status === 1) && !t.escrowAmount.isZero();
       }
       if (relRound === null) return true;
       const fr = t.forfeitRound && !t.forfeitRound.isZero()
