@@ -185,8 +185,9 @@ contract PrizeWindowsTest is Test {
     function makeWinner() internal returns (uint256 T) {
         T = findWinnableRound(prize.currentRound() + 2);
         runUntilRound(T - 1);                       // entry during T-1 plays T
-        vm.prank(player);
+        vm.startPrank(player);
         registry.submitEntry{value: ENTRY_ETH}(expectedString(T), true, 0);
+        vm.stopPrank();
         prize.fundPot{value: 1 ether}();            // a claimable pot must exist
         runUntilRound(T + 1);                       // round T fully settled
         assertEq(prize.roundWinningString(T), expectedString(T), "fixture: string mismatch");
@@ -218,17 +219,19 @@ contract PrizeWindowsTest is Test {
         uint256 T = makeWinner();                   // currentRound == T+1
         runUntilRound(T + 2);                       // last allowed round
         uint256 balBefore = player.balance;
-        vm.prank(player);
+        vm.startPrank(player);
         prize.claimWinnings(T);
+        vm.stopPrank();
         assertGt(player.balance, balBefore, "no payout received");
     }
 
     function test_ClaimRevertsAfterTwoRounds() public {
         uint256 T = makeWinner();
         runUntilRound(T + 3);                       // window over
-        vm.prank(player);
+        vm.startPrank(player);
         vm.expectRevert();
         prize.claimWinnings(T);
+        vm.stopPrank();
     }
 
     // ─── §14 Principal refund: 4 rounds ─────────────────────────────────────
@@ -236,30 +239,34 @@ contract PrizeWindowsTest is Test {
     function test_RefundSucceedsAtWindowEdge() public {
         runUntilRound(2);
         uint256 id;
-        vm.prank(player);
+        vm.startPrank(player);
         registry.submitEntry{value: ENTRY_ETH}(bytes6("AB12CD"), true, 0); // plays round 3
         id = registry.activeTicketOf(player);
+        vm.stopPrank();
         uint256 ler = 3;
         runUntilRound(ler + 4);                     // currentRound == LER+4: still refundable
         uint256 balBefore = player.balance;
-        vm.prank(player);
+        vm.startPrank(player);
         registry.claimRefund(id);
+        vm.stopPrank();
         assertEq(player.balance, balBefore + ENTRY_ETH, "principal not refunded");
     }
 
     function test_ForfeitedAfterFourRounds() public {
         runUntilRound(2);
         uint256 id;
-        vm.prank(player);
+        vm.startPrank(player);
         registry.submitEntry{value: ENTRY_ETH}(bytes6("AB12CD"), true, 0); // plays round 3
         id = registry.activeTicketOf(player);
+        vm.stopPrank();
         uint256 ler = 3;
         uint256 sinkBefore = sink.balance;
         runUntilRound(ler + 5);                     // settling LER+4 sweeps the lapse
         assertEq(sink.balance, sinkBefore + ENTRY_ETH, "escrow not forfeited to sink");
-        vm.prank(player);
+        vm.startPrank(player);
         vm.expectRevert();
         registry.claimRefund(id);
+        vm.stopPrank();
     }
 
     // ─── §14 Missed prize ≠ lost principal ───────────────────────────────────
@@ -267,21 +274,24 @@ contract PrizeWindowsTest is Test {
     function test_RecycleRevertsInsideWindow() public {
         uint256 T = makeWinner();                   // currentRound == T+1
         runUntilRound(T + 2);                       // still claimable
-        vm.prank(rando);
+        vm.startPrank(rando);
         vm.expectRevert();
         prize.recycleUnclaimed(T);
+        vm.stopPrank();
     }
 
     function test_MissedPrizeRecyclesPermissionlessly_PrincipalSurvives() public {
         uint256 T = makeWinner();
         runUntilRound(T + 3);                       // prize window over, never claimed
         uint256 potBefore = prize.currentAccumulatedRewards();
-        vm.prank(rando);                            // anyone may sweep
+        vm.startPrank(rando);                       // anyone may sweep
         prize.recycleUnclaimed(T);
+        vm.stopPrank();
         assertGe(prize.currentAccumulatedRewards(), potBefore, "pot did not absorb recycle");
-        vm.prank(player);
+        vm.startPrank(player);
         vm.expectRevert();
         prize.claimWinnings(T);                     // prize is gone for good
+        vm.stopPrank();
 
         // …but the principal window is still open. This ticket won its last
         // eligible round (T == LER), so §14 pushes its forfeiture to LER+6.
@@ -290,8 +300,9 @@ contract PrizeWindowsTest is Test {
             ? registry.activeTicketOf(player)
             : registry.ticketAt(registry.generation(), player, T);
         uint256 balBefore = player.balance;
-        vm.prank(player);
+        vm.startPrank(player);
         registry.claimRefund(id);
+        vm.stopPrank();
         assertEq(player.balance, balBefore + ENTRY_ETH, "expired winner lost principal");
     }
 
@@ -318,8 +329,9 @@ contract PrizeWindowsTest is Test {
         // running as the test contract (NotTicketOwner).
         uint256 id = _ticketId(T);
         uint256 balBefore = player.balance;
-        vm.prank(player);
+        vm.startPrank(player);
         registry.claimRefund(id);
+        vm.stopPrank();
         assertEq(player.balance, balBefore + ENTRY_ETH, "extended refund window not honored");
     }
 
@@ -329,8 +341,9 @@ contract PrizeWindowsTest is Test {
         uint256 sinkBefore = sink.balance;
         runUntilRound(T + 7);                        // settling T+6 sweeps the lapse
         assertEq(sink.balance, sinkBefore + ENTRY_ETH, "escrow not forfeited at LER+6");
-        vm.prank(player);
+        vm.startPrank(player);
         vm.expectRevert();
         registry.claimRefund(id);                    // window truly closed now
+        vm.stopPrank();
     }
 }
