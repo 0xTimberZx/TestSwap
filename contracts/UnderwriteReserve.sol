@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -44,7 +45,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * initial seeding, done as a plain transfer before the first round — early
  * variance cover, documented in the spec.
  */
-contract UnderwriteReserve is Ownable, ReentrancyGuard {
+contract UnderwriteReserve is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ─── Constants ─────────────────────────────────────────────────────────
@@ -64,6 +65,9 @@ contract UnderwriteReserve is Ownable, ReentrancyGuard {
     address public board;
     /// @notice Halt-only role: may pause grants and drain to Treasury.
     address public guardian;
+    /// @notice The single PoolLedger currently holding a standing TIMBS
+    ///         allowance (M6). Only one ledger is ever approved at a time.
+    address public ledger;
     /// @notice While halted, `grantTopUp` returns 0 — settlement never blocks.
     bool public halted;
 
@@ -91,6 +95,7 @@ contract UnderwriteReserve is Ownable, ReentrancyGuard {
 
     event BoardSet(address indexed board);
     event LedgerApproved(address indexed ledger);
+    event LedgerRevoked(address indexed ledger);
     event TopUpGranted(uint256 indexed tableId, uint256 wanted, uint256 granted, uint256 freeFloatAfter);
     event IncomeRecorded(uint256 indexed tableId, uint256 rakeShare, uint256 deadPots, uint256 treasuryShare, uint256 parkedToOverflow);
     event BudgetedSupport(address indexed from, uint256 amount, uint256 supportTotal, uint256 earnedTotal);
@@ -227,10 +232,38 @@ contract UnderwriteReserve is Ownable, ReentrancyGuard {
 
     /// @notice Give the generation's PoolLedger a standing allowance so it can
     ///         pull granted top-ups (mirror of the seed-funder approve).
-    function approveLedger(address ledger) external onlyOwner {
-        if (ledger == address(0)) revert ZeroAddress();
-        timbs.forceApprove(ledger, type(uint256).max);
-        emit LedgerApproved(ledger);
+    /// @dev M6: hardened against the house-float rug the audit flagged.
+    ///      - The owner is now a timelock+multisig (dev-docs/GOVERNANCE_
+    ///        HARDENING.md), so re-pointing this allowance is delayed and public.
+    ///      - Single-ledger invariant: approving a new ledger first ZEROES the
+    ///        previous one's allowance, so stale infinite allowances can never
+    ///        accumulate — at most one address is ever approved at a time.
+    ///      - `revokeLedger` gives the guardian a fast kill switch, and the
+    ///        guardian's existing `drainToTreasury` remains the ultimate rescue
+    ///        (empties the float to the immutable treasury) if a bad ledger is
+    ///        ever approved.
+    function approveLedger(address newLedger) external onlyOwner {
+        if (newLedger == address(0)) revert ZeroAddress();
+        address old = ledger;
+        if (old != address(0) && old != newLedger) {
+            timbs.forceApprove(old, 0);
+            emit LedgerRevoked(old);
+        }
+        ledger = newLedger;
+        timbs.forceApprove(newLedger, type(uint256).max);
+        emit LedgerApproved(newLedger);
+    }
+
+    /// @notice Kill the standing allowance immediately. Owner OR guardian — the
+    ///         guardian is the halt-role, so it can pull this fast without the
+    ///         timelock delay if a ledger misbehaves or was approved in error.
+    function revokeLedger() external {
+        if (msg.sender != owner() && msg.sender != guardian) revert NotGuardian();
+        address old = ledger;
+        if (old == address(0)) revert ZeroAddress();
+        timbs.forceApprove(old, 0);
+        ledger = address(0);
+        emit LedgerRevoked(old);
     }
 
     /// @notice Retune the waterfall float target (policy, not custody).

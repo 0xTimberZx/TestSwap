@@ -23,6 +23,7 @@ import {TimbFarm} from "../contracts/TimbFarm.sol";
 import {TimbLockVault} from "../contracts/TimbLockVault.sol";
 import {TimbTreasury} from "../contracts/TimbTreasury.sol";
 import {TimbGovernance} from "../contracts/TimbGovernance.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 /**
  * @title Deploy
@@ -49,6 +50,9 @@ import {TimbGovernance} from "../contracts/TimbGovernance.sol";
  *   VRF_EXTRA_ARGS         — v2.5 extraArgs blob, hex (LINK vs native payment)
  *   VRF_CONFIRMATIONS      — optional, default 3
  *   VRF_CALLBACK_GAS       — optional, default 200000
+ *   GOV_MULTISIG           — Gnosis Safe (or multisig) that proposes/executes
+ *                            timelocked owner actions (M1/M3/M6 hardening)
+ *   TIMELOCK_MIN_DELAY     — optional, seconds; default 172800 (48h)
  *   ENTRY_COST_TIMBS       — TIMBSToken constructor param (18 dec); prize entry
  *                            costs themselves are dynamic on-chain (no config)
  *   INITIAL_SUPPLY         — TIMBS initial mint amount (18 dec)
@@ -77,6 +81,7 @@ contract Deploy is Script {
     TimbLockVault       public lockVault;
     TimbTreasury        public treasury;
     TimbGovernance      public governance;
+    TimelockController  public timelock;
 
     address public timbsEthPair;
 
@@ -98,6 +103,12 @@ contract Deploy is Script {
         bytes memory vrfExtra   = vm.envBytes("VRF_EXTRA_ARGS");
         uint16  vrfConfs        = uint16(vm.envOr("VRF_CONFIRMATIONS", uint256(3)));
         uint32  vrfCbGas        = uint32(vm.envOr("VRF_CALLBACK_GAS", uint256(200_000)));
+
+        // Governance hardening (M1/M3/M6): the multisig proposes/executes owner
+        // actions through a timelock. Ownership handoff itself is a post-deploy
+        // runbook step (see below) so setup stays under the deployer key.
+        address govMultisig     = vm.envAddress("GOV_MULTISIG");
+        uint256 timelockDelay   = vm.envOr("TIMELOCK_MIN_DELAY", uint256(48 hours));
 
         uint256 entryCostTIMBS  = vm.envUint("ENTRY_COST_TIMBS"); // TIMBSToken faucet/mint param
         uint256 initialSupply   = vm.envUint("INITIAL_SUPPLY");
@@ -207,6 +218,22 @@ contract Deploy is Script {
         );
         console.log("TimbGovernance:     ", address(governance));
 
+        // ── 13. TimelockController (governance hardening M1/M3/M6) ────────────
+        // The multisig is the sole proposer and executor; the timelock self-
+        // administers (admin = address(0)) so no one can bypass the delay by
+        // re-granting roles. Privileged owners (Treasury, GameRegistry,
+        // UnderwriteReserve, …) are transferred to this timelock AFTER the
+        // system is verified — a post-deploy runbook step, not done here, so a
+        // wiring mistake can't strand setup behind a 48h delay.
+        {
+            address[] memory proposers = new address[](1);
+            address[] memory executors = new address[](1);
+            proposers[0] = govMultisig;
+            executors[0] = govMultisig;
+            timelock = new TimelockController(timelockDelay, proposers, executors, address(0));
+        }
+        console.log("TimelockController:  ", address(timelock));
+
         // ─────────────────────────────────────────────────────────────────────
         // WIRING — post-deploy configuration
         // ─────────────────────────────────────────────────────────────────────
@@ -304,6 +331,7 @@ contract Deploy is Script {
         console.log("TimbLockVault:      ", address(lockVault));
         console.log("TimbTreasury:       ", address(treasury));
         console.log("TimbGovernance:     ", address(governance));
+        console.log("TimelockController:  ", address(timelock));
         console.log("TIMBS/WETH Pair:    ", timbsEthPair);
         console.log("=========================================");
         console.log("");
@@ -317,5 +345,12 @@ contract Deploy is Script {
         console.log("   and fund the subscription (LINK/native) before startGame");
         console.log("7. Call timbPrize.startGame() after frontend tested");
         console.log("8. Add TimbSwap tab to DebugHub dashboard");
+        console.log("9. GOVERNANCE HANDOFF (after full verification) - for each of");
+        console.log("   TimbTreasury / GameRegistry / UnderwriteReserve:");
+        console.log("     owner: transferOwnership(timelock)  [Ownable2Step]");
+        console.log("     then via a timelock proposal from the multisig:");
+        console.log("       acceptOwnership()");
+        console.log("   Set TimbTreasury operator + operator ETH cap for routine ops.");
+        console.log("   See dev-docs/GOVERNANCE_HARDENING.md for the full runbook.");
     }
 }
