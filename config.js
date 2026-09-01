@@ -31,7 +31,8 @@ const ADDRESSES = {
   TimbSwapRouter:       "0x40C7Caf90817C9891D278Ec1400B9deb180911f1", // v8 — multi-hop path routing
   EligibleTokenRegistry:"0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04",
   GameRegistry:         "0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530", // v5 — dynamic per-round entry pricing (ETH floats off escrow, TIMBS steps with entries)
-  TimbPrize:            "0x35976f4D2260127848a6274D2eC89ee054412432", // re-pointed to registry v5 via setGameRegistry; drives its round lifecycle
+  TimbPrize:            "0xB3B40bFACf4dc881666a615593134CAc7DF2389a", // H1 — VRF entropy (arm→lock); new generation. Prev pre-H1: 0x35976f4D2260127848a6274D2eC89ee054412432
+  PrizeVRFEntropy:      "0xc44DFd31881B7EeED02610A31e663a8dFc821f4D", // H1 — dedicated VRF draw per prize segment (shares the board's sub)
   TimbStaking:          "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   TimbFarm:             "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
   TimbBoostFarm:        "0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35", // boosted extra-pair farms (USDT/LINK/DAPP…), TIMBS emission funded by the epoch-keeper waterfall boost tier
