@@ -34,7 +34,7 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 // wallet's in-app provider (this page never needs one).
 let _publicProv = null;
 function readProv() {
-  return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+  return _publicProv || (_publicProv = makeReadProvider());
 }
 
 // Read-only contracts bound to the stable provider — cache by address.

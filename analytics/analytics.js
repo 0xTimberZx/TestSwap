@@ -99,7 +99,7 @@ function shownOf(shown, total, noun) {
 // accounts. The wallet provider is only used for signing transactions.
 let _publicProv = null;
 function readProv() {
-  return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+  return _publicProv || (_publicProv = makeReadProvider());
 }
 
 // ─── Live Metrics ─────────────────────────────────────────────────────────────

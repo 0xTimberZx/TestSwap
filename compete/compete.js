@@ -88,7 +88,7 @@ let hasPlayEntry       = false;
 // accounts. The wallet provider is only used for signing transactions.
 let _publicProv = null;
 function readProv() {
-  return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+  return _publicProv || (_publicProv = makeReadProvider());
 }
 
 // Read-only contracts are immutable once bound to the (stable) public provider,

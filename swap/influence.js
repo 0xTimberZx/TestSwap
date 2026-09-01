@@ -21,7 +21,7 @@ function PrizeIndicators() {
     try {
       const readProv = (typeof provider !== "undefined" && provider)
         ? provider
-        : new ethers.providers.JsonRpcProvider(RPC_URL);
+        : makeReadProvider();
       const prize  = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_MINI_ABI, readProv);
       const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_MINI_ABI, readProv);
 

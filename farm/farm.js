@@ -36,7 +36,7 @@ const ERC20_ABI = [
 // accounts. The wallet provider is only used for signing transactions.
 let _publicProv = null;
 function readProv() {
-  return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+  return _publicProv || (_publicProv = makeReadProvider());
 }
 
 // The public Arb Sepolia RPC is load-balanced across nodes that lag each other,

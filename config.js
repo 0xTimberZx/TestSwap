@@ -6,15 +6,47 @@
 
 const CHAIN_ID   = 421614;
 const CHAIN_NAME = "Arbitrum Sepolia";
-const RPC_URL    = "https://sepolia-rollup.arbitrum.io/rpc";
+
+// Independent public RPCs for READ traffic. A single endpoint rate-limits under
+// load and stalls cold page loads (the game banner sits at "Loading…" until the
+// first read lands, and every page reads through one of these). makeReadProvider()
+// spreads reads across all of them so no single endpoint's throttling can freeze
+// the UI. Order = priority; the first is also what the wallet is asked to add.
+const RPC_URLS = [
+  "https://sepolia-rollup.arbitrum.io/rpc",       // official Arbitrum
+  "https://arbitrum-sepolia-rpc.publicnode.com",  // PublicNode
+  "https://arbitrum-sepolia.drpc.org",            // dRPC
+  "https://arbitrum-sepolia.gateway.tenderly.co", // Tenderly gateway
+];
+const RPC_URL = RPC_URLS[0]; // single URL for the wallet add-chain config below
 
 const CHAIN_CONFIG = {
   chainId:   "0x" + CHAIN_ID.toString(16),
   chainName: CHAIN_NAME,
   nativeCurrency: { name: "Ethereum", symbol: "ETH", decimals: 18 },
-  rpcUrls:        [RPC_URL],
+  rpcUrls:        RPC_URLS,
   blockExplorerUrls: ["https://sepolia.arbiscan.io"]
 };
+
+// ─── Resilient read provider ──────────────────────────────────────────────────
+// Reads go through a FallbackProvider across RPC_URLS with quorum 1: the
+// highest-priority endpoint answers, and any that rate-limits or stalls is
+// transparently skipped for the next — so one flaky RPC can't blank the page.
+// StaticJsonRpcProvider pins the network (skips a per-call eth_chainId) since
+// the chain is fixed. Signing still uses the wallet's own provider, never this.
+// Callers cache the result (one provider per page); this only builds it.
+function makeReadProvider() {
+  if (RPC_URLS.length === 1) {
+    return new ethers.providers.StaticJsonRpcProvider(RPC_URLS[0], CHAIN_ID);
+  }
+  const configs = RPC_URLS.map((url, i) => ({
+    provider:     new ethers.providers.StaticJsonRpcProvider(url, CHAIN_ID),
+    priority:     i + 1,  // lower number = tried first
+    weight:       1,
+    stallTimeout: 2500,   // ms to wait on a slow endpoint before trying the next
+  }));
+  return new ethers.providers.FallbackProvider(configs, 1); // quorum 1
+}
 
 // ─── Display pricing ──────────────────────────────────────────────────────────
 // Fixed USD-per-ETH for the marketing "Win the Pot" USD figure on the landing.
@@ -354,7 +386,7 @@ async function getPendingNonce() {
 // confirm transactions independently of the wallet's in-app provider.
 let _confirmProv = null;
 function _confirmProvider() {
-  return _confirmProv || (_confirmProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+  return _confirmProv || (_confirmProv = makeReadProvider());
 }
 
 // Confirm a submitted tx by polling the canonical public RPC for its receipt,
@@ -527,7 +559,7 @@ const _PRICE_TTL = 12000; // ms; a tick of ~12s keeps estimates live but cheap
 const _usdCache = {};     // lowercased addr -> { px: number|null, ts }
 let _priceProv = null;
 function _priceProvider() {
-  return _priceProv || (_priceProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+  return _priceProv || (_priceProv = makeReadProvider());
 }
 function _tokenDecimals(lc) {
   const t = DEFAULT_TOKENS.find(x => x.address.toLowerCase() === lc);
