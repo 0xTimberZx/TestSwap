@@ -115,8 +115,17 @@ contract PrizeWindowsTest is Test {
 
     /// @dev Settle exactly one segment (or roll the round on segment 6).
     function settleOne() internal {
+        uint256 before = prize.currentRound();
         vm.warp(prize.segmentStartTime() + prize.INTERACTION_WINDOW() + 1);
         prize.settleSegment();
+        uint256 nowR = prize.currentRound();
+        if (nowR > before) {
+            // H2: settleSegment advances the round O(1) and no longer runs
+            // expiry/forfeiture/activation inline — reproduce what the keeper
+            // (settler.js) does after each rollover.
+            registry.onRoundSettled(before, 0);                                   // settled round: expiry + forfeiture (0 = do all)
+            registry.activateRoundEntries(nowR, registry.getRoundEntrants(nowR)); // new round: activate its entrants
+        }
     }
 
     /// @dev Run full rounds until currentRound == target.
