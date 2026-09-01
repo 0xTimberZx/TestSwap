@@ -12,6 +12,11 @@ interface ITimbYieldVaultRegistry {
     function remove(uint256 ticketId) external;
 }
 
+interface ITimbPrizePot {
+    /// @notice Permissionless ETH recycle into the live prize pot.
+    function addToPot() external payable;
+}
+
 /**
  * @title GameRegistry (v2 — ticket model)
  * @notice Prize game ticket storage, escrow, lifecycle, and yield-weight hooks.
@@ -112,7 +117,18 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
     ///         Bounds the settlement sweep's bucket scan.
     uint256 public constant MAX_FORFEIT_PUSH = PRIZE_CLAIM_WINDOW_ROUNDS;
 
+    /// @notice Basis-points denominator for the lapse split.
+    uint256 public constant BPS = 10_000;
+
     // ─── State ───────────────────────────────────────────────────────────────
+
+    /// @notice Community-tilted split of LAPSED ETH principal (abandoned
+    ///         tickets, §14): this share is recycled into the live prize pot
+    ///         (players), the remainder to the protocol sink. Lapsed TIMBS
+    ///         principal routes wholly to the sink (the pot is ETH-only, and the
+    ///         treasury already buys back + burns TIMBS for holders). Timelock-
+    ///         set, bounded by BPS. Default 70% to the pot.
+    uint256 public lapsePotBps = 7_000;
 
     /// @notice TIMBS token.
     IERC20 public immutable timbsToken;
@@ -236,6 +252,8 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
     event TicketClosed(uint256 indexed ticketId, uint256 refundAmount, address escrowToken);
     event TicketIneligible(uint256 indexed ticketId, uint256 absorbedAmount, address escrowToken);
     event AdminEscrowRefunded(uint256 indexed ticketId, address indexed owner, uint256 amount, address escrowToken);
+    event LapseSwept(uint256 indexed ticketId, uint256 toPot, uint256 toSink, address escrowToken);
+    event LapsePotBpsSet(uint256 bps);
     event TicketForfeitExtended(uint256 indexed ticketId, uint256 indexed wonRound, uint256 newForfeitRound);
     event ExtraRoundsSunk(address indexed player, uint256 indexed ticketId, uint256 timbsAmount);
     event PricesFixed(uint256 indexed round, uint256 ethCost, uint256 timbsCost);
@@ -271,6 +289,7 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
     error InsufficientAllowance(uint256 required, uint256 available);
     error TooManyExtraRounds(uint256 requested, uint256 max);
     error EthTransferFailed();
+    error InvalidBps(uint256 bps);
 
     // ─── Modifiers ───────────────────────────────────────────────────────────
 
@@ -842,11 +861,34 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
 
         if (amount > 0) {
             if (token == address(0)) {
-                (bool ok,) = payable(protocolSink).call{value: amount}(""); // best-effort
-                if (ok) t.escrowAmount = 0;
+                // Community-tilted recycle (abandoned-ticket revenue): a share of
+                // lapsed ETH flows back into the live prize pot (players), the
+                // rest to the protocol sink. Both legs are best-effort and the
+                // escrow is decremented only by what actually left, so a failing
+                // leg neither blocks the settlement loop nor double-spends on a
+                // later retry (whatever couldn't be disposed stays on the ticket).
+                uint256 toPot   = 0;
+                uint256 potShare = (amount * lapsePotBps) / BPS;
+                if (potShare > 0 && timbPrize != address(0)) {
+                    try ITimbPrizePot(timbPrize).addToPot{value: potShare}() {
+                        toPot = potShare;
+                    } catch {
+                        // pot leg failed → the whole amount falls to the sink
+                    }
+                }
+                uint256 toSink = amount - toPot;
+                uint256 leftover = 0;
+                if (toSink > 0) {
+                    (bool ok,) = payable(protocolSink).call{value: toSink}("");
+                    if (!ok) { leftover = toSink; toSink = 0; }
+                }
+                t.escrowAmount = leftover;
+                emit LapseSwept(id, toPot, toSink, token);
             } else {
+                // Lapsed TIMBS → sink (treasury buys back + burns for holders).
                 t.escrowAmount = 0;
                 IERC20(token).safeTransfer(protocolSink, amount);
+                emit LapseSwept(id, 0, amount, token);
             }
         }
         emit TicketIneligible(id, amount, token);
@@ -1074,6 +1116,14 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
         if (_sink == address(0)) revert ZeroAddress();
         protocolSink = _sink;
         emit ProtocolSinkSet(_sink);
+    }
+
+    /// @notice Set the share of LAPSED ETH principal recycled to the prize pot
+    ///         (basis points; remainder goes to the protocol sink). Timelock-set.
+    function setLapsePotBps(uint256 _bps) external onlyOwner {
+        if (_bps > BPS) revert InvalidBps(_bps);
+        lapsePotBps = _bps;
+        emit LapsePotBpsSet(_bps);
     }
 
     function setYieldVault(address _vault) external onlyOwner {
