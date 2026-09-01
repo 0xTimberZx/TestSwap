@@ -470,6 +470,33 @@
   cursor: pointer;
 }
 
+/* ─── Telegram reminder opt-in ───────────────────────────────────────────── */
+.btn-tg-remind {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 12px;
+  background: #229ED9;              /* Telegram blue */
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 11px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn-tg-remind:hover { opacity: 0.85; }
+.tg-remind-note {
+  margin: 6px 2px 0;
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  line-height: 1.4;
+}
+
 /* ─── How It Works ───────────────────────────────────────────────────────── */
 .how-step {
   display: flex;
