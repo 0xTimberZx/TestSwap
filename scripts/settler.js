@@ -209,9 +209,13 @@ const LINGER_BUDGET_MS =
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // H1: how long to wait between polling the VRF for a just-armed segment's word.
-// The callback lands a few blocks after the request; a short poll settles within
-// seconds of it, while the run's linger budget bounds the total wait.
-const VRF_POLL_MS = Number(process.env.SETTLER_VRF_POLL_SECONDS || 20) * 1000;
+// The callback lands a few blocks after the request (typically ~5-15s on Arb
+// Sepolia), so a tight poll locks within seconds of fulfillment instead of
+// adding up to a full interval of dead wait on top. Each poll is a couple of
+// cheap eth_calls over a short per-segment window, so 5s is comfortable; the
+// run's linger budget still bounds the total wait. Override with
+// SETTLER_VRF_POLL_SECONDS if a flakier RPC needs backing off.
+const VRF_POLL_MS = Number(process.env.SETTLER_VRF_POLL_SECONDS || 5) * 1000;
 
 // Shared tx plumbing for settleSegment() — used by BOTH the arm and the lock
 // call (H1). Returns the confirmed receipt.
