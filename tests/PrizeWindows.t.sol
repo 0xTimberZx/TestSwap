@@ -6,11 +6,29 @@ import "forge-std/Test.sol";
 import "../contracts/PrizeEscrow.sol";
 import "../contracts/GameRegistry.sol";
 import "../contracts/TimbPrize.sol";
+import "../contracts/VRFEntropy.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /// @dev Minimal TIMBS stand-in — the registry only needs transferFrom/transfer.
 contract MockTIMBS is ERC20 {
     constructor() ERC20("Mock TIMBS", "TIMBS") { _mint(msg.sender, 1_000_000e18); }
+}
+
+/// @dev Mock Chainlink VRF v2.5 coordinator (H1). Records the request and hands
+///      back an incrementing id; the test drives fulfilment explicitly so the
+///      per-segment word — and thus the winning string — is deterministic.
+contract MockPrizeVRF is IVRFCoordinatorV2Plus {
+    uint256 public nextId = 1;
+
+    function requestRandomWords(RandomWordsRequest calldata) external returns (uint256) {
+        return nextId++;
+    }
+
+    function fulfil(address consumer, uint256 requestId, uint256 word) external {
+        uint256[] memory words = new uint256[](1);
+        words[0] = word;
+        VRFEntropy(consumer).rawFulfillRandomWords(requestId, words);
+    }
 }
 
 /**
@@ -30,10 +48,14 @@ contract MockTIMBS is ERC20 {
  *   - Missed prize: recycleUnclaimed is permissionless once the window is
  *     over, reverts inside it, and never touches the winner's principal window.
  *
- * Determinism note: these tests never vm.roll, so blockhash(block.number-1)
- * is constant for the whole run — the expected winning string of any future
- * round (with untouched counters) is precomputable, which is how the winner
- * fixtures pre-commit a matching ticket.
+ * Determinism note (H1/VRF): the winning character no longer derives from
+ * blockhash — it derives from a Chainlink VRF word (`keccak(word, salt)`).
+ * These tests drive a MockPrizeVRF coordinator and fulfil each segment with a
+ * fixed, salt-derived word (`_wordFor`), so the expected winning string of any
+ * future round is still precomputable — which is how the winner fixtures
+ * pre-commit a matching ticket. No swaps run, so every segment stays in the
+ * letter class (seed 0 → locked index `mix % 26` (0-25) → next round's seed),
+ * hence the exact char is `ALPHABET[mix % 26]`, independent of the counter.
  *
  * Run: forge test --match-contract PrizeWindowsTest -vvv
  */
@@ -44,6 +66,8 @@ contract PrizeWindowsTest is Test {
     PrizeEscrow  escrow;
     GameRegistry registry;
     TimbPrize    prize;
+    MockPrizeVRF coord;
+    VRFEntropy   entropy;
 
     address sink   = address(0xBEEF);
     address player = address(0xA11CE);
@@ -59,6 +83,19 @@ contract PrizeWindowsTest is Test {
         registry = new GameRegistry(address(timbs), sink, address(0));
         prize    = new TimbPrize(address(escrow), address(registry), address(this));
 
+        // H1: wire a dedicated VRFEntropy for the prize game (mirrors the board).
+        coord   = new MockPrizeVRF();
+        entropy = new VRFEntropy(
+            address(coord),
+            bytes32(uint256(0xABC)), // key hash
+            42,                      // subscription id
+            3,                       // confirmations
+            200_000,                 // callback gas
+            hex"1234"                // extraArgs blob
+        );
+        entropy.setBoard(address(prize));   // only TimbPrize may request
+        prize.setEntropy(address(entropy)); // must be set before startGame (EntropyNotSet)
+
         registry.setTimbPrize(address(prize));
         // Entry costs are dynamic in v5 — no setter.
         escrow.setTimbPrize(address(prize));
@@ -71,30 +108,20 @@ contract PrizeWindowsTest is Test {
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    /// @dev The seed counter for (round, segment). Round 1 starts at 0 (startGame),
-    ///      and every rollover seeds the next round's counter to the index of the
-    ///      just-locked jittered char (TimbPrize line 506). No swaps run in these
-    ///      tests, so the counter is never nudged mid-round and — starting from a
-    ///      letter (index 0) — stays in the letter class every round, so each
-    ///      locked-char index is `mix % 26`, which becomes the next round's seed.
-    function counterAt(uint256 round, uint256 segment) internal view returns (uint256 c) {
-        c = 0; // round 1
-        for (uint256 r = 1; r < round; r++) {
-            uint256 mix = uint256(keccak256(abi.encodePacked(
-                blockhash(block.number - 1), c, r, segment
-            )));
-            c = mix % 26; // locked-char index (letter class) = next round's seed
-        }
+    /// @dev The VRF word this test fulfils (round, segment) with — a fixed
+    ///      function of the salt, so a future round's outcome is precomputable.
+    function _wordFor(uint256 round, uint256 segment) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked("PRIZE_VRF_WORD", round, segment)));
     }
 
-    /// @dev Mirror of TimbPrize._lockCurrentSegment. Class-preserving jitter
-    ///      (§13.2): the live char stays in the letter class here, so the locked
-    ///      char is ALPHABET[mix % 26] with the round's carried-over counter.
+    /// @dev Mirror of TimbPrize._lockCurrentSegment under VRF (H1). `entropyFor`
+    ///      returns `keccak(word, salt)`; the live char stays in the letter class
+    ///      throughout (see Determinism note), so the locked char is
+    ///      ALPHABET[mix % 26]. The counter no longer feeds the mix — it only
+    ///      selects the class, which is letter every round with no swaps.
     function expectedChar(uint256 round, uint256 segment) internal view returns (bytes1) {
-        uint256 c = counterAt(round, segment);
-        uint256 mix = uint256(keccak256(abi.encodePacked(
-            blockhash(block.number - 1), c, round, segment
-        )));
+        bytes32 salt = prize.saltFor(round, segment);
+        uint256 mix  = uint256(keccak256(abi.encodePacked(_wordFor(round, segment), salt)));
         return ALPHABET[mix % 26];
     }
 
@@ -114,10 +141,20 @@ contract PrizeWindowsTest is Test {
     }
 
     /// @dev Settle exactly one segment (or roll the round on segment 6).
+    ///      H1: settlement is now arm → VRF callback → lock. First settleSegment
+    ///      arms (fires the request); we fulfil it via the mock coordinator with
+    ///      the segment's fixed word; the second settleSegment locks + advances.
     function settleOne() internal {
         uint256 before = prize.currentRound();
+        uint256 seg    = prize.currentSegment();
         vm.warp(prize.segmentStartTime() + prize.INTERACTION_WINDOW() + 1);
-        prize.settleSegment();
+
+        prize.settleSegment();                        // arm
+        bytes32 salt = prize.saltFor(before, seg);
+        (uint256 reqId, , , bool ready) = entropy.draws(salt);
+        if (!ready) coord.fulfil(address(entropy), reqId, _wordFor(before, seg));
+        prize.settleSegment();                        // lock + advance / settle round
+
         uint256 nowR = prize.currentRound();
         if (nowR > before) {
             // H2: settleSegment advances the round O(1) and no longer runs

@@ -3,13 +3,16 @@
 // Checks timeRemainingInSegment() on TimbPrize and calls settleSegment()
 // when the interaction window has elapsed.
 //
-// One settleSegment() call resolves exactly one event: either a plain
-// segment advance (segment N -> N+1), or — when the current segment is the
-// 6th — the full round-boundary chain in one atomic transaction: lock the
-// final digit, build the winning string, distribute the pot, expire old
-// entries, then reset ALL 6 digit counters/locks and start the next round's
-// segment 1 with a fresh segmentStartTime. That whole chain is one on-chain
-// event even though a lot happens inside it.
+// H1 (VRF): settling a due segment now takes TWO settleSegment() calls. The
+// first ARMS it — fires one Chainlink VRF request and returns without advancing
+// (the winning char must not be knowable while the segment can still be nudged).
+// Once the VRF callback lands, a second call LOCKS the char from the word and
+// advances (segment N -> N+1), or — when the current segment is the 6th — runs
+// the full round-boundary chain in one atomic transaction: lock the final digit,
+// build the winning string, distribute the pot, then reset ALL 6 digit
+// counters/locks and start the next round's segment 1 with a fresh
+// segmentStartTime. This script drives that arm → wait-for-word → lock cycle and
+// re-requests a draw that stalls past the module's re-request delay.
 //
 // The previous version of this script only ever made ONE such call per run
 // and exited. If a run was skipped, delayed, or this job was paused for a
@@ -68,7 +71,21 @@ const TIMBPRIZE_ABI = [
   "function segmentStartTime() external view returns (uint256)",
   "function settleSegment() external",
   "function gameStarted() external view returns (bool)",
+  // H1: prize entropy is now VRF. settleSegment() is arm-then-lock — the first
+  // due call ARMS (fires the request, no advance), a later call LOCKS + advances
+  // once the callback has landed. These expose the entropy address + salt so the
+  // keeper can poll readiness and re-request a stalled draw.
+  "function entropy() external view returns (address)",
+  "function saltFor(uint256 round, uint256 segment) external pure returns (bytes32)",
+  "function rearmSegment() external",
   "function getRoundResult(uint256 round) external view returns (bytes6 winningString, uint256 potAmount, address[] winners, uint256 perWinner, uint256 remainder)"
+];
+
+// H1: the prize game's dedicated VRFEntropy module (read-only, from the keeper).
+const ENTROPY_ABI = [
+  "function isReady(bytes32 salt) external view returns (bool)",
+  "function isRequested(bytes32 salt) external view returns (bool)",
+  "function replaceable(bytes32 salt) external view returns (bool)"
 ];
 
 const GAMEREGISTRY_ABI = [
@@ -191,7 +208,14 @@ const LINGER_BUDGET_MS =
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function settleOnce(provider, wallet, prize, round, segment) {
+// H1: how long to wait between polling the VRF for a just-armed segment's word.
+// The callback lands a few blocks after the request; a short poll settles within
+// seconds of it, while the run's linger budget bounds the total wait.
+const VRF_POLL_MS = Number(process.env.SETTLER_VRF_POLL_SECONDS || 20) * 1000;
+
+// Shared tx plumbing for settleSegment() — used by BOTH the arm and the lock
+// call (H1). Returns the confirmed receipt.
+async function sendSettleSegment(provider, wallet, prize) {
   // Gas config — 130% buffer on fee params (ecosystem pattern)
   const feeData = await provider.getFeeData();
   const maxFeePerGas         = feeData.maxFeePerGas         * 130n / 100n;
@@ -204,27 +228,41 @@ async function settleOnce(provider, wallet, prize, round, segment) {
   // Explicit nonce — prevents NONCE_EXPIRED on rapid back-to-back calls
   const nonce = await provider.getTransactionCount(wallet.address, "pending");
 
-  // segment 6 -> _settleRound(): builds the winning string, pays out,
-  // expires old entries, and resets every counter for the next round.
-  // Everything else is a plain single-segment advance.
-  const isRoundBoundary = segment === 6n;
-
   const tx = await prize.settleSegment({
     maxFeePerGas,
     maxPriorityFeePerGas,
     gasLimit,
     nonce
   });
-
   console.log(`[settler] Submitted: ${tx.hash}`);
+  const receipt = await tx.wait();
+  console.log(`[settler] Confirmed in block ${receipt.blockNumber}`);
+  return { tx, receipt };
+}
+
+// H1: ARM the due segment — fires the VRF request. No advance happens here; the
+// segment locks on a later call once the word lands. Kept quiet on the public
+// channel (it is not a settlement), ops-noted only.
+async function armSegment(provider, wallet, prize, round, segment) {
+  console.log(`[settler] Arming round #${round} segment ${segment}/6 (VRF request)…`);
+  const { tx } = await sendSettleSegment(provider, wallet, prize);
+  await notify(`🎲 Armed segment ${segment}/6 (round #${round}) — awaiting VRF word\nTx: \`${tx.hash}\``);
+}
+
+// H1: LOCK the due segment — the word has landed, so this call locks the char
+// and advances (or, on segment 6, rolls the round). This is the settlement event.
+async function settleOnce(provider, wallet, prize, round, segment) {
+  // segment 6 -> _settleRound(): builds the winning string, pays out,
+  // expires old entries, and resets every counter for the next round.
+  // Everything else is a plain single-segment advance.
+  const isRoundBoundary = segment === 6n;
+
+  const { tx } = await sendSettleSegment(provider, wallet, prize);
   await notify(
     isRoundBoundary
       ? `✅ Round #${round} settled (segment 6/6) — round #${round + 1n} starting fresh\nTx: \`${tx.hash}\``
       : `✅ Segment ${segment}/6 settled\nRound #${round}\nTx: \`${tx.hash}\``
   );
-
-  const receipt = await tx.wait();
-  console.log(`[settler] Confirmed in block ${receipt.blockNumber}`);
 
   // Community beat: announce the rollover in the public group only once the
   // round is actually settled on-chain (~every 6h, not the hourly segments).
@@ -313,6 +351,16 @@ async function main() {
     return;
   }
 
+  // H1: the prize game's VRFEntropy — read the wired address off TimbPrize so a
+  // redeploy needs no settler edit. Refuse to run if it isn't set: startGame()
+  // reverts without it, so a live game always has one.
+  const entropyAddr = await prize.entropy();
+  if (entropyAddr === ethers.ZeroAddress) {
+    throw new Error("TimbPrize.entropy() is unset — prize VRF not wired; refusing to start settler");
+  }
+  const entropy = new ethers.Contract(entropyAddr, ENTROPY_ABI, provider);
+  console.log(`[settler] Prize VRFEntropy: ${entropyAddr}`);
+
   // ── Drain the backlog: settle every overdue segment/round-boundary event
   //    this run finds, instead of stopping after the first one. Each
   //    iteration re-reads on-chain state, so a round rollover mid-loop is
@@ -342,25 +390,71 @@ async function main() {
       continue;
     }
 
-    console.log(`[settler] Segment ready. Calling settleSegment()...`);
     // Tiered Telegram alert if this segment blew past its 60:00 grid mark
     // (>60:03 slight, >60:10 major) before we could settle it.
     await alertIfDelayed(prize, round, segment);
+
+    // H1: settlement is arm → VRF callback → lock. Resolve the segment's VRF
+    // state and act accordingly:
+    //   ready     → LOCK (settle event: advances / rolls the round)
+    //   unarmed   → ARM (fire the request), then wait for the word
+    //   armed,    → wait for the callback; re-request if it has stalled past
+    //   not ready   REREQUEST_DELAY (replaceable)
+    let salt, requested, ready;
     try {
-      const wasRoundBoundary = await settleOnce(provider, wallet, prize, round, segment);
-      settledCount++;
-      if (wasRoundBoundary) {
-        roundsRolled++;
-        // H2: drain the just-settled round's expiry/forfeiture and activate the
-        // new round's entrants, now that advancement no longer does it inline.
-        await drainSettlement(registry, round, round + 1n);
+      salt      = await prize.saltFor(round, segment);
+      requested = await entropy.isRequested(salt);
+      ready     = requested ? await entropy.isReady(salt) : false;
+    } catch (err) {
+      const msg = err?.shortMessage || err?.message || String(err);
+      console.error(`[settler] VRF state read failed: ${msg}`);
+      await notify(`❌ VRF state read FAILED\nRound #${round} | Segment ${segment}/6\nError: ${msg}`);
+      process.exit(1);
+    }
+
+    if (ready) {
+      console.log(`[settler] VRF word ready. Locking segment ${segment}/6…`);
+      try {
+        const wasRoundBoundary = await settleOnce(provider, wallet, prize, round, segment);
+        settledCount++;
+        if (wasRoundBoundary) {
+          roundsRolled++;
+          // H2: drain the just-settled round's expiry/forfeiture and activate the
+          // new round's entrants, now that advancement no longer does it inline.
+          await drainSettlement(registry, round, round + 1n);
+        }
+      } catch (err) {
+        const msg = err?.shortMessage || err?.message || String(err);
+        console.error(`[settler] lock settleSegment() failed: ${msg}`);
+        await notify(`❌ Lock settleSegment() FAILED\nRound #${round} | Segment ${segment}/6\nError: ${msg}`);
+        process.exit(1);
+      }
+      continue; // re-read state; the next segment (or round) may also be due
+    }
+
+    // Not ready yet — arm if needed, otherwise re-request a stalled draw.
+    try {
+      if (!requested) {
+        await armSegment(provider, wallet, prize, round, segment);
+      } else if (await entropy.replaceable(salt)) {
+        console.log(`[settler] VRF draw stalled past the re-request delay — rearming…`);
+        await (await prize.rearmSegment()).wait();
+        await notify(`♻️ Re-requested a stalled VRF draw\nRound #${round} | Segment ${segment}/6`);
       }
     } catch (err) {
       const msg = err?.shortMessage || err?.message || String(err);
-      console.error(`[settler] settleSegment() failed: ${msg}`);
-      await notify(`❌ settleSegment() FAILED\nRound #${round} | Segment ${segment}/6\nError: ${msg}`);
+      console.error(`[settler] arm/rearm failed: ${msg}`);
+      await notify(`❌ Arm/rearm FAILED\nRound #${round} | Segment ${segment}/6\nError: ${msg}`);
       process.exit(1);
     }
+
+    // Wait for the callback if the run's budget allows, then loop to re-check.
+    if (Date.now() - startedAt + VRF_POLL_MS > LINGER_BUDGET_MS) {
+      console.log(`[settler] VRF word not in and the linger budget is spent — exiting; next run locks it.`);
+      break;
+    }
+    console.log(`[settler] Waiting ${Math.round(VRF_POLL_MS / 1000)}s for the VRF word…`);
+    await sleep(VRF_POLL_MS);
   }
 
   if (settledCount === 0) {

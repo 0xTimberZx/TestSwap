@@ -19,6 +19,16 @@ interface IPrizeEscrow {
     function deposit() external payable;
 }
 
+/// @dev The prize game's async VRF entropy module (a dedicated VRFEntropy
+///      instance, mirroring the board's gen-9 path). One word per segment.
+interface IVRFEntropy {
+    function requestFor(bytes32 salt) external returns (uint256 requestId);
+    function rerequest(bytes32 salt) external returns (uint256 requestId);
+    function isReady(bytes32 salt) external view returns (bool);
+    function isRequested(bytes32 salt) external view returns (bool);
+    function entropyFor(bytes32 salt) external view returns (bytes32);
+}
+
 interface IGameRegistry {
     function verifyEntryExisted(address player, uint256 round)
         external view returns (bool, bytes6);
@@ -51,11 +61,14 @@ interface IEligibleTokenRegistry {
  *   - 6 segments per round: 59:45 interaction + 0:15 settlement.
  *   - positionCounter increments +1 per eligible swap (via nudgeScroll).
  *   - Winning string = the 6 per-segment LOCKED characters (jittered).
- *   - Lock (per segment, §13.2): char is jittered from keccak256(
- *     blockhash(block.number-1), counter, round, segment) but kept in the
- *     SAME class as the live char — letter→letter (mod 26), digit→digit
- *     (mod 10). Swaps let a player aim the class (letter vs digit); the
- *     exact character within that class stays unaimable.
+ *   - Lock (per segment, §13.2, H1): each segment is armed AFTER its
+ *     interaction window (Chainlink VRF v2.5, one word per segment via the
+ *     dedicated VRFEntropy module) and locked once the word lands. The char is
+ *     jittered from the VRF word but kept in the SAME class as the frozen live
+ *     char — letter→letter (mod 26), digit→digit (mod 10). Swaps let a player
+ *     aim the class (letter vs digit) BEFORE arm; the exact character within
+ *     that class is drawn afterward and is unaimable. Replaces the earlier
+ *     grindable blockhash(n-1) entropy.
  *   - Winners: exact 6-char match, equal split, remainder (r) snowballs.
  *   - Prize ETH held in PrizeEscrow, paid on winner claim.
  *   - Dual-layer verification at settlement via GameRegistry.
@@ -117,6 +130,10 @@ contract TimbPrize is Ownable, ReentrancyGuard {
 
     /// @notice PrizeEscrow — holds all prize ETH.
     address public prizeEscrow;
+
+    /// @notice VRFEntropy — per-segment Chainlink VRF v2.5 words (H1). Replaces
+    ///         the grindable blockhash entropy for the winning character.
+    IVRFEntropy public entropy;
 
     /// @notice GameRegistry — entry storage and verification.
     address public gameRegistry;
@@ -231,6 +248,8 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     event SettlerUpdated(address indexed newSettler);
     event WinnersPerRoundSet(uint256 count);
     event ProtocolCutSet(uint256 bps);
+    event EntropySet(address indexed entropy);
+    event SegmentArmed(uint256 indexed round, uint256 indexed segment, uint256 requestId);
 
     // ─── Errors ──────────────────────────────────────────────────────────────
 
@@ -249,6 +268,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     error NotAWinner(address caller, uint256 round);
     error ClaimWindowExpired(uint256 round);
     error EntriesPaused();
+    error EntropyNotSet();
     error SettlementPaused();
     error InvalidWinnersCount();
     error InsufficientPotBalance();
@@ -291,6 +311,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
 
     function startGame() external onlyOwner {
         if (gameStarted) revert GameAlreadyStarted();
+        if (address(entropy) == address(0)) revert EntropyNotSet(); // H1: VRF must be wired
         gameStarted      = true;
         currentRound     = 1;
         currentSegment   = 1;
@@ -336,6 +357,11 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         if (_isInSettlementWindow()) {
             if (settlementPaused) revert InSettlementWindow();
             _settleDueSegment();
+            // H1: the settle attempt may only ARM the segment (VRF word not in
+            // yet) without advancing. While still awaiting the lock, the class is
+            // frozen — do NOT nudge, or a fulfilled word could be paired with a
+            // steered class. Nudge only once the segment has actually advanced.
+            if (_isInSettlementWindow()) return;
         }
         positionCounter++;
         segmentDigitCounter[currentSegment]++;
@@ -426,6 +452,19 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         _settleDueSegment();
     }
 
+    /// @notice Per-segment VRF salt. Public so keepers/frontend can compute it
+    ///         to drive rearmSegment (or a direct entropy.rerequest) on a stall.
+    function saltFor(uint256 round, uint256 segment) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(round, segment));
+    }
+
+    /// @notice Replace a stalled VRF draw for the current segment. Permissionless
+    ///         and safe: an unfulfilled draw has no knowable value, and the module
+    ///         refuses once a draw has landed — so this can never reroll a result.
+    function rearmSegment() external whenGameStarted {
+        entropy.rerequest(saltFor(currentRound, currentSegment));
+    }
+
     /// @dev Shared by settleSegment() and the lazy path in nudgeScroll().
     ///      Callers hold the reentrancy guard.
     function _settleDueSegment() internal {
@@ -436,18 +475,30 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             revert SegmentNotComplete(elapsed, INTERACTION_WINDOW);
         }
 
+        // H1: arm → lock via VRF, mirroring the board. The segment's class is
+        // frozen at arm time (nudges stop touching an armed segment — see
+        // nudgeScroll), so the word can never be paired with a steered class.
+        bytes32 salt = saltFor(currentRound, currentSegment);
+        if (!entropy.isRequested(salt)) {
+            // Arm: fire the draw now that the interaction window has closed. The
+            // word is unknowable until its callback lands.
+            uint256 reqId = entropy.requestFor(salt);
+            emit SegmentArmed(currentRound, currentSegment, reqId);
+            return;
+        }
+        if (!entropy.isReady(salt)) return; // armed, awaiting the VRF callback — no-op
+
         if (currentSegment < SEGMENTS_PER_ROUND) {
-            // Lock current segment digit and advance on the 60-minute grid.
-            // The incoming segment's counter is NOT reset: the meter is
-            // continuous — each digit carries its value across segments and
-            // rounds, and nudging resumes from wherever it last sat.
-            _lockCurrentSegment();
+            // Lock from the VRF word and advance on the 60-minute grid. The
+            // incoming segment's counter is NOT reset: the meter is continuous —
+            // each digit carries its value across segments and rounds.
+            _lockCurrentSegment(salt);
             currentSegment++;
             segmentStartTime = _nextSegmentStart();
             emit SegmentAdvanced(currentRound, currentSegment, block.timestamp);
         } else {
-            // Final segment — lock and settle round
-            _lockCurrentSegment();
+            // Final segment — lock and settle round.
+            _lockCurrentSegment(salt);
             _settleRound();
         }
     }
@@ -528,31 +579,20 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Lock the current segment: freeze its character as the nudge
-     *      counter mixed with the previous block's hash (§13.2). Nudgers
-     *      during the open window cannot know the hash of whichever block
-     *      eventually settles the segment, so swaps still INFLUENCE the
-     *      outcome (every nudge changes it) but nobody can AIM it — the
-     *      deterministic counter % 36 mapping this replaces was
-     *      MEV-snipeable via last-second nudge steering.
-     *
-     *      Residual (accepted, documented): a manual settler can grind
-     *      timing inside the 15s settlement window (~1/36 per block) since
-     *      blockhash(n-1) is known within block n. The keeper settling
-     *      within seconds of the boundary leaves almost no grind room;
-     *      full elimination needs commit-reveal/VRF — deliberately out of
-     *      scope for testnet.
+     * @dev Lock the current segment: freeze its character as the nudge-steered
+     *      class mixed with the segment's VRF word (§13.2, H1). `entropyFor`
+     *      returns keccak(word, salt) and reverts until the callback lands, so a
+     *      segment can never lock early. Swaps still INFLUENCE the outcome by
+     *      steering the class (letter ↔ digit), but nobody can AIM it: the class
+     *      is frozen at arm time and the word is drawn afterward, unpredictable.
+     *      This replaces the grindable blockhash(n-1) mix (H1) — a settler could
+     *      grind blocks in the settlement window to snipe a char.
      */
-    function _lockCurrentSegment() internal {
-        uint256 mix = uint256(keccak256(abi.encodePacked(
-            blockhash(block.number - 1),
-            segmentDigitCounter[currentSegment],
-            currentRound,
-            currentSegment
-        )));
+    function _lockCurrentSegment(bytes32 salt) internal {
+        uint256 mix = uint256(entropy.entropyFor(salt));
         // Class-preserving jitter (§13.2). The pre-jitter live char is
         // ALPHABET[counter % 36]: index 0-25 is a letter (A-Z), 26-35 a digit
-        // (0-9). The locked char is jittered by block entropy but stays in the
+        // (0-9). The locked char is jittered by the VRF word but stays in the
         // SAME class as the live char — so a player can aim the class by
         // nudging (letter ↔ digit), while the exact character within that
         // class remains unpredictable.
@@ -883,6 +923,13 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     function setGameRegistry(address _registry) external onlyOwner {
         if (_registry == address(0)) revert ZeroAddress();
         gameRegistry = _registry;
+    }
+
+    /// @notice Wire the prize game's VRFEntropy module (H1). Set before startGame.
+    function setEntropy(address _entropy) external onlyOwner {
+        if (_entropy == address(0)) revert ZeroAddress();
+        entropy = IVRFEntropy(_entropy);
+        emit EntropySet(_entropy);
     }
 
     function setPrizeEscrow(address _escrow) external onlyOwner {
