@@ -30,7 +30,6 @@ interface IGameRegistry {
         external view returns (address[] memory);
     function activateRoundEntries(uint256 round, address[] calldata players) external;
     function recordWinners(uint256 round, address[] calldata winners) external;
-    function onRoundSettled(uint256 settledRound) external;
     function setCurrentRound(uint256 round) external;
     function onGameStarted() external;
 }
@@ -478,10 +477,15 @@ contract TimbPrize is Ownable, ReentrancyGuard {
             IGameRegistry(gameRegistry).recordWinners(round, winners);
         }
 
-        // Registry post-settlement hook: ends yield weight for tickets whose
-        // run finished this round, and absorbs escrow of tickets whose refund
-        // window just lapsed (→ Ineligible).
-        IGameRegistry(gameRegistry).onRoundSettled(round);
+        // H2: expiry + forfeiture for this round, and activation of the next
+        // round's entrants, are NO LONGER run synchronously here. That
+        // O(entrants) loop inside the settle tx let a sybil flood OOG-freeze
+        // round advancement (and, via refund-gating, lock principal). The keeper
+        // now drains them in bounded chunks AFTER settlement, via the registry's
+        // paginated onRoundSettled(round, maxSteps) and activateRoundEntries.
+        // recordWinners above (bounded by winnerCount) still runs first, so the
+        // §14 forfeiture anchors are set before the keeper's forfeiture sweep.
+        // Advancement below is now O(1) and cannot be blocked by entrant count.
 
         uint256 totalEntries =
             IGameRegistry(gameRegistry).getRoundEntrants(round).length;
@@ -515,7 +519,9 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         }
 
         IGameRegistry(gameRegistry).setCurrentRound(currentRound);
-        _activateRoundEntries(currentRound);
+        // H2: activation of currentRound's entrants is now keeper-driven (see the
+        // note above) — permissionless activateRoundEntries(currentRound, chunk)
+        // in bounded batches, so it can't block this O(1) advance.
 
         emit RoundStarted(currentRound, block.timestamp);
         emit SegmentAdvanced(currentRound, 1, block.timestamp);

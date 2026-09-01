@@ -172,8 +172,8 @@ contract GameRegistryGenerationsTest is Test {
         // (settledRound - REFUND_WINDOW_ROUNDS = 6 - 4 = 2). If the sweep were
         // not generation-scoped it would forfeit the gen-1 ticket sitting in
         // roundEntrants[1][2]. It must remain untouched.
-        registry.setCurrentRound(6);
-        registry.onRoundSettled(6);
+        registry.setCurrentRound(7); // H2: round 6 is "settled" once currentRound > 6
+        registry.onRoundSettled(6, 0); // paginated (0 = do all)
 
         assertEq(uint8(_status(tid)), uint8(GameRegistry.TicketStatus.Active), "gen-1 ticket not swept");
         (GameRegistry.Ticket memory t,) = registry.getTicket(tid);

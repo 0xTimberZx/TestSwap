@@ -706,14 +706,28 @@ contract GameRegistry is Ownable, ReentrancyGuard {
 
     // ─── TimbPrize: Round Lifecycle ──────────────────────────────────────────
 
+    // ─── H2: paginated settlement bookkeeping ────────────────────────────────
+    // Expiry + forfeiture are paginated out of the synchronous settle path so a
+    // large (or sybil-flooded) entrant set can't OOG-freeze round advancement
+    // (which, via refund-gating, would also lock principal). TimbPrize advances
+    // the round O(1); anyone drains this afterward in bounded chunks. The cursor
+    // walks a fixed ordered scan for a settled round S:
+    //   [roundEntrants[S]] (expiry)  ++  [LER buckets hi, hi-1, hi-2] (forfeit).
+    mapping(uint256 => mapping(uint256 => uint256)) public settleCursor; // gen → S → linear position
+    mapping(uint256 => mapping(uint256 => bool))    public settleDone;   // gen → S → fully processed
+
     /**
-     * @notice Activate Pending tickets at round start. Registers their escrow
-     *         weight in the yield vault — Active tickets earn for the pot.
+     * @notice Activate Pending tickets for the CURRENT round. Registers their
+     *         escrow weight in the yield vault — Active tickets earn for the pot.
+     * @dev H2: permissionless + chunkable — the keeper (or anyone) activates the
+     *      live round's entrants in bounded batches instead of one settle-time
+     *      loop. Gated to currentRound so no future round can be pre-activated;
+     *      idempotent per ticket via the Pending→Active guard below.
      */
     function activateRoundEntries(uint256 round, address[] calldata players)
         external
-        onlyTimbPrize
     {
+        require(round == currentRound, "not current round");
         uint256 g = generation;
         for (uint256 i = 0; i < players.length; i++) {
             uint256 id = ticketAt[g][players[i]][round];
@@ -730,74 +744,110 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Post-settlement hook, called once per settled round:
-     *         1. Tickets whose run ended this round stop earning yield and
-     *            free their wallet to enter again (refund window opens).
-     *         2. Tickets whose refund window just lapsed become Ineligible and
-     *            their unclaimed escrow is absorbed to the protocol sink.
+     * @notice Paginated post-settlement processing for a settled round S:
+     *         1. Tickets whose run ended at S stop earning yield and free their
+     *            wallet to enter again (refund window opens).
+     *         2. Tickets whose refund window lapsed at S become Ineligible and
+     *            their unclaimed escrow is absorbed to the protocol sink (§14).
+     * @dev H2: resumable + PERMISSIONLESS. Processes up to `maxSteps` entrants
+     *      per call from a stored cursor; call repeatedly until it returns true.
+     *      `maxSteps == 0` means "do all remaining" (may OOG — caller's choice).
+     *      Gated to already-settled rounds. The monotonic cursor visits each
+     *      entrant exactly once, so the per-ticket handlers need no replay guard
+     *      beyond their existing status checks. Decoupled from TimbPrize's O(1)
+     *      round advancement so a large entrant set can never freeze the game.
      */
-    function onRoundSettled(uint256 settledRound) external onlyTimbPrize {
-        // 1. End-of-run: eligibility ended with this round.
-        address[] storage ended = roundEntrants[generation][settledRound];
-        for (uint256 i = 0; i < ended.length; i++) {
-            uint256 id = ticketAt[generation][ended[i]][settledRound];
-            if (id == 0) continue;
-            Ticket storage t = tickets[id];
-            if (t.status == TicketStatus.Active &&
-                t.lastEligibleRound == settledRound) {
-                _vaultRemove(id);
-                if (activeTicketOf[t.owner] == id) activeTicketOf[t.owner] = 0;
-                emit TicketExpired(id, settledRound);
+    function onRoundSettled(uint256 settledRound, uint256 maxSteps)
+        external
+        returns (bool done)
+    {
+        require(settledRound < currentRound, "round not settled");
+        uint256 g = generation;
+        if (settleDone[g][settledRound]) return true;
+        if (maxSteps == 0) maxSteps = type(uint256).max;
+
+        uint256 c     = settleCursor[g][settledRound];
+        uint256 steps = 0;
+
+        // Phase A — expiry over roundEntrants[S].
+        address[] storage ended = roundEntrants[g][settledRound];
+        uint256 nEnded = ended.length;
+        while (c < nEnded && steps < maxSteps) {
+            _expireOne(g, settledRound, ended[c]);
+            unchecked { c++; steps++; }
+        }
+        if (c < nEnded) { settleCursor[g][settledRound] = c; return false; }
+
+        // Phase B — forfeiture over LER buckets hi, hi-1, hi-2 (§14 windows).
+        // Baseline LER bucket is S-4; a late win pushes forfeitRound up to LER+6,
+        // so the buckets that can forfeit at S are LER in [S-6 .. S-4].
+        if (settledRound > REFUND_WINDOW_ROUNDS) {
+            uint256 hi = settledRound - REFUND_WINDOW_ROUNDS;
+            uint256 lo = hi > MAX_FORFEIT_PUSH ? hi - MAX_FORFEIT_PUSH : 1;
+            uint256 base = nEnded; // cursor offset where the forfeiture space begins
+            for (uint256 ler = hi; ; ler--) {
+                address[] storage bucket = roundEntrants[g][ler];
+                uint256 nb = bucket.length;
+                if (c < base + nb) {                       // unprocessed work in this bucket
+                    uint256 i = c > base ? c - base : 0;
+                    while (i < nb && steps < maxSteps) {
+                        _forfeitOne(g, ler, settledRound, bucket[i]);
+                        unchecked { i++; steps++; }
+                    }
+                    c = base + i;
+                    if (i < nb) { settleCursor[g][settledRound] = c; return false; }
+                }
+                base += nb;
+                if (ler == lo) break;                      // lo >= 1, so no underflow
             }
         }
 
-        // 2. Refund-window lapse. A ticket forfeits when settledRound reaches
-        //    its per-ticket forfeitRound. Baseline is LER+4, but a win in the
-        //    ticket's last one/two eligible rounds pushes it up to LER+6 (§14),
-        //    so at round S the tickets forfeiting have LER in [S-4-2 .. S-4].
-        //    Scan those LER buckets and forfeit exactly those due this round.
-        if (settledRound <= REFUND_WINDOW_ROUNDS) return;
-        uint256 hi = settledRound - REFUND_WINDOW_ROUNDS;                 // baseline LER bucket (S-4)
-        uint256 lo = hi > MAX_FORFEIT_PUSH ? hi - MAX_FORFEIT_PUSH : 1;   // earliest LER that could forfeit now
-        for (uint256 ler = hi; ler >= lo; ler--) {
-            _sweepLapsedBucket(ler, settledRound);
+        settleCursor[g][settledRound] = c;
+        settleDone[g][settledRound]   = true;
+        return true;
+    }
+
+    /// @dev Expiry of one end-of-run ticket (Phase A). Visited once via the cursor.
+    function _expireOne(uint256 g, uint256 settledRound, address who) internal {
+        uint256 id = ticketAt[g][who][settledRound];
+        if (id == 0) return;
+        Ticket storage t = tickets[id];
+        if (t.status == TicketStatus.Active && t.lastEligibleRound == settledRound) {
+            _vaultRemove(id);
+            if (activeTicketOf[t.owner] == id) activeTicketOf[t.owner] = 0;
+            emit TicketExpired(id, settledRound);
         }
     }
 
-    /// @dev Forfeit tickets in one LER bucket whose forfeitRound == settledRound.
-    ///      The forfeitRound check (not LER alone) is what respects the §14
-    ///      "later of claim/active" anchor — a late winner in an earlier bucket
-    ///      is skipped until its own, later, forfeit round.
-    function _sweepLapsedBucket(uint256 ler, uint256 settledRound) internal {
-        address[] storage bucket = roundEntrants[generation][ler];
-        for (uint256 i = 0; i < bucket.length; i++) {
-            uint256 id = ticketAt[generation][bucket[i]][ler];
-            if (id == 0) continue;
-            Ticket storage t = tickets[id];
-            if (t.lastEligibleRound != ler)          continue;
-            if (t.forfeitRound != settledRound)      continue; // not due yet (won late)
-            if (t.status != TicketStatus.Active &&
-                t.status != TicketStatus.Pending)    continue; // already refunded/terminal
+    /// @dev Forfeit one ticket whose forfeitRound == settledRound (Phase B). The
+    ///      forfeitRound check (not LER alone) respects the §14 "later of
+    ///      claim/active" anchor — a late winner is skipped until its own round.
+    function _forfeitOne(uint256 g, uint256 ler, uint256 settledRound, address who) internal {
+        uint256 id = ticketAt[g][who][ler];
+        if (id == 0) return;
+        Ticket storage t = tickets[id];
+        if (t.lastEligibleRound != ler)       return;
+        if (t.forfeitRound != settledRound)   return; // not due yet (won late)
+        if (t.status != TicketStatus.Active &&
+            t.status != TicketStatus.Pending) return; // already refunded/terminal
 
-            uint256 amount = t.escrowAmount;
-            address token  = t.escrowToken;
-            _onTicketDeactivated(t);
-            t.status = TicketStatus.Ineligible;
-            _vaultRemove(id);
-            if (activeTicketOf[t.owner] == id) activeTicketOf[t.owner] = 0;
+        uint256 amount = t.escrowAmount;
+        address token  = t.escrowToken;
+        _onTicketDeactivated(t);
+        t.status = TicketStatus.Ineligible;
+        _vaultRemove(id);
+        if (activeTicketOf[t.owner] == id) activeTicketOf[t.owner] = 0;
 
-            if (amount > 0) {
-                if (token == address(0)) {
-                    // Best-effort: never brick settlement on a sink transfer.
-                    (bool ok,) = payable(protocolSink).call{value: amount}("");
-                    if (ok) t.escrowAmount = 0;
-                } else {
-                    t.escrowAmount = 0;
-                    IERC20(token).safeTransfer(protocolSink, amount);
-                }
+        if (amount > 0) {
+            if (token == address(0)) {
+                (bool ok,) = payable(protocolSink).call{value: amount}(""); // best-effort
+                if (ok) t.escrowAmount = 0;
+            } else {
+                t.escrowAmount = 0;
+                IERC20(token).safeTransfer(protocolSink, amount);
             }
-            emit TicketIneligible(id, amount, token);
         }
+        emit TicketIneligible(id, amount, token);
     }
 
     /// @notice TimbPrize reports the winners of a settled round so the registry

@@ -72,8 +72,17 @@ const TIMBPRIZE_ABI = [
 ];
 
 const GAMEREGISTRY_ABI = [
-  "function getRoundEntrants(uint256 round) external view returns (address[])"
+  "function getRoundEntrants(uint256 round) external view returns (address[])",
+  // H2: paginated post-settlement bookkeeping the keeper drains after a rollover.
+  "function generation() external view returns (uint256)",
+  "function settleDone(uint256 gen, uint256 round) external view returns (bool)",
+  "function onRoundSettled(uint256 settledRound, uint256 maxSteps) external returns (bool)",
+  "function activateRoundEntries(uint256 round, address[] players) external"
 ];
+
+// Entrants processed per drain tx. Small enough to always fit gas; the keeper
+// loops until the round is fully drained.
+const DRAIN_CHUNK = Number(process.env.SETTLE_DRAIN_CHUNK || 100);
 
 // bytes6 hex ("0x4B375857 32 51") -> "K7XW2Q"
 function bytes6ToStr(b6) {
@@ -250,6 +259,41 @@ async function settleOnce(provider, wallet, prize, round, segment) {
   return isRoundBoundary;
 }
 
+// ─── H2: drain paginated settlement bookkeeping after a rollover ────────────────
+// TimbPrize advances the round O(1) and no longer runs expiry/forfeiture/
+// activation inline (a sybil flood could OOG-freeze that). The keeper drains
+// them here in bounded chunks. All calls are permissionless + idempotent, so a
+// partial drain simply resumes next run — settlement is never blocked.
+async function drainSettlement(registry, settledRound, newRound) {
+  let gen;
+  try { gen = await registry.generation(); } catch { gen = 0n; }
+
+  // 1. Expiry + forfeiture of the just-settled round, chunk by chunk.
+  for (let i = 0; i < 500; i++) {
+    try {
+      if (await registry.settleDone(gen, settledRound)) break;
+      await (await registry.onRoundSettled(settledRound, DRAIN_CHUNK)).wait();
+    } catch (e) {
+      console.warn(`[settler] onRoundSettled(${settledRound}) drain paused: ${e?.shortMessage || e?.message}`);
+      break;
+    }
+  }
+
+  // 2. Activate the new round's entrants (idempotent, gated to currentRound).
+  let entrants = [];
+  try { entrants = await registry.getRoundEntrants(newRound); } catch {}
+  for (let i = 0; i < entrants.length; i += DRAIN_CHUNK) {
+    const chunk = entrants.slice(i, i + DRAIN_CHUNK);
+    try {
+      await (await registry.activateRoundEntries(newRound, chunk)).wait();
+    } catch (e) {
+      console.warn(`[settler] activateRoundEntries(${newRound}) drain paused: ${e?.shortMessage || e?.message}`);
+      break;
+    }
+  }
+  console.log(`[settler] drained bookkeeping: settled #${settledRound}, activated ${entrants.length} for #${newRound}`);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -259,6 +303,7 @@ async function main() {
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const wallet   = new ethers.Wallet(PRIVATE_KEY, provider);
   const prize    = new ethers.Contract(TIMBPRIZE_ADDR, TIMBPRIZE_ABI, wallet);
+  const registry = new ethers.Contract(GAMEREGISTRY_ADDR, GAMEREGISTRY_ABI, wallet);
 
   // ── Sanity checks ────────────────────────────────────────────────────────
 
@@ -304,7 +349,12 @@ async function main() {
     try {
       const wasRoundBoundary = await settleOnce(provider, wallet, prize, round, segment);
       settledCount++;
-      if (wasRoundBoundary) roundsRolled++;
+      if (wasRoundBoundary) {
+        roundsRolled++;
+        // H2: drain the just-settled round's expiry/forfeiture and activate the
+        // new round's entrants, now that advancement no longer does it inline.
+        await drainSettlement(registry, round, round + 1n);
+      }
     } catch (err) {
       const msg = err?.shortMessage || err?.message || String(err);
       console.error(`[settler] settleSegment() failed: ${msg}`);
