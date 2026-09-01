@@ -87,9 +87,11 @@ contract DeployPrizeVRFMigration is Script {
         prize.setEligibleRegistry(eligibleAddr);
 
         // 5. Re-point the existing contracts at the NEW prize (owner-only setters).
+        //    PrizeEscrow and TimbSwapRouter have payable receive()s, so their
+        //    contract type must be cast from a `payable` address.
         GameRegistry(registryAddr).setTimbPrize(address(prize));
-        PrizeEscrow(escrowAddr).setTimbPrize(address(prize));
-        TimbSwapRouter(routerAddr).setTimbPrize(address(prize));
+        PrizeEscrow(payable(escrowAddr)).setTimbPrize(address(prize));
+        TimbSwapRouter(payable(routerAddr)).setTimbPrize(address(prize));
         EligibleTokenRegistry(eligibleAddr).registerConsumer(address(prize));
 
         vm.stopBroadcast();
