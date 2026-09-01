@@ -33,8 +33,15 @@ const REGISTRY_ABI = [
   "function effectiveStatus(uint256) view returns (uint8)",
 ];
 
+// M7: scope CORS to the site origin (set FAUCET_ALLOWED_ORIGIN, e.g.
+// https://timbswap.xyz). Defaults to "*" so a fresh deploy still works, but
+// production should pin it. NOTE: CORS is browser-enforced only — it does not
+// stop a scripted (curl) caller; the daily circuit-breaker in faucet-worker.js
+// bounds that abuse, and a signature-gated claim would close it entirely.
+const ALLOWED_ORIGIN = Deno.env.get("FAUCET_ALLOWED_ORIGIN") || "*";
 const cors = {
-  "Access-Control-Allow-Origin": "*",              // tighten to your domain in prod
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+  "Vary": "Origin",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "content-type, authorization, apikey",
 };

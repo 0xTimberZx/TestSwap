@@ -43,6 +43,10 @@ const LINGER_MS   = Number(process.env.FAUCET_LINGER_MINUTES || 55) * 60_000;
 const POLL_MS     = Number(process.env.POLL_SECONDS || 10) * 1000;
 const BATCH       = 25;
 const STATUS_ACTIVE = 1n;
+// Daily circuit-breaker (M7): cap total claims dispatched per rolling 24h so an
+// unauthenticated griefer pasting enumerable active-ticket addresses can't drain
+// the budget or force unbounded pot contributions. 0 = uncapped (set on mainnet).
+const DAILY_CAP   = Number(process.env.FAUCET_DAILY_CAP || 0);
 
 // Addresses come straight from config.js — same single source of truth the
 // settler and frontend use, so a redeploy only edits config.js.
@@ -93,6 +97,16 @@ async function updateClaim(id, patch) {
     body: JSON.stringify(patch),
   });
   if (!res.ok) console.error(`[claim ${id}] update ${res.status}: ${await res.text()}`);
+}
+
+// Count claims dispatched in the last rolling 24h (M7 daily circuit-breaker).
+// Uses a HEAD + count=exact so no rows are transferred.
+async function sentLast24h() {
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const url = `${SB_URL}/rest/v1/faucet_claims?status=eq.sent&sent_at=gte.${since}&select=id`;
+  const res = await fetch(url, { method: "HEAD", headers: { ...sbHeaders, Prefer: "count=exact", Range: "0-0" } });
+  const cr = res.headers.get("content-range") || "*/0";   // e.g. "0-0/1234" or "*/0"
+  return Number(cr.split("/")[1] || 0);
 }
 
 async function expireStale() {
@@ -154,6 +168,7 @@ async function main() {
 
   const startedAt = Date.now();
   let lowWarned = false;
+  let capWarned = false;
 
   while (Date.now() - startedAt < LINGER_MS) {
     // Balance guard — refuse to send (and alert once) if the hot wallet is low.
@@ -167,6 +182,24 @@ async function main() {
       continue;
     }
     lowWarned = false;
+
+    // Daily circuit-breaker (M7): once the rolling-24h dispatch count hits the
+    // cap, pause — this bounds a griefer's ability to drain the budget / force
+    // pot contributions by pasting enumerable active-ticket addresses.
+    if (DAILY_CAP > 0) {
+      let sent;
+      try { sent = await sentLast24h(); }
+      catch (e) { console.error("[faucet] daily-cap read failed:", e.message); await sleep(POLL_MS); continue; }
+      if (sent >= DAILY_CAP) {
+        if (!capWarned) {
+          await notify(`⚠️ Faucet daily cap reached (${sent}/${DAILY_CAP} in 24h) — pausing until it rolls off.`);
+          capWarned = true;
+        }
+        await sleep(POLL_MS);
+        continue;
+      }
+      capWarned = false;
+    }
 
     let claims;
     try { claims = await fetchReserved(); }
