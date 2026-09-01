@@ -79,3 +79,25 @@ window.open(url, "_blank", "noopener");
   large entrant counts, page the bucket scan — noted as a future refinement.
 - The dedupe key is `(wallet, generation, forfeitRound)`, so a *replacement*
   ticket (new forfeitRound) is reminded again, but the same ticket is not.
+
+## Also on these rails: segment-1 match notifications
+
+The same opt-in registry powers a hype nudge: when a round's **segment 1 locks**,
+holders whose ticket's **first letter matches** the locked character get a "you're
+still in the running" DM.
+
+| Component | File |
+|---|---|
+| Dedupe ledger | `supabase/migrations/20260901130000_match_notifications.sql` (`match_notifications_sent`) |
+| Worker | `scripts/match-notifier.js` |
+| Schedule | `.github/workflows/match-notifier.yml` (every 15 min — snappy after the lock) |
+
+How it works: the worker reads `TimbPrize.segmentDigitLocked(1)` / `segmentLockedChar(1)`
+and, once segment 1 is locked, compares each current-round entrant's live ticket
+`string6[0]` to that character. Matching subscribers get one DM per `(wallet,
+generation, round, segment 1)` — the matcher set is fixed the instant segment 1
+locks, so it's a single notification per ticket-round. Reuses the same repo
+secrets/vars as the reminder worker (no extra opt-in; a subscriber gets both).
+
+Extending to later segments (a "still alive after segment N" streak) is a natural
+follow-up — the ledger's `segment` column already accommodates it.
