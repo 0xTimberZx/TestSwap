@@ -31,7 +31,7 @@ const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 // ─── Read-only provider (no wallet needed for stats) ─────────────────────────
 
-const readProvider = new ethers.providers.JsonRpcProvider(RPC_URL);
+const readProvider = makeReadProvider();
 
 function readContract(name, abi) {
   return new ethers.Contract(ADDRESSES[name], abi, readProvider);

@@ -30,7 +30,7 @@ const LOCK_STATUS = ["Active", "Unlocked", "Withdrawn"];
 // accounts. The wallet provider is only used for signing transactions.
 let _publicProv = null;
 function readProv() {
-  return _publicProv || (_publicProv = new ethers.providers.JsonRpcProvider(RPC_URL));
+  return _publicProv || (_publicProv = makeReadProvider());
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
