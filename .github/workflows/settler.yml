@@ -73,8 +73,13 @@ jobs:
       # GITHUB_TOKEN cannot trigger workflow runs), each finishing run
       # dispatches the next one, making the keeper self-perpetuating with
       # cron as a mere backstop that restarts a broken chain.
+      # Self-chain ONLY on a successful run. A failed run must NOT re-dispatch —
+      # otherwise a fast-failing settler (e.g. a contract/settler ABI mismatch)
+      # turns `if: always()` into a ~15s infinite fail-loop that floods runs and
+      # notifications. On failure the */10 cron is the backstop that restarts the
+      # chain, exactly as intended.
       - name: Dispatch next settler run
-        if: always() && github.event.inputs.mode != 'health' && github.event.schedule != '0 12 * * *'
+        if: success() && github.event.inputs.mode != 'health' && github.event.schedule != '0 12 * * *'
         env:
           DISPATCH_TOKEN: ${{ secrets.SETTLER_DISPATCH_TOKEN }}
         run: |
