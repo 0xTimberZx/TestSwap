@@ -17,6 +17,7 @@ import {TimbSwapRouter} from "../contracts/TimbSwapRouter.sol";
 import {EligibleTokenRegistry} from "../contracts/EligibleTokenRegistry.sol";
 import {GameRegistry} from "../contracts/GameRegistry.sol";
 import {TimbPrize} from "../contracts/TimbPrize.sol";
+import {VRFEntropy} from "../contracts/VRFEntropy.sol";
 import {TimbStaking} from "../contracts/TimbStaking.sol";
 import {TimbFarm} from "../contracts/TimbFarm.sol";
 import {TimbLockVault} from "../contracts/TimbLockVault.sol";
@@ -42,6 +43,12 @@ import {TimbGovernance} from "../contracts/TimbGovernance.sol";
  *   WETH_ADDRESS           — WETH address on Arbitrum Sepolia
  *   DAPP_TOKEN_ADDRESS     — existing DAPP token address (for eligible registry)
  *   LINK_TOKEN_ADDRESS     — LINK token address (for lock vault whitelist)
+ *   VRF_COORDINATOR        — Chainlink VRF v2.5 coordinator (prize-game entropy, H1)
+ *   VRF_KEY_HASH           — the gas lane
+ *   VRF_SUB_ID             — subscription this prize entropy is a consumer of
+ *   VRF_EXTRA_ARGS         — v2.5 extraArgs blob, hex (LINK vs native payment)
+ *   VRF_CONFIRMATIONS      — optional, default 3
+ *   VRF_CALLBACK_GAS       — optional, default 200000
  *   ENTRY_COST_TIMBS       — TIMBSToken constructor param (18 dec); prize entry
  *                            costs themselves are dynamic on-chain (no config)
  *   INITIAL_SUPPLY         — TIMBS initial mint amount (18 dec)
@@ -64,6 +71,7 @@ contract Deploy is Script {
     EligibleTokenRegistry public eligibleRegistry;
     GameRegistry        public gameRegistry;
     TimbPrize           public timbPrize;
+    VRFEntropy          public prizeEntropy;
     TimbStaking         public staking;
     TimbFarm            public farm;
     TimbLockVault       public lockVault;
@@ -81,6 +89,15 @@ contract Deploy is Script {
         address weth            = vm.envAddress("WETH_ADDRESS");
         address dapp            = vm.envAddress("DAPP_TOKEN_ADDRESS");
         address link            = vm.envAddress("LINK_TOKEN_ADDRESS");
+
+        // H1: prize-game VRF entropy wiring (same subscription may list the board
+        // and this as consumers). Read off Chainlink's published tables at deploy.
+        address vrfCoordinator  = vm.envAddress("VRF_COORDINATOR");
+        bytes32 vrfKeyHash      = vm.envBytes32("VRF_KEY_HASH");
+        uint256 vrfSubId        = vm.envUint("VRF_SUB_ID");
+        bytes memory vrfExtra   = vm.envBytes("VRF_EXTRA_ARGS");
+        uint16  vrfConfs        = uint16(vm.envOr("VRF_CONFIRMATIONS", uint256(3)));
+        uint32  vrfCbGas        = uint32(vm.envOr("VRF_CALLBACK_GAS", uint256(200_000)));
 
         uint256 entryCostTIMBS  = vm.envUint("ENTRY_COST_TIMBS"); // TIMBSToken faucet/mint param
         uint256 initialSupply   = vm.envUint("INITIAL_SUPPLY");
@@ -146,6 +163,16 @@ contract Deploy is Script {
             address(router)
         );
         console.log("TimbPrize:          ", address(timbPrize));
+
+        // ── 7b. Prize VRF entropy (H1) ───────────────────────────────────────
+        // Dedicated VRFEntropy for the prize game, mirroring the board's path.
+        // setBoard(timbPrize) locks it to the one consumer; setEntropy wires the
+        // reverse edge in the dependency section below.
+        prizeEntropy = new VRFEntropy(
+            vrfCoordinator, vrfKeyHash, vrfSubId, vrfConfs, vrfCbGas, vrfExtra
+        );
+        prizeEntropy.setBoard(address(timbPrize));
+        console.log("Prize VRFEntropy:   ", address(prizeEntropy));
 
         // ── 8. TimbStaking ───────────────────────────────────────────────────
         staking = new TimbStaking(address(timbs), rewardRateSec);
@@ -217,6 +244,7 @@ contract Deploy is Script {
         timbPrize.setEligibleRegistry(address(eligibleRegistry));
         timbPrize.setGameRegistry(address(gameRegistry));
         timbPrize.setPrizeEscrow(address(prizeEscrow));
+        timbPrize.setEntropy(address(prizeEntropy)); // H1: required before startGame
         console.log("TimbPrize: all dependencies set");
 
         // TIMBSToken
@@ -270,6 +298,7 @@ contract Deploy is Script {
         console.log("EligibleRegistry:   ", address(eligibleRegistry));
         console.log("GameRegistry:       ", address(gameRegistry));
         console.log("TimbPrize:          ", address(timbPrize));
+        console.log("Prize VRFEntropy:   ", address(prizeEntropy));
         console.log("TimbStaking:        ", address(staking));
         console.log("TimbFarm:           ", address(farm));
         console.log("TimbLockVault:      ", address(lockVault));
@@ -284,7 +313,9 @@ contract Deploy is Script {
         console.log("3. Add liquidity to TIMBS/WETH pair");
         console.log("4. notifyRewardAmount() on TimbStaking + TimbFarm");
         console.log("5. Fund PrizeEscrow with initial ETH seed");
-        console.log("6. Call timbPrize.startGame() after frontend tested");
-        console.log("7. Add TimbSwap tab to DebugHub dashboard");
+        console.log("6. Add Prize VRFEntropy as a consumer on the VRF subscription");
+        console.log("   and fund the subscription (LINK/native) before startGame");
+        console.log("7. Call timbPrize.startGame() after frontend tested");
+        console.log("8. Add TimbSwap tab to DebugHub dashboard");
     }
 }
