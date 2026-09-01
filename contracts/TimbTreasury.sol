@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -95,7 +96,7 @@ using SafeERC20 for IERC20;
  *   4. prizeEscrow owner deposits routed here
  *   5. Verify on Sourcify
  */
-contract TimbTreasury is Ownable, ReentrancyGuard {
+contract TimbTreasury is Ownable2Step, ReentrancyGuard {
 
     // ─── State ───────────────────────────────────────────────────────────────
 
@@ -166,6 +167,26 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     /// @notice Total ETH sent to prize pot (lifetime).
     uint256 public totalPotFunded;
 
+    // ─── Operator role (M1) ────────────────────────────────────────────────────
+    // The owner is meant to be a timelock+multisig (see dev-docs/GOVERNANCE_
+    // HARDENING.md), so routine, small operational ETH spend would otherwise wait
+    // out the full timelock delay. A separate `operator` may withdraw ETH up to a
+    // rolling per-period cap — least privilege for day-to-day ops. Everything
+    // dangerous (uncapped withdrawals, ERC20 sweeps, retargeting outflow
+    // addresses) stays with the timelock owner. The cap defaults to 0, so the
+    // operator can do nothing until the owner explicitly funds the allowance.
+
+    /// @notice Rate-limited operational spender (address(0) = disabled).
+    address public operator;
+    /// @notice Max ETH the operator may withdraw per rolling window.
+    uint256 public operatorEthCap;
+    /// @notice Length of the operator's rolling spend window.
+    uint256 public operatorPeriod = 1 days;
+    /// @notice Start of the current window (lazily rolled forward).
+    uint256 public operatorWindowStart;
+    /// @notice ETH the operator has withdrawn in the current window.
+    uint256 public operatorSpentInWindow;
+
     // ─── Events ──────────────────────────────────────────────────────────────
 
     event FeesReceived(address indexed from, uint256 amount);
@@ -193,6 +214,8 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     event PairSet(address indexed pair);
     event FeeSenderSet(address indexed sender, bool authorised);
     event OperationalWithdraw(address indexed to, uint256 amount);
+    event OperatorSet(address indexed operator);
+    event OperatorEthCapSet(uint256 cap, uint256 period);
 
     // ─── Errors ──────────────────────────────────────────────────────────────
 
@@ -204,6 +227,15 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     error InsufficientETH(uint256 requested, uint256 available);
     error NotAuthorised();
     error TransferFailed();
+    error OperatorCapExceeded(uint256 requested, uint256 remaining);
+
+    // ─── Modifiers ─────────────────────────────────────────────────────────────
+
+    /// @dev The timelock owner, or the rate-limited operator (M1).
+    modifier onlyOwnerOrOperator() {
+        if (msg.sender != owner() && msg.sender != operator) revert NotAuthorised();
+        _;
+    }
 
     // ─── Constructor ─────────────────────────────────────────────────────────
 
@@ -492,27 +524,46 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Unwrap WETH fee revenue into ETH (owner only) — feeds
-     *         executeBuyback / distributeToPot, which spend native ETH.
+     * @notice Unwrap WETH fee revenue into ETH — feeds executeBuyback /
+     *         distributeToPot, which spend native ETH. Owner or operator: this
+     *         only converts WETH the treasury already holds into ETH it already
+     *         holds; it moves nothing out, so the operator may run it.
      */
-    function unwrapWeth(uint256 amount) external nonReentrant onlyOwner {
+    function unwrapWeth(uint256 amount) external nonReentrant onlyOwnerOrOperator {
         if (weth == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
         IWETH(weth).withdraw(amount);
     }
 
     /**
-     * @notice Withdraw ETH for operational expenses (owner only).
-     * @dev Manual operation — owner controls treasury allocations.
+     * @notice Withdraw ETH for operational expenses.
+     * @dev The timelock owner is unbounded. The operator (M1) is rate-limited to
+     *      `operatorEthCap` per rolling `operatorPeriod`, so a compromised
+     *      operator key can never drain the treasury in one move — large or
+     *      urgent spend goes through the timelock owner. Cap defaults to 0.
      */
     function withdrawOperational(address to, uint256 amount)
         external
         nonReentrant
-        onlyOwner
+        onlyOwnerOrOperator
     {
         if (to == address(0))              revert ZeroAddress();
         if (amount == 0)                   revert ZeroAmount();
         if (amount > address(this).balance) revert InsufficientETH(amount, address(this).balance);
+
+        // Owner (timelock) is unbounded; the operator is capped per window.
+        if (msg.sender != owner()) {
+            // Lazily roll the window forward.
+            if (block.timestamp >= operatorWindowStart + operatorPeriod) {
+                operatorWindowStart   = block.timestamp;
+                operatorSpentInWindow = 0;
+            }
+            uint256 remaining = operatorEthCap > operatorSpentInWindow
+                ? operatorEthCap - operatorSpentInWindow
+                : 0;
+            if (amount > remaining) revert OperatorCapExceeded(amount, remaining);
+            operatorSpentInWindow += amount;
+        }
 
         (bool ok,) = payable(to).call{value: amount}("");
         if (!ok) revert TransferFailed();
@@ -575,6 +626,21 @@ contract TimbTreasury is Ownable, ReentrancyGuard {
     function setStakingDistributionPeriod(uint256 _period) external onlyOwner {
         if (_period == 0) revert ZeroAmount();
         stakingDistributionPeriod = _period;
+    }
+
+    /// @notice Set (or clear, with address(0)) the rate-limited operator (M1).
+    function setOperator(address _operator) external onlyOwner {
+        operator = _operator;
+        emit OperatorSet(_operator);
+    }
+
+    /// @notice Set the operator's per-window ETH withdrawal cap and window length.
+    ///         Setting the cap to 0 disables operator withdrawals entirely.
+    function setOperatorEthCap(uint256 _cap, uint256 _period) external onlyOwner {
+        if (_period == 0) revert ZeroAmount();
+        operatorEthCap = _cap;
+        operatorPeriod = _period;
+        emit OperatorEthCapSet(_cap, _period);
     }
 
     function setFeeSender(address sender, bool authorised) external onlyOwner {

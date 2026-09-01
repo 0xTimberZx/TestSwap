@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -63,7 +64,7 @@ interface ITimbYieldVaultRegistry {
  *   3. timbPrize.setGameRegistry(this)
  *   (Entry costs are dynamic — computed on-chain, no setup call.)
  */
-contract GameRegistry is Ownable, ReentrancyGuard {
+contract GameRegistry is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ─── Types ───────────────────────────────────────────────────────────────
@@ -234,6 +235,7 @@ contract GameRegistry is Ownable, ReentrancyGuard {
     event TicketExpired(uint256 indexed ticketId, uint256 indexed round);
     event TicketClosed(uint256 indexed ticketId, uint256 refundAmount, address escrowToken);
     event TicketIneligible(uint256 indexed ticketId, uint256 absorbedAmount, address escrowToken);
+    event AdminEscrowRefunded(uint256 indexed ticketId, address indexed owner, uint256 amount, address escrowToken);
     event TicketForfeitExtended(uint256 indexed ticketId, uint256 indexed wonRound, uint256 newForfeitRound);
     event ExtraRoundsSunk(address indexed player, uint256 indexed ticketId, uint256 timbsAmount);
     event PricesFixed(uint256 indexed round, uint256 ethCost, uint256 timbsCost);
@@ -1081,8 +1083,12 @@ contract GameRegistry is Ownable, ReentrancyGuard {
 
     /// @notice Escape hatch for a ticket/game inconsistency ("contract error
     ///         between ticket and game") — flags the ticket Ineligible.
-    ///         Escrow stays on the ticket for a follow-up adminAbsorbEscrow
-    ///         or manual resolution.
+    ///         Escrow stays on the ticket for a follow-up adminRefundStuck
+    ///         or the player's own claim path.
+    /// @dev M3: this only changes a ticket's STATUS and releases its pricing
+    ///      seat. It moves no funds and can never route escrow anywhere but back
+    ///      to the ticket owner (see adminRefundStuck), so it is not a
+    ///      confiscation surface.
     function adminMarkIneligible(uint256 ticketId) external onlyOwner {
         Ticket storage t = tickets[ticketId];
         if (t.id == 0) revert TicketNotFound(ticketId);
@@ -1098,18 +1104,27 @@ contract GameRegistry is Ownable, ReentrancyGuard {
         emit TicketIneligible(ticketId, t.escrowAmount, t.escrowToken);
     }
 
-    /// @notice Sweep escrow stranded on an Ineligible ticket to the sink
-    ///         (e.g. after an ETH send to the sink failed during settlement).
-    function adminAbsorbEscrow(uint256 ticketId) external onlyOwner {
+    /// @notice Return escrow stranded on an Ineligible ticket to the TICKET
+    ///         OWNER (e.g. a ticket/game inconsistency, or an ETH send that
+    ///         failed during settlement).
+    /// @dev M3: this used to sweep the escrow to `protocolSink`, which let the
+    ///      owner mark any live ticket Ineligible and confiscate a player's
+    ///      stake. The destination is now hard-wired to `t.owner`, so the admin
+    ///      path can only ever REFUND the player, never seize funds — the owner
+    ///      gains nothing from misusing it. Legitimate forfeiture of a
+    ///      claim-window-lapsed ticket to the sink still happens automatically
+    ///      in the §14 settlement sweep, which this does not touch.
+    function adminRefundStuck(uint256 ticketId) external onlyOwner nonReentrant {
         Ticket storage t = tickets[ticketId];
         if (t.id == 0) revert TicketNotFound(ticketId);
         if (t.status != TicketStatus.Ineligible) revert TicketNotRefundable(t.status);
         uint256 amount = t.escrowAmount;
         if (amount == 0) revert ZeroAmount();
         address token = t.escrowToken;
+        address to    = t.owner;
         t.escrowAmount = 0;
-        _payEscrow(protocolSink, token, amount);
-        emit TicketIneligible(ticketId, amount, token);
+        _payEscrow(to, token, amount);
+        emit AdminEscrowRefunded(ticketId, to, amount, token);
     }
 
     function pause()   external onlyOwner { paused = true;  emit Paused(msg.sender); }

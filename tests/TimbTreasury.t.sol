@@ -161,4 +161,68 @@ contract TimbTreasuryTest is Test {
         vm.expectRevert(); // ZeroAddress (router unset)
         treasury.provideLiquidityETH(address(timbs), 1_000e18, 1 ether, 0, 0);
     }
+
+    // ─── M1: rate-limited operator ─────────────────────────────────────────────
+
+    address operator = address(0x09E7);
+    address dest     = address(0xD00D);
+
+    // Operator may spend up to the cap; over-cap in the same window reverts.
+    function testOperatorCapEnforced() public {
+        vm.deal(address(treasury), 10 ether);
+        treasury.setOperator(operator);
+        treasury.setOperatorEthCap(0.5 ether, 1 days);
+
+        vm.prank(operator);
+        treasury.withdrawOperational(dest, 0.4 ether);
+        assertEq(dest.balance, 0.4 ether, "first op withdrawal");
+
+        // 0.4 + 0.2 > 0.5 cap → revert.
+        vm.prank(operator);
+        vm.expectRevert(); // OperatorCapExceeded
+        treasury.withdrawOperational(dest, 0.2 ether);
+    }
+
+    // The cap is per-window: it resets once the period elapses.
+    function testOperatorWindowRolls() public {
+        vm.deal(address(treasury), 10 ether);
+        treasury.setOperator(operator);
+        treasury.setOperatorEthCap(0.5 ether, 1 days);
+
+        vm.prank(operator);
+        treasury.withdrawOperational(dest, 0.5 ether); // fills the window
+
+        vm.warp(block.timestamp + 1 days + 1);
+        vm.prank(operator);
+        treasury.withdrawOperational(dest, 0.5 ether); // fresh window
+        assertEq(dest.balance, 1 ether, "window did not roll");
+    }
+
+    // The timelock owner is not rate-limited.
+    function testOwnerBypassesOperatorCap() public {
+        vm.deal(address(treasury), 10 ether);
+        treasury.setOperatorEthCap(0.5 ether, 1 days);
+        // owner == this (deployer); withdraw far above the operator cap.
+        treasury.withdrawOperational(dest, 5 ether);
+        assertEq(dest.balance, 5 ether, "owner must be uncapped");
+    }
+
+    // A stranger (neither owner nor operator) cannot withdraw.
+    function testOperationalWithdrawRejectsStranger() public {
+        vm.deal(address(treasury), 10 ether);
+        treasury.setOperator(operator);
+        treasury.setOperatorEthCap(0.5 ether, 1 days);
+        vm.prank(address(0xBAD));
+        vm.expectRevert(); // NotAuthorised
+        treasury.withdrawOperational(dest, 0.1 ether);
+    }
+
+    // With no cap set, the operator can withdraw nothing (cap defaults to 0).
+    function testOperatorDisabledByDefault() public {
+        vm.deal(address(treasury), 10 ether);
+        treasury.setOperator(operator);
+        vm.prank(operator);
+        vm.expectRevert(); // OperatorCapExceeded (remaining == 0)
+        treasury.withdrawOperational(dest, 1 wei);
+    }
 }
