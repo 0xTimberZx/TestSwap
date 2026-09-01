@@ -30,10 +30,11 @@ jobs:
         working-directory: scripts
         env:
           ARB_RPC:               ${{ secrets.ARB_RPC }}
+          ARB_SEPOLIA_RPC:       ${{ secrets.ARB_SEPOLIA_RPC }}
           SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
           TELEGRAM_BOT_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:      ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}
-          COMPETE_URL:           ${{ vars.COMPETE_URL }}
+          TELEGRAM_BOT_USERNAME: SettlerTimbBot
+          COMPETE_URL:           https://timbswap.xyz/compete
         run: node match-notifier.js
