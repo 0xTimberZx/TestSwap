@@ -345,7 +345,7 @@ contract Deploy is Script {
         console.log("   and fund the subscription (LINK/native) before startGame");
         console.log("7. Call timbPrize.startGame() after frontend tested");
         console.log("8. Add TimbSwap tab to DebugHub dashboard");
-        console.log("9. GOVERNANCE HANDOFF (after full verification) — for each of");
+        console.log("9. GOVERNANCE HANDOFF (after full verification) - for each of");
         console.log("   TimbTreasury / GameRegistry / UnderwriteReserve:");
         console.log("     owner: transferOwnership(timelock)  [Ownable2Step]");
         console.log("     then via a timelock proposal from the multisig:");
