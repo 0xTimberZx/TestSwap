@@ -234,17 +234,22 @@ async function _initProvider() {
 async function _ensureChain() {
   const network = await provider.getNetwork();
   if (network.chainId === CHAIN_ID) return;
+  // Attempt the switch, but never let its popup HANG the connect — time-bound
+  // each wallet request so a prompt the wallet fails to surface (or the user
+  // leaves open) settles instead of freezing the button. On failure this throws
+  // and connectWallet turns it into a clean "wrong network" failure the user can
+  // retry, rather than an indefinite spinner.
   try {
-    await injectedProvider().request({
+    await _withTimeout(injectedProvider().request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: CHAIN_CONFIG.chainId }]
-    });
+    }), 60000, "switchChain");
   } catch (switchErr) {
-    if (switchErr.code === 4902) {
-      await injectedProvider().request({
+    if (switchErr && switchErr.code === 4902) {
+      await _withTimeout(injectedProvider().request({
         method: "wallet_addEthereumChain",
         params: [CHAIN_CONFIG]
-      });
+      }), 60000, "addChain");
     } else {
       throw switchErr;
     }
@@ -260,58 +265,44 @@ async function _ensureChain() {
   }
 }
 
-// De-dupe concurrent connect attempts. A mobile wallet rejects a SECOND
-// eth_requestAccounts with -32002 ("Already processing. Please wait.") while
-// its first popup is still open, so every impatient re-tap logged a bogus
-// "Wallet Connect Failed" (the tight Requested→Failed loop seen in DebugHub)
-// even though the original request was still live. While one attempt is in
-// flight, hand every caller the SAME promise instead of firing a new request.
-let _connectInFlight = null;
-
+// Connect the wallet. Modeled on the SwapTables flow, which connects reliably in
+// Brave: fire eth_requestAccounts on EVERY tap (no in-flight promise caching).
+// The old de-dupe returned a stale promise while one attempt was pending — so if
+// the wallet never surfaced its prompt, _connectInFlight stayed set and every
+// later tap hit a DEAD promise (the button did nothing until a full reload). A
+// second request while a popup is genuinely open just returns -32002 ("already
+// processing"), which is benign, so re-firing is safe and actually re-triggers a
+// prompt that failed to surface.
 async function connectWallet() {
   if (!window.ethereum) {
     alert("No wallet detected. Please use MetaMask or Brave Wallet.");
     return false;
   }
-  if (_connectInFlight) return _connectInFlight;
-
-  _connectInFlight = (async () => {
-    // Visual feedback on the shared connect button (same id on every page): a
-    // tap while the wallet is locked previously looked dead — eth_requestAccounts
-    // sits pending until the wallet surfaces its popup, which Brave sometimes
-    // won't do until the user opens the extension. Tell the user to check their
-    // wallet, and disable the button so repeated taps don't pile up.
-    _setConnectBtn("Connecting… check your wallet", true);
-    try {
-      // Request account authorization FIRST. _initProvider() calls signer.getAddress(),
-      // which throws "unknown account #0" in ethers v5 before any account is authorized —
-      // silently failing the whole connect even though the wallet popup succeeded.
-      // Time-bound it: if the wallet never surfaces its prompt (or the user leaves
-      // it), the in-flight promise still settles so the button recovers and a
-      // re-tap can fire a fresh request instead of hitting a dead _connectInFlight.
-      await _withTimeout(
-        injectedProvider().request({ method: "eth_requestAccounts" }), 60000, "eth_requestAccounts");
-      await _initProvider();
-      await _ensureChain();
-      _saveSession(userAddress);
-      return true;
-    } catch (err) {
-      // -32002 = a request is already pending in the wallet. Not a real
-      // failure — the user just needs to finish the popup that's already open.
-      if (err && (err.code === -32002 || /already processing/i.test(err.message || ""))) {
-        console.warn("connectWallet: a connect request is already pending in the wallet");
-      } else {
-        console.error("connectWallet failed:", err);
-      }
-      return false;
-    } finally {
-      // Always restore the button (success hides it via the page handler; on
-      // failure/cancel this makes it tappable again with the right label).
-      _setConnectBtn("Connect Wallet", false);
-      _connectInFlight = null;
+  // Feedback on the shared connect button (same id every page) — a locked-wallet
+  // tap previously looked dead while eth_requestAccounts sat pending.
+  _setConnectBtn("Connecting… check your wallet", true);
+  try {
+    // Request account authorization FIRST. _initProvider() calls signer.getAddress(),
+    // which throws "unknown account #0" in ethers v5 before any account is authorized.
+    // Timeout so a never-answered request still settles (button always recovers).
+    await _withTimeout(
+      injectedProvider().request({ method: "eth_requestAccounts" }), 60000, "eth_requestAccounts");
+    await _initProvider();
+    await _ensureChain();
+    _saveSession(userAddress);
+    return true;
+  } catch (err) {
+    if (err && (err.code === -32002 || /already processing/i.test(err.message || ""))) {
+      console.warn("connectWallet: a request is already open in your wallet — approve it there");
+    } else {
+      console.error("connectWallet failed:", err);
     }
-  })();
-  return _connectInFlight;
+    return false;
+  } finally {
+    // Restore the button (success hides it via the page handler; on failure/cancel
+    // this makes it tappable again so a re-tap fires a fresh request).
+    _setConnectBtn("Connect Wallet", false);
+  }
 }
 
 // Update the shared connect button (id "connect-btn" on every page). No-op if
