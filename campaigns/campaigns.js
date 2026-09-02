@@ -62,5 +62,7 @@ function renderReceipts() {
   setText("cv-pool", PRIZE_POOL);
   renderReceipts();
   refreshPrizeWallet();
-  setInterval(refreshPrizeWallet, 60000); // keep the balance current while open
+  // Only poll the balance while the tab is visible; refresh on focus.
+  setInterval(() => { if (!document.hidden) refreshPrizeWallet(); }, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshPrizeWallet(); });
 })();
