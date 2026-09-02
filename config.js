@@ -19,13 +19,15 @@ const PUBLIC_RPCS = [
   "https://arbitrum-sepolia.gateway.tenderly.co", // Tenderly gateway
 ];
 
-// Dedicated read endpoint (a keyed Alchemy/dRPC/etc. URL with real rate limits),
-// injected at DEPLOY time from the ARB_SEPOLIA_RPC secret (see deploy.yml). Kept
-// out of git — the placeholder below is replaced only in the deployed output
-// (which is public anyway, as any frontend RPC must be). If it's left
-// unreplaced (local preview, a PR build, or no secret set) the guard drops it
-// and reads fall back to the public endpoints above.
-const DEDICATED_RPC = "__ARB_SEPOLIA_RPC__";
+// Dedicated read endpoint (keyed Alchemy URL with real per-key rate limits).
+// Committed directly (a frontend RPC is public regardless): the shared public
+// endpoints throttle per-IP under heavy browsing and stall reads, so a keyed
+// primary is the durable fix. The deploy.yml injection still swaps the
+// "__ARB_SEPOLIA_RPC__" placeholder when present, but this literal takes its
+// place, so the injection is now an inert no-op unless this is reset to the
+// placeholder. Recommend locking this key to the timbswap.xyz domain in the
+// Alchemy dashboard so a copied URL can't be abused elsewhere.
+const DEDICATED_RPC = "https://arb-sepolia.g.alchemy.com/v2/PDKCOXR05xcN4AkdaVqNp";
 const _hasDedicated = typeof DEDICATED_RPC === "string" &&
                       DEDICATED_RPC.startsWith("http");
 
