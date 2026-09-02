@@ -536,7 +536,10 @@ function _swapLiveTick() {
     updateSwapUsd();
   }
 }
-setInterval(_swapLiveTick, 4000);
+// Only tick while the tab is visible — _swapLiveTick runs recalcQuote()/price
+// reads, so a backgrounded swap tab would keep hitting the RPC. Refresh on focus.
+setInterval(() => { if (!document.hidden) _swapLiveTick(); }, 4000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) _swapLiveTick(); });
 
 // Active multi-hop route (effective addresses, e.g. [USDT, WETH, TIMBS]) or
 // null when the trade is direct / a wrap. Set only by a successful path quote.
