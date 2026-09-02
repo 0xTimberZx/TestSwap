@@ -335,7 +335,11 @@ async function drainSettlement(registry, settledRound, newRound) {
 
   // 2. Activate the new round's entrants (idempotent, gated to currentRound).
   let entrants = [];
-  try { entrants = await registry.getRoundEntrants(newRound); } catch {}
+  // Plain, mutable copy of plain strings — see healCurrentRoundActivation: the
+  // ethers v6 Result returned by getRoundEntrants is a FROZEN array, and passing
+  // it (or slices of it) as `players` makes ethers throw "Cannot assign to read
+  // only property" when it normalizes the addresses in place.
+  try { entrants = Array.from(await registry.getRoundEntrants(newRound), (a) => String(a)); } catch {}
   for (let i = 0; i < entrants.length; i += DRAIN_CHUNK) {
     const chunk = entrants.slice(i, i + DRAIN_CHUNK);
     try {
@@ -372,7 +376,12 @@ async function healCurrentRoundActivation(registry, prize) {
     return;
   }
   let entrants = [];
-  try { entrants = await registry.getRoundEntrants(round); } catch { return; }
+  // getRoundEntrants returns an ethers v6 Result — a FROZEN array. Passing it,
+  // or a slice of it, back as the `players` argument makes ethers throw
+  // "Cannot assign to read only property '0'" when it normalizes the addresses
+  // in place (this was the real reason activation silently failed and tickets
+  // stuck "Pending"). Copy to a plain, mutable array of plain strings first.
+  try { entrants = Array.from(await registry.getRoundEntrants(round), (a) => String(a)); } catch { return; }
   if (!entrants.length) return;
   console.log(`[settler] activation catch-up: ensuring ${entrants.length} entrant(s) active for round #${round}…`);
   for (let i = 0; i < entrants.length; i += DRAIN_CHUNK) {
