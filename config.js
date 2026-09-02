@@ -248,7 +248,11 @@ async function _initProvider() {
 }
 
 async function _ensureChain() {
-  const network = await provider.getNetwork();
+  // getNetwork() sends eth_chainId to the injected wallet; Brave can leave that
+  // pending indefinitely after a data-shred, hanging the connect on the very
+  // first read. Bound it so a wedged wallet fails cleanly instead of freezing
+  // the "Connecting…" button (matches the timeout autoReconnect already uses).
+  const network = await _withTimeout(provider.getNetwork(), 15000, "getNetwork");
   if (network.chainId === CHAIN_ID) { _walletChainOk = true; return; }
   // Attempt the switch, but never let its popup HANG the connect — time-bound
   // each wallet request so a prompt the wallet fails to surface (or the user
@@ -270,11 +274,11 @@ async function _ensureChain() {
       throw switchErr;
     }
   }
-  await _initProvider();
+  await _withTimeout(_initProvider(), 15000, "initProvider");
   // Some mobile in-app wallets resolve wallet_switchEthereumChain without
   // actually switching. Verify, and fail the connect loudly instead of
   // letting the session run against the wrong network.
-  const net = await provider.getNetwork();
+  const net = await _withTimeout(provider.getNetwork(), 15000, "getNetwork");
   if (net.chainId !== CHAIN_ID) {
     DebugHub.logSecurity?.("Chain Check", "fail");
     throw new Error(`Wallet stayed on chain ${net.chainId} — switch to ${CHAIN_NAME} (${CHAIN_ID}) and reconnect.`);
@@ -304,7 +308,13 @@ async function connectWallet() {
     // Timeout so a never-answered request still settles (button always recovers).
     await _withTimeout(
       injectedProvider().request({ method: "eth_requestAccounts" }), 60000, "eth_requestAccounts");
-    await _initProvider();
+    // eth_requestAccounts resolving does NOT mean later wallet reads will. Brave
+    // (especially after "Shred site data") can leave signer.getAddress() /
+    // getNetwork() pending forever — the button then sat on "Connecting…" with
+    // no failure logged (confirmed in DebugHub: "Wallet Connect Requested" with
+    // nothing after it). Bound every wallet read so the connect always resolves
+    // to success or a clean, retryable failure. _ensureChain() is itself bounded.
+    await _withTimeout(_initProvider(), 15000, "initProvider");
     await _ensureChain();
     _saveSession(userAddress);
     return true;

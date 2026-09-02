@@ -205,12 +205,12 @@ async function loadStats() {
 // without connecting. When a wallet drops mid-session the app lands back on the
 // dashboard, so this is the connect prompt that lets the user reconnect.
 function goGated(e, dest) {
-  if (userAddress) return true;              // already connected → follow the link
-  if (e) e.preventDefault();
-  handleConnect().then(() => {
-    if (userAddress) window.location.href = dest;  // connected via the popup → proceed
-  });
-  return false;
+  // Never gate navigation on a wallet connect. The destination pages (/compete/,
+  // /swap/) load read-only and carry their own Connect button, so requiring a
+  // connect here only strands the user on the landing page when the wallet is
+  // flaky (the reported "buttons don't lead me to compete or swap"). Just follow
+  // the link; the page prompts to connect when an action actually needs it.
+  return true;
 }
 
 async function handleConnect() {
