@@ -7,24 +7,39 @@
 const CHAIN_ID   = 421614;
 const CHAIN_NAME = "Arbitrum Sepolia";
 
-// Independent public RPCs for READ traffic. A single endpoint rate-limits under
-// load and stalls cold page loads (the game banner sits at "Loading…" until the
-// first read lands, and every page reads through one of these). makeReadProvider()
-// spreads reads across all of them so no single endpoint's throttling can freeze
-// the UI. Order = priority; the first is also what the wallet is asked to add.
-const RPC_URLS = [
+// Independent public RPCs for READ traffic. Free public endpoints rate-limit
+// per-IP under heavy browsing (several tabs polling), which stalls reads on
+// every page ("fine at first, spoils after exploring"). makeReadProvider()
+// spreads reads across all of them so no single endpoint's throttling freezes
+// the UI. Order = priority.
+const PUBLIC_RPCS = [
   "https://sepolia-rollup.arbitrum.io/rpc",       // official Arbitrum
   "https://arbitrum-sepolia-rpc.publicnode.com",  // PublicNode
   "https://arbitrum-sepolia.drpc.org",            // dRPC
   "https://arbitrum-sepolia.gateway.tenderly.co", // Tenderly gateway
 ];
-const RPC_URL = RPC_URLS[0]; // single URL for the wallet add-chain config below
+
+// Dedicated read endpoint (a keyed Alchemy/dRPC/etc. URL with real rate limits),
+// injected at DEPLOY time from the ARB_SEPOLIA_RPC secret (see deploy.yml). Kept
+// out of git — the placeholder below is replaced only in the deployed output
+// (which is public anyway, as any frontend RPC must be). If it's left
+// unreplaced (local preview, a PR build, or no secret set) the guard drops it
+// and reads fall back to the public endpoints above.
+const DEDICATED_RPC = "__ARB_SEPOLIA_RPC__";
+const _hasDedicated = typeof DEDICATED_RPC === "string" &&
+                      DEDICATED_RPC.startsWith("http");
+
+// App reads: dedicated first (high limits), public endpoints as fallback.
+const RPC_URLS = _hasDedicated ? [DEDICATED_RPC, ...PUBLIC_RPCS] : PUBLIC_RPCS;
+// Wallet add-chain uses only PUBLIC endpoints — never route a visitor's wallet
+// traffic through our keyed quota.
+const RPC_URL = PUBLIC_RPCS[0];
 
 const CHAIN_CONFIG = {
   chainId:   "0x" + CHAIN_ID.toString(16),
   chainName: CHAIN_NAME,
   nativeCurrency: { name: "Ethereum", symbol: "ETH", decimals: 18 },
-  rpcUrls:        RPC_URLS,
+  rpcUrls:        PUBLIC_RPCS,
   blockExplorerUrls: ["https://sepolia.arbiscan.io"]
 };
 
