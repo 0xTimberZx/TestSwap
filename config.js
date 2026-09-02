@@ -276,6 +276,12 @@ async function connectWallet() {
   if (_connectInFlight) return _connectInFlight;
 
   _connectInFlight = (async () => {
+    // Visual feedback on the shared connect button (same id on every page): a
+    // tap while the wallet is locked previously looked dead — eth_requestAccounts
+    // sits pending until the wallet surfaces its popup, which Brave sometimes
+    // won't do until the user opens the extension. Tell the user to check their
+    // wallet, and disable the button so repeated taps don't pile up.
+    _setConnectBtn("Connecting… check your wallet", true);
     try {
       // Request account authorization FIRST. _initProvider() calls signer.getAddress(),
       // which throws "unknown account #0" in ethers v5 before any account is authorized —
@@ -295,10 +301,26 @@ async function connectWallet() {
       }
       return false;
     } finally {
+      // Always restore the button (success hides it via the page handler; on
+      // failure/cancel this makes it tappable again with the right label).
+      _setConnectBtn("Connect Wallet", false);
       _connectInFlight = null;
     }
   })();
   return _connectInFlight;
+}
+
+// Update the shared connect button (id "connect-btn" on every page). No-op if
+// the page has no such button. The per-page success handler hides the button
+// after a connect; this only drives the pending/failed states.
+function _setConnectBtn(text, disabled) {
+  try {
+    const b = document.getElementById("connect-btn");
+    if (!b) return;
+    b.textContent = text;
+    b.disabled = !!disabled;
+    b.classList.toggle("is-connecting", !!disabled);
+  } catch {}
 }
 
 /**
