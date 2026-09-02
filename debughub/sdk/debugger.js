@@ -1,6 +1,6 @@
 /* ============================================================
    DebugHub SDK
-   Version: 1.3.1  (#debug is local-only: sink held back while armed)
+   Version: 1.3.2  (#debug local-only; upload failures now logged once)
 
    Drop-in replacement for MyDapp/debughub/sdk/debugger.js.
 
@@ -143,9 +143,30 @@
         body: JSON.stringify(row),
         keepalive: true,
         mode: "cors"
-      }).catch(function () {});
+      }).then(function (res) {
+        // Surface the FIRST upload rejection so a silently-failing sink is
+        // diagnosable (this is why "my events never reach the hub" was invisible
+        // — every failure was swallowed). One-time only; telemetry must never
+        // spam the console or affect the host app. A 4xx is server/RLS/key; a
+        // thrown fetch below is network/CORS/blocked (e.g. by a shield).
+        if (!res.ok && !_sinkWarned) {
+          _sinkWarned = true;
+          res.text().then(function (t) {
+            warn("telemetry upload rejected (HTTP " + res.status + "): " + String(t || "").slice(0, 200));
+          }).catch(function () {
+            warn("telemetry upload rejected (HTTP " + res.status + ")");
+          });
+        }
+      }).catch(function (err) {
+        if (!_sinkWarned) {
+          _sinkWarned = true;
+          warn("telemetry upload failed (network/blocked/CORS): " + ((err && err.message) || err));
+        }
+      });
     } catch (e) { /* never throw from telemetry */ }
   }
+  // One-time guard so a failing sink logs its reason ONCE, never per event.
+  var _sinkWarned = false;
 
   // ---------- console feedback (silent unless storage fails) ----------
 
