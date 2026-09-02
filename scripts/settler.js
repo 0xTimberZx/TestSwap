@@ -148,14 +148,24 @@ async function alertIfDelayed(prize, round, segment) {
 // ─── Telegram ─────────────────────────────────────────────────────────────────
 
 async function sendTelegram(chatId, text) {
+  const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
+  const post = (body) => fetch(url, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
   try {
-    const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
-    const res  = await fetch(url, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" })
-    });
-    if (!res.ok) console.error("[notify] Telegram error:", await res.text());
+    let res = await post({ chat_id: chatId, text, parse_mode: "Markdown" });
+    if (!res.ok) {
+      // Markdown parsing chokes on error dumps ( _ * [ ] etc. from an RPC error
+      // JSON), which previously dropped the alert entirely — so a FATAL failure
+      // (e.g. an RPC 403) went unnoticed. Resend as plain text so critical
+      // alerts are never silently lost.
+      const err = await res.text();
+      console.error("[notify] Telegram Markdown send failed, retrying plain text:", err);
+      res = await post({ chat_id: chatId, text });
+      if (!res.ok) console.error("[notify] Telegram plain-text send error:", await res.text());
+    }
   } catch (e) {
     console.error("[notify] Failed to send Telegram message:", e.message);
   }
