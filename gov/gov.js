@@ -32,14 +32,14 @@ let myVotingPower  = ethers.BigNumber.from(0);
 let totalPower     = ethers.BigNumber.from(0);
 let proposalCount  = 0;
 
-// Read-only queries always go to the canonical Arbitrum Sepolia RPC —
-// never the wallet's in-app provider. Mobile wallets sometimes serve
-// eth_call/eth_getBalance from a different network than they display,
-// which reads as zero balances (or stale state) for perfectly funded
-// accounts. The wallet provider is only used for signing transactions.
-let _publicProv = null;
+// Read-only queries go through the shared read provider (config.js): the
+// connected wallet's own RPC once it is verified on the right chain — that
+// endpoint isn't the shared public one, so polling can't trip a per-IP rate
+// limit, which is what keeps pages responsive in Brave — otherwise the
+// resilient public FallbackProvider. The _walletChainOk gate prevents a
+// wrong-network wallet from serving stale/zero reads.
 function readProv() {
-  return _publicProv || (_publicProv = makeReadProvider());
+  return sharedReadProvider();
 }
 
 // ─── Stats Bar ────────────────────────────────────────────────────────────────

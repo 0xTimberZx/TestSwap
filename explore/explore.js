@@ -30,11 +30,12 @@ const ERC20_META_ABI = [
 const WINDOW_DAYS = 7;
 const ZERO = "0x0000000000000000000000000000000000000000";
 
-// Read-only queries always go to the canonical Arbitrum Sepolia RPC — never a
-// wallet's in-app provider (this page never needs one).
-let _publicProv = null;
+// Read-only queries go through the shared read provider (config.js): the
+// connected wallet's own RPC when verified on-chain (avoids public-RPC per-IP
+// rate limits, especially in Brave), else the resilient public
+// FallbackProvider — so this page works with or without a wallet.
 function readProv() {
-  return _publicProv || (_publicProv = makeReadProvider());
+  return sharedReadProvider();
 }
 
 // Read-only contracts bound to the stable provider — cache by address.
