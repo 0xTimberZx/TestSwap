@@ -31,8 +31,22 @@ const DEDICATED_RPC = "https://arb-sepolia.g.alchemy.com/v2/PDKCOXR05xcN4AkdaVqN
 const _hasDedicated = typeof DEDICATED_RPC === "string" &&
                       DEDICATED_RPC.startsWith("http");
 
-// App reads: dedicated first (high limits), public endpoints as fallback.
-const RPC_URLS = _hasDedicated ? [DEDICATED_RPC, ...PUBLIC_RPCS] : PUBLIC_RPCS;
+// App reads: when a dedicated (keyed) endpoint exists, use it ALONE — do NOT
+// mix it into a FallbackProvider with the public endpoints. Mixing was the
+// source of the "header not found" / "historical state is not available" /
+// "RPC endpoint not found" CALL_EXCEPTIONs seen in DebugHub (on loadLiveMetrics,
+// loadVault, loadRecentSwaps, loadClaims). Those aren't contract reverts: the
+// public Arbitrum-Sepolia nodes run divergent heads and prune state, and ethers'
+// FallbackProvider pins each call to the highest block it has seen, then on an
+// Alchemy stall (>stallTimeout) races the publics and returns whichever settles
+// first — often a public node's FAST ERROR for a block it lacks or pruned.
+// ethers v5 surfaces that node error as CALL_EXCEPTION with data="0x", which
+// mimics a revert but is a node failure (nested error.data.code -32000/-32002).
+// A single consistent node has one head and keeps recent state, so the whole
+// class vanishes. Publics remain the resilient fallback only when no key is set.
+// (If Alchemy itself ever proves flaky, add a SECOND keyed provider here rather
+// than the public nodes — heterogeneous public heads are what break consistency.)
+const RPC_URLS = _hasDedicated ? [DEDICATED_RPC] : PUBLIC_RPCS;
 // Wallet add-chain uses only PUBLIC endpoints — never route a visitor's wallet
 // traffic through our keyed quota.
 const RPC_URL = PUBLIC_RPCS[0];
