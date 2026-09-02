@@ -220,6 +220,37 @@ function sharedReadProvider() {
   return _publicRO || (_publicRO = makeReadProvider());
 }
 
+// ─── Logs read provider (wide eth_getLogs ranges) ─────────────────────────────
+// Event scans need an endpoint that serves WIDE block ranges. The keyed Alchemy
+// endpoint — and many wallet RPCs — cap eth_getLogs to a tiny range (observed
+// ~10 blocks; see scripts/epoch.js), so a multi-day event window fails there
+// ("Could not load claims / swaps"). The canonical Arbitrum public endpoint
+// serves large ranges (the same one epoch.js and the explore page already scan
+// from browsers). So getLogs ALWAYS goes here, independent of the state-read
+// provider (which is Alchemy or the wallet). eth_call consistency isn't a
+// concern for getLogs — it's addressed by explicit fromBlock/toBlock below.
+let _logsRO = null;
+function logsReadProvider() {
+  return _logsRO || (_logsRO = new ethers.providers.StaticJsonRpcProvider(PUBLIC_RPCS[0], CHAIN_ID));
+}
+// Cache the logs endpoint's own head briefly so a page's several event scans
+// don't each pay a getBlockNumber. Resolving the head on the SAME endpoint that
+// runs the getLogs is what prevents a cross-provider mismatch — a toBlock past
+// the node's head returns "header not found" — now that state reads come from a
+// different (possibly further-ahead) node.
+let _logsHead = { block: 0, at: 0 };
+async function logsHeadBlock(fallbackBlock) {
+  const now = Date.now();
+  if (_logsHead.block && now - _logsHead.at < 4000) return _logsHead.block;
+  try {
+    const b = await logsReadProvider().getBlockNumber();
+    _logsHead = { block: b, at: now };
+    return b;
+  } catch {
+    return fallbackBlock || _logsHead.block || 0;
+  }
+}
+
 // ─── Injected Provider Selection (Brave-safe) ─────────────────────────────────
 // When multiple wallet extensions inject, window.ethereum.providers is an
 // array and window.ethereum itself is whichever extension won the injection
@@ -614,11 +645,19 @@ function blockAge(block, currentBlock, bps) {
 // limits. Try the wanted window first, then shrink (¼, then 1/20) before
 // giving up, so a strict endpoint still yields the most recent slice of
 // activity instead of nothing.
+//
+// The scan is routed through logsReadProvider() (the wide-range canonical
+// endpoint), NOT the contract's own provider — that may be Alchemy or the
+// wallet, both of which cap getLogs to a tiny range. `currentBlock` (the state
+// node's head) is only a fallback for the toBlock; the real toBlock is the logs
+// endpoint's own head, so it can never outrun that node ("header not found").
 async function queryFilterWindow(contract, filter, currentBlock, windowBlocks) {
+  const c    = contract.connect(logsReadProvider());
+  const head = await logsHeadBlock(currentBlock);
   let lastErr = null;
   for (const f of [1, 0.25, 0.05]) {
-    const from = Math.max(0, currentBlock - Math.round(windowBlocks * f));
-    try { return await contract.queryFilter(filter, from, currentBlock); }
+    const from = Math.max(0, head - Math.round(windowBlocks * f));
+    try { return await c.queryFilter(filter, from, head); }
     catch (e) { lastErr = e; }
   }
   throw lastErr;
