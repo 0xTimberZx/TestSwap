@@ -326,7 +326,9 @@ async function drainSettlement(registry, settledRound, newRound) {
       if (await registry.settleDone(gen, settledRound)) break;
       await (await registry.onRoundSettled(settledRound, DRAIN_CHUNK)).wait();
     } catch (e) {
-      console.warn(`[settler] onRoundSettled(${settledRound}) drain paused: ${e?.shortMessage || e?.message}`);
+      const msg = e?.shortMessage || e?.message || String(e);
+      console.warn(`[settler] onRoundSettled(${settledRound}) drain paused: ${msg}`);
+      await notify(`⚠️ Settler drain paused — onRoundSettled(#${settledRound})\n${msg}\nExpiry/forfeiture bookkeeping is incomplete; will retry next run.`);
       break;
     }
   }
@@ -339,11 +341,51 @@ async function drainSettlement(registry, settledRound, newRound) {
     try {
       await (await registry.activateRoundEntries(newRound, chunk)).wait();
     } catch (e) {
-      console.warn(`[settler] activateRoundEntries(${newRound}) drain paused: ${e?.shortMessage || e?.message}`);
+      const msg = e?.shortMessage || e?.message || String(e);
+      console.warn(`[settler] activateRoundEntries(${newRound}) drain paused: ${msg}`);
+      await notify(`⚠️ Settler drain paused — activateRoundEntries(#${newRound})\n${msg}\nRound #${newRound} tickets may show stuck "Pending"; will retry next run.`);
       break;
     }
   }
   console.log(`[settler] drained bookkeeping: settled #${settledRound}, activated ${entrants.length} for #${newRound}`);
+}
+
+// Self-healing activation catch-up. Entries flip Pending→Active only when the
+// keeper activates them (TimbPrize advances the round O(1) and never activates
+// inline). drainSettlement() does that — but ONLY right after a run settles a
+// round boundary. So if the run that settled a boundary failed or was
+// interrupted mid-drain (or was force-cancelled while holding the slot), that
+// round's entries stay Pending forever: no later run retries them, because no
+// later run settles that same boundary again. Symptom: tickets stuck "Pending"
+// in an already-live round (the round-4 incident). Heal it every run by
+// (re)activating the CURRENT round's entrants up front. activateRoundEntries is
+// gated to currentRound and no-ops already-active tickets, so this is safe to
+// call unconditionally; on testnet the occasional no-op tx is free, and it
+// guarantees a missed/partial activation self-corrects on the very next run
+// instead of requiring a manual poke.
+async function healCurrentRoundActivation(registry, prize) {
+  let round;
+  try {
+    round = await prize.currentRound();
+  } catch (e) {
+    console.warn(`[settler] activation catch-up skipped (round read failed): ${e?.shortMessage || e?.message}`);
+    return;
+  }
+  let entrants = [];
+  try { entrants = await registry.getRoundEntrants(round); } catch { return; }
+  if (!entrants.length) return;
+  console.log(`[settler] activation catch-up: ensuring ${entrants.length} entrant(s) active for round #${round}…`);
+  for (let i = 0; i < entrants.length; i += DRAIN_CHUNK) {
+    const chunk = entrants.slice(i, i + DRAIN_CHUNK);
+    try {
+      await (await registry.activateRoundEntries(round, chunk)).wait();
+    } catch (e) {
+      const msg = e?.shortMessage || e?.message || String(e);
+      console.warn(`[settler] activation catch-up for #${round} paused: ${msg}`);
+      await notify(`⚠️ Settler activation catch-up FAILED — round #${round}\n${msg}\nTickets may show stuck "Pending" until this clears.`);
+      break;
+    }
+  }
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -352,7 +394,16 @@ async function main() {
   if (!RPC_URL)      throw new Error("Missing ARB_SEPOLIA_RPC");
   if (!PRIVATE_KEY)  throw new Error("Missing SETTLER_PRIVATE_KEY");
 
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  // Bound every RPC request so a dead-air endpoint fails fast instead of hanging
+  // on ethers' 5-minute default. A wedged read or tx otherwise freezes the whole
+  // run, and with the workflow's `cancel-in-progress: false` a frozen run holds
+  // the concurrency slot and blocks every queued run behind it (the exact
+  // failure that left round-4 tickets stuck). A timed-out request throws, is
+  // caught by the handlers below, alerts, and exits — letting cron / the next
+  // run recover and freeing the slot.
+  const fetchReq = new ethers.FetchRequest(RPC_URL);
+  fetchReq.timeout = Number(process.env.SETTLER_RPC_TIMEOUT_MS || 30_000);
+  const provider = new ethers.JsonRpcProvider(fetchReq);
   const wallet   = new ethers.Wallet(PRIVATE_KEY, provider);
   const prize    = new ethers.Contract(TIMBPRIZE_ADDR, TIMBPRIZE_ABI, wallet);
   const registry = new ethers.Contract(GAMEREGISTRY_ADDR, GAMEREGISTRY_ABI, wallet);
@@ -374,6 +425,12 @@ async function main() {
   }
   const entropy = new ethers.Contract(entropyAddr, ENTROPY_ABI, provider);
   console.log(`[settler] Prize VRFEntropy: ${entropyAddr}`);
+
+  // Self-heal any round whose entrants were left un-activated by a prior failed
+  // or interrupted drain, BEFORE settling anything this run. Idempotent, so it's
+  // a no-op on a healthy game. This is what makes a missed activation recover on
+  // its own instead of leaving tickets stuck "Pending" until a manual poke.
+  await healCurrentRoundActivation(registry, prize);
 
   // ── Drain the backlog: settle every overdue segment/round-boundary event
   //    this run finds, instead of stopping after the first one. Each
