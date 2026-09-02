@@ -202,6 +202,18 @@ body { padding-top: 60px; }
   transition: opacity 0.15s;
 }
 .btn-connect:hover { opacity: 0.85; }
+/* Pending / failed connect states. The failure message replaces the label, so
+   let the button grow and wrap rather than clipping the reason to nothing. */
+.btn-connect.is-connecting { opacity: 0.7; cursor: progress; }
+.btn-connect.is-failed {
+  background: #f59e0b;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.35;
+  max-width: 260px;
+  font-size: 12px;
+  font-weight: 500;
+}
 
 .wallet-info {
   position: relative;

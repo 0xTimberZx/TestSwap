@@ -302,12 +302,23 @@ async function connectWallet() {
   // Feedback on the shared connect button (same id every page) — a locked-wallet
   // tap previously looked dead while eth_requestAccounts sat pending.
   _setConnectBtn("Connecting… check your wallet", true);
+  // Which wallet are we actually talking to? When several extensions inject,
+  // injectedProvider() picks one — and a request sent to a provider the user
+  // isn't actually using never surfaces a prompt and never rejects. Recording
+  // the pick makes that case visible in telemetry instead of indistinguishable
+  // from a slow wallet.
+  try { DebugHub.logCheckpoint("Wallet Target " + _providerLabel(), "pass"); } catch {}
   try {
     // Request account authorization FIRST. _initProvider() calls signer.getAddress(),
     // which throws "unknown account #0" in ethers v5 before any account is authorized.
     // Timeout so a never-answered request still settles (button always recovers).
+    // 25s, not 60s. A wallet that is going to prompt does so in under a second;
+    // past ~20s it is wedged, and the old minute-long wait meant the user always
+    // navigated away before the rejection could fire. Every observed hang in
+    // telemetry is "Wallet Connect Requested" with nothing after it, because the
+    // page died first — the timeout was correct and simply never got to run.
     await _withTimeout(
-      injectedProvider().request({ method: "eth_requestAccounts" }), 60000, "eth_requestAccounts");
+      injectedProvider().request({ method: "eth_requestAccounts" }), 25000, "eth_requestAccounts");
     // eth_requestAccounts resolving does NOT mean later wallet reads will. Brave
     // (especially after "Shred site data") can leave signer.getAddress() /
     // getNetwork() pending forever — the button then sat on "Connecting…" with
@@ -319,8 +330,22 @@ async function connectWallet() {
     _saveSession(userAddress);
     return true;
   } catch (err) {
+    // Log the failure HERE, not only in the caller. A stage-labelled event is the
+    // difference between "the connect hung" and "eth_chainId hung on Brave Wallet
+    // while MetaMask held the accounts" — the second is actionable, the first is
+    // what we had.
+    const stage = _timeoutStage(err);
+    try {
+      if (stage) DebugHub.logCheckpoint("Wallet Connect Timeout: " + stage, "fail");
+      DebugHub.logError("connectWallet", err);
+    } catch {}
     if (err && (err.code === -32002 || /already processing/i.test(err.message || ""))) {
       console.warn("connectWallet: a request is already open in your wallet — approve it there");
+      _setConnectFail("Approve the request in your wallet, then tap again.");
+    } else if (stage) {
+      // Silent hangs used to leave the user with a button that just went back to
+      // "Connect Wallet" and no idea why. Say what happened.
+      _setConnectFail("Your wallet didn't respond (" + stage + "). Unlock it or switch wallets, then retry.");
     } else {
       console.error("connectWallet failed:", err);
     }
@@ -342,6 +367,43 @@ function _setConnectBtn(text, disabled) {
     b.textContent = text;
     b.disabled = !!disabled;
     b.classList.toggle("is-connecting", !!disabled);
+  } catch {}
+}
+
+// Which injected wallet injectedProvider() resolved to, for telemetry. Several
+// extensions can inject at once and only one of them holds the user's accounts.
+function _providerLabel() {
+  try {
+    const p = injectedProvider();
+    if (!p) return "none";
+    const multi = (window.ethereum && window.ethereum.providers &&
+                   window.ethereum.providers.length) ? "multi:" : "";
+    if (p.isBraveWallet) return multi + "brave";
+    if (p.isMetaMask)    return multi + "metamask";
+    if (p.isCoinbaseWallet) return multi + "coinbase";
+    return multi + "unknown";
+  } catch { return "error"; }
+}
+
+// _withTimeout rejects with "<label> timeout". Pull the label back out so we can
+// say WHICH wallet call hung — request, initProvider or getNetwork are three very
+// different failures and were previously indistinguishable.
+function _timeoutStage(err) {
+  const m = /^(\S+) timeout$/.exec((err && err.message) || "");
+  return m ? m[1] : null;
+}
+
+// Leave a failure message on the connect button instead of silently resetting it
+// to "Connect Wallet", which read as "nothing happened". Reverts on the next tap.
+function _setConnectFail(msg) {
+  try {
+    const b = document.getElementById("connect-btn");
+    if (!b) return;
+    b.textContent = msg;
+    b.disabled = false;
+    b.classList.remove("is-connecting");
+    b.classList.add("is-failed");
+    b.title = msg;
   } catch {}
 }
 
