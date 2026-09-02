@@ -52,8 +52,13 @@ function PrizeIndicators() {
 
   useEffect(() => {
     fetchState();
-    pollRef.current = setInterval(fetchState, 4000);
-    return () => clearInterval(pollRef.current);
+    // Only poll while the tab is visible so a backgrounded swap tab doesn't
+    // drain the shared public-RPC quota (which throttles the IP and stalls
+    // reads across every page). Re-poll on focus so it's fresh on return.
+    pollRef.current = setInterval(() => { if (!document.hidden) fetchState(); }, 6000);
+    const onVis = () => { if (!document.hidden) fetchState(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(pollRef.current); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   if (error) {

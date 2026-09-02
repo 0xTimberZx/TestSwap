@@ -280,7 +280,12 @@ function handleDisconnect() {
   // Load static stats once
   await loadStats();
 
-  // Start scroll polling immediately — no wallet needed
+  // Start scroll polling immediately — no wallet needed. Only poll while the
+  // tab is VISIBLE: a backgrounded landing tab polling forever drains the shared
+  // public-RPC quota, which throttles the IP and stalls reads on every page
+  // ("fine at first, spoils after exploring"). Ease the cadence to 8s too — the
+  // landing scroll doesn't need 3s freshness — and re-poll on tab focus.
   await updateScroll();
-  setInterval(updateScroll, 3000);  // poll every 3s
+  setInterval(() => { if (!document.hidden) updateScroll(); }, 8000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) updateScroll(); });
 })();
