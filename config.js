@@ -308,20 +308,37 @@ async function connectWallet() {
  *   const addr = await autoReconnect();
  *   if (addr) { showWalletUI(addr); loadUserData(); }
  */
+// Bound any wallet call so a stalled injected wallet can't hang the page.
+// Brave's wallet can leave eth_accounts / eth_chainId pending indefinitely on a
+// refresh; without a timeout that freezes init() before the first round-state
+// read (the "stale/Loading after refresh" bug).
+function _withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error((label || "wallet") + " timeout")), ms)),
+  ]);
+}
+
 async function autoReconnect() {
   if (!window.ethereum) return null;
   const saved = _getSavedAddress();
   if (!saved) return null;
 
   try {
-    // Check wallet still has the account active (no popup)
-    const accounts = await injectedProvider().request({ method: "eth_accounts" });
+    // Check the wallet still has the account active (no popup), with a timeout.
+    const accounts = await _withTimeout(
+      injectedProvider().request({ method: "eth_accounts" }), 4000, "eth_accounts");
     if (!accounts || accounts.length === 0) { _clearSession(); return null; }
     if (accounts[0].toLowerCase() !== saved.toLowerCase()) {
       _clearSession(); return null;
     }
-    await _initProvider();
-    await _ensureChain();
+    await _withTimeout(_initProvider(), 4000, "initProvider");
+    // Silent reconnect must NEVER trigger a chain-switch POPUP (it hangs the
+    // page on refresh). Verify the chain read-only; if it's wrong or the read
+    // stalls, drop the session and let the user reconnect explicitly (that path
+    // does the switch). This keeps reads off a wrong-network wallet.
+    const net = await _withTimeout(provider.getNetwork(), 4000, "getNetwork");
+    if (net.chainId !== CHAIN_ID) { _clearSession(); return null; }
     return userAddress;
   } catch {
     _clearSession();

@@ -1742,36 +1742,44 @@ function handleDisconnect() {
   DebugHub.logCheckpoint("Compete:Page Loaded", "pass");
   initBannerRotation();
 
-  const _reconnected = await autoReconnect();
-  if (_reconnected) {
-    document.getElementById("connect-btn")?.classList.add("hidden");
-    document.getElementById("wallet-info")?.classList.remove("hidden");
-    document.getElementById("network-badge")?.classList.remove("hidden");
-    const _el = document.getElementById("wallet-addr");
-    if (_el) _el.textContent = fmtAddr(_reconnected);
-    DebugHub.startSession(_reconnected);
-    DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
-    // Reflect the connected state on the entry button immediately; without this
-    // it keeps reading "Connect wallet to enter" until the user types.
-    updateEntryButton();
-    refreshEntryBalance();
-    listenForAccountChanges(async (newAddr) => {
-      if (!newAddr) { handleDisconnect(); return; }
-      const _addrEl = document.getElementById("wallet-addr");
-      if (_addrEl) _addrEl.textContent = fmtAddr(newAddr);
+  // Wallet auto-reconnect runs INDEPENDENTLY of the game load. Init used to do
+  // `await autoReconnect()` here, so a stalled injected wallet on a refresh
+  // (Brave, saved session) froze the page BEFORE the first pollRoundState —
+  // leaving round/pot/tickets stuck on "Loading" until a full site-data wipe.
+  // Now the round state always loads; the wallet UI fills in when (or if) the
+  // reconnect resolves. autoReconnect() is also timeout-bounded in config.js.
+  autoReconnect().then((_reconnected) => {
+    if (_reconnected) {
+      document.getElementById("connect-btn")?.classList.add("hidden");
+      document.getElementById("wallet-info")?.classList.remove("hidden");
+      document.getElementById("network-badge")?.classList.remove("hidden");
+      const _el = document.getElementById("wallet-addr");
+      if (_el) _el.textContent = fmtAddr(_reconnected);
+      DebugHub.startSession(_reconnected);
+      DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
       updateEntryButton();
-      await Promise.all([loadMyEntries(), loadPastRounds(), pollRoundState()]);
       refreshEntryBalance();
-    });
-  } else {
-    // Not connected — run the CONNECT WALLET marquee right away so no real
-    // digits flash before the first poll resolves, and show the newcomer
-    // banner immediately (its live stats fill in when the poll lands).
+      loadMyEntries(); // refresh tickets now that the wallet is known
+      listenForAccountChanges(async (newAddr) => {
+        if (!newAddr) { handleDisconnect(); return; }
+        const _addrEl = document.getElementById("wallet-addr");
+        if (_addrEl) _addrEl.textContent = fmtAddr(newAddr);
+        updateEntryButton();
+        await Promise.all([loadMyEntries(), loadPastRounds(), pollRoundState()]);
+        refreshEntryBalance();
+      });
+    } else {
+      // Not connected — run the CONNECT WALLET marquee and show the newcomer
+      // banner (its live stats fill in from the poll already in flight).
+      startGateMask();
+      document.getElementById("newcomer-banner")?.classList.remove("hidden");
+      updateEntryButton();
+    }
+  }).catch(() => {
     startGateMask();
     document.getElementById("newcomer-banner")?.classList.remove("hidden");
-    // Make the entry button live as a connect trigger right away.
     updateEntryButton();
-  }
+  });
 
   // These five loaders hit the RPC independently — fire them in parallel so
   // the page paints on the slowest single round-trip instead of the sum of
