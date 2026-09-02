@@ -286,7 +286,11 @@ async function connectWallet() {
       // Request account authorization FIRST. _initProvider() calls signer.getAddress(),
       // which throws "unknown account #0" in ethers v5 before any account is authorized —
       // silently failing the whole connect even though the wallet popup succeeded.
-      await injectedProvider().request({ method: "eth_requestAccounts" });
+      // Time-bound it: if the wallet never surfaces its prompt (or the user leaves
+      // it), the in-flight promise still settles so the button recovers and a
+      // re-tap can fire a fresh request instead of hitting a dead _connectInFlight.
+      await _withTimeout(
+        injectedProvider().request({ method: "eth_requestAccounts" }), 60000, "eth_requestAccounts");
       await _initProvider();
       await _ensureChain();
       _saveSession(userAddress);
