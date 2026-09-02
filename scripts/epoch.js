@@ -101,11 +101,45 @@ function addrFromConfig(key, { optional = false } = {}) {
 // impossible; the canonical endpoint serves large ranges — the explore page
 // already scans it from browsers. The ARB_SEPOLIA_RPC secret is only used
 // to SEND transactions (falls back to the canonical RPC if unset).
+//
+// Reading it out of config.js by regex is brittle by nature: this broke silently
+// once already when the multi-RPC refactor turned `const RPC_URL = "https://…"`
+// into `const RPC_URL = PUBLIC_RPCS[0]`. The pattern needed a quoted literal,
+// matched nothing, and the keeper threw on startup — every scheduled run failed
+// before doing any work. So try the literal first, then fall back to the first
+// entry of the PUBLIC_RPCS array, then to a hardcoded canonical endpoint. The
+// keeper must not be one refactor away from dead.
+const CANONICAL_RPC = "https://sepolia-rollup.arbitrum.io/rpc";
+
 function rpcFromConfig() {
-  const src = fs.readFileSync(path.join(__dirname, "..", "config.js"), "utf8");
-  const m = src.match(/\bRPC_URL\s*=\s*"(https?:\/\/[^"]+)"/);
-  if (!m) throw new Error('RPC_URL not found in config.js — refusing to start epoch keeper');
-  return m[1];
+  let src = "";
+  try {
+    src = fs.readFileSync(path.join(__dirname, "..", "config.js"), "utf8");
+  } catch (e) {
+    console.warn(`config.js unreadable (${e.message}) — using canonical RPC`);
+    return CANONICAL_RPC;
+  }
+
+  // 1. A directly-assigned string literal (the pre-refactor shape).
+  const lit = src.match(/\bRPC_URL\s*=\s*"(https?:\/\/[^"]+)"/);
+  if (lit) return lit[1];
+
+  // 2. The first entry of the PUBLIC_RPCS array, which is what RPC_URL now
+  //    aliases. Deliberately PUBLIC and not DEDICATED_RPC: the keyed endpoint is
+  //    the frontend's browser quota, and epoch scans are wide eth_getLogs ranges
+  //    that would burn it. The canonical endpoint serves large ranges.
+  const arr = src.match(/\bPUBLIC_RPCS\s*=\s*\[([\s\S]*?)\]/);
+  if (arr) {
+    const first = arr[1].match(/"(https?:\/\/[^"]+)"/);
+    if (first) return first[1];
+  }
+
+  // 3. Nothing parsed. Warn loudly but RUN — a keeper that refuses to start is
+  //    worse than one on a known-good default, because a stalled epoch silently
+  //    stops emissions (and the re-grant incident showed how expensive a stuck
+  //    keeper gets).
+  console.warn("RPC_URL/PUBLIC_RPCS not parseable from config.js — using canonical RPC");
+  return CANONICAL_RPC;
 }
 
 const TIMBPRIZE_ADDR   = addrFromConfig("TimbPrize");
