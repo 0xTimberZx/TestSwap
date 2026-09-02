@@ -81,21 +81,28 @@ let advanceInSettlement = false; // on-chain settlement window blocks nudges
 // reverts (UNPREDICTABLE_GAS_LIMIT) — we route to replaceEntry instead.
 let hasPlayEntry       = false;
 
-// Read-only queries always go to the canonical Arbitrum Sepolia RPC —
-// never the wallet's in-app provider. Mobile wallets sometimes serve
-// eth_call/eth_getBalance from a different network than they display,
-// which reads as zero balances (or stale state) for perfectly funded
-// accounts. The wallet provider is only used for signing transactions.
-let _publicProv = null;
+// Read provider: when a wallet is connected and verified on Arb Sepolia, reads
+// go THROUGH the wallet (its RPC isn't the shared public endpoint, so this
+// page's heavy 4s polling can't trip a per-IP rate limit — the source of the
+// "Loading/stale" throttling). Wallet-less visitors, or an unverified chain,
+// fall back to the resilient public/keyed FallbackProvider. sharedReadProvider()
+// (config.js) makes that decision; chainChanged reloads the page so it can't go
+// stale, and a wrong-chain wallet is never used (guarded by _walletChainOk).
 function readProv() {
-  return _publicProv || (_publicProv = makeReadProvider());
+  return sharedReadProvider();
 }
 
-// Read-only contracts are immutable once bound to the (stable) public provider,
-// so cache them by address instead of re-instantiating on every 4s/12s poll.
+// Cache read-only contracts by address — but REBIND them all when the read
+// provider switches (wallet⇄public on connect/disconnect). Without this, a
+// contract cached against the public provider before auto-reconnect resolved
+// would keep polling the public RPC even after the wallet connected, defeating
+// the wallet-read path.
+let _roProvider = null;
 const _roContracts = {};
 function contractRO(address, abi) {
-  return _roContracts[address] || (_roContracts[address] = new ethers.Contract(address, abi, readProv()));
+  const p = readProv();
+  if (p !== _roProvider) { _roProvider = p; for (const k in _roContracts) delete _roContracts[k]; }
+  return _roContracts[address] || (_roContracts[address] = new ethers.Contract(address, abi, p));
 }
 
 // ─── USD pricing (newcomer banner) ───────────────────────────────────────────

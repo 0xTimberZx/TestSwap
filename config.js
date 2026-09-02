@@ -190,6 +190,22 @@ let provider = null;
 let signer   = null;
 let userAddress = null;
 
+// ─── Shared read provider (wallet-first when connected) ───────────────────────
+// When a wallet is connected AND verified on the right chain, reads go THROUGH
+// the wallet's own provider — its RPC isn't the shared public endpoint, so heavy
+// polling can't trip a per-IP rate limit (the SwapTables model, and why other
+// dApps stay responsive in Brave). Wallet-less visitors, or any state where the
+// wallet chain isn't confirmed, fall back to the resilient public/keyed
+// FallbackProvider. chainChanged reloads the page (see listenForAccountChanges),
+// so _walletChainOk can't linger stale across a network switch; accountsChanged
+// nulls `provider`, which also drops us back to public.
+let _walletChainOk = false;
+let _publicRO = null;
+function sharedReadProvider() {
+  try { if (provider && _walletChainOk) return provider; } catch {}
+  return _publicRO || (_publicRO = makeReadProvider());
+}
+
 // ─── Injected Provider Selection (Brave-safe) ─────────────────────────────────
 // When multiple wallet extensions inject, window.ethereum.providers is an
 // array and window.ethereum itself is whichever extension won the injection
@@ -233,7 +249,7 @@ async function _initProvider() {
 
 async function _ensureChain() {
   const network = await provider.getNetwork();
-  if (network.chainId === CHAIN_ID) return;
+  if (network.chainId === CHAIN_ID) { _walletChainOk = true; return; }
   // Attempt the switch, but never let its popup HANG the connect — time-bound
   // each wallet request so a prompt the wallet fails to surface (or the user
   // leaves open) settles instead of freezing the button. On failure this throws
@@ -263,6 +279,7 @@ async function _ensureChain() {
     DebugHub.logSecurity?.("Chain Check", "fail");
     throw new Error(`Wallet stayed on chain ${net.chainId} — switch to ${CHAIN_NAME} (${CHAIN_ID}) and reconnect.`);
   }
+  _walletChainOk = true; // verified on the right chain — reads may use the wallet
 }
 
 // Connect the wallet. Modeled on the SwapTables flow, which connects reliably in
@@ -356,6 +373,7 @@ async function autoReconnect() {
     // does the switch). This keeps reads off a wrong-network wallet.
     const net = await _withTimeout(provider.getNetwork(), 4000, "getNetwork");
     if (net.chainId !== CHAIN_ID) { _clearSession(); return null; }
+    _walletChainOk = true; // verified on the right chain — reads may use the wallet
     return userAddress;
   } catch {
     _clearSession();
@@ -726,6 +744,7 @@ function listenForAccountChanges(onChangeCallback) {
     provider    = null;
     signer      = null;
     userAddress = null;
+    _walletChainOk = false; // drop back to the public read provider
     _clearSession();
     if (onChangeCallback) onChangeCallback(null);
   });
