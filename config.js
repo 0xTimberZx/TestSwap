@@ -255,17 +255,41 @@ async function logsHeadBlock(fallbackBlock) {
 // When multiple wallet extensions inject, window.ethereum.providers is an
 // array and window.ethereum itself is whichever extension won the injection
 // race — requests could go to one wallet while events come from another.
-// Prefer Brave Wallet, then MetaMask, then the first injected provider, so
-// every request/listener in this file consistently targets the same wallet.
-function injectedProvider() {
+// Prefer the provider that already owns an authorized account. When no
+// provider is connected yet, prefer Brave Wallet, then MetaMask, then the
+// first injected provider, so every request/listener targets one wallet.
+let _activeInjectedProvider = null;
+
+function injectedProviders() {
   const eth = window.ethereum;
-  if (!eth) return null;
-  if (eth.providers && eth.providers.length) {
-    return eth.providers.find((p) => p.isBraveWallet)
-        || eth.providers.find((p) => p.isMetaMask)
-        || eth.providers[0];
-  }
-  return eth;
+  if (!eth) return [];
+  return eth.providers && eth.providers.length ? eth.providers : [eth];
+}
+
+function injectedProvider() {
+  if (_activeInjectedProvider) return _activeInjectedProvider;
+  const providers = injectedProviders();
+  return providers.find((p) => p.isBraveWallet)
+      || providers.find((p) => p.isMetaMask)
+      || providers[0]
+      || null;
+}
+
+async function selectInjectedProvider() {
+  if (_activeInjectedProvider) return _activeInjectedProvider;
+  const providers = injectedProviders();
+  if (!providers.length) return null;
+
+  // A provider can be injected globally while another extension owns the
+  // connected account. Find the owner before sending the first popup request.
+  const authorized = await Promise.all(providers.map(async (p) => {
+    try {
+      const accounts = await _withTimeout(p.request({ method: "eth_accounts" }), 1500, "eth_accounts");
+      return accounts && accounts.length ? p : null;
+    } catch { return null; }
+  }));
+  _activeInjectedProvider = authorized.find(Boolean) || injectedProvider();
+  return _activeInjectedProvider;
 }
 
 // ─── Session Persistence ──────────────────────────────────────────────────────
@@ -344,6 +368,7 @@ async function connectWallet() {
     alert("No wallet detected. Please use MetaMask or Brave Wallet.");
     return false;
   }
+  await selectInjectedProvider();
   // Feedback on the shared connect button (same id every page) — a locked-wallet
   // tap previously looked dead while eth_requestAccounts sat pending.
   _setConnectBtn("Connecting… check your wallet", true);
@@ -476,6 +501,7 @@ async function autoReconnect() {
   if (!saved) return null;
 
   try {
+    await selectInjectedProvider();
     // Check the wallet still has the account active (no popup), with a timeout.
     const accounts = await _withTimeout(
       injectedProvider().request({ method: "eth_accounts" }), 4000, "eth_accounts");
@@ -869,6 +895,7 @@ function listenForAccountChanges(onChangeCallback) {
     provider    = null;
     signer      = null;
     userAddress = null;
+    _activeInjectedProvider = null;
     _walletChainOk = false; // drop back to the public read provider
     _clearSession();
     if (onChangeCallback) onChangeCallback(null);
