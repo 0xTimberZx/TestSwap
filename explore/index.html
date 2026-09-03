@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Force HTTPS: wallets (window.ethereum) only inject on a secure origin -->
+  <script>if(location.protocol==="http:"&&!/^(localhost|127\.0\.0\.1)$/.test(location.hostname))location.replace(location.href.replace(/^http:/,"https:"));</script>
   <script>try{document.documentElement.dataset.theme=localStorage.getItem("timbswap_theme")==="light"?"light":"dark"}catch(e){}</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
