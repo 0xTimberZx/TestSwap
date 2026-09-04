@@ -93,9 +93,9 @@ const ADDRESSES = {
   TimbSwapFactory:      "0xCCd6d3f0A86042d2B7056eDd381d367126628AF5",
   TimbSwapRouter:       "0x40C7Caf90817C9891D278Ec1400B9deb180911f1", // v8 — multi-hop path routing
   EligibleTokenRegistry:"0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04",
-  GameRegistry:         "0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530", // v5 — dynamic per-round entry pricing (ETH floats off escrow, TIMBS steps with entries)
-  TimbPrize:            "0x5AEDDf3f2132266929C9DB4783399d8be24121df", // H1 re-migration — generation 2 (retires gen-1 tickets, reclaimable). Prev: 0xB3B40bFACf4dc881666a615593134CAc7DF2389a; pre-H1: 0x35976f4D2260127848a6274D2eC89ee054412432
-  PrizeVRFEntropy:      "0x801F444d902599B759149Dac66fafB4Ce85a7052", // H1 re-migration — dedicated VRF draw per prize segment (shares the board's sub). Prev: 0xc44DFd31881B7EeED02610A31e663a8dFc821f4D
+  GameRegistry:         "0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65", // gen-3 re-migration — permissionless activateRoundEntries (keeper-driven, no longer onlyTimbPrize). Prev: 0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530
+  TimbPrize:            "0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF", // gen-3 re-migration — aligned prize bound to the new registry (retires gen-2 tickets, reclaimable from old registry). Prev: 0x5AEDDf3f2132266929C9DB4783399d8be24121df; pre-gen-2: 0xB3B40bFACf4dc881666a615593134CAc7DF2389a
+  PrizeVRFEntropy:      "0xa2AC62BF0FdD1D1ED148ea1c0555eEcD8829A393", // gen-3 re-migration — dedicated VRF draw per prize segment (shares the board's sub). Prev: 0x801F444d902599B759149Dac66fafB4Ce85a7052
   TimbStaking:          "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   TimbFarm:             "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
   TimbBoostFarm:        "0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35", // boosted extra-pair farms (USDT/LINK/DAPP…), TIMBS emission funded by the epoch-keeper waterfall boost tier

@@ -311,6 +311,20 @@ async function settleOnce(provider, wallet, prize, round, segment) {
   return isRoundBoundary;
 }
 
+// The deployed (pre-gen-3) GameRegistry gates activateRoundEntries behind
+// onlyTimbPrize, so the keeper's call reverts NotTimbPrize() (selector
+// 0x3e94dce9). There is nothing the keeper can do about it until the gen-3
+// migration lands (dev-docs/GEN3_MIGRATION.md) — so log it, but do NOT page ops
+// on every run. Any OTHER revert still alerts. Delete this guard once migrated.
+function _isNotTimbPrizeRevert(e) {
+  try {
+    const s = JSON.stringify(e, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
+    return /0x3e94dce9/i.test(s) || /NotTimbPrize/i.test(s);
+  } catch {
+    return /NotTimbPrize/i.test(e?.message || "");
+  }
+}
+
 // ─── H2: drain paginated settlement bookkeeping after a rollover ────────────────
 // TimbPrize advances the round O(1) and no longer runs expiry/forfeiture/
 // activation inline (a sybil flood could OOG-freeze that). The keeper drains
@@ -346,8 +360,12 @@ async function drainSettlement(registry, settledRound, newRound) {
       await (await registry.activateRoundEntries(newRound, chunk)).wait();
     } catch (e) {
       const msg = e?.shortMessage || e?.message || String(e);
-      console.warn(`[settler] activateRoundEntries(${newRound}) drain paused: ${msg}`);
-      await notify(`⚠️ Settler drain paused — activateRoundEntries(#${newRound})\n${msg}\nRound #${newRound} tickets may show stuck "Pending"; will retry next run.`);
+      if (_isNotTimbPrizeRevert(e)) {
+        console.warn(`[settler] activateRoundEntries(${newRound}) skipped: registry gates it to TimbPrize (pre-gen-3) — no-op until migration.`);
+      } else {
+        console.warn(`[settler] activateRoundEntries(${newRound}) drain paused: ${msg}`);
+        await notify(`⚠️ Settler drain paused — activateRoundEntries(#${newRound})\n${msg}\nRound #${newRound} tickets may show stuck "Pending"; will retry next run.`);
+      }
       break;
     }
   }
@@ -390,8 +408,12 @@ async function healCurrentRoundActivation(registry, prize) {
       await (await registry.activateRoundEntries(round, chunk)).wait();
     } catch (e) {
       const msg = e?.shortMessage || e?.message || String(e);
-      console.warn(`[settler] activation catch-up for #${round} paused: ${msg}`);
-      await notify(`⚠️ Settler activation catch-up FAILED — round #${round}\n${msg}\nTickets may show stuck "Pending" until this clears.`);
+      if (_isNotTimbPrizeRevert(e)) {
+        console.warn(`[settler] activation catch-up for #${round} skipped: registry gates activateRoundEntries to TimbPrize (pre-gen-3). No-op until migration — see dev-docs/GEN3_MIGRATION.md.`);
+      } else {
+        console.warn(`[settler] activation catch-up for #${round} paused: ${msg}`);
+        await notify(`⚠️ Settler activation catch-up FAILED — round #${round}\n${msg}\nTickets may show stuck "Pending" until this clears.`);
+      }
       break;
     }
   }
