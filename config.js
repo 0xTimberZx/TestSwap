@@ -545,7 +545,12 @@ async function autoReconnect() {
     _walletChainOk = true; // verified on the right chain — reads may use the wallet
     return userAddress;
   } catch {
-    _clearSession();
+    // A transient wallet read failure/timeout (flaky Brave on refresh) is NOT a
+    // disconnect — DON'T clear the saved session, or one bad refresh drops the
+    // user to a gated view that needs a manual reconnect and stays gated on
+    // further refreshes. The explicit empty-accounts / account-switch checks
+    // above still clear on a real disconnect. Keeping the session lets the next
+    // load reconnect; reads work meanwhile via the keyed provider regardless.
     return null;
   }
 }
