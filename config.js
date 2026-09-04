@@ -66,17 +66,50 @@ const CHAIN_CONFIG = {
 // StaticJsonRpcProvider pins the network (skips a per-call eth_chainId) since
 // the chain is fixed. Signing still uses the wallet's own provider, never this.
 // Callers cache the result (one provider per page); this only builds it.
+//
+// With a keyed endpoint we run it ALONE (see the RPC_URLS note above — mixing
+// public nodes reintroduces divergent-head fake reverts). Resilience against a
+// transient keyed blip (rate-limit / momentary stall) comes from a retry
+// wrapper, NOT public fallbacks: a failed read is retried a couple of times
+// with short backoff before the caller falls back to "—". Real contract reverts
+// (CALL_EXCEPTION) are never retried — they propagate immediately.
 function makeReadProvider() {
+  let base;
   if (RPC_URLS.length === 1) {
-    return new ethers.providers.StaticJsonRpcProvider(RPC_URLS[0], CHAIN_ID);
+    base = new ethers.providers.StaticJsonRpcProvider(RPC_URLS[0], CHAIN_ID);
+  } else {
+    const configs = RPC_URLS.map((url, i) => ({
+      provider:     new ethers.providers.StaticJsonRpcProvider(url, CHAIN_ID),
+      priority:     i + 1,  // lower number = tried first
+      weight:       1,
+      stallTimeout: 2500,   // ms to wait on a slow endpoint before trying the next
+    }));
+    base = new ethers.providers.FallbackProvider(configs, 1); // quorum 1
   }
-  const configs = RPC_URLS.map((url, i) => ({
-    provider:     new ethers.providers.StaticJsonRpcProvider(url, CHAIN_ID),
-    priority:     i + 1,  // lower number = tried first
-    weight:       1,
-    stallTimeout: 2500,   // ms to wait on a slow endpoint before trying the next
-  }));
-  return new ethers.providers.FallbackProvider(configs, 1); // quorum 1
+  return _withReadRetry(base);
+}
+
+// Retry transient read failures on the (single, consistent) read provider so a
+// momentary Alchemy rate-limit or stall doesn't blank the page. Read-only, so a
+// retry is always safe. A genuine revert (CALL_EXCEPTION) is thrown at once —
+// with a single keyed endpoint there are no divergent-head "fake reverts", so a
+// CALL_EXCEPTION is real and must not be retried.
+function _withReadRetry(provider) {
+  const _send = provider.send.bind(provider);
+  provider.send = async (method, params) => {
+    let lastErr;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { return await _send(method, params); }
+      catch (e) {
+        lastErr = e;
+        if (e && e.code === "CALL_EXCEPTION") throw e; // real revert — don't retry
+        if (attempt === 2) break;
+        await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  };
+  return provider;
 }
 
 // ─── Display pricing ──────────────────────────────────────────────────────────
