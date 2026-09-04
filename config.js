@@ -339,6 +339,20 @@ function _clearSession() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch {}
 }
 
+// Full teardown for a MANUAL disconnect (the wallet-menu "Disconnect" on every
+// page). Pages used to only null provider/signer/userAddress, leaving the saved
+// sessionStorage address behind — so navigating to another page silently
+// auto-reconnected the wallet the user just disconnected. Clear the session and
+// reset the chain/provider flags too, so a manual disconnect actually sticks.
+function disconnectWallet() {
+  provider = null;
+  signer = null;
+  userAddress = null;
+  _walletChainOk = false;
+  _activeInjectedProvider = null;
+  _clearSession();
+}
+
 function _getSavedAddress() {
   try { return sessionStorage.getItem(SESSION_KEY); } catch { return null; }
 }
@@ -559,33 +573,45 @@ async function autoReconnect() {
   const saved = _getSavedAddress();
   if (!saved) return null;
 
-  try {
-    await selectInjectedProvider();
-    // Check the wallet still has the account active (no popup), with a timeout.
-    const accounts = await _withTimeout(
-      injectedProvider().request({ method: "eth_accounts" }), 4000, "eth_accounts");
-    if (!accounts || accounts.length === 0) { _clearSession(); return null; }
-    if (accounts[0].toLowerCase() !== saved.toLowerCase()) {
-      _clearSession(); return null;
+  // Retry the reconnect a couple of times: Brave often has eth_accounts /
+  // getNetwork hiccup on a soft refresh, and one failed attempt used to drop the
+  // user to the gated view even though the wallet is connected. The session is
+  // preserved across attempts; reads work meanwhile via the keyed provider.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await selectInjectedProvider();
+      // Check the wallet still has the account active (no popup), with a timeout.
+      const accounts = await _withTimeout(
+        injectedProvider().request({ method: "eth_accounts" }), 4000, "eth_accounts");
+      // A DIFFERENT account is authorized → the saved session is genuinely stale
+      // (a real switch, not a hiccup): clear it and stop.
+      if (accounts && accounts.length && accounts[0].toLowerCase() !== saved.toLowerCase()) {
+        _clearSession();
+        return null;
+      }
+      // No authorized account right now — locked, or Brave briefly returning []
+      // on a refresh. Treat as transient (retry); NEVER clear here. A real revoke
+      // fires accountsChanged, which ends the session explicitly.
+      if (!accounts || !accounts.length) throw new Error("no-accounts");
+
+      await _withTimeout(_initProvider(), 4000, "initProvider");
+      // Silent reconnect must NEVER trigger a chain-switch POPUP (it hangs the
+      // page on refresh). Verify the chain read-only; if it's wrong, stay gated
+      // (don't clear) and let the user reconnect explicitly (that path switches).
+      const net = await _withTimeout(provider.getNetwork(), 4000, "getNetwork");
+      if (net.chainId !== CHAIN_ID) return null;
+      _walletChainOk = true; // verified on the right chain
+      return userAddress;
+    } catch {
+      // Transient wallet read failure/timeout (flaky Brave on soft refresh). The
+      // wallet is connected; the read just hiccuped. Retry before giving up FOR
+      // THIS LOAD — the session is preserved either way, so the next load
+      // reconnects and reads work meanwhile via the keyed provider.
+      if (attempt < 2) { await new Promise(r => setTimeout(r, 500)); continue; }
+      return null;
     }
-    await _withTimeout(_initProvider(), 4000, "initProvider");
-    // Silent reconnect must NEVER trigger a chain-switch POPUP (it hangs the
-    // page on refresh). Verify the chain read-only; if it's wrong or the read
-    // stalls, drop the session and let the user reconnect explicitly (that path
-    // does the switch). This keeps reads off a wrong-network wallet.
-    const net = await _withTimeout(provider.getNetwork(), 4000, "getNetwork");
-    if (net.chainId !== CHAIN_ID) { _clearSession(); return null; }
-    _walletChainOk = true; // verified on the right chain — reads may use the wallet
-    return userAddress;
-  } catch {
-    // A transient wallet read failure/timeout (flaky Brave on refresh) is NOT a
-    // disconnect — DON'T clear the saved session, or one bad refresh drops the
-    // user to a gated view that needs a manual reconnect and stays gated on
-    // further refreshes. The explicit empty-accounts / account-switch checks
-    // above still clear on a real disconnect. Keeping the session lets the next
-    // load reconnect; reads work meanwhile via the keyed provider regardless.
-    return null;
   }
+  return null;
 }
 
 function getContract(name, signerOrProvider) {

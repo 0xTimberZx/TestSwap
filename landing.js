@@ -257,9 +257,7 @@ async function handleConnect() {
 
 function handleDisconnect() {
   DebugHub.endSession();
-  provider    = null;
-  signer      = null;
-  userAddress = null;
+  disconnectWallet();
   document.getElementById("connect-btn").classList.remove("hidden");
   document.getElementById("wallet-info").classList.add("hidden");
   document.getElementById("network-badge").classList.add("hidden");
