@@ -213,9 +213,12 @@ contract GasFaucet is Ownable2Step, ReentrancyGuard {
             revert NotEligible(claimant);
         }
 
-        // ── Cooldown. ──
-        uint256 readyAt = lastClaimAt[claimant] + cooldown;
-        if (block.timestamp < readyAt) revert CooldownActive(readyAt);
+        // ── Cooldown (a never-claimed wallet is always allowed). ──
+        uint256 last = lastClaimAt[claimant];
+        if (last != 0) {
+            uint256 readyAt = last + cooldown;
+            if (block.timestamp < readyAt) revert CooldownActive(readyAt);
+        }
 
         uint256 ethOut = doEth ? dripEth + potEth : 0;
         uint256 timbsOut = doTimbs ? timbsPerClaim : 0;
@@ -267,7 +270,8 @@ contract GasFaucet is Ownable2Step, ReentrancyGuard {
             registry.effectiveStatus(ticketId) != IGameRegistry.TicketStatus.Active) {
             return false;
         }
-        if (block.timestamp < lastClaimAt[claimant] + cooldown) return false;
+        uint256 last = lastClaimAt[claimant];
+        if (last != 0 && block.timestamp < last + cooldown) return false;
 
         bool ethOk = !ethPaused && (dripEth + potEth) > 0 &&
             ethDistributed + dripEth + potEth <= ethCap;

@@ -117,8 +117,9 @@ contract GasFaucetTest is Test {
         vm.prank(dispatcher);
         faucet.dispense(alice);
 
+        uint256 readyAt = faucet.lastClaimAt(alice) + faucet.cooldown();
         vm.prank(dispatcher);
-        vm.expectRevert(GasFaucet.CooldownActive.selector);
+        vm.expectRevert(abi.encodeWithSelector(GasFaucet.CooldownActive.selector, readyAt));
         faucet.dispense(alice);
     }
 
@@ -137,14 +138,14 @@ contract GasFaucetTest is Test {
 
     function test_NotEligibleReverts() public {
         vm.prank(dispatcher);
-        vm.expectRevert(GasFaucet.NotEligible.selector);
+        vm.expectRevert(abi.encodeWithSelector(GasFaucet.NotEligible.selector, alice));
         faucet.dispense(alice);
     }
 
     function test_PendingTicketIsNotEligible() public {
         registry.grant(alice, IGameRegistry.TicketStatus.Pending);
         vm.prank(dispatcher);
-        vm.expectRevert(GasFaucet.NotEligible.selector);
+        vm.expectRevert(abi.encodeWithSelector(GasFaucet.NotEligible.selector, alice));
         faucet.dispense(alice);
     }
 
@@ -201,7 +202,7 @@ contract GasFaucetTest is Test {
         faucet.dispense(alice);
 
         vm.prank(dispatcher);
-        vm.expectRevert(GasFaucet.EthCapExceeded.selector);
+        vm.expectRevert(abi.encodeWithSelector(GasFaucet.EthCapExceeded.selector, DRIP + POT, uint256(0)));
         faucet.dispense(bob);
     }
 
@@ -214,7 +215,7 @@ contract GasFaucetTest is Test {
         faucet.dispense(alice);
 
         vm.prank(dispatcher);
-        vm.expectRevert(GasFaucet.TimbsCapExceeded.selector);
+        vm.expectRevert(abi.encodeWithSelector(GasFaucet.TimbsCapExceeded.selector, TIMB, uint256(0)));
         faucet.dispense(bob);
     }
 
@@ -224,7 +225,7 @@ contract GasFaucetTest is Test {
         _eligible(alice);
 
         vm.prank(dispatcher);
-        vm.expectRevert(GasFaucet.InsufficientTimbsBalance.selector);
+        vm.expectRevert(abi.encodeWithSelector(GasFaucet.InsufficientTimbsBalance.selector, TIMB, uint256(0)));
         faucet.dispense(alice);
     }
 
