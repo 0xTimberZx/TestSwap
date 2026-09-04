@@ -69,7 +69,11 @@ interface IYieldVaultAdmin {
  *   VRF_COORDINATOR         Chainlink VRF v2.5 coordinator (Arbitrum Sepolia)
  *   VRF_KEY_HASH            gas lane
  *   VRF_SUB_ID              subscription this prize entropy consumes
- *   VRF_EXTRA_ARGS          v2.5 extraArgs blob (hex)
+ *   VRF_EXTRA_ARGS          v2.5 extraArgs blob (hex). COPY VERBATIM from the live
+ *                             entropy — `cast call <OLD_ENTROPY> "extraArgs()(bytes)"`.
+ *                             Do NOT re-encode: the deployed coordinator rejects the
+ *                             canonical 36-byte _argsToBytes blob with an empty-data
+ *                             revert at the first segment arm. See GEN3_MIGRATION.md.
  *   VRF_CONFIRMATIONS       optional, default 3
  *   VRF_CALLBACK_GAS        optional, default 200000
  *

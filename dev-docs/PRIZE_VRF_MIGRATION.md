@@ -93,6 +93,11 @@ gasLimit, extraArgs)` for the prize game; `prizeEntropy.setBoard(timbPrize)`;
 `timbPrize.setEntropy(prizeEntropy)`; add `timbPrize`'s entropy as a consumer on
 the VRF subscription. Same runbook values as the board's entropy.
 
+> ⚠️ **`extraArgs` must be copied byte-for-byte from a working entropy**, not
+> re-encoded — the deployed coordinator rejects the canonical `_argsToBytes` blob
+> with an empty-data revert (`data: "0x"`) at the first segment arm. Full detail +
+> the `setExtraArgs` recovery in `dev-docs/GEN3_MIGRATION.md`.
+
 ## 8. Settler
 
 Extend the prize settler to arm→wait→lock each segment (it already does this for

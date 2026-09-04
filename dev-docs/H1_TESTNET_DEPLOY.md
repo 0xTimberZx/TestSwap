@@ -21,6 +21,12 @@ at 1.
 - Decide LINK vs native payment → that's the `extraArgs` blob (build with
   `VRFV2PlusClient._argsToBytes`; native-payment blob is
   `0x92fd13380000000000000000000000000000000000000000000000000000000000000001`).
+  - ⚠️ **On a RE-migration (a new entropy replacing a working one), do NOT re-encode
+    this — copy the live entropy's `extraArgs()` verbatim.** The deployed Arbitrum
+    Sepolia coordinator rejected the canonical 36-byte `_argsToBytes` output with an
+    empty-data revert on the gen-3 cutover; the entropy that works carries a
+    non-canonical 37-byte value and byte-identical is what's accepted. Full write-up
+    in `GEN3_MIGRATION.md` (the extraArgs gotcha).
 - Fund the subscription (LINK or native ETH).
 
 You'll add the new entropy as a *consumer* in step 4 (its address doesn't exist

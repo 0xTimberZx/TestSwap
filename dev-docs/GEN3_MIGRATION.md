@@ -56,9 +56,30 @@ SETTLER_ADDR=0x...                  # keeper EOA (SETTLER_PRIVATE_KEY's address)
 VRF_COORDINATOR=0x...
 VRF_KEY_HASH=0x...
 VRF_SUB_ID=...
-VRF_EXTRA_ARGS=0x...
+VRF_EXTRA_ARGS=0x...                 # ⚠️ copy VERBATIM from the live entropy —
+                                     # do NOT re-encode. See the extraArgs gotcha below.
 # VRF_CONFIRMATIONS / VRF_CALLBACK_GAS optional
 ```
+
+> **⚠️ `extraArgs` gotcha (cost a live outage on the gen-3 cutover).** Read the
+> value straight off the currently-working prize entropy and pass those exact
+> bytes — never rebuild it with `VRFV2PlusClient._argsToBytes`:
+> ```
+> cast call <OLD_PRIZE_ENTROPY> "extraArgs()(bytes)" --rpc-url $ARB_SEPOLIA_RPC
+> ```
+> The deployed VRF v2.5 coordinator on Arbitrum Sepolia rejects the *canonical*
+> 36-byte re-encoding (4-byte tag + 32-byte bool) — `requestRandomWords` reverts
+> with **empty data** (`execution reverted, data: "0x"`, which ethers surfaces as
+> "no data present; likely require(false)"). The live entropy that works carries a
+> non-canonical **37-byte** value (tag + 33 bytes). Byte-identical is what the
+> coordinator accepts. If the first `settleSegment()` arm reverts with empty data
+> and every other VRF param already matches the working entropy, this is why — fix
+> it without redeploying via the owner-only setter:
+> ```
+> OLD_EXTRA=$(cast call <OLD_PRIZE_ENTROPY> "extraArgs()(bytes)" --rpc-url $R)
+> cast send <NEW_PRIZE_ENTROPY> "setExtraArgs(bytes)" "$OLD_EXTRA" \
+>   --private-key $DEPLOYER_PRIVATE_KEY --rpc-url $R
+> ```
 
 ## Run
 
@@ -73,7 +94,15 @@ addresses. `startGame()` is intentionally **not** called yet.
 ## After the deploy
 
 1. **VRF:** add the printed Prize `VRFEntropy` as a consumer on the VRF
-   subscription, and make sure it's funded.
+   subscription, and make sure it's funded. **Then verify `extraArgs` byte-matches
+   the old entropy** (see the gotcha above) — this is the step that bit the gen-3
+   cutover:
+   ```
+   cast call <NEW_PRIZE_ENTROPY> "extraArgs()(bytes)" --rpc-url $R
+   cast call <OLD_PRIZE_ENTROPY> "extraArgs()(bytes)" --rpc-url $R   # must be identical
+   ```
+   If they differ, `setExtraArgs` the old value onto the new entropy before
+   `startGame()`, or the first segment arm will revert with empty data.
 2. **config.js:** update `ADDRESSES` — `GameRegistry`, `TimbPrize`, and
    `PrizeVRFEntropy` to the new addresses. (config.js loads fresh on every page,
    so it ships on the next Pages deploy.) Also update the notification workers /
