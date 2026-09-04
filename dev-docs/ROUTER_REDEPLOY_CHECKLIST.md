@@ -3,6 +3,17 @@
 Copy-paste steps to make the swap-weighted-nudge + free-nudge-cap change live.
 **Router-only redeploy.** TimbPrize, Factory, GameRegistry, pairs, all other contracts stay put.
 
+> **Generation-safe free-nudge key (fixes the gen-3 nudge collision).** The
+> current router source keys `freeNudgesUsed` by
+> `keccak256(timbPrize, round, segment, user)` — namespaced by the prize
+> instance. This is the fix for the reuse bug where a router carried a wallet's
+> stale per-(round,segment) free-nudge count across a game-generation migration
+> and wrongly showed "Free nudges used" on the fresh game (see
+> `dev-docs/GEN3_MIGRATION.md` §7). **A fresh router deploy adopts this
+> automatically** — `freeNudgesUsed` starts empty and the key is prize-scoped, so
+> no migration cleanup is needed. Nothing extra to do here beyond deploying the
+> current source; the verify step below confirms it.
+
 Current live addresses (Arbitrum Sepolia, 421614):
 
 | Role | Address |

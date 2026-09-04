@@ -125,6 +125,23 @@ addresses. `startGame()` is intentionally **not** called yet.
    reclaim from the old registry directly (Withdraw on a Pending ticket =
    `cancelEntry`; or `claimRefund` once expired). Testnet ETH, no monetary value.
 
+7. **Router free-nudge collision (reuse artifact — self-heals):** the *deployed*
+   `TimbSwapRouter` keys `freeNudgesUsed` by `(round, segment, user)` with **no
+   generation namespace**. The reused router therefore inherits a wallet's stale
+   per-(round,segment) free-nudge count across the migration, so a wallet that
+   nudged in a prior generation's round 1 / segment 2 sees "Free nudges used /
+   Max (0)" on gen-3's round 1 / segment 2 despite making no pushes (gen-3 hit
+   exactly this). Same class of bug as the vault weight above.
+   - **Impact:** only wallets active in a prior generation, only at
+     (round, segment) pairs they already used; the **paid swap-nudge path is
+     unaffected** (uncapped); and it **self-clears** once gen-3 passes the highest
+     (round, segment) the prior generation reached. There is no owner lever to
+     reset an individual stale key, and it's not worth a router redeploy on its own.
+   - **Fixed for future migrations:** the repo router now namespaces the key by
+     the prize instance — `keccak256(timbPrize, round, segment, user)` — so each
+     generation's fresh prize gives a distinct key. Ships with the next router
+     deploy; see `dev-docs/ROUTER_REDEPLOY_CHECKLIST.md`.
+
 ## Rollback
 
 Nothing destructive happens until step 2 (config cutover) and step 3

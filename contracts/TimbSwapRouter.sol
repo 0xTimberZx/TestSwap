@@ -76,8 +76,15 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     ///         per wallet, so sybil doesn't help). 0 = free path disabled.
     uint256 public freeNudgeCapPerSeg = 10;
 
-    /// @notice Free-nudge usage, keyed by keccak256(round, segment, user) so
-    ///         the cap auto-resets every segment with no cleanup.
+    /// @notice Free-nudge usage, keyed by keccak256(timbPrize, round, segment,
+    ///         user) so the cap auto-resets every segment with no cleanup, AND is
+    ///         namespaced by the prize instance. Each game generation deploys a
+    ///         fresh TimbPrize and repoints this router at it (setTimbPrize), so
+    ///         a new generation's round 1 / segment 2 gets a distinct key from a
+    ///         prior generation's — otherwise the reused router would inherit
+    ///         stale per-(round,segment) usage across a migration and wrongly
+    ///         report "free nudges used" on the fresh game (gen-3 hit exactly
+    ///         this — see dev-docs/GEN3_MIGRATION.md).
     mapping(bytes32 => uint256) public freeNudgesUsed;
 
     // ─── Constants ───────────────────────────────────────────────────────────
@@ -659,7 +666,9 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
 
         uint256 round = ITimbPrize(timbPrize).currentRound();
         uint256 seg   = ITimbPrize(timbPrize).currentSegment();
-        bytes32 key   = keccak256(abi.encode(round, seg, msg.sender));
+        // Namespaced by the prize instance so a reused router doesn't carry
+        // stale per-(round,segment) usage across a game-generation migration.
+        bytes32 key   = keccak256(abi.encode(timbPrize, round, seg, msg.sender));
         uint256 used  = freeNudgesUsed[key];
         uint256 room  = freeNudgeCapPerSeg > used ? freeNudgeCapPerSeg - used : 0;
         uint256 n     = count < room ? count : room;
@@ -679,7 +688,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         if (timbPrize == address(0)) return 0;
         uint256 round = ITimbPrize(timbPrize).currentRound();
         uint256 seg   = ITimbPrize(timbPrize).currentSegment();
-        uint256 used  = freeNudgesUsed[keccak256(abi.encode(round, seg, user))];
+        uint256 used  = freeNudgesUsed[keccak256(abi.encode(timbPrize, round, seg, user))];
         return freeNudgeCapPerSeg > used ? freeNudgeCapPerSeg - used : 0;
     }
 
