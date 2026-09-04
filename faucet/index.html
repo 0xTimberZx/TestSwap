@@ -6,23 +6,23 @@
   <script>try{document.documentElement.dataset.theme=localStorage.getItem("timbswap_theme")==="light"?"light":"dark"}catch(e){}</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Governance — TimbSwap</title>
-  <meta name="description" content="Deposit TIMBS for voting power and vote on TimbSwap protocol proposals." />
-  <link rel="canonical" href="https://timbswap.xyz/gov/" />
+  <title>Faucet — TimbSwap</title>
+  <meta name="description" content="Claim gas to keep playing on TimbSwap, the Arbitrum Sepolia testnet DEX — plus where to get base testnet ETH." />
+  <link rel="canonical" href="https://timbswap.xyz/faucet/" />
   <meta name="theme-color" content="#0b0f14" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <!-- Open Graph / social preview -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="TimbSwap" />
-  <meta property="og:title" content="Governance — TimbSwap" />
-  <meta property="og:description" content="Deposit TIMBS for voting power and vote on TimbSwap protocol proposals." />
-  <meta property="og:url" content="https://timbswap.xyz/gov/" />
+  <meta property="og:title" content="Faucet — TimbSwap" />
+  <meta property="og:description" content="Claim gas to keep playing on TimbSwap, the Arbitrum Sepolia testnet DEX — plus where to get base testnet ETH." />
+  <meta property="og:url" content="https://timbswap.xyz/faucet/" />
   <meta property="og:image" content="https://timbswap.xyz/og.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Governance — TimbSwap" />
-  <meta name="twitter:description" content="Deposit TIMBS for voting power and vote on TimbSwap protocol proposals." />
+  <meta name="twitter:title" content="Faucet — TimbSwap" />
+  <meta name="twitter:description" content="Claim gas to keep playing on TimbSwap, the Arbitrum Sepolia testnet DEX — plus where to get base testnet ETH." />
   <meta name="twitter:image" content="https://timbswap.xyz/og.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -36,7 +36,7 @@
     }
   </script>
   <link rel="stylesheet" href="../style.css?v=20260902a" />
-  <link rel="stylesheet" href="gov.css?v=20260744a" />
+  <link rel="stylesheet" href="faucet.css?v=20260904a" />
 </head>
 <body>
 
@@ -59,7 +59,7 @@
         <div class="nav-dropdown">
           <a href="../farm/">Farm</a>
           <a href="../compete/">Compete</a>
-          <a href="../faucet/">Faucet</a>
+          <a href="../faucet/" class="nav-active">Faucet</a>
           <a class="nav-off">Airdrop <span class="badge-soon">Soon</span></a>
         </div>
       </div>
@@ -111,69 +111,68 @@
     <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">Debugger ↗︎</a>
   </div>
 
-  <div class="gov-page">
+  <div class="faucet-page">
+    <h1 class="page-h1">Faucet</h1>
+    <p class="page-sub">Keep-alive gas for active players — and where to get base testnet ETH if you're just starting out.</p>
 
-    <h1 class="page-h1">Governance</h1>
-    <p class="page-sub">Deposit TIMBS for voting power and vote on protocol proposals. Your tokens stay locked only while you hold active votes.</p>
+    <!-- ─── TimbSwap gas keep-alive faucet ─────────────────────────────── -->
+    <div class="faucet-card">
+      <div class="faucet-card-head">
+        <div class="faucet-icon">⛽</div>
+        <div>
+          <div class="faucet-title">TimbSwap Gas Keep-Alive</div>
+          <div class="faucet-sub">A small ETH top-up once every 24h — enough to keep playing.</div>
+        </div>
+      </div>
 
-    <!-- ─── Stats Bar ─────────────────────────────────────────────────────── -->
-    <div class="gov-stats">
-      <div class="gov-stat">
-        <span class="gov-stat-label">Total Proposals</span>
-        <span class="gov-stat-val" id="g-proposals">—</span>
+      <p class="faucet-note">
+        Holding a <strong>live Active ticket</strong>? Claim a gas top-up straight to your wallet.
+        Part of each claim also grows the current round's pot. The ticket is the anti-abuse gate —
+        so this tops up players who've run their gas dry, once per day.
+      </p>
+
+      <div class="faucet-action">
+        <button id="faucet-connect" class="btn-pool btn-pool-primary" onclick="handleConnect()">Connect Wallet</button>
+        <button id="faucet-claim" class="btn-pool btn-pool-primary" onclick="handleClaim()" hidden disabled>
+          On-site claiming — coming shortly
+        </button>
       </div>
-      <div class="gov-stat">
-        <span class="gov-stat-label">Total Voting Power</span>
-        <span class="gov-stat-val" id="g-total-power">—</span>
-      </div>
-      <div class="gov-stat">
-        <span class="gov-stat-label">Your Voting Power</span>
-        <span class="gov-stat-val" id="g-my-power">—</span>
-      </div>
-      <div class="gov-stat">
-        <span class="gov-stat-label">Quorum Required</span>
-        <span class="gov-stat-val" id="g-quorum">—</span>
-      </div>
+      <p class="faucet-hint" id="faucet-hint" hidden>
+        On-site claiming is being wired up. In the meantime, enter a round on
+        <a href="../compete/">Compete</a> to hold an Active ticket, and grab base ETH below if you need it.
+      </p>
     </div>
 
-    <div class="gov-grid">
-
-      <!-- ─── Voting Power Card ──────────────────────────────────────────── -->
-      <div class="gov-card">
-        <h2 class="card-title">Voting Power</h2>
-        <p class="card-sub">Deposit TIMBS to participate in governance. Your TIMBS are locked while you have active votes.</p>
-
-        <div class="vp-display" id="vp-display">
-          <span class="vp-amount" id="vp-amount">—</span>
-          <span class="vp-label">TIMBS deposited</span>
-        </div>
-
-        <div class="pool-bal" id="vp-wallet" onclick="setVPMax()" title="Use full balance">Balance: —</div>
-        <div class="gov-input-row">
-          <input id="vp-input" class="gov-input" type="number" placeholder="Amount" />
-          <button class="gov-max-btn" onclick="setVPMax()">MAX</button>
-        </div>
-
-        <div class="vp-actions">
-          <button class="btn-gov-primary" id="vp-deposit-btn" onclick="handleDeposit()" disabled>
-            Connect wallet
-          </button>
-          <button class="btn-gov-secondary" id="vp-withdraw-btn" onclick="handleWithdraw()" disabled>
-            Withdraw
-          </button>
+    <!-- ─── External testnet faucets (TESTNET ONLY — hidden on mainnet) ── -->
+    <div class="faucet-card faucet-card-external" id="external-faucets" hidden>
+      <div class="faucet-card-head">
+        <div class="faucet-icon">💧</div>
+        <div>
+          <div class="faucet-title">Need base Arbitrum Sepolia ETH?</div>
+          <div class="faucet-sub">Brand-new wallet with no ETH? Grab starter ETH here first, then enter a round.</div>
         </div>
       </div>
 
-      <!-- ─── Proposals List ────────────────────────────────────────────── -->
-      <div class="gov-card gov-card-wide">
-        <div class="proposals-header">
-          <h2 class="card-title">Proposals</h2>
-        </div>
-        <div id="proposals-list" class="proposals-list">
-          <div class="empty-state">Loading proposals…</div>
-        </div>
-      </div>
+      <p class="faucet-note">
+        Our faucet tops up players who already hold a ticket — it can't onboard a zero-balance
+        wallet. These public faucets drip base Arbitrum Sepolia ETH so you can pay for your first
+        entry, after which the keep-alive faucet takes over.
+      </p>
 
+      <ul class="faucet-links">
+        <li>
+          <a href="https://www.alchemy.com/faucets/arbitrum-sepolia" target="_blank" rel="noopener">
+            <span class="faucet-link-name">Alchemy — Arbitrum Sepolia Faucet ↗︎</span>
+            <span class="faucet-link-desc">0.1 ETH every 24h · no account required</span>
+          </a>
+        </li>
+        <li>
+          <a href="https://faucet.quicknode.com/drip" target="_blank" rel="noopener">
+            <span class="faucet-link-name">QuickNode — Multi-Chain Testnet Faucet ↗︎</span>
+            <span class="faucet-link-desc">Base drip free · optional bonuses for more</span>
+          </a>
+        </li>
+      </ul>
     </div>
   </div>
 
@@ -192,7 +191,7 @@
   </footer>
 
   <script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
-  <script src="gov.js?v=20260902a"></script>
+  <script src="faucet.js?v=20260904a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
