@@ -204,19 +204,19 @@ let provider = null;
 let signer   = null;
 let userAddress = null;
 
-// ─── Shared read provider (wallet-first when connected) ───────────────────────
-// When a wallet is connected AND verified on the right chain, reads go THROUGH
-// the wallet's own provider — its RPC isn't the shared public endpoint, so heavy
-// polling can't trip a per-IP rate limit (the SwapTables model, and why other
-// dApps stay responsive in Brave). Wallet-less visitors, or any state where the
-// wallet chain isn't confirmed, fall back to the resilient public/keyed
-// FallbackProvider. chainChanged reloads the page (see listenForAccountChanges),
-// so _walletChainOk can't linger stale across a network switch; accountsChanged
-// nulls `provider`, which also drops us back to public.
+// ─── Shared read provider (keyed endpoint, never the wallet) ──────────────────
+// All reads go through the keyed/public provider (RPC_URLS), NOT the connected
+// wallet's own provider. Routing reads through the wallet used to avoid a per-IP
+// rate limit on the shared PUBLIC nodes — but with a dedicated keyed endpoint
+// (quota'd per-key, not per-IP, and pinned to CHAIN_ID) that concern is gone,
+// and the wallet path caused a worse failure: a flaky wallet RPC (Brave after a
+// "Shred site data") failed EVERY read and blanked the page to "—" while
+// connected, only recovering once the user disconnected. The keyed endpoint is
+// reliable and safe to poll, so we always use it. Writes still go through the
+// wallet signer; `_walletChainOk` is kept only as a connect-time chain check.
 let _walletChainOk = false;
 let _publicRO = null;
 function sharedReadProvider() {
-  try { if (provider && _walletChainOk) return provider; } catch {}
   return _publicRO || (_publicRO = makeReadProvider());
 }
 
@@ -418,18 +418,25 @@ async function connectWallet() {
       _setConnectFail("Your wallet didn't respond (" + stage + "). Unlock it or switch wallets, then retry.");
     } else {
       console.error("connectWallet failed:", err);
+      // Any other settled failure still leaves a tappable, retryable button
+      // rather than a stale "Connecting…".
+      _setConnectFail("Couldn't connect — try again.");
     }
     return false;
   } finally {
-    // Restore the button (success hides it via the page handler; on failure/cancel
-    // this makes it tappable again so a re-tap fires a fresh request).
-    _setConnectBtn("Connect Wallet", false);
+    // Only clear a lingering PENDING state (e.g. success, which the page handler
+    // then hides). On failure the catch already left a retryable message via
+    // _setConnectFail — don't clobber it back to a bare "Connect Wallet", which
+    // read as "nothing happened".
+    const b = document.getElementById("connect-btn");
+    if (b && b.classList.contains("is-connecting")) _setConnectBtn("Connect Wallet", false);
   }
 }
 
 // Update the shared connect button (id "connect-btn" on every page). No-op if
 // the page has no such button. The per-page success handler hides the button
 // after a connect; this only drives the pending/failed states.
+let _connectWatchdog = null;
 function _setConnectBtn(text, disabled) {
   try {
     const b = document.getElementById("connect-btn");
@@ -437,6 +444,24 @@ function _setConnectBtn(text, disabled) {
     b.textContent = text;
     b.disabled = !!disabled;
     b.classList.toggle("is-connecting", !!disabled);
+    // Guarantee recovery. Every wallet read in connectWallet is timeout-bounded,
+    // but if one ever hangs with no rejection (seen on Brave after a data-shred),
+    // neither catch nor finally runs and the button would sit disabled on
+    // "Connecting…" forever. Arm a watchdog when we enter the pending state; any
+    // later state change clears it. If it fires while still pending, force the
+    // button back to a tappable, retryable state.
+    clearTimeout(_connectWatchdog);
+    if (disabled) {
+      _connectWatchdog = setTimeout(() => {
+        const el = document.getElementById("connect-btn");
+        if (!el || !el.classList.contains("is-connecting")) return;
+        el.classList.remove("is-connecting");
+        el.classList.add("is-failed");
+        el.disabled = false;
+        el.textContent = "Connect Wallet — try again";
+        el.title = "Your wallet didn't respond. Unlock it or switch wallets, then tap again.";
+      }, 30000);
+    }
   } catch {}
 }
 
@@ -467,6 +492,7 @@ function _timeoutStage(err) {
 // to "Connect Wallet", which read as "nothing happened". Reverts on the next tap.
 function _setConnectFail(msg) {
   try {
+    clearTimeout(_connectWatchdog);
     const b = document.getElementById("connect-btn");
     if (!b) return;
     b.textContent = msg;
@@ -519,7 +545,12 @@ async function autoReconnect() {
     _walletChainOk = true; // verified on the right chain — reads may use the wallet
     return userAddress;
   } catch {
-    _clearSession();
+    // A transient wallet read failure/timeout (flaky Brave on refresh) is NOT a
+    // disconnect — DON'T clear the saved session, or one bad refresh drops the
+    // user to a gated view that needs a manual reconnect and stays gated on
+    // further refreshes. The explicit empty-accounts / account-switch checks
+    // above still clear on a real disconnect. Keeping the session lets the next
+    // load reconnect; reads work meanwhile via the keyed provider regardless.
     return null;
   }
 }

@@ -312,8 +312,8 @@ async function pollRoundState() {
     // extra rounds the user is paying for are reflected as a range.
     renderPlaysRound(currentRoundNum);
 
-    // Pot substats as ordered segments: Pot · backed by · yield accruing.
-    // "backed by" (escrow reserve) sits right after the pot; yield accruing
+    // Pot substats as ordered segments: Pot · backed by · yield rate.
+    // "backed by" (escrow reserve) sits right after the pot; yield rate
     // is its own segment (no longer parenthetical).
     // Each segment glues its own words with non-breaking spaces ( ) so it
     // never breaks mid-value; segments join with regular spaces around " · "
@@ -334,8 +334,8 @@ async function pollRoundState() {
     // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
     // a direct seed not registered via fundPot().
     if (escrowBal && escrowBal.gt(s.pot)) potSegs.push(`backed by ${fmt(escrowBal)} ETH`);
-    // Live yield accruing from active-ticket escrow (4th pot source).
-    if (accrued && !accrued.isZero()) potSegs.push(`yield accruing ${fmt(accrued)} ETH`);
+    // Live yield rate from active-ticket escrow (4th pot source).
+    if (accrued && !accrued.isZero()) potSegs.push(`yield rate ${fmt(accrued)} ETH`);
     document.getElementById("sub-pot").textContent = potSegs.join(" · ");
 
     // Entries playing THIS round. getRoundEntrants() is append-only history —
