@@ -79,6 +79,17 @@ function fmtStake(wei, decimals = 18) {
   return n.toFixed(Math.abs(n) >= 100 ? 2 : 4);
 }
 
+// Fixed-precision amount formatter (wei → grouped string) for the boost banner,
+// where a specific decimal count is wanted regardless of magnitude — e.g.
+// fmt(reserve, 18, 2) → "1,234.56", fmt(rate*86400, 18, 0) → "5,000". Missing
+// before, so any funded boost reserve threw a ReferenceError and blanked the
+// whole boosted section.
+function fmt(wei, decimals = 18, maxDecimals = 2) {
+  if (!wei) return "0";
+  const n = parseFloat(ethers.utils.formatUnits(wei, decimals));
+  return n.toLocaleString("en-US", { maximumFractionDigits: maxDecimals });
+}
+
 // pool = "staking" | "farm"
 function poolConfig(pool) {
   return pool === "staking"
