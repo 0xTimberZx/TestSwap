@@ -192,8 +192,22 @@ async function refreshEmit(pool, contract) {
   }
 }
 
+// Coalesce overlapping refreshes. The 15s interval, the visibilitychange
+// handler, connect/disconnect, and init can all fire loadAllPools() while an
+// earlier one is still resolving — overlapping reads raced and could leave the
+// UI reflecting a stale pass. If a load is already in flight, return it instead
+// of starting a second.
+let _loadInFlight = null;
 async function loadAllPools() {
-  await Promise.all([loadPool("staking"), loadPool("farm"), loadBoost()]);
+  if (_loadInFlight) return _loadInFlight;
+  _loadInFlight = (async () => {
+    try {
+      await Promise.all([loadPool("staking"), loadPool("farm"), loadBoost()]);
+    } finally {
+      _loadInFlight = null;
+    }
+  })();
+  return _loadInFlight;
 }
 
 // ─── Boosted Farms (TimbBoostFarm — multi-pool, epoch-funded) ─────────────────
@@ -710,7 +724,7 @@ async function handleConnect() {
 
 function handleDisconnect() {
   DebugHub.endSession();
-  provider = null; signer = null; userAddress = null;
+  disconnectWallet();
   document.getElementById("connect-btn").classList.remove("hidden");
   document.getElementById("wallet-info").classList.add("hidden");
   document.getElementById("network-badge").classList.add("hidden");

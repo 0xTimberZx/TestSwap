@@ -19,9 +19,7 @@ function PrizeIndicators() {
 
   async function fetchState() {
     try {
-      const readProv = (typeof provider !== "undefined" && provider)
-        ? provider
-        : makeReadProvider();
+      const readProv = sharedReadProvider();
       const prize  = new ethers.Contract(ADDRESSES.TimbPrize, TIMBPRIZE_MINI_ABI, readProv);
       const router = new ethers.Contract(ADDRESSES.TimbSwapRouter, ROUTER_MINI_ABI, readProv);
 

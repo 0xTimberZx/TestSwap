@@ -103,7 +103,7 @@ async function refreshLockBalance() {
   const el = document.getElementById("lock-balance");
   if (!selectedToken || !userAddress) { el.textContent = "Balance: —"; return; }
   try {
-    const erc = new ethers.Contract(selectedToken.address, ERC20_ABI, provider);
+    const erc = new ethers.Contract(selectedToken.address, ERC20_ABI, sharedReadProvider());
     const bal = await erc.balanceOf(userAddress);
     el.textContent = `Balance: ${fmt(bal, selectedToken.decimals, 4)} ${selectedToken.symbol}`;
   } catch { el.textContent = "Balance: —"; }
@@ -112,7 +112,7 @@ async function refreshLockBalance() {
 async function setLockMax() {
   if (!selectedToken || !userAddress) return;
   try {
-    const erc = new ethers.Contract(selectedToken.address, ERC20_ABI, provider);
+    const erc = new ethers.Contract(selectedToken.address, ERC20_ABI, sharedReadProvider());
     const bal = await erc.balanceOf(userAddress);
     document.getElementById("lock-amount").value = ethers.utils.formatUnits(bal, selectedToken.decimals);
   } catch {}
@@ -477,7 +477,7 @@ async function handleConnect() {
 
 function handleDisconnect() {
   DebugHub.endSession();
-  provider = null; signer = null; userAddress = null;
+  disconnectWallet();
   document.getElementById("connect-btn").classList.remove("hidden");
   document.getElementById("wallet-info").classList.add("hidden");
   document.getElementById("network-badge").classList.add("hidden");

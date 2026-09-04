@@ -339,6 +339,20 @@ function _clearSession() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch {}
 }
 
+// Full teardown for a MANUAL disconnect (the wallet-menu "Disconnect" on every
+// page). Pages used to only null provider/signer/userAddress, leaving the saved
+// sessionStorage address behind — so navigating to another page silently
+// auto-reconnected the wallet the user just disconnected. Clear the session and
+// reset the chain/provider flags too, so a manual disconnect actually sticks.
+function disconnectWallet() {
+  provider = null;
+  signer = null;
+  userAddress = null;
+  _walletChainOk = false;
+  _activeInjectedProvider = null;
+  _clearSession();
+}
+
 function _getSavedAddress() {
   try { return sessionStorage.getItem(SESSION_KEY); } catch { return null; }
 }
