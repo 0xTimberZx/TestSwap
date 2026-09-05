@@ -77,7 +77,16 @@ const CHAIN_CONFIG = {
 function makeReadProvider() {
   let base;
   if (RPC_URLS.length === 1) {
-    base = new ethers.providers.StaticJsonRpcProvider(RPC_URLS[0], CHAIN_ID);
+    // Batch reads: ethers collapses every eth_call issued in the same tick into a
+    // SINGLE JSON-RPC POST. A page load fired ~16 rapid POSTs, which (a) tripped
+    // Brave's volume heuristic on our RPC proxy (the proxy returned 200 with valid
+    // data, but Brave dropped the burst client-side → all-dashes on refresh) and
+    // (b) ran up Supabase edge invocations. One batched POST behaves like the
+    // single faucet-claim POST that Brave allows, and slashes edge cost.
+    // Pin the network like StaticJsonRpcProvider so it never sends eth_chainId.
+    const NET = { chainId: CHAIN_ID, name: CHAIN_NAME };
+    base = new ethers.providers.JsonRpcBatchProvider(RPC_URLS[0], NET);
+    base.detectNetwork = async () => NET;
   } else {
     const configs = RPC_URLS.map((url, i) => ({
       provider:     new ethers.providers.StaticJsonRpcProvider(url, CHAIN_ID),
