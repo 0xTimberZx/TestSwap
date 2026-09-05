@@ -102,12 +102,27 @@ function poolConfig(pool) {
 async function loadPool(pool) {
   const cfg = poolConfig(pool);
   const contract = new ethers.Contract(cfg.address, cfg.abi, readProv());
+  const hasUser = !!userAddress;
 
   try {
-    const [total, apr] = await Promise.all([
+    // Fire global + per-wallet reads in ONE tick so the batch provider collapses
+    // them into a single JSON-RPC POST. A connected load used to fire two separate
+    // batches (global, then per-wallet); merging them keeps the request count under
+    // Brave's third-party volume throttle on the RPC proxy. Per-wallet reads are
+    // caught individually so one flaky call can't blank the whole card.
+    const Z = ethers.BigNumber.from(0);
+    const wallet = hasUser ? new ethers.Contract(cfg.token, ERC20_ABI, readProv()) : null;
+    const reads = [
       contract.totalStaked(),
-      contract[cfg.aprFn]().catch(() => ethers.BigNumber.from(0))
-    ]);
+      contract[cfg.aprFn]().catch(() => Z),
+    ];
+    if (hasUser) reads.push(
+      contract.stakedBalance(userAddress).catch(() => Z),
+      contract.earned(userAddress).catch(() => Z),
+      wallet.balanceOf(userAddress).catch(() => Z)
+    );
+    const res = await Promise.all(reads);
+    const total = res[0], apr = res[1];
 
     document.getElementById(pool + "-total").textContent = fmtStake(total);
     document.getElementById(pool + "-apr").textContent = formatApr(apr);
@@ -118,13 +133,8 @@ async function loadPool(pool) {
     // is visible on-page, not just in a console.
     refreshEmit(pool, contract).catch(() => {});
 
-    if (userAddress) {
-      const wallet = new ethers.Contract(cfg.token, ERC20_ABI, readProv());
-      const [mine, earned, inWallet] = await Promise.all([
-        contract.stakedBalance(userAddress),
-        contract.earned(userAddress),
-        wallet.balanceOf(userAddress)
-      ]);
+    if (hasUser) {
+      const mine = res[2], earned = res[3], inWallet = res[4];
       document.getElementById(pool + "-mine").textContent = fmtStake(mine);
       document.getElementById(pool + "-earned").textContent = fmtStake(earned) + " TIMBS";
       document.getElementById(pool + "-wallet").textContent =
