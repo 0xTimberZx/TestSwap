@@ -1034,17 +1034,30 @@ function listenForAccountChanges(onChangeCallback) {
   // Bind once — a second call (re-connect, re-init) would stack a duplicate
   // accountsChanged handler and fire session teardown twice per event.
   if (!eth || _walletListenersBound) return;
-  _walletListenersBound = true;
-  eth.on("accountsChanged", async () => {
-    provider    = null;
-    signer      = null;
-    userAddress = null;
-    _activeInjectedProvider = null;
-    _walletChainOk = false; // drop back to the public read provider
-    _clearSession();
-    if (onChangeCallback) onChangeCallback(null);
-  });
-  eth.on("chainChanged", () => window.location.reload());
+  // Brave (and some multi-wallet / EIP-6963 setups) wrap window.ethereum in a
+  // Proxy whose `on` is a read-only, non-configurable property; merely READING
+  // `eth.on` then throws a V8 proxy-invariant TypeError ("'get' on proxy:
+  // property 'on' is a read-only and non-configurable data property ... but the
+  // proxy did not return its actual value"). This binding is non-essential
+  // account/chain-change UX and must NEVER abort page init — an unguarded throw
+  // here aborted the connected-load init before loadAllPools(), blanking every
+  // read to "—" on Brave. Guard every access; on failure we simply skip the
+  // listeners (an account switch then needs a manual reload, a minor degrade).
+  try {
+    eth.on("accountsChanged", async () => {
+      provider    = null;
+      signer      = null;
+      userAddress = null;
+      _activeInjectedProvider = null;
+      _walletChainOk = false; // drop back to the public read provider
+      _clearSession();
+      if (onChangeCallback) onChangeCallback(null);
+    });
+    eth.on("chainChanged", () => window.location.reload());
+    _walletListenersBound = true; // only mark bound once both succeeded
+  } catch (e) {
+    console.warn("listenForAccountChanges: wallet event binding unavailable (provider proxy):", e && e.message);
+  }
 }
 
 // Prompts the wallet's own account picker. MetaMask pops one straight
