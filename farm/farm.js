@@ -39,6 +39,24 @@ function readProv() {
   return sharedReadProvider();
 }
 
+// TEMP DIAGNOSTIC — raw beacon straight to the same-origin relay, bypassing the
+// DebugHub SDK, so init progress is visible even if the SDK path is the failure.
+// Remove once the farm dashes are resolved.
+function _rawBeacon(name, extra) {
+  try {
+    fetch('/api/debughub_events', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        app: 'TimbSwap', type: 'checkpoint',
+        name: 'FARMDIAG:' + name, status: 'pass',
+        message: (extra == null ? null : String(extra).slice(0, 800))
+      })
+    }).catch(function () {});
+  } catch (e) {}
+}
+
 // The public Arb Sepolia RPC is load-balanced across nodes that lag each other,
 // so a state read fired immediately after confirmTx can hit a node still a block
 // behind and return pre-tx values (e.g. a "stale" staked balance after an
@@ -161,6 +179,7 @@ async function loadPool(pool) {
     }
   } catch (e) {
     console.warn(`loadPool(${pool}):`, e.message);
+    _rawBeacon('loadPool-' + pool + '-ERR', (e && (e.code ? e.code + ' ' : '') + (e.message || e)));
   }
 }
 
@@ -752,9 +771,13 @@ function handleDisconnect() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 (async () => {
+ _rawBeacon('init-start', 'ethers=' + (typeof ethers) + ' makeReadProvider=' + (typeof makeReadProvider) + ' sharedReadProvider=' + (typeof sharedReadProvider) + ' autoReconnect=' + (typeof autoReconnect));
+ try {
   // Auto-reconnect if wallet was connected before navigation
     DebugHub.logCheckpoint("Farm:Page Loaded", "pass");
+  _rawBeacon('after-logCheckpoint');
   const _reconnected = await autoReconnect();
+  _rawBeacon('after-autoReconnect', 'reconnected=' + !!_reconnected + ' userAddress=' + (typeof userAddress !== 'undefined' ? userAddress : 'undef'));
   if (_reconnected) {
     document.getElementById("connect-btn")?.classList.add("hidden");
     document.getElementById("wallet-info")?.classList.remove("hidden");
@@ -790,8 +813,13 @@ function handleDisconnect() {
     });
   }
 
+  _rawBeacon('before-loadAllPools');
   await loadAllPools();
+  _rawBeacon('after-loadAllPools');
   // Only refresh pool stats while the tab is visible; catch up on return.
   setInterval(() => { if (!document.hidden) loadAllPools(); }, 30000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) loadAllPools(); });
+ } catch (e) {
+  _rawBeacon('INIT-ERROR', (e && (e.code ? e.code + ' ' : '') + (e.message || e)) + ' | stack: ' + (e && e.stack ? String(e.stack).slice(0, 500) : 'n/a'));
+ }
 })();
