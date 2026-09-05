@@ -628,7 +628,10 @@ async function autoReconnect() {
       // page on refresh). Verify the chain read-only; if it's wrong, stay gated
       // (don't clear) and let the user reconnect explicitly (that path switches).
       const net = await _withTimeout(provider.getNetwork(), 4000, "getNetwork");
-      if (net.chainId !== CHAIN_ID) return null;
+      // Wrong chain: stay gated (don't clear the session) but revert the
+      // optimistic nav chrome so the real Connect button returns — the explicit
+      // connect path is what switches the chain.
+      if (net.chainId !== CHAIN_ID) { clearWalletChrome(); return null; }
       _walletChainOk = true; // verified on the right chain
       return userAddress;
     } catch {
@@ -637,9 +640,17 @@ async function autoReconnect() {
       // THIS LOAD — the session is preserved either way, so the next load
       // reconnects and reads work meanwhile via the keyed provider.
       if (attempt < 2) { await new Promise(r => setTimeout(r, 500)); continue; }
+      // Reconnect failed for this load. Revert the optimistic nav chrome (session
+      // kept) so the nav shows a real Connect button instead of a stuck
+      // "connected" state with a hidden button — this is the general fix for the
+      // #374 optimistic-chrome half-state on EVERY page. (The !window.ethereum
+      // early-return above is left alone to avoid a false revert during a late
+      // wallet injection.)
+      clearWalletChrome();
       return null;
     }
   }
+  clearWalletChrome();
   return null;
 }
 
