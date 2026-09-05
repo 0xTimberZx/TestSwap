@@ -28,7 +28,7 @@
 </head>
 <body>
   <h1>TimbSwap /api diagnostic</h1>
-  <p class="sub">Same-origin test of the Cloudflare Worker. Open this on the same browser/device that shows the dashes.</p>
+  <p class="sub">Same-origin test of the Cloudflare Worker + the app's real read path. Open on the browser/device that shows the dashes.</p>
 
   <div class="card">
     <p class="label">Loaded config (config.js)</p>
@@ -36,67 +36,141 @@
   </div>
 
   <div class="card">
-    <p class="label">POST /api/rpc &nbsp;→&nbsp; eth_blockNumber</p>
+    <p class="label">1. POST /api/rpc &nbsp;→&nbsp; eth_blockNumber (plain fetch)</p>
     <div id="rpc-pill" class="pill wait">running…</div>
     <div class="val" id="rpc" style="margin-top:8px;">…</div>
   </div>
 
   <div class="card">
-    <p class="label">POST /api/debughub_events &nbsp;→&nbsp; test event</p>
+    <p class="label">2. Raw BATCH POST /api/rpc &nbsp;→&nbsp; 2× eth_call (array body)</p>
+    <div id="batch-pill" class="pill wait">running…</div>
+    <div class="val" id="batch" style="margin-top:8px;">…</div>
+  </div>
+
+  <div class="card">
+    <p class="label">3. ethers JsonRpcBatchProvider &nbsp;→&nbsp; Staking.totalStaked + estimatedAPR</p>
+    <div id="eb-pill" class="pill wait">running…</div>
+    <div class="val" id="eb" style="margin-top:8px;">…</div>
+  </div>
+
+  <div class="card">
+    <p class="label">4. ethers StaticJsonRpcProvider (non-batch control) &nbsp;→&nbsp; totalStaked</p>
+    <div id="es-pill" class="pill wait">running…</div>
+    <div class="val" id="es" style="margin-top:8px;">…</div>
+  </div>
+
+  <div class="card">
+    <p class="label">5. POST /api/debughub_events &nbsp;→&nbsp; test event</p>
     <div id="tel-pill" class="pill wait">running…</div>
     <div class="val" id="tel" style="margin-top:8px;">…</div>
   </div>
 
   <button onclick="location.reload()">Run again</button>
 
-  <!-- Load the real config so we can show exactly what the app is using. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
   <script>document.write('<script src="config.js?t=' + Date.now() + '"><\/script>');</script>
   <script>
   (function () {
-    var cfgEl = document.getElementById('cfg');
-    try {
-      var rpc = (typeof DEDICATED_RPC !== 'undefined') ? DEDICATED_RPC : '(DEDICATED_RPC undefined)';
-      var tel = (window.DEBUGHUB_CONFIG && window.DEBUGHUB_CONFIG.telemetryUrl) || '(telemetryUrl unset)';
-      cfgEl.textContent = 'DEDICATED_RPC = ' + rpc + '\ntelemetryUrl  = ' + tel;
-    } catch (e) { cfgEl.textContent = 'config read error: ' + e.message; }
-
     function setPill(id, ok, text) {
       var p = document.getElementById(id);
       p.className = 'pill ' + (ok ? 'ok' : 'bad');
       p.textContent = text;
     }
+    function show(id, text){ document.getElementById(id).textContent = text; }
 
-    // ── /api/rpc ──
-    fetch('/api/rpc', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
-    }).then(function (r) {
-      return r.text().then(function (body) {
-        var ok = r.ok && body.indexOf('"result"') !== -1;
-        setPill('rpc-pill', ok, 'HTTP ' + r.status + (ok ? '  OK' : '  FAIL'));
-        document.getElementById('rpc').textContent = body || '(empty body)';
-      });
-    }).catch(function (e) {
-      setPill('rpc-pill', false, 'NETWORK ERROR');
-      document.getElementById('rpc').textContent = e.message;
-    });
+    var RPC = (typeof DEDICATED_RPC !== 'undefined') ? DEDICATED_RPC : '/api/rpc';
+    var CHAIN = (typeof CHAIN_ID !== 'undefined') ? CHAIN_ID : 421614;
+    var STAKING = '0xe776c7b700B190ED8248741F9b518B08d8733C8F'; // ADDRESSES.TimbStaking
+    var SEL_TOTAL = '0x817b1cd2'; // totalStaked()
+    var SEL_APR   = '0x1cbb6f74'; // estimatedAPR()  (computed below if ethers present)
 
-    // ── /api/debughub_events ──
-    fetch('/api/debughub_events', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ app: 'TimbSwap', type: 'checkpoint', name: 'apidiag-smoke', status: 'pass' })
-    }).then(function (r) {
-      return r.text().then(function (body) {
-        var ok = r.ok; // relay returns 201/204 with empty body on success
-        setPill('tel-pill', ok, 'HTTP ' + r.status + (ok ? '  OK' : '  FAIL'));
-        document.getElementById('tel').textContent = body ? body : '(empty body — success looks like HTTP 201/204)';
-      });
-    }).catch(function (e) {
-      setPill('tel-pill', false, 'NETWORK ERROR');
-      document.getElementById('tel').textContent = e.message;
-    });
+    // config card
+    try {
+      var tel = (window.DEBUGHUB_CONFIG && window.DEBUGHUB_CONFIG.telemetryUrl) || '(telemetryUrl unset)';
+      show('cfg', 'DEDICATED_RPC = ' + RPC + '\ntelemetryUrl  = ' + tel +
+                  '\nethers loaded = ' + (!!window.ethers));
+    } catch (e) { show('cfg', 'config read error: ' + e.message); }
+
+    // Recompute selectors from ethers if available (authoritative)
+    if (window.ethers) {
+      try {
+        var iface = new ethers.utils.Interface([
+          'function totalStaked() view returns (uint256)',
+          'function estimatedAPR() view returns (uint256)'
+        ]);
+        SEL_TOTAL = iface.encodeFunctionData('totalStaked', []);
+        SEL_APR   = iface.encodeFunctionData('estimatedAPR', []);
+      } catch (e) {}
+    }
+
+    // ── 1. single eth_blockNumber ──
+    fetch(RPC, { method:'POST', headers:{'content-type':'application/json'},
+      body:'{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' })
+      .then(function(r){ return r.text().then(function(b){
+        var ok = r.ok && b.indexOf('"result"')!==-1;
+        setPill('rpc-pill', ok, 'HTTP '+r.status+(ok?' OK':' FAIL'));
+        show('rpc', b || '(empty)');
+      });}).catch(function(e){ setPill('rpc-pill',false,'NETWORK ERROR'); show('rpc', e.message); });
+
+    // ── 2. raw batch array of 2 eth_call ──
+    var batchBody = JSON.stringify([
+      { jsonrpc:'2.0', id:1, method:'eth_call', params:[{ to:STAKING, data:SEL_TOTAL }, 'latest'] },
+      { jsonrpc:'2.0', id:2, method:'eth_call', params:[{ to:STAKING, data:SEL_APR   }, 'latest'] }
+    ]);
+    fetch(RPC, { method:'POST', headers:{'content-type':'application/json'}, body:batchBody })
+      .then(function(r){ return r.text().then(function(b){
+        var isArr=false, hasRes=false;
+        try { var j=JSON.parse(b); isArr=Array.isArray(j); hasRes=isArr && j.every(function(x){return x&&x.result!==undefined;}); } catch(e){}
+        var ok = r.ok && isArr && hasRes;
+        setPill('batch-pill', ok, 'HTTP '+r.status+(ok?' OK (array)':(isArr?' array w/ error':' NOT ARRAY')));
+        show('batch', b || '(empty)');
+      });}).catch(function(e){ setPill('batch-pill',false,'NETWORK ERROR'); show('batch', e.message); });
+
+    // ── 3 & 4 need ethers ──
+    if (!window.ethers) {
+      setPill('eb-pill', false, 'ethers not loaded'); setPill('es-pill', false, 'ethers not loaded');
+      show('eb','—'); show('es','—');
+    } else {
+      var ABI = ['function totalStaked() view returns (uint256)','function estimatedAPR() view returns (uint256)'];
+      var NET = { chainId: CHAIN, name: 'arbitrum-sepolia' };
+
+      // 3. JsonRpcBatchProvider (exactly like config.makeReadProvider)
+      (async function(){
+        try {
+          var bp = new ethers.providers.JsonRpcBatchProvider(RPC, NET);
+          bp.detectNetwork = async function(){ return NET; };
+          var c = new ethers.Contract(STAKING, ABI, bp);
+          var out = await Promise.all([ c.totalStaked(), c.estimatedAPR() ]);
+          setPill('eb-pill', true, 'OK');
+          show('eb', 'totalStaked = ' + out[0].toString() + '\nestimatedAPR = ' + out[1].toString());
+        } catch(e){
+          setPill('eb-pill', false, (e && e.code) ? e.code : 'ERROR');
+          show('eb', (e && (e.message||e.toString())) + (e && e.body ? '\nbody: '+e.body : ''));
+        }
+      })();
+
+      // 4. StaticJsonRpcProvider control (non-batch)
+      (async function(){
+        try {
+          var sp = new ethers.providers.StaticJsonRpcProvider(RPC, NET);
+          var c2 = new ethers.Contract(STAKING, ABI, sp);
+          var t = await c2.totalStaked();
+          setPill('es-pill', true, 'OK');
+          show('es', 'totalStaked = ' + t.toString());
+        } catch(e){
+          setPill('es-pill', false, (e && e.code) ? e.code : 'ERROR');
+          show('es', (e && (e.message||e.toString())) + (e && e.body ? '\nbody: '+e.body : ''));
+        }
+      })();
+    }
+
+    // ── 5. telemetry relay ──
+    fetch('/api/debughub_events', { method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ app:'TimbSwap', type:'checkpoint', name:'apidiag-smoke', status:'pass' }) })
+      .then(function(r){ return r.text().then(function(b){
+        setPill('tel-pill', r.ok, 'HTTP '+r.status+(r.ok?' OK':' FAIL'));
+        show('tel', b ? b : '(empty body — success is HTTP 201/204)');
+      });}).catch(function(e){ setPill('tel-pill',false,'NETWORK ERROR'); show('tel', e.message); });
   })();
   </script>
 </body>
