@@ -562,7 +562,9 @@ async function setMaxAmount(pool) { return setAmount(pool, 100); }
 // ─── Stake ────────────────────────────────────────────────────────────────────
 
 async function handleStake(pool) {
-  if (!userAddress) return;
+  // When gated (autoReconnect didn't establish a signer), the primary button
+  // reads "Connect wallet" — so route a tap to an explicit connect, then stop.
+  if (!userAddress) { await handleConnect(); return; }
   // Zero-balance state: the button reads "Buy TIMBS" / "Get LP" → go to Swap.
   const sBtn = document.getElementById(pool + "-stake-btn");
   if (sBtn && sBtn.dataset.action === "get") { window.location.href = "../swap/"; return; }
@@ -762,6 +764,19 @@ function handleDisconnect() {
       if (!newAddr) { handleDisconnect(); return; }
       const _el = document.getElementById("wallet-addr");
       if (_el) _el.textContent = fmtAddr(newAddr);
+      await loadAllPools();
+    });
+  } else {
+    // autoReconnect failed (Brave frequently returns no account / times out on a
+    // reload) while config.js's optimistic chrome may have already painted the
+    // nav "connected" from the saved session. Revert the nav to the real Connect
+    // button so the page is honest, and make the pool CTA a live one-tap
+    // reconnect — otherwise the nav shows connected, its Connect button stays
+    // hidden, and the pool buttons are stuck on a dead, disabled "Connect wallet".
+    clearWalletChrome();
+    ["staking", "farm"].forEach(p => {
+      const b = document.getElementById(p + "-stake-btn");
+      if (b) { b.textContent = "Connect wallet"; b.disabled = false; }
     });
   }
 
