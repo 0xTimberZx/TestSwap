@@ -48,13 +48,13 @@
   </div>
 
   <div class="card">
-    <p class="label">3. ethers JsonRpcBatchProvider &nbsp;→&nbsp; Staking.totalStaked + estimatedAPR</p>
+    <p class="label">3. REAL makeReadProvider() &nbsp;→&nbsp; Staking.totalStaked + estimatedAPR</p>
     <div id="eb-pill" class="pill wait">running…</div>
     <div class="val" id="eb" style="margin-top:8px;">…</div>
   </div>
 
   <div class="card">
-    <p class="label">4. ethers StaticJsonRpcProvider (non-batch control) &nbsp;→&nbsp; totalStaked</p>
+    <p class="label">4. REAL makeReadProvider() &nbsp;→&nbsp; FULL batch (staking+farm+boost, 8 calls, 1 tick)</p>
     <div id="es-pill" class="pill wait">running…</div>
     <div class="val" id="es" style="margin-top:8px;">…</div>
   </div>
@@ -131,15 +131,19 @@
       setPill('eb-pill', false, 'ethers not loaded'); setPill('es-pill', false, 'ethers not loaded');
       show('eb','—'); show('es','—');
     } else {
-      var ABI = ['function totalStaked() view returns (uint256)','function estimatedAPR() view returns (uint256)'];
-      var NET = { chainId: CHAIN, name: 'arbitrum-sepolia' };
+      var STAKING_ABI = ['function totalStaked() view returns (uint256)','function estimatedAPR() view returns (uint256)'];
+      var FARM_ADDR = '0xE319E2206F71A5cD8dd2c411C6F29712935f9011'; // ADDRESSES.TimbFarm
+      var FARM_ABI = ['function totalStaked() view returns (uint256)','function estimatedEmissionsAPR() view returns (uint256)'];
+      var BOOST_ADDR = '0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35'; // ADDRESSES.TimbBoostFarm
+      var BOOST_ABI = ['function poolCount() view returns (uint256)','function totalWeight() view returns (uint256)','function rewardRatePerSecond() view returns (uint256)','function periodFinish() view returns (uint256)'];
 
-      // 3. JsonRpcBatchProvider (exactly like config.makeReadProvider)
+      // 3. THE REAL makeReadProvider() from config.js (includes _withReadRetry) —
+      //    single-pool reads, exactly like loadPool("staking").
       (async function(){
         try {
-          var bp = new ethers.providers.JsonRpcBatchProvider(RPC, NET);
-          bp.detectNetwork = async function(){ return NET; };
-          var c = new ethers.Contract(STAKING, ABI, bp);
+          if (typeof makeReadProvider !== 'function') throw new Error('makeReadProvider() not found in config.js');
+          var prov = makeReadProvider();
+          var c = new ethers.Contract(STAKING, STAKING_ABI, prov);
           var out = await Promise.all([ c.totalStaked(), c.estimatedAPR() ]);
           setPill('eb-pill', true, 'OK');
           show('eb', 'totalStaked = ' + out[0].toString() + '\nestimatedAPR = ' + out[1].toString());
@@ -149,14 +153,32 @@
         }
       })();
 
-      // 4. StaticJsonRpcProvider control (non-batch)
+      // 4. THE REAL makeReadProvider() firing a FULL-SIZE batch in ONE tick —
+      //    staking + farm + boost together, exactly like loadAllPools().
       (async function(){
         try {
-          var sp = new ethers.providers.StaticJsonRpcProvider(RPC, NET);
-          var c2 = new ethers.Contract(STAKING, ABI, sp);
-          var t = await c2.totalStaked();
-          setPill('es-pill', true, 'OK');
-          show('es', 'totalStaked = ' + t.toString());
+          if (typeof makeReadProvider !== 'function') throw new Error('makeReadProvider() not found in config.js');
+          var prov = makeReadProvider();
+          var s = new ethers.Contract(STAKING, STAKING_ABI, prov);
+          var f = new ethers.Contract(FARM_ADDR, FARM_ABI, prov);
+          var b = new ethers.Contract(BOOST_ADDR, BOOST_ABI, prov);
+          // Fire ALL in the same tick so the batch provider collapses them into
+          // one POST — this is the exact shape loadAllPools() produces.
+          var out = await Promise.all([
+            s.totalStaked(), s.estimatedAPR(),
+            f.totalStaked(), f.estimatedEmissionsAPR(),
+            b.poolCount(), b.totalWeight(), b.rewardRatePerSecond(), b.periodFinish()
+          ]);
+          setPill('es-pill', true, 'OK (' + out.length + ' calls, 1 batch)');
+          show('es',
+            'staking.totalStaked   = ' + out[0].toString() + '\n' +
+            'staking.estimatedAPR  = ' + out[1].toString() + '\n' +
+            'farm.totalStaked      = ' + out[2].toString() + '\n' +
+            'farm.emissionsAPR     = ' + out[3].toString() + '\n' +
+            'boost.poolCount       = ' + out[4].toString() + '\n' +
+            'boost.totalWeight     = ' + out[5].toString() + '\n' +
+            'boost.rewardRate/s    = ' + out[6].toString() + '\n' +
+            'boost.periodFinish    = ' + out[7].toString());
         } catch(e){
           setPill('es-pill', false, (e && e.code) ? e.code : 'ERROR');
           show('es', (e && (e.message||e.toString())) + (e && e.body ? '\nbody: '+e.body : ''));
