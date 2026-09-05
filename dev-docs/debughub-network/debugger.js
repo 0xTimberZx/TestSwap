@@ -1,17 +1,19 @@
 /* ============================================================
    DebugHub SDK
-   Version: 1.3.1  (#debug is local-only: sink held back while armed)
+  Version: 1.3.3  (#debug local-only; first-party relay with compatibility fallback)
 
    Drop-in replacement for MyDapp/debughub/sdk/debugger.js.
 
    Usage: add this script tag BEFORE your app.js, and define
      window.DEBUGHUB_CONFIG = {
        appName:     "TimbSwap",
-       // Optional network sink. When both are present the SDK POSTs
+      // Optional first-party relay and direct compatibility sink. When
+      // configured the SDK POSTs
        // every event to Supabase in addition to localStorage, so the
        // hub can aggregate across origins AND devices. Omit them and
        // the SDK behaves exactly like 1.1.0 (localStorage only).
-       supabaseUrl: "https://ipyfodnidwsdvwqrcjrl.supabase.co",
+      telemetryUrl: "https://timbswap.xyz/api/debughub_events",
+      supabaseUrl: "https://ipyfodnidwsdvwqrcjrl.supabase.co",
        supabaseKey: "sb_publishable_yg4wjMwvGrlf5C9vqs2nkw_Hfks0Ux9"
      };
    before it loads. supabaseUrl/Key are read lazily (at send time), so
@@ -33,7 +35,7 @@
 (function () {
   "use strict";
 
-  var SDK_VERSION = "1.3.1";
+  var SDK_VERSION = "1.3.3";
   var MAX_EVENTS = 200;
 
   var config = window.DEBUGHUB_CONFIG || {};
@@ -100,7 +102,8 @@
     return s.length > n ? s.slice(0, n) : s;
   }
 
-  // Fire-and-forget POST to Supabase (PostgREST). Read the endpoint lazily so
+  // Fire-and-forget POST to the first-party relay, falling back to Supabase
+  // during rollout. Read endpoints lazily so
   // a config script that runs after this SDK can still supply it. `keepalive`
   // lets the session_end event flush during beforeunload. All failures are
   // swallowed — telemetry must never affect the host app, and the event is
@@ -113,8 +116,10 @@
     // "nothing uploaded" assurance literally true.
     if (snapshotArmed()) return;
     var cfg = window.DEBUGHUB_CONFIG || config;
-    var url = cfg.supabaseUrl, key = cfg.supabaseKey;
-    if (!url || !key || typeof fetch !== "function") return;
+    var relayUrl = cfg.telemetryUrl;
+    var supabaseUrl = cfg.supabaseUrl;
+    var key = cfg.supabaseKey;
+    if ((!relayUrl && (!supabaseUrl || !key)) || typeof fetch !== "function") return;
     try {
       var row = {
         app:         event.app,
@@ -132,20 +137,45 @@
         duration_ms: (typeof event.durationMs === "number") ? Math.round(event.durationMs) : null,
         event_ts:    event.timestamp || null
       };
-      fetch(url.replace(/\/+$/, "") + "/rest/v1/debughub_events", {
-        method: "POST",
-        headers: {
-          "apikey": key,
-          "Authorization": "Bearer " + key,
-          "Content-Type": "application/json",
-          "Prefer": "return=minimal"
-        },
-        body: JSON.stringify(row),
-        keepalive: true,
-        mode: "cors"
-      }).catch(function () {});
+      var send = function (url, headers) {
+        return fetch(url, {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify(row),
+          keepalive: true,
+          mode: "cors"
+        });
+      };
+      var directUrl = supabaseUrl && supabaseUrl.replace(/\/+$/, "") + "/rest/v1/debughub_events";
+      var directHeaders = {
+        "apikey": key,
+        "Authorization": "Bearer " + key,
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+      };
+      var relay = relayUrl
+        ? send(relayUrl.replace(/\/+$/, ""), { "Content-Type": "application/json" })
+        : Promise.reject(new Error("first-party relay unavailable"));
+      relay.then(function (res) {
+        if (res.ok || !directUrl) return res;
+        return send(directUrl, directHeaders);
+      }).catch(function () {
+        if (directUrl) return send(directUrl, directHeaders);
+        throw new Error("telemetry relay unavailable");
+      }).then(function (res) {
+        if (!res || res.ok || _sinkWarned) return;
+        _sinkWarned = true;
+        warn("telemetry upload rejected (HTTP " + res.status + ")");
+      }).catch(function (err) {
+        if (!_sinkWarned) {
+          _sinkWarned = true;
+          warn("telemetry upload failed (network/blocked/CORS): " + ((err && err.message) || err));
+        }
+      });
     } catch (e) { /* never throw from telemetry */ }
   }
+  // One-time guard so a failing sink logs its reason ONCE, never per event.
+  var _sinkWarned = false;
 
   // ---------- console feedback (silent unless storage fails) ----------
 
