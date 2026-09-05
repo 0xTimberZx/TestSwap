@@ -51,6 +51,18 @@
 .faucet-action { display: flex; }
 .faucet-action .btn-pool { width: 100%; }
 
+/* Claim feedback — the gatekeeper's reply, colour-coded by outcome. */
+.faucet-status {
+  font-size: 13px;
+  font-family: var(--mono);
+  line-height: 1.5;
+  margin: 12px 0 0;
+  color: var(--text-2);
+}
+.faucet-status-ok      { color: var(--green); }
+.faucet-status-err     { color: #ff5c5c; }
+.faucet-status-pending { color: var(--text-2); }
+
 .faucet-hint {
   font-size: 13px;
   color: var(--text-3);

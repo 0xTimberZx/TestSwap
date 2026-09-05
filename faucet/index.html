@@ -36,7 +36,7 @@
     }
   </script>
   <link rel="stylesheet" href="../style.css?v=20260902a" />
-  <link rel="stylesheet" href="faucet.css?v=20260904a" />
+  <link rel="stylesheet" href="faucet.css?v=20260905a" />
 </head>
 <body>
 
@@ -133,13 +133,14 @@
 
       <div class="faucet-action">
         <button id="faucet-connect" class="btn-pool btn-pool-primary" onclick="handleConnect()">Connect Wallet</button>
-        <button id="faucet-claim" class="btn-pool btn-pool-primary" onclick="handleClaim()" hidden disabled>
-          On-site claiming — coming shortly
+        <button id="faucet-claim" class="btn-pool btn-pool-primary" onclick="handleClaim()" hidden>
+          Claim gas top-up
         </button>
       </div>
+      <p class="faucet-status" id="faucet-status" role="status" aria-live="polite" hidden></p>
       <p class="faucet-hint" id="faucet-hint" hidden>
-        On-site claiming is being wired up. In the meantime, enter a round on
-        <a href="../compete/">Compete</a> to hold an Active ticket, and grab base ETH below if you need it.
+        One top-up per wallet every 24h. No Active ticket yet? Enter a round on
+        <a href="../compete/">Compete</a> first, then come back — and grab base ETH below if your wallet is empty.
       </p>
     </div>
 
@@ -191,7 +192,7 @@
   </footer>
 
   <script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
-  <script src="faucet.js?v=20260904c"></script>
+  <script src="faucet.js?v=20260905a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
