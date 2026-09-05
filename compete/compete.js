@@ -334,9 +334,12 @@ async function pollRoundState() {
     // Escrow backing — only when it exceeds the accounted (winnable) pot, e.g.
     // a direct seed not registered via fundPot().
     if (escrowBal && escrowBal.gt(s.pot)) potSegs.push(`backed by ${fmt(escrowBal)} ETH`);
-    // Live yield rate from active-ticket escrow (4th pot source).
-    if (accrued && !accrued.isZero()) potSegs.push(`yield rate ${fmt(accrued)} ETH`);
     document.getElementById("sub-pot").textContent = potSegs.join(" · ");
+
+    // FLOW GROUP (right of the "|" divider): live yield rate + round entries.
+    // nbsp within each segment so a value never wraps mid-word.
+    const flowSegs = [];
+    if (accrued && !accrued.isZero()) flowSegs.push(`yield rate ${fmt(accrued)} ETH`);
 
     // Entries playing THIS round. getRoundEntrants() is append-only history —
     // it keeps a wallet forever, even after that ticket is replaced/cancelled/
@@ -349,9 +352,11 @@ async function pollRoundState() {
     if (entrants) {
       const active = await earningCount(s.round.toNumber(), entrants).catch(() => null);
       activeEntries = active !== null ? active : entrants.length;
-      document.getElementById("sub-entries").textContent =
-        `${activeEntries} ${activeEntries === 1 ? "entry" : "entries"}`;
+      flowSegs.push(`${activeEntries} ${activeEntries === 1 ? "entry" : "entries"}`);
     }
+    document.getElementById("sub-entries").textContent = flowSegs.join(" · ");
+    const _sep = document.getElementById("sub-sep");
+    if (_sep) _sep.hidden = flowSegs.length === 0;
 
     if (s.inSettlement) {
       setBannerTimer("Intermission — calculating…");
@@ -1767,6 +1772,10 @@ function handleDisconnect() {
       updateEntryButton();
       refreshEntryBalance();
       loadMyEntries(); // refresh tickets now that the wallet is known
+      // Reconcile the gated view NOW rather than waiting for the next 4s poll:
+      // re-render the digit track un-gated and hide the CONNECT-WALLET marquee /
+      // newcomer banner the moment the reconnect lands.
+      pollRoundState();
       listenForAccountChanges(async (newAddr) => {
         if (!newAddr) { handleDisconnect(); return; }
         const _addrEl = document.getElementById("wallet-addr");

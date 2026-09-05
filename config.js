@@ -337,6 +337,35 @@ function _saveSession(address) {
 
 function _clearSession() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+  // A cleared session means the optimistic chrome (below) must revert to the
+  // gated "Connect Wallet" state — otherwise a genuine disconnect / account
+  // switch would leave the nav showing connected.
+  clearWalletChrome();
+}
+
+// ─── Optimistic wallet chrome ─────────────────────────────────────────────────
+// On a refresh, the page renders gated first and only flips to connected once
+// autoReconnect() confirms — a visible "Connect Wallet" flash even when a wallet
+// is connected. If a session is saved, paint the connected nav chrome
+// immediately (below, at load) so there's no flash; autoReconnect then confirms
+// (idempotent) and _clearSession() reverts it if the wallet is really gone. Only
+// the shared nav elements (same ids on every page) are touched — per-page data
+// still fills in from the page's own reads.
+function applyWalletChrome(addr) {
+  try {
+    document.getElementById("connect-btn")?.classList.add("hidden");
+    document.getElementById("wallet-info")?.classList.remove("hidden");
+    document.getElementById("network-badge")?.classList.remove("hidden");
+    const a = document.getElementById("wallet-addr");
+    if (a && addr) a.textContent = fmtAddr(addr);
+  } catch {}
+}
+function clearWalletChrome() {
+  try {
+    document.getElementById("connect-btn")?.classList.remove("hidden");
+    document.getElementById("wallet-info")?.classList.add("hidden");
+    document.getElementById("network-badge")?.classList.add("hidden");
+  } catch {}
 }
 
 // Full teardown for a MANUAL disconnect (the wallet-menu "Disconnect" on every
@@ -1080,3 +1109,13 @@ if (!window.DebugHub) {
     logSecurity:   () => {}
   };
 }
+
+// Optimistic wallet chrome: config.js loads at the bottom of each page (after the
+// nav), so the nav elements exist here. If a session is saved, show the
+// connected nav immediately so a refresh never flashes the gated "Connect
+// Wallet" state before autoReconnect() confirms. autoReconnect (in the page's
+// init) then confirms it, or _clearSession() reverts it on a real disconnect.
+try {
+  const _savedAddr = _getSavedAddress();
+  if (_savedAddr) applyWalletChrome(_savedAddr);
+} catch {}
