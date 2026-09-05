@@ -782,6 +782,6 @@ function handleDisconnect() {
 
   await loadAllPools();
   // Only refresh pool stats while the tab is visible; catch up on return.
-  setInterval(() => { if (!document.hidden) loadAllPools(); }, 15000);
+  setInterval(() => { if (!document.hidden) loadAllPools(); }, 30000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) loadAllPools(); });
 })();

@@ -1830,7 +1830,7 @@ function handleDisconnect() {
   // data cost) refreshing state nobody is looking at. On return to the tab,
   // catch up immediately instead of waiting for the next interval.
   const whenVisible = (fn) => () => { if (!document.hidden) fn(); };
-  setInterval(whenVisible(pollRoundState), 4000);
+  setInterval(whenVisible(pollRoundState), 8000);
   setInterval(whenVisible(loadPastRounds), 30000);
   // Keep the entry-token balance current (drops after an entry, rises after a
   // faucet/transfer) without the user having to touch the selector.
