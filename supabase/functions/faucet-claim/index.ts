@@ -48,26 +48,40 @@ const REGISTRY_ABI = [
 // reserve that funds yield. weightOf is keyed by ticketId.
 const YIELD_ABI = ["function weightOf(uint256) view returns (uint256)"];
 
-// M7: scope CORS to the site origin (set FAUCET_ALLOWED_ORIGIN, e.g.
-// https://timbswap.xyz). Defaults to "*" so a fresh deploy still works, but
-// production should pin it. NOTE: CORS is browser-enforced only — it does not
-// stop a scripted (curl) caller; the daily circuit-breaker in faucet-worker.js
-// bounds that abuse, and a signature-gated claim would close it entirely.
-const ALLOWED_ORIGIN = Deno.env.get("FAUCET_ALLOWED_ORIGIN") || "*";
-const cors = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-  "Vary": "Origin",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "content-type, authorization, apikey",
-};
+// M7: scope CORS to the site origin(s). FAUCET_ALLOWED_ORIGIN is a comma-
+// separated allowlist (e.g. "https://timbswap.xyz,https://www.timbswap.xyz");
+// the matching request origin is echoed back, so several legit origins can be
+// pinned at once. Defaults to "*" so a fresh deploy still works. This is a
+// per-WEBSITE control, never per-wallet/session — a browser holding many wallets
+// is unaffected. NOTE: CORS is browser-enforced only; it does not stop a scripted
+// (curl) caller — the daily circuit-breaker in faucet-worker.js bounds that abuse.
+const ALLOWED_ORIGINS = (Deno.env.get("FAUCET_ALLOWED_ORIGIN") || "*")
+  .split(",").map((s) => s.trim()).filter(Boolean);
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors, "content-type": "application/json" },
-  });
+function corsFor(req: Request): Record<string, string> {
+  let allow = "*";
+  if (!(ALLOWED_ORIGINS.length === 1 && ALLOWED_ORIGINS[0] === "*")) {
+    // Pinned: echo the request origin only if it's on the allowlist; otherwise
+    // fall back to the first listed origin (so a non-match browser is blocked).
+    const reqOrigin = req.headers.get("origin") || "";
+    allow = ALLOWED_ORIGINS.includes(reqOrigin) ? reqOrigin : ALLOWED_ORIGINS[0];
+  }
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Vary": "Origin",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "content-type, authorization, apikey",
+  };
+}
 
 Deno.serve(async (req) => {
+  const cors = corsFor(req);
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, "content-type": "application/json" },
+    });
+
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST")    return json({ error: "POST only" }, 405);
 

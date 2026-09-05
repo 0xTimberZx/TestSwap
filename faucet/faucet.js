@@ -117,10 +117,7 @@ async function handleConnect() {
   document.getElementById("wallet-addr").textContent = fmtAddr(userAddress);
   reflectConnectedUI(true);
 
-  listenForAccountChanges((newAddr) => {
-    if (!newAddr) { handleDisconnect(); return; }
-    document.getElementById("wallet-addr").textContent = fmtAddr(newAddr);
-  });
+  listenForAccountChanges(onWalletChanged);
 }
 
 function handleDisconnect() {
@@ -130,6 +127,20 @@ function handleDisconnect() {
   document.getElementById("wallet-info").classList.add("hidden");
   document.getElementById("network-badge").classList.add("hidden");
   reflectConnectedUI(false);
+}
+
+// A different wallet became active in the same browser session (Switch Account /
+// wallet UI). Update the chrome AND reset the claim card so the newly-selected
+// wallet can claim on its own merits. Owning several wallets in one browser must
+// never lock any of them out — each is gated only by ITS OWN active ticket and
+// 24h cooldown, one submission at a time.
+function onWalletChanged(newAddr) {
+  if (!newAddr) { handleDisconnect(); return; }
+  const el = document.getElementById("wallet-addr");
+  if (el) el.textContent = fmtAddr(newAddr);
+  resetClaimBtn();
+  setClaimStatus("", null);
+  DebugHub.startSession(newAddr);
 }
 
 // ─── Init ───────────────────────────────────────────────────────────────────────
@@ -148,10 +159,6 @@ function handleDisconnect() {
     reflectConnectedUI(true);
     DebugHub.startSession(reconnected);
     DebugHub.logCheckpoint("Wallet Auto-Reconnected", "pass");
-    listenForAccountChanges((newAddr) => {
-      if (!newAddr) { handleDisconnect(); return; }
-      const el = document.getElementById("wallet-addr");
-      if (el) el.textContent = fmtAddr(newAddr);
-    });
+    listenForAccountChanges(onWalletChanged);
   }
 })();
