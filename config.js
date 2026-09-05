@@ -19,15 +19,16 @@ const PUBLIC_RPCS = [
   "https://arbitrum-sepolia.gateway.tenderly.co", // Tenderly gateway
 ];
 
-// Dedicated read endpoint (keyed Alchemy URL with real per-key rate limits).
-// Committed directly (a frontend RPC is public regardless): the shared public
-// endpoints throttle per-IP under heavy browsing and stall reads, so a keyed
-// primary is the durable fix. The deploy.yml injection still swaps the
-// "__ARB_SEPOLIA_RPC__" placeholder when present, but this literal takes its
-// place, so the injection is now an inert no-op unless this is reset to the
-// placeholder. Recommend locking this key to the timbswap.xyz domain in the
-// Alchemy dashboard so a copied URL can't be abused elsewhere.
-const DEDICATED_RPC = "https://arb-sepolia.g.alchemy.com/v2/PDKCOXR05xcN4AkdaVqNp";
+// Dedicated read endpoint. Reads route through our OWN first-party RPC proxy (a
+// Supabase Edge Function) which relays to a single keyed Alchemy backend.
+// Why the proxy: Brave Shields blocks g.alchemy.com directly (every read dashed
+// in Brave even with Alchemy 100% healthy), but ALLOWS functions.supabase.co —
+// the same reason the faucet-claim function reaches Brave. Relaying to ONE
+// Alchemy node keeps reads consistent (no divergent-head reverts — see the note
+// below). Upstream Alchemy URL lives in the `rpc` function's ALCHEMY_RPC_URL env
+// (defaults to the public keyed URL, which a frontend RPC exposes regardless):
+//   https://arb-sepolia.g.alchemy.com/v2/PDKCOXR05xcN4AkdaVqNp
+const DEDICATED_RPC = "https://ipyfodnidwsdvwqrcjrl.functions.supabase.co/rpc";
 const _hasDedicated = typeof DEDICATED_RPC === "string" &&
                       DEDICATED_RPC.startsWith("http");
 
