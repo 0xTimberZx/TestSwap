@@ -21,6 +21,7 @@
 
 const ALLOWED_ORIGINS = new Set([
   "https://timbswap.xyz",
+  "https://www.timbswap.xyz",
   "https://0xtimberzx.github.io",
 ]);
 const MAX_BODY_BYTES = 128 * 1024; // RPC batches + telemetry rows are small; generous cap
