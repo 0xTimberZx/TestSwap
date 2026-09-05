@@ -40,6 +40,11 @@ jobs:
           DRIP_ETH:             ${{ vars.FAUCET_DRIP_ETH }}
           POT_ETH:              ${{ vars.FAUCET_POT_ETH }}
           MIN_BALANCE_ETH:      ${{ vars.FAUCET_MIN_BALANCE_ETH }}
+          # Global rolling-24h ceiling on TOTAL sends (not per-wallet/session) —
+          # bounds budget drain from a griefer pasting enumerable ticket holders.
+          # Unset/empty => 0 => uncapped, so this line is harmless until you set
+          # the FAUCET_DAILY_CAP repo variable to a number.
+          FAUCET_DAILY_CAP:     ${{ vars.FAUCET_DAILY_CAP }}
         run: node faucet-worker.js
 
       # Self-chain so the queue is served within seconds, not on the 10-min
