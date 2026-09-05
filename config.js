@@ -19,16 +19,20 @@ const PUBLIC_RPCS = [
   "https://arbitrum-sepolia.gateway.tenderly.co", // Tenderly gateway
 ];
 
-// Dedicated read endpoint. Reads route through our OWN first-party RPC proxy (a
-// Supabase Edge Function) which relays to a single keyed Alchemy backend.
-// Why the proxy: Brave Shields blocks g.alchemy.com directly (every read dashed
-// in Brave even with Alchemy 100% healthy), but ALLOWS functions.supabase.co —
-// the same reason the faucet-claim function reaches Brave. Relaying to ONE
-// Alchemy node keeps reads consistent (no divergent-head reverts — see the note
-// below). Upstream Alchemy URL lives in the `rpc` function's ALCHEMY_RPC_URL env
-// (defaults to the public keyed URL, which a frontend RPC exposes regardless):
+// Dedicated read endpoint. Reads route through our OWN SAME-ORIGIN RPC proxy —
+// a Cloudflare Worker on `timbswap.xyz/api/*` (workers/timbswap-api.js) that
+// relays to a single keyed Alchemy backend.
+// Why same-origin: Brave Shields / adblockers throttle or block third-party
+// requests (g.alchemy.com dashed every read in Brave; functions.supabase.co was
+// allowed for single calls but throttled the connected read burst). Served from
+// the site's own origin under /api/*, these are first-party — Brave never touches
+// them, and the browser skips CORS entirely. Relaying to ONE Alchemy node keeps
+// reads consistent (no divergent-head reverts — see the note below). Upstream
+// Alchemy URL lives in the Worker's ALCHEMY_RPC_URL secret (defaults to the
+// public keyed URL, which a frontend RPC exposes regardless):
 //   https://arb-sepolia.g.alchemy.com/v2/PDKCOXR05xcN4AkdaVqNp
-const DEDICATED_RPC = "https://ipyfodnidwsdvwqrcjrl.functions.supabase.co/rpc";
+// (The Supabase-hosted `rpc` function remains deployed as a manual fallback.)
+const DEDICATED_RPC = "https://timbswap.xyz/api/rpc";
 const _hasDedicated = typeof DEDICATED_RPC === "string" &&
                       DEDICATED_RPC.startsWith("http");
 
@@ -1107,17 +1111,20 @@ _applyTheme(_currentTheme());
 // Loaded by SDK script tag in each page. Fallback stub defined here
 // so DebugHub never breaks TimbSwap if the SDK fails to load.
 //
-// supabaseUrl/Key point the SDK at the shared network sink so telemetry reaches
-// the hub across origins/devices (localStorage alone can't — timbswap.xyz is a
-// different origin than the hub). The SDK reads these lazily at send time, so
-// setting them here (after the SDK script tag) is fine. The current 1.1.0 SDK
-// ignores them; they activate once MyDapp ships debugger.js v1.2.0. Anon key is
+// telemetryUrl points the SDK at our SAME-ORIGIN telemetry relay — the Cloudflare
+// Worker on `timbswap.xyz/api/*` (workers/timbswap-api.js), which inserts into the
+// hub's Supabase table server-side with the service-role key. Same-origin so Brave
+// Shields / adblockers never block it (the direct supabase.co REST insert was a
+// blocked third-party call in Brave). supabaseUrl/Key remain as the SDK's fallback
+// sink for builds that predate telemetryUrl support. The SDK reads these lazily at
+// send time, so setting them here (after the SDK script tag) is fine. Anon key is
 // public by design — RLS is the boundary. See dev-docs/debughub-network/.
 
 window.DEBUGHUB_CONFIG = {
-  appName:     "TimbSwap",
-  supabaseUrl: "https://ipyfodnidwsdvwqrcjrl.supabase.co",
-  supabaseKey: "sb_publishable_yg4wjMwvGrlf5C9vqs2nkw_Hfks0Ux9"
+  appName:      "TimbSwap",
+  telemetryUrl: "https://timbswap.xyz/api/debughub_events",
+  supabaseUrl:  "https://ipyfodnidwsdvwqrcjrl.supabase.co",
+  supabaseKey:  "sb_publishable_yg4wjMwvGrlf5C9vqs2nkw_Hfks0Ux9"
 };
 
 if (!window.DebugHub) {
