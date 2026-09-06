@@ -98,11 +98,20 @@ The game freezes if these stall (we saw exactly this on testnet). Each needs a
 
 - [ ] SDK 1.3.4 shipped (Brave provider-proxy fix — #391). Confirm SDK
       checkpoints land from Brave post-merge.
-- [ ] **RLS**: `debughub_anon_select` is currently `USING true` (world-readable).
-      Decide: lock reads to the hub's reader for mainnet, or accept a public
-      debug feed. Wallet + error strings are exposed either way.
-- [ ] **Abuse**: `/api/debughub_events` + anon insert are open writes (allowlist
-      only, no rate limit). Add a Worker rate-limit and/or a table TTL/size cap.
+- [ ] **RLS (world-readable)**: `debughub_anon_select` is `USING true`. NOTE the
+      dependency — the hub viewer (`dev-docs/debughub-network/app.js`, deployed
+      from the separate **MyDapp** repo) reads the table **client-side with the
+      anon key**, so it relies on this policy. Locking SELECT requires FIRST
+      routing the hub's reads through a service-role Worker endpoint (mirror the
+      write relay), THEN restricting SELECT to service-role. Hub-side change —
+      cannot be done from this repo alone.
+- [ ] **Public write / abuse**: both `/api/debughub_events` (service-role relay)
+      and the anon INSERT policy accept events (app/type allowlist, no rate
+      limit). To close the vector: remove the anon INSERT policy so ONLY the
+      relay writes (trade-off: dh.js's direct-Supabase fallback then fails for
+      any origin without the relay, e.g. the `0xtimberzx.github.io` mirror;
+      timbswap.xyz is unaffected). Add a Cloudflare rate-limit (WAF rule or a
+      KV/DO binding — not pure Worker code) and/or a table TTL/size cap.
 - [ ] Point DebugHub `appName`/keys at the mainnet project if the hub is separated
       per environment; otherwise events from both envs share one table.
 
