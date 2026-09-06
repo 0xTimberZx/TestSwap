@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TimbSwap nudge diagnostic</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#0b0f14; color:#e6edf3;
+         font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         padding:18px 16px 60px; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:#8b98a5; font-size:13px; margin:0 0 18px; }
+  .card { background:#121821; border:1px solid #1e2733; border-radius:12px; padding:14px; margin:0 0 14px; }
+  .label { font-size:12px; letter-spacing:.04em; text-transform:uppercase; color:#8b98a5; margin:0 0 8px; }
+  .val { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; word-break:break-all; white-space:pre-wrap; }
+  .verdict { font-size:15px; font-weight:700; }
+  .ok  { color:#3ddc97; } .bad { color:#ff6b6b; } .warn { color:#f5c451; }
+  button { margin-top:8px; background:#3ddc97; color:#04110b; border:0; font-weight:700; padding:12px 18px; border-radius:10px; font-size:15px; width:100%; }
+</style>
+</head>
+<body>
+  <h1>TimbSwap nudge diagnostic</h1>
+  <p class="sub">Read-only. Reads router + prize state to explain "free nudges used".</p>
+
+  <div class="card">
+    <p class="label">On-chain state</p>
+    <div class="val" id="state">reading…</div>
+  </div>
+  <div class="card">
+    <p class="label">Verdict</p>
+    <div class="val verdict" id="verdict">…</div>
+  </div>
+
+  <button onclick="location.reload()">Run again</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script>document.write('<script src="config.js?t=' + Date.now() + '"><\/script>');</script>
+  <script>
+  (async function () {
+    var stateEl = document.getElementById('state');
+    var vEl = document.getElementById('verdict');
+    function set(el, t, cls){ el.textContent = t; if (cls) el.className = 'val verdict ' + cls; }
+    try {
+      var ROUTER = ADDRESSES.TimbSwapRouter;
+      var PRIZE  = ADDRESSES.TimbPrize;
+      var USER   = '0x42536623b503D4926DfAF6173B0357b7DfD19800';
+      var prov = makeReadProvider();
+
+      var router = new ethers.Contract(ROUTER, [
+        'function freeNudgeCapPerSeg() view returns (uint256)',
+        'function freeNudgesRemaining(address) view returns (uint256)',
+        'function freeNudgesUsed(bytes32) view returns (uint256)',
+        'function timbPrize() view returns (address)'
+      ], prov);
+      var prize = new ethers.Contract(PRIZE, [
+        'function currentRound() view returns (uint256)',
+        'function currentSegment() view returns (uint256)',
+        'function segmentStartTime() view returns (uint256)',
+        'function timeRemainingInSegment() view returns (uint256)'
+      ], prov);
+
+      var r = await Promise.all([
+        router.freeNudgeCapPerSeg(),
+        router.timbPrize(),
+        router.freeNudgesRemaining(USER),
+        prize.currentRound(),
+        prize.currentSegment(),
+        prize.segmentStartTime(),
+        prize.timeRemainingInSegment()
+      ]);
+      var cap = r[0], prizeInRouter = r[1], remaining = r[2],
+          round = r[3], seg = r[4], segStart = r[5], timeLeft = r[6];
+
+      // freeNudgesUsed for THIS (prize, round, seg, user)
+      var key = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(
+        ['address','uint256','uint256','address'], [PRIZE, round, seg, USER]));
+      var used = await router.freeNudgesUsed(key);
+
+      var nowS = Math.floor(Date.now()/1000);
+      var segAgeMin = ((nowS - segStart.toNumber())/60).toFixed(1);
+
+      set(stateEl,
+        'freeNudgeCapPerSeg = ' + cap.toString() + '\n' +
+        'router.timbPrize   = ' + prizeInRouter + '\n' +
+        'config PRIZE addr  = ' + PRIZE + '\n' +
+        'prize match        = ' + (prizeInRouter.toLowerCase() === PRIZE.toLowerCase()) + '\n' +
+        'currentRound       = ' + round.toString() + '\n' +
+        'currentSegment     = ' + seg.toString() + '\n' +
+        'segmentStartTime   = ' + segStart.toString() + '  (' + segAgeMin + ' min ago)\n' +
+        'timeRemaining(s)   = ' + timeLeft.toString() + '\n' +
+        'freeNudgesUsed[cur]= ' + used.toString() + '\n' +
+        'freeNudgesRemaining= ' + remaining.toString() + '\n' +
+        'user               = ' + USER);
+
+      if (cap.eq(0)) {
+        set(vEl, 'CAP = 0 → the free-nudge path is DISABLED on the router. Everyone sees "free nudges used" regardless of activity. Not a bug — a config choice. Re-enable with setFreeNudgeCapPerSeg(10).', 'warn');
+      } else if (prizeInRouter.toLowerCase() !== PRIZE.toLowerCase()) {
+        set(vEl, 'ROUTER POINTS AT A DIFFERENT PRIZE than the frontend. The nudge key/round come from the router\'s prize while the UI reads config\'s prize → mismatch. Fix: router.setTimbPrize(config PRIZE).', 'bad');
+      } else if (used.gte(cap)) {
+        set(vEl, 'used (' + used.toString() + ') ≥ cap (' + cap.toString() + ') for round ' + round + '/seg ' + seg + '. This wallet genuinely spent its free nudges for THIS segment (started ' + segAgeMin + ' min ago). If you truly did not nudge this segment, that is the real bug to chase.', used.gt(0) ? 'ok' : 'bad');
+      } else {
+        set(vEl, 'remaining = ' + remaining.toString() + ' → free nudges ARE available on-chain. If the page shows "used", the frontend read is stale — hard reload.', 'ok');
+      }
+    } catch (e) {
+      set(stateEl, 'ERROR: ' + (e && (e.message || e)));
+      set(vEl, 'read failed — see error above', 'bad');
+    }
+  })();
+  </script>
+</body>
+</html>
