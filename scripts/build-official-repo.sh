@@ -47,6 +47,7 @@ rm -rf \
   supabase/functions/faucet-claim supabase/functions/faucet-status \
   .github/workflows/faucet.yml \
   .github/workflows/claude.yml \
+  tables .github/workflows/frontend.yml scripts/check-frontend.js \
   SPECS.md \
   .states t \
   scripts/build-official-repo.sh
