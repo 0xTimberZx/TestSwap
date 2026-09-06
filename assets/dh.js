@@ -1,6 +1,6 @@
 /* ============================================================
    DebugHub SDK
-  Version: 1.3.3  (#debug local-only; first-party relay with compatibility fallback)
+  Version: 1.3.4  (#debug local-only; first-party relay with compatibility fallback)
 
    Drop-in replacement for MyDapp/debughub/sdk/debugger.js.
 
@@ -35,7 +35,7 @@
 (function () {
   "use strict";
 
-  var SDK_VERSION = "1.3.3";
+  var SDK_VERSION = "1.3.4"; // 1.3.4: Brave provider-proxy `.on` guard + export-before-wiring
   var MAX_EVENTS = 200;
 
   var config = window.DEBUGHUB_CONFIG || {};
@@ -314,24 +314,34 @@
   // ---------- wallet event wiring ----------
 
   function wireWalletEvents() {
-    if (!window.ethereum || !window.ethereum.on) return;
-
-    window.ethereum.on("accountsChanged", function (accounts) {
-      if (!accounts || accounts.length === 0) {
-        if (currentSession) {
-          var sec = baseEvent("security");
-          sec.name = "Wallet Dropped";
-          sec.status = "pass"; // user disconnected/locked — lifecycle, not a fault
-          pushEvent(sec);
+    if (!window.ethereum) return;
+    // Brave (and some multi-wallet / EIP-6963 setups) wrap window.ethereum in a
+    // Proxy whose `on` is a read-only, non-configurable property; merely READING
+    // `window.ethereum.on` then throws a V8 proxy-invariant TypeError. Guard every
+    // access — an unguarded throw here aborted the SDK IIFE before window.DebugHub
+    // was exported, dropping the whole page to the no-op stub and silently
+    // capturing ZERO telemetry on Brave. Wallet-event wiring is a nicety; it must
+    // never break the SDK. (Also defensively wrapped at the call site.)
+    try {
+      if (typeof window.ethereum.on !== "function") return;
+      window.ethereum.on("accountsChanged", function (accounts) {
+        if (!accounts || accounts.length === 0) {
+          if (currentSession) {
+            var sec = baseEvent("security");
+            sec.name = "Wallet Dropped";
+            sec.status = "pass"; // user disconnected/locked — lifecycle, not a fault
+            pushEvent(sec);
+          }
+          endSession();
+          return;
         }
         endSession();
-        return;
-      }
-      endSession();
-      startSession(accounts[0]);
-    });
-
-    window.ethereum.on("disconnect", function () { endSession(); });
+        startSession(accounts[0]);
+      });
+      window.ethereum.on("disconnect", function () { endSession(); });
+    } catch (e) {
+      warn("wallet event wiring unavailable (provider proxy): " + ((e && e.message) || e));
+    }
   }
 
   window.addEventListener("beforeunload", function () { endSession(); });
@@ -342,7 +352,20 @@
   if (!storageOk) warn("localStorage unavailable - events will not be logged");
   else ok("ready (" + APP_NAME + " · v" + SDK_VERSION + ")");
 
-  wireWalletEvents();
+  // Export the API FIRST, before any wallet/DOM wiring that could throw. Every
+  // method below is a hoisted function declaration, so this is safe here — and it
+  // guarantees a real SDK (not the no-op page stub) even if wiring later fails.
+  window.DebugHub = {
+    startSession: startSession,
+    endSession: endSession,
+    logCheckpoint: logCheckpoint,
+    logError: logError,
+    logPerf: logPerf,
+    logSecurity: logSecurity,
+    openSnapshot: openSnapshot   // callable directly if a dapp wants its own button
+  };
+
+  try { wireWalletEvents(); } catch (e) { warn("wireWalletEvents failed: " + ((e && e.message) || e)); }
 
   // ---------- local snapshot (unauthorized viewer path) ----------
   //
@@ -552,15 +575,7 @@
     window.addEventListener("hashchange", function () { if (snapshotArmed()) mountSnapshotButton(); });
   }
 
-  window.DebugHub = {
-    startSession: startSession,
-    endSession: endSession,
-    logCheckpoint: logCheckpoint,
-    logError: logError,
-    logPerf: logPerf,
-    logSecurity: logSecurity,
-    openSnapshot: openSnapshot   // callable directly if a dapp wants its own button
-  };
-
-  armSnapshot();
+  // window.DebugHub was exported above, before wallet wiring, so a throw there
+  // can never drop the page to the no-op stub.
+  try { armSnapshot(); } catch (e) { warn("armSnapshot failed: " + ((e && e.message) || e)); }
 })();
