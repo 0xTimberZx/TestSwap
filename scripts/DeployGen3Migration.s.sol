@@ -12,11 +12,14 @@ import {TimbSwapRouter} from "../contracts/TimbSwapRouter.sol";
 import {EligibleTokenRegistry} from "../contracts/EligibleTokenRegistry.sol";
 
 /// @dev Minimal admin surface for the reused TimbYieldVault — repoint it at the
-///      NEW registry so register()/remove() (both onlyGameRegistry) accept the
-///      new registry as caller. See scripts/vault-weight.js for the full ABI.
+///      NEW registry (register()/remove() are onlyGameRegistry) AND the NEW
+///      prize (harvest() is onlyTimbPrize). See scripts/vault-weight.js for the
+///      full ABI.
 interface IYieldVaultAdmin {
     function setGameRegistry(address) external;
+    function setTimbPrize(address) external;
     function gameRegistry() external view returns (address);
+    function timbPrize() external view returns (address);
 }
 
 /**
@@ -134,11 +137,18 @@ contract DeployGen3Migration is Script {
         TimbSwapRouter(payable(routerAddr)).setTimbPrize(address(prize));
         EligibleTokenRegistry(eligibleAddr).registerConsumer(address(prize));
 
-        // 7. Repoint the reused vault at the NEW registry so register()/remove()
-        //    (onlyGameRegistry) accept it. Without this, activation would flip
-        //    tickets Active but silently drop their yield weight (the vault call
-        //    is try/catch-fenced in the new registry, so it never bricks).
+        // 7. Repoint the reused vault at BOTH the NEW registry and the NEW prize.
+        //    - setGameRegistry: register()/remove() are onlyGameRegistry — without
+        //      it, activation flips tickets Active but silently drops their yield
+        //      weight (the vault call is try/catch-fenced in the new registry).
+        //    - setTimbPrize: harvest() is onlyTimbPrize — without it, every
+        //      settlement's _harvestYield → vault.harvest() reverts NotTimbPrize,
+        //      is swallowed by TimbPrize's try/catch, and yield accrues but NEVER
+        //      sweeps into the pot (no revert, no event — an invisible gap). This
+        //      line was missing in the original gen-3 run and had to be repaired
+        //      by a manual owner tx; it is wired here so it can never recur.
         IYieldVaultAdmin(vaultAddr).setGameRegistry(address(registry));
+        IYieldVaultAdmin(vaultAddr).setTimbPrize(address(prize));
 
         vm.stopBroadcast();
 
