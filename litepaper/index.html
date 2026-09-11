@@ -135,8 +135,9 @@
         <a href="#game" class="toc-link">3 · The prize game</a>
         <a href="#tokenomics" class="toc-link">4 · Tokenomics &amp; emissions</a>
         <a href="#architecture" class="toc-link">5 · Architecture &amp; trust</a>
-        <a href="#risks" class="toc-link">6 · Risks</a>
-        <a href="#roadmap" class="toc-link">7 · Roadmap &amp; the gate</a>
+        <a href="#governance" class="toc-link">6 · Governance &amp; ownership</a>
+        <a href="#risks" class="toc-link">7 · Risks</a>
+        <a href="#roadmap" class="toc-link">8 · Roadmap &amp; the gate</a>
         <a href="#refs" class="toc-link">References</a>
       </nav>
     </aside>
@@ -228,9 +229,21 @@
         <p>The frontend is a static site — every figure is read live from chain, users hold their own keys, and an autonomous GitHub Actions keeper settles segments and runs the reward sweep without a human in the loop. Contract addresses are published in the <a href="../docs/#authenticity">Docs address table</a> and the <a href="https://github.com/0xTimberZx/TimbSwap" target="_blank" rel="noopener">open-source repository</a> — verify before you trust any label.</p>
       </section>
 
-      <!-- 5 Risks -->
+      <!-- 6 Governance -->
+      <section id="governance" class="docs-section">
+        <h2><span class="lp-num">6</span>Governance &amp; ownership</h2>
+        <p>Trust in TimbSwap rests on <strong>immutable, verified contract logic behind a delay-gated multisig</strong> — not on an upgradeable proxy an owner could silently rewrite.</p>
+        <ul>
+          <li><strong>Ownership.</strong> Every privileged contract is <code>Ownable2Step</code> (two-step handoff — no fat-finger transfers). At mainnet, ownership moves to a <strong>timelock + multisig</strong>, so every privileged action — pauses, rate changes, parameter toggles, emergency withdrawals — becomes multisig-proposed and <strong>delay-gated</strong>: users can see a change coming and exit ahead of it. <em>On testnet these keys are developer-controlled — disclosed, and exactly what the mainnet handoff removes.</em></li>
+          <li><strong>Governance today is signaling.</strong> The on-chain governance module records votes but does not execute them; real authority is the timelock/multisig. This is deliberate for launch — no live governance-execution attack surface to exploit.</li>
+          <li><strong>Change model — govern, don't upgrade.</strong> The launch contracts are immutable: <strong>there are no proxies</strong>. A "contract update" is a <strong>governed migration</strong> — deploy the new version, then governance repoints the wiring and migrates ownership (the same pattern the game already uses to swap a module). The attack surface stays small and nothing an owner can rewrite in place.</li>
+          <li><strong>Where it's heading (post-beta).</strong> A tiered model is planned: a <strong>security class</strong> (top governance stakers) alongside the broader <strong>community</strong>, voting together on emergency actions and contract updates, with accumulating stakes and time-locked withdrawals. It plugs into the timelock as its proposer with no redeploy. <em>Stated as direction, not a capability claimed today.</em></li>
+        </ul>
+      </section>
+
+      <!-- 7 Risks -->
       <section id="risks" class="docs-section">
-        <h2><span class="lp-num">6</span>Risks</h2>
+        <h2><span class="lp-num">7</span>Risks</h2>
         <ul>
           <li><strong>Smart-contract risk.</strong> The contracts are testnet-hardened but <strong>unaudited</strong>; an independent audit gates mainnet. Permissionless refund and recovery paths exist so funds are never trapped behind an operator.</li>
           <li><strong>Impermanent loss.</strong> Providing liquidity carries standard AMM IL, larger on thin or volatile pairs (boosted farms are the highest-risk seat).</li>
@@ -241,9 +254,9 @@
         </ul>
       </section>
 
-      <!-- 6 Roadmap -->
+      <!-- 8 Roadmap -->
       <section id="roadmap" class="docs-section">
-        <h2><span class="lp-num">7</span>Roadmap &amp; the graduation gate</h2>
+        <h2><span class="lp-num">8</span>Roadmap &amp; the graduation gate</h2>
         <p><span class="lp-tag">Now · live</span> — The full engine runs end-to-end on Arbitrum Sepolia: AMM, prize game with permissionless settlement and generations, emissions on the epoch waterfall with the 99% solvency stop, and an unattended keeper.</p>
         <p><span class="lp-tag">Next</span> — The road to mainnet, gated on evidence and safety: proven engagement (sustained wallets, repeat play, eligible volume tracking rounds); an <strong>independent audit</strong> and security policy; <strong>legal counsel</strong> and likely geofencing; seeded liquidity and an initial pot; and live signal dashboards from existing telemetry.</p>
         <p><span class="lp-tag">Vision</span> — Adaptive incentives: the allocation cycle is rule-based and solvency-bounded today; the same telemetry that proves solvency is the substrate for a future policy that tunes incentives to observed protocol health — still on-chain, still bounded by the identical guardrails. <em>Stated as direction, not a capability claimed today.</em></p>
