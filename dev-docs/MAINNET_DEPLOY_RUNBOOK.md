@@ -20,7 +20,10 @@ are on the official repo `main` (CI green). Fund-flow reference: `FUND_FLOWS.md`
 - [ ] Official repo `main` is at the intended commit; `contracts.yml` CI green.
 - [ ] Contracts verified to build locally: `forge build --sizes` and `forge test`.
 - [ ] Decisions locked: double-letters OFF (governance toggle); governance =
-      off-chain signaling; FoT/rebasing = unsupported (documented).
+      off-chain signaling; FoT/rebasing = unsupported (documented); **change model
+      = governed migration / repoint, NO proxies** (an "update" is a deploy +
+      governed repoint + ownership migration, per the gen-3 pattern — see
+      `GOVERNANCE_V2.md`). Tiered on-chain governance (v2) is post-beta.
 - [ ] Gnosis **Safe / multisig** deployed on Arbitrum One (`GOV_MULTISIG`).
 - [ ] Timelock delay chosen (`TIMELOCK_MIN_DELAY`, default 48h).
 - [ ] Chainlink **VRF v2.5** subscription created + funded (LINK or native);
