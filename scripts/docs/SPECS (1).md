@@ -69,7 +69,7 @@ TIMBSToken
   └── Fixed supply, minted to treasury at deploy
   └── Governance-unlockable emissions cap (vote required)
   └── entryCostTIMBS → GameRegistry (derives all entry prices)
-  └── buybackRatio → TimbTreasury (50/50 burn/stake, owner-adjustable)
+  └── buybackRatio → TimbTreasury (5/20/75 burn/reserve/waterfall, owner-adjustable)
 
 TimbSwapRouter
   └── swap() → splits fee → TimbTreasury (0.05% protocol)
@@ -83,8 +83,9 @@ TimbSwapFactory
 TimbTreasury
   └── receives protocol fees (swap + round settlement cut)
   └── executes buyback: purchases TIMBS from market
-      └── 50% burned via TIMBSToken.burn()
-      └── 50% sent to TimbStaking as distribution
+      └── 5% burned via TIMBSToken.burn()
+      └── 20% held as treasury reserve
+      └── 75% into the reward waterfall
   └── remainder → prize pot top-up + operations
 
 TimbStaking
@@ -179,8 +180,9 @@ TimbTreasury receives:
 
 TimbTreasury executes:
   → buyback TIMBS from market
-      50% burned (deflationary)
-      50% distributed to TimbStaking pool
+      5% burned (deflationary)
+      20% held as treasury reserve
+      75% distributed via the reward waterfall
   → remainder to prize pot top-up + operations
 ```
 

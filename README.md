@@ -227,7 +227,7 @@ forge script scripts/Deploy.s.sol \
 - **Effective supply:** ~99,500,000 TIMBS *(500k at unreachable phantom pair address — permanent burn)*
 - **Entry cost:** paid in ETH (`entryCostETH`) or TIMBS (`entryCostTIMBS`), both governance-adjustable
 - **Extra rounds:** `entryCostTIMBS` each, up to 12 per ticket, non-refundable
-- **Buyback:** 50% burned, 50% to stakers
+- **Buyback:** 5% burned, 20% to reserve, 75% into the reward waterfall
 - **Protocol fee:** 0.05% of swap volume → TimbTreasury
 
 ---
