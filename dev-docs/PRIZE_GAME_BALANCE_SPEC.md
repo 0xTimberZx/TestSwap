@@ -15,7 +15,7 @@ Target contracts: `contracts/TimbSwapRouter.sol` (changed), `contracts/TimbPrize
   - `advanceScroll(count)` → gas-only, no swap, `count`≤`MAX_BATCH_NUDGE`(20) (`:468-483`).
 - Consequence: the cheapest way to move the meter is **gas-only `advanceScroll`**, which
   (a) lets a bot snipe the final nudge and dominate, and (b) generates **no swap volume**, so
-  the bot war does *not* feed the 0.05% fee → 50/50 burn/stake loop.
+  the bot war does *not* feed the 0.05% fee → buyback loop (5/20/75 burn/reserve/waterfall).
 
 Goal #1: casual players can win (curb single-actor dominance of the final nudge).
 Goal #2: make the meter race route through the AMM so it feeds Treasury/burn/stakers.

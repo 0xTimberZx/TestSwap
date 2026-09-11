@@ -28,7 +28,7 @@
 | Initial mint | 100% at genesis — mainnet splits 50M treasury / 50M release vault |
 | Emissions | Fixed supply — NO ongoing mint; rewards redistribute the genesis supply from pre-funded reserves |
 | Supply schedule | Halving release: locked → treasury at rounds 1000·2ⁿ (see EMISSIONS_SCHEDULE.md) |
-| Deflationary pressure | Buyback (50% burn/lock), out-of-circulation prize sinks |
+| Deflationary pressure | Buyback (5% burn / 20% reserve / 75% waterfall), out-of-circulation prize sinks |
 
 The initial supply is fully controlled by the treasury. No team allocation,
 no vesting cliffs, no pre-sale tranches at launch. Owner distributes from
