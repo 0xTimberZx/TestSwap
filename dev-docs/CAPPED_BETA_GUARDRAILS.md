@@ -83,10 +83,20 @@ is `onlyOwner`). Decide this before opening:
 
 ## 6. Whitehat channel — turn "real money live" into a discovery channel
 
-- [ ] Publish a **security contact** + responsible-disclosure policy.
-- [ ] A **modest bug bounty** scoped to the deployed contracts (the SwapTables
-      cleanup keeps that scope tight).
-- [ ] Safe-harbor language for good-faith researchers.
+Done — see the policy in the official repo:
+[`SECURITY.md`](https://github.com/0xTimberZx/TimbSwap/blob/main/SECURITY.md).
+
+- [x] Publish a **security contact** + responsible-disclosure policy — GitHub
+      Private Vulnerability Reporting is the primary channel; 72h ack, 90-day
+      coordinated disclosure.
+- [x] A **modest bug bounty** scoped to the deployed contracts (the SwapTables
+      cleanup keeps that scope tight) — five impact tiers (T1 UI → T5 drain)
+      under a **$500** capped-beta program cap.
+- [x] Safe-harbor language for good-faith researchers.
+
+> The bounty cap and the value-at-risk ceiling move together: a $500 top payout
+> only out-competes a drain while reachable value stays near it, so its approach
+> is a graduation trigger (§8). See the "flow vs. stock" note in `SECURITY.md`.
 
 ## 7. Disclosure — set expectations
 
