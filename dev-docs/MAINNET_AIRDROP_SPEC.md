@@ -60,6 +60,38 @@ Therefore the real defenses for this leg are, in order of weight:
 > play but compounds. Default this spec to **per-address-lifetime** and make it a
 > config flag.
 
+### Asset choice — why the reward stays TIMB (not ETH/WETH)
+
+The dispatcher is **asset-agnostic** — the reward is just a parameter (`TIMB`,
+`WETH`, or native ETH; WETH is a drop-in swap of the token address, native ETH
+swaps the ERC-20 transfer for a value send and makes the optional §9.4 contract
+`payable`). It is tempting to hand out ETH/WETH instead. **Don't, during the
+beta** — swapping an *illiquid* reward for a *liquid* one deletes the single
+biggest Sybil brake this design has:
+
+- **No LP = a free brake.** TIMB has no market until `startGame`, so farming it
+  now yields something a bot **can't sell yet** (deferred value — the whole
+  reason the beta window is farm-resistant at all). ETH/WETH is **instantly
+  liquid**: every claim is immediately-realizable cash, anywhere. You'd have built
+  a **mainnet ETH faucet gated by a *free* testnet action** — among the most
+  aggressively farmed things in crypto.
+- **VaR becomes real money.** TIMB is your own minted supply (marketing spend).
+  ETH/WETH is hard assets leaving the treasury on *every* claim, and the
+  distributor float is real ETH — a far juicier drain target for the bounty.
+- **Gating mismatch (the crux).** Real-value rewards must be gated on **costly**
+  actions. A *testnet* ticket costs ~free gas; gating **real ETH** on it leaves
+  only Turnstile + caps between the spigot and a drain, and Turnstile is beatable
+  by solver farms. If you ever want to hand out real ETH, gate it on **mainnet**
+  activity (a mainnet ticket / stake), not the free testnet gate.
+- **Optics.** Giving away your own token is ordinary; giving away cash-like ETH at
+  scale can touch promotions / money-transmission / tax-reporting rules a token
+  airdrop doesn't. Review before scaling, not after.
+
+**Verdict: the beta reward stays TIMB.** Illiquidity is a free Sybil brake and it
+costs your own supply, not cash. ETH/WETH is out of scope until there is real
+**mainnet** gating — or a narrow, mainnet-gated "gas top-up for verified players,"
+which is really the cold-start case in `FAUCET_SPEC.md §7`, not this airdrop.
+
 ## 3. Flow
 
 ```
@@ -250,6 +282,9 @@ service_role internally.
 3. **Total cap + per-address cap numbers** (§2, §10) — yours to set against VaR.
 4. **Reject contract addresses?** (bots often claim to a contract) — cheap to add.
 5. **Batch cadence + size** (§6, §7) — trade latency vs gas.
+6. **Reward asset** — *settled: TIMB.* ETH/WETH is out of scope until real mainnet
+   gating exists (§2 asset-choice). Not an open decision — listed so it isn't
+   reopened by accident.
 
 ## 14. Build checklist
 
