@@ -30,6 +30,12 @@ item maps to a real contract lever or a concrete op. Companion to
       limit routine operational ETH withdrawals (M1).
 - [ ] **VRF subscription:** fund enough to run, but don't overfund the hot
       subscription; monitor and top up (§5).
+- [ ] **Airdrop distributor** *(only if the testnet-claim → mainnet-TIMB airdrop
+      leg is live — see `MAINNET_AIRDROP_SPEC.md`)*: fund the distributor wallet
+      with only a **small TIMB float + gas**, never the Safe/mint; set a **hard
+      total-airdrop cap** and a **per-address cap**. The float is real
+      value-at-risk — count it toward the master ceiling. Keep the reward **TIMB**
+      (illiquid pre-LP = a free Sybil brake); **not** ETH/WETH (spec §2).
 
 ## 2. Emergency controls — wire and test BEFORE opening
 
