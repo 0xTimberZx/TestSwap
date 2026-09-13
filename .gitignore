@@ -35,5 +35,62 @@ scratchpad/
 # ─── Scratch (was tracked once by accident; regenerable or dead) ──────────────
 tmp/
 
+# ─── Private planning docs ────────────────────────────────────────────────────
+# dev-docs/ is for LOCAL planning notes (economics, launch kit, incentive design,
+# audit findings, etc.) — kept OUT of the public repo. Everything here is ignored
+# by default; only the explicitly allowlisted runbooks/specs below are tracked.
+# To publish a specific doc on purpose, add a "!dev-docs/<file>" line.
+dev-docs/*
+!dev-docs/ABANDONED_TICKET_REVENUE.md
+!dev-docs/AUDIT_PREP.md
+!dev-docs/AUDIT_SEED_FARM.md
+!dev-docs/BOOSTED_FARMS_SPEC.md
+!dev-docs/BUSINESS_DECK.html
+!dev-docs/BUSINESS_ONEPAGER.md
+!dev-docs/CAPPED_BETA_GUARDRAILS.md
+!dev-docs/CONTRACT_TODO.md
+!dev-docs/EMAIL_LOGIN.md
+!dev-docs/EMISSIONS_SCHEDULE.md
+!dev-docs/EXPLORE_PAGE.md
+!dev-docs/FARM_FUNDING.md
+!dev-docs/FAUCET_GOLIVE.md
+!dev-docs/FAUCET_SPEC.md
+!dev-docs/FUND_FLOWS.md
+!dev-docs/GAME_SYNC_GENERATIONS.md
+!dev-docs/GAS_FAUCET_MAINNET.md
+!dev-docs/GAS_SELF_AUDIT.md
+!dev-docs/GEN3_MIGRATION.md
+!dev-docs/GENESIS_CHECKLIST.md
+!dev-docs/GOVERNANCE_HARDENING.md
+!dev-docs/GOVERNANCE_V2.md
+!dev-docs/H1_TESTNET_DEPLOY.md
+!dev-docs/INCIDENT_2026-09-15_SHARED_INFRA_REPOINT.md
+!dev-docs/MAINNET_AIRDROP_SPEC.md
+!dev-docs/MAINNET_BETA_CHECKLIST.md
+!dev-docs/MAINNET_DEPLOY_RUNBOOK.md
+!dev-docs/MAINNET_FAUCET_PROPOSALS.md
+!dev-docs/MULTICHAIN_METER_SPEC.md
+!dev-docs/MULTIHOP_ROUTING_SPEC.md
+!dev-docs/PRE_MAINNET_AUDIT.md
+!dev-docs/PRIZE_GAME_BALANCE_SPEC.md
+!dev-docs/PRIZE_VRF_MIGRATION.md
+!dev-docs/QUESTS_DEPLOY.md
+!dev-docs/RECLAIM_REMINDERS.md
+!dev-docs/REGISTRY_MIGRATION_NOTES.md
+!dev-docs/ROUTER_REDEPLOY_CHECKLIST.md
+!dev-docs/SCENARIO_C_TIMBS_HUB_SPEC.md
+!dev-docs/SCENARIO_D_STUB.md
+!dev-docs/TIMBPRIZE_V7_REDEPLOY.md
+!dev-docs/TREASURY_V1_RECOVERY.md
+!dev-docs/VOICE.md
+!dev-docs/WAITLIST.md
+!dev-docs/debughub-network/NOTES.md
+!dev-docs/debughub-network/README.md
+!dev-docs/debughub-network/app.js
+!dev-docs/debughub-network/debugger.js
+!dev-docs/debughub-network/hub-app-patch.md
+!dev-docs/debughub-network/schema.sql
+!dev-docs/supabase-rls-policies.sql
+
 # ─── Node (dev-only tooling for vendored bundles; see scripts/build-vendor.mjs) ─
 node_modules/
