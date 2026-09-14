@@ -7,6 +7,18 @@
 const CHAIN_ID   = 421614;
 const CHAIN_NAME = "Arbitrum Sepolia";
 
+// Cloudflare Turnstile site key (PUBLIC — safe in client JS) for the faucet claim
+// page. Set to your real site key; leave "" to render the faucet with no human
+// check (the edge function also skips verification when TURNSTILE_SECRET is unset,
+// so both must be set together to enforce it). window.* so faucet.js can read it.
+window.TURNSTILE_SITE_KEY = "";
+
+// Faucet UI mirror of the mainnet-TIMB airdrop leg. Set true ONLY once the
+// airdrop-dispatch function is live and AIRDROP_ENABLED is set on the faucet-claim
+// edge function — this just shows/hides the "+ real TIMB" explainer on the faucet
+// page; the edge function's own flag is what actually enqueues payouts.
+window.AIRDROP_ENABLED = false;
+
 // Independent public RPCs for READ traffic. Free public endpoints rate-limit
 // per-IP under heavy browsing (several tabs polling), which stalls reads on
 // every page ("fine at first, spoils after exploring"). makeReadProvider()
@@ -143,6 +155,7 @@ const ADDRESSES = {
   GameRegistry:         "0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65", // gen-3 re-migration — permissionless activateRoundEntries (keeper-driven, no longer onlyTimbPrize). Prev: 0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530
   TimbPrize:            "0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF", // gen-3 re-migration — aligned prize bound to the new registry (retires gen-2 tickets, reclaimable from old registry). Prev: 0x5AEDDf3f2132266929C9DB4783399d8be24121df; pre-gen-2: 0xB3B40bFACf4dc881666a615593134CAc7DF2389a
   PrizeVRFEntropy:      "0xa2AC62BF0FdD1D1ED148ea1c0555eEcD8829A393", // gen-3 re-migration — dedicated VRF draw per prize segment (shares the board's sub). Prev: 0x801F444d902599B759149Dac66fafB4Ce85a7052
+  GasFaucet:            "0x0000000000000000000000000000000000000000", // Sepolia — TIMBS-only keep-alive faucet, bound to the LIVE gen-3 registry (GameRegistry above). Set to the DeployFaucet address; scripts/faucet-worker.js reads this and refuses to start on the zero address.
   TimbStaking:          "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   TimbFarm:             "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
   TimbBoostFarm:        "0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35", // boosted extra-pair farms (USDT/LINK/DAPP…), TIMBS emission funded by the epoch-keeper waterfall boost tier
