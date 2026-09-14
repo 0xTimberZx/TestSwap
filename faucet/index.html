@@ -7,22 +7,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Faucet — TimbSwap</title>
-  <meta name="description" content="Claim gas to keep playing on TimbSwap, the Arbitrum Sepolia testnet DEX — plus where to get base testnet ETH." />
+  <meta name="description" content="Active-ticket keep-alive faucet on TimbSwap — a testnet TIMBS drip for live players on Arbitrum Sepolia." />
   <link rel="canonical" href="https://timbswap.xyz/faucet/" />
   <meta name="theme-color" content="#0b0f14" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <!-- Open Graph / social preview -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="TimbSwap" />
   <meta property="og:title" content="Faucet — TimbSwap" />
-  <meta property="og:description" content="Claim gas to keep playing on TimbSwap, the Arbitrum Sepolia testnet DEX — plus where to get base testnet ETH." />
+  <meta property="og:description" content="Active-ticket keep-alive faucet on TimbSwap — a testnet TIMBS drip for live players." />
   <meta property="og:url" content="https://timbswap.xyz/faucet/" />
   <meta property="og:image" content="https://timbswap.xyz/og.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Faucet — TimbSwap" />
-  <meta name="twitter:description" content="Claim gas to keep playing on TimbSwap, the Arbitrum Sepolia testnet DEX — plus where to get base testnet ETH." />
+  <meta name="twitter:description" content="Active-ticket keep-alive faucet on TimbSwap — a testnet TIMBS drip for live players." />
   <meta name="twitter:image" content="https://timbswap.xyz/og.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -35,8 +34,11 @@
       window.DebugHub = { startSession:()=>{}, endSession:()=>{}, logCheckpoint:()=>{}, logError:()=>{}, logPerf:()=>{}, logSecurity:()=>{} };
     }
   </script>
+  <!-- Cloudflare Turnstile (anti-bot). Renders explicitly from faucet.js using
+       the site key in config.js, so it no-ops cleanly if not configured. -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
   <link rel="stylesheet" href="../style.css?v=20260902a" />
-  <link rel="stylesheet" href="faucet.css?v=20260905a" />
+  <link rel="stylesheet" href="faucet.css?v=20260913a" />
 </head>
 <body>
 
@@ -51,7 +53,7 @@
         <div class="nav-dropdown">
           <a href="../swap/">Swap</a>
           <a href="../analytics/">Analytics</a>
-          <a class="nav-off">Governance</a>
+          <a href="/gov/">Protocol</a>
         </div>
       </div>
       <div class="nav-group">
@@ -59,14 +61,14 @@
         <div class="nav-dropdown">
           <a href="../farm/">Farm</a>
           <a href="../compete/">Compete</a>
-          <a href="../faucet/" class="nav-active">Faucet</a>
+          <a class="nav-off">Faucet</a>
           <a class="nav-off">Airdrop <span class="badge-soon">Soon</span></a>
         </div>
       </div>
       <div class="nav-group">
         <button class="nav-group-btn">Tools <span class="nav-caret">▾</span></button>
         <div class="nav-dropdown">
-          <a class="nav-off">Lock Vault</a>
+          <a href="../lock/">Lock Vault</a>
           <a href="../explore/">V2 Pools</a>
           <a href="../docs/">Docs</a>
           <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">Debugger ↗︎</a>
@@ -98,120 +100,91 @@
     <div class="nav-mobile-section">DASHBOARD</div>
     <a href="../swap/">Swap</a>
     <a href="../analytics/">Analytics</a>
-    <a class="nav-off">Governance</a>
+    <a href="/gov/">Protocol</a>
     <div class="nav-mobile-section">EARN TIMBS</div>
     <a href="../farm/">Farm</a>
     <a href="../compete/">Compete</a>
-    <a href="../faucet/">Faucet</a>
+    <a class="nav-off">Faucet</a>
     <a class="nav-off">Airdrop</a>
     <div class="nav-mobile-section">TOOLS</div>
-    <a class="nav-off">Lock Vault</a>
+    <a href="../lock/">Lock Vault</a>
     <a href="../explore/">V2 Pools</a>
     <a href="../docs/">Docs</a>
     <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">Debugger ↗︎</a>
   </div>
 
-  <div class="faucet-page">
+  <div class="lock-page">
     <h1 class="page-h1">Faucet</h1>
-    <p class="page-sub">Keep-alive gas for active players — and where to get base testnet ETH if you're just starting out.</p>
+    <p class="page-sub">A keep-alive drip of testnet TIMBS for live players. Hold an <strong>Active ticket</strong> and claim once every 24 hours to top up your Arbitrum Sepolia TIMBS.</p>
 
-    <!-- ─── TimbSwap gas keep-alive faucet ─────────────────────────────── -->
-    <div class="faucet-card">
-      <div class="faucet-card-head">
-        <div class="faucet-icon">⛽</div>
-        <div>
-          <div class="faucet-title">TimbSwap Gas Keep-Alive</div>
-          <div class="faucet-sub">A small ETH top-up once every 24h — enough to keep playing.</div>
+    <div class="lock-grid">
+      <div class="lock-card faucet-card">
+        <h2 class="card-title">Claim testnet TIMBS</h2>
+
+        <div class="lock-field">
+          <label class="lock-label">Wallet</label>
+          <div id="faucet-addr" class="faucet-addr">Connect a wallet to claim.</div>
+        </div>
+
+        <!-- Turnstile mounts here (explicit render from faucet.js). -->
+        <div id="turnstile-widget" class="faucet-turnstile"></div>
+
+        <button id="faucet-claim-btn" class="btn-connect faucet-claim-btn" onclick="handleClaim()" disabled>
+          Connect wallet to claim
+        </button>
+
+        <div id="faucet-status" class="faucet-status" role="status" aria-live="polite"></div>
+
+        <p class="faucet-note">
+          Eligibility is a live <strong>Active</strong> ticket in the game — the ticket
+          you minted to enter is the anti-bot gate. No pre-existing balance needed;
+          this tops players up, it doesn't onboard a cold wallet.
+          <a href="../compete/">Enter a round →</a>
+        </p>
+
+        <!-- Shown only when the mainnet-TIMB airdrop leg is live (config.js:
+             window.AIRDROP_ENABLED). faucet.js toggles it. -->
+        <div id="faucet-airdrop" class="faucet-airdrop" hidden>
+          <div class="faucet-airdrop-badge">+ real TIMB</div>
+          <p>
+            Each claim also sends you <strong>1 TIMB on Arbitrum One</strong> (mainnet)
+            — a pre-launch reward for testnet players. It arrives within a few minutes.
+            <br />
+            <span class="faucet-airdrop-fine">
+              It is <strong>not tradeable through TimbSwap yet</strong> — there's no
+              liquidity pool until the mainnet game starts. One per round, subject to a
+              hard cap, and the reward can change or end at any time.
+            </span>
+          </p>
         </div>
       </div>
-
-      <p class="faucet-note">
-        Holding a <strong>live Active ticket</strong>? Claim a gas top-up straight to your wallet.
-        Part of each claim also grows the current round's pot. The ticket is the anti-abuse gate —
-        so this tops up players who've run their gas dry, once per day.
-      </p>
-
-      <div class="faucet-action">
-        <button id="faucet-connect" class="btn-pool btn-pool-primary" onclick="handleConnect()">Connect Wallet</button>
-        <button id="faucet-claim" class="btn-pool btn-pool-primary" onclick="handleClaim()" hidden>
-          Claim gas top-up
-        </button>
-      </div>
-      <p class="faucet-status" id="faucet-status" role="status" aria-live="polite" hidden></p>
-      <p class="faucet-hint" id="faucet-hint" hidden>
-        One top-up per wallet every 24h. No Active ticket yet? Enter a round on
-        <a href="../compete/">Compete</a> first, then come back — and grab base ETH below if your wallet is empty.
-      </p>
     </div>
 
-    <!-- ─── External testnet faucets (TESTNET ONLY — hidden on mainnet) ── -->
-    <div class="faucet-card faucet-card-external" id="external-faucets" hidden>
-      <div class="faucet-card-head">
-        <div class="faucet-icon">💧</div>
-        <div>
-          <div class="faucet-title">Need base Arbitrum Sepolia ETH?</div>
-          <div class="faucet-sub">Brand-new wallet with no ETH? Grab starter ETH here first, then enter a round.</div>
-        </div>
-      </div>
-
-      <p class="faucet-note">
-        Our faucet tops up players who already hold a ticket — it can't onboard a zero-balance
-        wallet. These public faucets drip base Arbitrum Sepolia ETH so you can pay for your first
-        entry, after which the keep-alive faucet takes over.
-      </p>
-
-      <ul class="faucet-links">
-        <li>
-          <a href="https://www.alchemy.com/faucets/arbitrum-sepolia" target="_blank" rel="noopener">
-            <span class="faucet-link-name">Alchemy — Arbitrum Sepolia Faucet ↗︎</span>
-            <span class="faucet-link-desc">0.1 ETH every 24h · no account required</span>
-          </a>
-        </li>
-        <li>
-          <a href="https://faucet.quicknode.com/drip" target="_blank" rel="noopener">
-            <span class="faucet-link-name">QuickNode — Multi-Chain Testnet Faucet ↗︎</span>
-            <span class="faucet-link-desc">Base drip free · optional bonuses for more</span>
-          </a>
-        </li>
+    <!-- ─── Disclaimers ───────────────────────────────────────────────────── -->
+    <div class="faucet-disclaimer">
+      <p><strong>Capped beta — please read.</strong></p>
+      <ul>
+        <li><strong>Unaudited.</strong> The faucet and airdrop contracts are
+          pre-audit. Interact only with what you're comfortable risking.</li>
+        <li><strong>Testnet tokens have no value.</strong> The TIMBS drip is on
+          Arbitrum Sepolia — testnet tokens, not real money; they cannot be sold
+          or bridged.</li>
+        <li><strong>Not an investment.</strong> TIMB is a utility/participation
+          token, distributed free; nothing here is an offer, solicitation, or a
+          promise of value, liquidity, or return.</li>
+        <li><strong>Eligibility &amp; caps.</strong> Claims require a live Active
+          ticket, are limited to once per 24h, and are subject to on-chain caps.
+          Rewards may be reduced, paused, or ended at any time.</li>
+        <li><strong>Privacy.</strong> A Cloudflare Turnstile human-check runs on
+          claim; your wallet address is recorded to enforce the cooldown and to
+          send the reward. No other personal data is collected.</li>
+        <li>Use at your own risk, and only in compliance with the laws that apply
+          to you.</li>
       </ul>
     </div>
   </div>
 
-  <footer class="footer">
-    <div class="footer-left">
-      <span class="nav-logo-mark">⬡</span> TimbSwap — Arbitrum Sepolia Testnet
-    </div>
-    <div class="footer-links">
-      <a href="/docs/">Docs</a>
-      <a href="https://sepolia.arbiscan.io/address/0xCCd6d3f0A86042d2B7056eDd381d367126628AF5" target="_blank">Factory ↗︎</a>
-      <a href="https://github.com/0xTimberZx/TimbSwap" target="_blank">GitHub ↗︎</a>
-      <a href="https://t.me/timbswapann" target="_blank">Telegram ↗︎</a>
-      <a href="https://x.com/timbswap" target="_blank">X ↗︎</a>
-      <a href="https://0xtimberzx.github.io/MyDapp/debughub/" target="_blank">DebugHub ↗︎</a>
-    </div>
-  </footer>
-
   <script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
-  <script src="faucet.js?v=20260905c"></script>
-  <script>
-    function toggleMobileNav() {
-      document.getElementById("mobile-nav").classList.toggle("open");
-    }
-    document.addEventListener("click", function(e) {
-      const nav = document.getElementById("mobile-nav");
-      const btn = document.querySelector(".nav-hamburger");
-      if (nav && btn && !nav.contains(e.target) && !btn.contains(e.target)) {
-        nav.classList.remove("open");
-      }
-    });
-    function toggleWalletMenu(e) {
-      e.stopPropagation();
-      document.getElementById("wallet-info").classList.toggle("open");
-    }
-    document.addEventListener("click", function(e) {
-      const wi = document.getElementById("wallet-info");
-      if (wi && !wi.contains(e.target)) wi.classList.remove("open");
-    });
-  </script>
+  <script src="faucet.js?v=20260913a"></script>
 </body>
 </html>
