@@ -1137,20 +1137,28 @@ _applyTheme(_currentTheme());
 // Loaded by SDK script tag in each page. Fallback stub defined here
 // so DebugHub never breaks TimbSwap if the SDK fails to load.
 //
-// telemetryUrl points the SDK at our SAME-ORIGIN telemetry relay — the Cloudflare
-// Worker on `timbswap.xyz/api/*` (workers/timbswap-api.js), which inserts into the
-// hub's Supabase table server-side with the service-role key. Same-origin so Brave
-// Shields / adblockers never block it (the direct supabase.co REST insert was a
-// blocked third-party call in Brave). supabaseUrl/Key remain as the SDK's fallback
-// sink for builds that predate telemetryUrl support. The SDK reads these lazily at
-// send time, so setting them here (after the SDK script tag) is fine. Anon key is
-// public by design — RLS is the boundary. See dev-docs/debughub-network/.
+// CAPPED-BETA POSTURE: telemetry is localStorage-ONLY. We deliberately omit
+// telemetryUrl / supabaseUrl / supabaseKey, so the SDK's transmit() is a no-op
+// (debughub/sdk/debugger.js: no relay and no direct sink → return before any
+// fetch). Nothing about user wallets or activity leaves the device.
+//
+// Why: the same-origin relay (/api/debughub_events) was removed from the Worker
+// for the beta, and the SDK's fallback — a DIRECT supabase.co REST insert with
+// the anon key — was still shipping every user's wallet address + chain id +
+// events into a table that allowed public anon SELECT. That is user-data
+// exposure on the domain the bug bounty covers, and it contradicted the
+// bounty's "telemetry is out of scope / never touch user data" stance
+// (SECURITY.md in the official repo). Per-user debugging still works via the
+// local #debug snapshot path — no backend required.
+//
+// To re-enable an AGGREGATED hub post-audit, first harden the backend (no public
+// anon SELECT; read behind service-role/auth; hash or drop wallet addresses;
+// rate-limit the relay) AND bring it explicitly into the bounty scope.
 
 window.DEBUGHUB_CONFIG = {
-  appName:      "TimbSwap",
-  telemetryUrl: "https://timbswap.xyz/api/debughub_events",
-  supabaseUrl:  "https://ipyfodnidwsdvwqrcjrl.supabase.co",
-  supabaseKey:  "sb_publishable_yg4wjMwvGrlf5C9vqs2nkw_Hfks0Ux9"
+  appName: "TimbSwap"
+  // No telemetryUrl / supabaseUrl / supabaseKey during the capped beta →
+  // localStorage-only. See the block above before adding a network sink back.
 };
 
 if (!window.DebugHub) {
