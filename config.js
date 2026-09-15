@@ -13,11 +13,13 @@ const CHAIN_NAME = "Arbitrum Sepolia";
 // so both must be set together to enforce it). window.* so faucet.js can read it.
 window.TURNSTILE_SITE_KEY = "";
 
-// Faucet UI mirror of the mainnet-TIMB airdrop leg. Set true ONLY once the
+// Faucet UI mirror of the mainnet-TIMB airdrop leg. True ONLY while the
 // airdrop-dispatch function is live and AIRDROP_ENABLED is set on the faucet-claim
 // edge function — this just shows/hides the "+ real TIMB" explainer on the faucet
 // page; the edge function's own flag is what actually enqueues payouts.
-window.AIRDROP_ENABLED = false;
+// Live since 2026-09-15: TimbAirdropDistributor 0x955e5800245164EC4DCd1da9062115bBdA132c83
+// (Arbitrum One), 1 TIMB per eligible claim, 10,000 TIMB total cap, round 1.
+window.AIRDROP_ENABLED = true;
 
 // Independent public RPCs for READ traffic. Free public endpoints rate-limit
 // per-IP under heavy browsing (several tabs polling), which stalls reads on
