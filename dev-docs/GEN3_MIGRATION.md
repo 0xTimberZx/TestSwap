@@ -33,6 +33,25 @@ staking are untouched.
 
 ## Prerequisites
 
+- **Confirm you are in the repo that serves the live site.** `timbswap.xyz` is
+  served by **TestSwap** (custom domain set in its Pages settings — there is no
+  CNAME file to tell you). TimbSwap is a dev mirror at
+  `0xtimberzx.github.io/TimbSwap`. The reused contracts below are shared on-chain
+  regardless of which checkout you run from, so running this from the mirror
+  hijacks the live game. This happened once —
+  see `INCIDENT_2026-09-15_SHARED_INFRA_REPOINT.md`.
+- **Read the current bindings and put them in `.env` as the pre-flight guard**
+  (`EXPECT_OLD_PRIZE`, `EXPECT_OLD_REGISTRY`). The script refuses to broadcast
+  unless escrow, router and vault all currently point at exactly these:
+  ```
+  cast call $PRIZE_ESCROW_ADDR "timbPrize()(address)"    --rpc-url $ARB_SEPOLIA_RPC
+  cast call $ROUTER_ADDR       "timbPrize()(address)"    --rpc-url $ARB_SEPOLIA_RPC
+  cast call $YIELD_VAULT_ADDR  "timbPrize()(address)"    --rpc-url $ARB_SEPOLIA_RPC
+  cast call $YIELD_VAULT_ADDR  "gameRegistry()(address)" --rpc-url $ARB_SEPOLIA_RPC
+  ```
+  All three `timbPrize` reads must agree, and they must match `ADDRESSES.TimbPrize`
+  / `ADDRESSES.GameRegistry` in the **live** `config.js`. If they don't, stop —
+  something is already mis-bound and a migration on top of it will make it worse.
 - Deployer key = current owner of the reused contracts.
 - The `PROTOCOL_SINK_ADDR` **must match the current sink** so lapsed-revenue
   routing is unchanged. Read it off the old registry:
@@ -52,6 +71,8 @@ PRIZE_ESCROW_ADDR=0x865C50d933e63BbE388EEAFa017AE634B0A6fB6D
 ROUTER_ADDR=0x40C7Caf90817C9891D278Ec1400B9deb180911f1
 ELIGIBLE_REGISTRY_ADDR=0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04
 YIELD_VAULT_ADDR=0x43D833e828e2AF951527C2b573Eb70c358FfEB0B
+EXPECT_OLD_PRIZE=0x...              # pre-flight: what escrow/router/vault are bound to NOW
+EXPECT_OLD_REGISTRY=0x...           # pre-flight: what the vault is bound to NOW
 SETTLER_ADDR=0x...                  # keeper EOA (SETTLER_PRIVATE_KEY's address)
 VRF_COORDINATOR=0x...
 VRF_KEY_HASH=0x...
@@ -90,6 +111,10 @@ forge script scripts/DeployGen3Migration.s.sol \
 
 It deploys and wires everything in one broadcast, then prints the three new
 addresses. `startGame()` is intentionally **not** called yet.
+
+Run it **without** `--broadcast` first: the pre-flight guard executes in
+simulation and prints the four current bindings next to your `EXPECT_*` values,
+so a wrong-game `.env` fails here at zero cost.
 
 ## After the deploy
 

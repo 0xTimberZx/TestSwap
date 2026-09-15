@@ -80,6 +80,20 @@ interface IYieldVaultAdmin {
  *   VRF_CONFIRMATIONS       optional, default 3
  *   VRF_CALLBACK_GAS        optional, default 200000
  *
+ * PRE-FLIGHT GUARD (required — see dev-docs/INCIDENT_2026-09-15_SHARED_INFRA_REPOINT.md):
+ *   EXPECT_OLD_PRIZE        the TimbPrize the shared infra is bound to RIGHT NOW
+ *   EXPECT_OLD_REGISTRY     the GameRegistry the vault is bound to RIGHT NOW
+ *   Steps 6–7 repoint contracts that are SHARED with whatever game is live. The
+ *   script therefore refuses to broadcast unless the escrow, router and vault all
+ *   currently point at the pair you name here. This makes it impossible to run
+ *   the migration from a stale checkout / dev mirror and silently hijack the
+ *   live game's escrow, router and vault — which is exactly what happened on
+ *   2026-09-15. Read the live values first:
+ *     cast call $PRIZE_ESCROW_ADDR "timbPrize()(address)"
+ *     cast call $YIELD_VAULT_ADDR  "gameRegistry()(address)"
+ *   and confirm they match the ADDRESSES block of the config.js that serves
+ *   the live site (timbswap.xyz) before pasting them into .env.
+ *
  * Run:
  *   forge script scripts/DeployGen3Migration.s.sol \
  *     --rpc-url $ARB_SEPOLIA_RPC --broadcast -vvvv
@@ -102,6 +116,8 @@ contract DeployGen3Migration is Script {
         bytes memory vrfExtra  = vm.envBytes("VRF_EXTRA_ARGS");
         uint16  vrfConfs       = uint16(vm.envOr("VRF_CONFIRMATIONS", uint256(3)));
         uint32  vrfCbGas       = uint32(vm.envOr("VRF_CALLBACK_GAS", uint256(200_000)));
+
+        _preflight(escrowAddr, routerAddr, vaultAddr);
 
         vm.startBroadcast(deployerKey);
 
@@ -165,5 +181,35 @@ contract DeployGen3Migration is Script {
         console.log("4. Call new TimbPrize.startGame()  (fresh epoch, opens round 1)");
         console.log("5. Confirm settler activates round 2+ (activateRoundEntries no longer reverts)");
         console.log("6. Tell holders to reclaim principal from the OLD registry (user-reclaim only)");
+    }
+
+    /// @dev Refuse to repoint shared infra away from a game the operator did not
+    ///      explicitly name. Every reused contract must currently be bound to
+    ///      EXPECT_OLD_PRIZE / EXPECT_OLD_REGISTRY; any mismatch means the .env
+    ///      describes a different game than the one these contracts serve (a
+    ///      stale checkout, a dev mirror, a half-applied prior migration) and the
+    ///      broadcast would hijack the live game. Runs in simulation too, so a
+    ///      plain `forge script` (no --broadcast) surfaces the mismatch for free.
+    function _preflight(address escrowAddr, address routerAddr, address vaultAddr) internal view {
+        address expectPrize    = vm.envAddress("EXPECT_OLD_PRIZE");
+        address expectRegistry = vm.envAddress("EXPECT_OLD_REGISTRY");
+
+        address escrowPrize = PrizeEscrow(payable(escrowAddr)).timbPrize();
+        address routerPrize = TimbSwapRouter(payable(routerAddr)).timbPrize();
+        address vaultReg    = IYieldVaultAdmin(vaultAddr).gameRegistry();
+        address vaultPrize  = IYieldVaultAdmin(vaultAddr).timbPrize();
+
+        console.log("PRE-FLIGHT: shared infra currently bound to");
+        console.log("  escrow.timbPrize   ", escrowPrize);
+        console.log("  router.timbPrize   ", routerPrize);
+        console.log("  vault.timbPrize    ", vaultPrize);
+        console.log("  vault.gameRegistry ", vaultReg);
+        console.log("  EXPECT_OLD_PRIZE   ", expectPrize);
+        console.log("  EXPECT_OLD_REGISTRY", expectRegistry);
+
+        require(escrowPrize == expectPrize,    "PRE-FLIGHT: escrow.timbPrize != EXPECT_OLD_PRIZE — wrong game / stale .env");
+        require(routerPrize == expectPrize,    "PRE-FLIGHT: router.timbPrize != EXPECT_OLD_PRIZE — wrong game / stale .env");
+        require(vaultPrize  == expectPrize,    "PRE-FLIGHT: vault.timbPrize != EXPECT_OLD_PRIZE — wrong game / stale .env");
+        require(vaultReg    == expectRegistry, "PRE-FLIGHT: vault.gameRegistry != EXPECT_OLD_REGISTRY — wrong game / stale .env");
     }
 }
