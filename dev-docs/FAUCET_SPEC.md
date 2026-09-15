@@ -1,138 +1,119 @@
-# Gas faucet — active-ticket gas drip
+# Faucet — active-ticket keep-alive drip
 
-A paste-your-address faucet for mainnet launch. Any wallet that **holds a live
-active ticket** can claim **once per 24h**; each claim sends a small amount of
-ETH to the wallet *and* an equal amount to the current round's pot.
+A paste-nothing, connect-and-claim faucet for live players. Any wallet holding a
+live **Active** ticket can claim **once per 24h**; each claim sends a little ETH
+to the wallet (gas), an equal amount to the current round's pot, and
+`timbsPerClaim` TIMBS — all in one on-chain transaction.
 
-Status: **built, awaiting mainnet wiring** (addresses, secrets, hot-wallet
-funding). Files: `supabase/functions/faucet-claim/`, `scripts/faucet-worker.js`,
-`supabase/migrations/20260831000000_faucet.sql`, `.github/workflows/faucet.yml`.
+Status: **built (Phase 1), awaiting chain wiring** — the deployed `GasFaucet`
+address, the edge-function + worker secrets, treasury operator wiring, and the
+TIMBS pre-fund. Files:
+
+- `contracts/GasFaucet.sol` — the on-chain faucet (single-chain).
+- `scripts/DeployFaucet.s.sol` — deploy + owner-side wiring.
+- `supabase/functions/faucet-claim/` — the gatekeeper edge function.
+- `scripts/faucet-worker.js` + `.github/workflows/faucet.yml` — the sender.
+- `faucet/` — the claim page (`index.html`, `faucet.js`, `faucet.css`).
+- `supabase/migrations/20260831000000_faucet.sql` (+ the 3-arg soft-check
+  migration) — the `faucet_claims` ledger and its RPCs.
 
 ---
 
 ## 1. What it does
 
-- **Eligibility:** the pasted address must currently hold a **live active
-  ticket** — `GameRegistry.effectiveStatus(activeTicketOf(addr)) == Active`. No
-  pre-existing ETH balance is required; this is a keep-alive drip for real
-  players who've run their gas dry. The ticket (which cost gas to mint) is the
+- **Eligibility (on-chain Sybil gate):** `GameRegistry.effectiveStatus(activeTicketOf(addr)) == Active`. The ticket cost gas + escrow to mint — that is the gate. No pre-existing balance required.
+- **Per claim:** `dripEth` to the wallet + `potEth` to the pot (`TimbPrize.addToPot`) + `timbsPerClaim` TIMBS to the wallet. All legs are independently pausable and independently capped on-chain (`GasFaucet.sol`).
+- **Cooldown:** once per 24h per address, enforced BOTH in Postgres (`reserve_faucet_claim`, fast pre-check) and on-chain (`lastClaimAt + cooldown`, the authority).
+
+## 2. Architecture — gatekeeper + single sender + on-chain enforcement
+
+Three layers; the hot wallet is touched by exactly one of them:
+
+- **Edge fn `faucet-claim` (gatekeeper).** Verifies Turnstile, validates the
+  address, reads the **chain** for a live Active ticket + `TimbYieldVault.weightOf`
+  (soft), atomically reserves the 24h slot (`reserve_faucet_claim`), and returns
+  `202`. **Never sends anything.**
+- **Worker `faucet-worker.js` (single sender).** The only thing that holds a key.
+  Drains `reserved` rows oldest-first, re-checks `GasFaucet.claimable()` on-chain,
+  calls `dispense(claimant)` on one sequential nonce stream, and resolves each row
+  to `sent`/`failed`. Lingers + polls (like the settler) so a claim lands within
+  seconds; `concurrency: timbswap-faucet` guarantees one sender.
+- **`GasFaucet.dispense` (on-chain enforcement).** Re-checks eligibility, cooldown,
+  and caps itself — so a leaked dispatcher key still cannot over-drip or bypass the
   Sybil gate.
-- **Amount, per claim:** `DRIP_ETH` to the wallet + `POT_ETH` to the pot.
-  Launch default **0.000005 ETH each** (~$0.01 apiece at ETH $2,000; the drip
-  covers ~500k gas at the Arb One 0.01 gwei floor). The pot half is sent via
-  `TimbPrize.addToPot()` — every claim grows the live round.
-- **Cooldown:** once per 24h per address, enforced atomically in Postgres.
-
-> Units note: the original ask said "0.05 gwei" — that's ~$0.0000001 and can't
-> cover a single tx. The figure is **0.000005 ETH**.
-
-## 2. Architecture — gatekeeper + single sender
-
-Two pieces, because the hot wallet must send on **one sequential nonce stream**
-or concurrent claims collide:
-
-- **Edge function `faucet-claim` (gatekeeper).** Validates the address, reads the
-  **chain** for a live ticket (never a mirror), atomically reserves the 24h slot,
-  and **enqueues** a `reserved` row. It never sends ETH. Returns `202 queued`.
-- **Worker `faucet-worker.js` (single sender).** The *only* thing that touches
-  the hot wallet. Drains `reserved` claims oldest-first, re-checks eligibility
-  on-chain, and sends the drip + `addToPot()` with sequential nonces. Lingers and
-  polls every ~10s (like the settler) so a claim lands within seconds, then exits
-  and self-chains. `concurrency: timbswap-faucet` guarantees one sender.
 
 ```
-paste address → POST faucet-claim
-                  ├─ ethers.getAddress (valid?)
-                  ├─ chain: activeTicketOf → effectiveStatus == Active ?
-                  ├─ reserve_faucet_claim() : advisory-locked 24h check + enqueue
-                  └─ 202 { queued }
-                                   ⇓  (queue)
-   faucet-worker (single) → re-check ticket → sendTransaction(drip)
-                                             → addToPot{value:POT}()
-                                             → mark sent (tx hashes)
+connect wallet → POST /api/faucet-claim  (Worker → Supabase faucet-claim)
+                   ├─ Turnstile siteverify
+                   ├─ chain: activeTicketOf → effectiveStatus == Active ?
+                   ├─ reserve_faucet_claim() : advisory-locked 24h + enqueue
+                   └─ 202 { queued }
+                                  ⇓  (faucet_claims, drained on a schedule)
+   faucet-worker (single) → claimable()? → dispense(claimant)
+                                          → mark sent (tx hash)
 ```
 
 ## 3. Data model (`faucet_claims`)
 
-`id · address · ticket_id · status(reserved|sent|failed) · wallet_tx · pot_tx ·
-reserved_at · sent_at · error`. RLS **on, no anon policy** — only the
-service_role backend reads/writes it (mirrors `dev-docs/supabase-rls-policies.sql`).
+`id · address · ticket_id · reserve_weight · status(reserved|sent|failed) ·
+wallet_tx · pot_tx · reserved_at · sent_at · error`. RLS **on, no anon policy** —
+only the service_role backend touches it.
 
-- **`reserve_faucet_claim(address, ticket_id)`** — `pg_advisory_xact_lock` +
-  24h-window check + insert. Returns the new id, or `null` on cooldown. A
-  `failed` send does **not** burn the day; a `reserved` row **does** hold the
-  slot until the worker resolves it.
-- **`expire_stale_reservations()`** — flips `reserved` rows older than 15 min to
-  `failed` (worker crash between reserve and send), releasing the slot. The
-  worker calls it on start.
+- `reserve_faucet_claim(address, ticket_id, reserve_weight)` — `pg_advisory_xact_lock`
+  + 24h-window check + insert; returns the new id, or `null` on cooldown. A
+  `failed` row does **not** burn the day.
+- `expire_stale_reservations()` — flips `reserved` rows older than 15 min to
+  `failed` (a crashed sender), releasing the slot. The worker calls it on start.
 
-## 4. Abuse / Sybil
+Note: `dispense` is one tx (drip + pot + TIMBS), so the worker records that single
+hash in `wallet_tx`; `pot_tx` is left null.
 
-- **Ticket gate:** each active ticket cost real gas (and TIMBS/ETH escrow) to
-  mint. One drip per ticket per day.
-- **Self-limiting economics:** a farmer nets only `DRIP_ETH`/day/ticket while an
-  equal `POT_ETH` goes to a pot they probably don't win — farming funds the game.
-- **24h cooldown** per address, atomic (no double-claim race).
-- **Optional hardening (not in MVP):** per-IP rate limit at the edge; reject
-  contract addresses; cap total daily faucet outflow.
+## 4. Config & secrets
 
-## 5. Hot-wallet ops
+**config.js:** `GasFaucet` (ADDRESSES — the worker reads it), and
+`window.TURNSTILE_SITE_KEY` (public). `GameRegistry` / `TimbPrize` are already read
+by the ecosystem.
 
-- Dedicated **faucet wallet**, funded from treasury, separate from the settler.
-- **Balance guard:** the worker refuses to send below `MIN_BALANCE_ETH`
-  (default 0.01) and alerts Telegram once — claims pause, nothing bricks.
-- **Daily ceiling:** `active_tickets × (DRIP+POT)`. At 0.00001 ETH/claim and
-  1,000 active tickets that's 0.01 ETH/day (~$20 at ETH $2,000).
-- Alerts reuse the settler's Telegram channel.
+**Cloudflare Worker (vars/secrets):** `FAUCET_UPSTREAM` (the Supabase faucet-claim
+URL), optional `FAUCET_PROXY_SECRET`.
 
-## 6. Config & secrets
-
-**config.js** supplies `TimbPrize` + `GameRegistry` (worker reads them, same as
-the settler). **Update both to the mainnet addresses before launch.**
-
-GitHub Actions secrets: `ARB_RPC`, `FAUCET_PRIVATE_KEY`, `SUPABASE_URL`,
-`SUPABASE_SERVICE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
-`FAUCET_DISPATCH_TOKEN` (PAT, Actions r/w, for the self-chain). Vars:
-`FAUCET_DRIP_ETH`, `FAUCET_POT_ETH`, `FAUCET_MIN_BALANCE_ETH`.
-
-Edge-function secrets (Supabase → Edge Functions): `RPC_URL`,
-`GAME_REGISTRY_ADDR` (`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` auto-injected).
+**Edge fn (Supabase → Edge Functions):** `FAUCET_RPC_URL` (Sepolia),
+`GAME_REGISTRY_ADDR`, `TIMB_YIELD_VAULT_ADDR`, `TURNSTILE_SECRET`, optional
+`FAUCET_PROXY_SECRET`; `AIRDROP_ENABLED`/`AIRDROP_ROUND` gate the Phase-2 leg
+(default off). `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` auto-injected.
 Deploy: `supabase functions deploy faucet-claim --no-verify-jwt`.
 
-## 7. Cold-start caveat
+**Worker keeper (GitHub Actions secrets):** `ARB_SEPOLIA_RPC`,
+`FAUCET_DISPATCHER_PRIVATE_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`; optional `FAUCET_DISPATCH_TOKEN`
+(self-chain PAT). Vars: `FAUCET_LINGER_MINUTES`, `FAUCET_POLL_SECONDS`,
+`FAUCET_DRAIN_LIMIT`.
 
-Eligibility requires an **active ticket**, but minting the first ticket costs
-gas. So the faucet **replenishes existing players; it does not onboard a
-zero-ETH cold wallet**. If launch needs cold-start onboarding, that's a separate
-path (e.g. a first-entry sponsor, or entering via a trade that bundles gas) —
-out of scope here, flagged deliberately.
+## 5. Hot-wallet & funding
 
-## 8. Frontend (paste-to-claim)
+- Dedicated **faucet dispatcher** wallet (set as `GasFaucet.dispatcher`), holds
+  only gas — never the treasury or the TIMBS budget.
+- **ETH** stays in the treasury and is pulled live per claim: the faucet must be
+  the treasury's `operator` (`setOperator` + `setOperatorEthCap`).
+- **TIMBS** is **pre-funded** into the faucet (`treasury.withdrawToken(timbs,
+  faucet, budget)`); `recoverTimbs` returns unused budget.
+- Two ceilings on each asset: the faucet's own `ethCap`/`timbsCap` **and** the
+  treasury's operator cap.
 
-Minimal wiring — a text box + button hitting the edge function:
+## 6. Cold-start caveat
 
-```js
-async function claimGas(address) {
-  const r = await fetch("https://<project>.functions.supabase.co/faucet-claim", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ address }),
-  });
-  const body = await r.json();
-  return { ok: r.ok, ...body };   // ok → "Gas is on the way"; else body.error (voice-tuned)
-}
-```
+Eligibility is an Active ticket, and minting the first ticket costs gas — so the
+faucet **replenishes existing players; it does not onboard a zero-ETH cold
+wallet.** Cold-start onboarding (a public testnet faucet, or a sponsored first
+entry) is a separate path, flagged deliberately.
 
-Error copy from the function is already written in the house voice ("No active
-ticket for this address. Enter a round first." / "Already claimed. Come back in
-about {h}h.").
+## 7. Launch checklist
 
-## 9. Launch checklist
-
-1. Deploy `TimbPrize` + `GameRegistry` on Arb One; update **config.js**.
-2. Apply the migration (`faucet_claims` + functions) to Supabase.
-3. Fund the faucet hot wallet from treasury.
-4. Set the secrets/vars (§6); deploy the edge function; enable the workflow.
-5. Wire the paste-to-claim box (§8) into the play page.
-6. Smoke test: claim once (arrives), claim again (429 cooldown), non-ticket
-   address (403).
+1. `forge script scripts/DeployFaucet.s.sol` (env per its header) → note the address.
+2. Owner/Safe: `treasury.setOperator(faucet)`, `setOperatorEthCap(...)`,
+   `withdrawToken(timbs, faucet, budget)` to pre-fund TIMBS.
+3. Set `GasFaucet` in config.js; set `window.TURNSTILE_SITE_KEY`.
+4. Deploy the edge fn + set its secrets; set the Worker `FAUCET_UPSTREAM` var;
+   set the keeper GitHub secrets; enable the workflow.
+5. Smoke test: claim with an Active ticket (arrives), claim again (429 cooldown),
+   an address with no ticket (403), bad/absent Turnstile (403).
