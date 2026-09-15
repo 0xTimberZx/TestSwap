@@ -31,11 +31,37 @@ item maps to a real contract lever or a concrete op. Companion to
 - [ ] **VRF subscription:** fund enough to run, but don't overfund the hot
       subscription; monitor and top up (§5).
 - [ ] **Airdrop distributor** *(only if the testnet-claim → mainnet-TIMB airdrop
-      leg is live — see `MAINNET_AIRDROP_SPEC.md`)*: fund the distributor wallet
-      with only a **small TIMB float + gas**, never the Safe/mint; set a **hard
-      total-airdrop cap** and a **per-address cap**. The float is real
-      value-at-risk — count it toward the master ceiling. Keep the reward **TIMB**
-      (illiquid pre-LP = a free Sybil brake); **not** ETH/WETH (spec §2).
+      leg is live — see `MAINNET_AIRDROP_SPEC.md`)*. The leg is an on-chain
+      `TimbAirdropDistributor` (Arb One) holding a pre-funded TIMB float, fed by
+      the `airdrop-dispatch` edge fn. Every cap below is a **contract lever**,
+      not a config flag — set them in the constructor and verify on-chain
+      before the first `distribute()`:
+
+      | Lever | Contract | Proposed (confirm at deploy) | Bound it gives |
+      |---|---|---|---|
+      | `amountPerClaim` | owner `setAmountPerClaim` | **1 TIMB** (1e18) | dispatcher chooses *who*, never *how much* |
+      | `totalCap` | owner `setTotalCap` | **10,000 TIMB** | lifetime ceiling on everything the contract can ever send |
+      | `perRoundCap` | owner `setPerRoundCap` | **= `totalCap`** while `AIRDROP_ROUND` stays `1` | per-round ceiling (matters only if you open a second round) |
+      | `claimed[round][addr]` | one-way, no setter | round `1` for the whole beta | **per-address lifetime** cap of one claim — a second `distribute` for the same address reverts on-chain, whatever the DB says |
+      | float on the contract | Safe → distributor `transfer` | **≤ 1,000 TIMB per top-up** + ~0.01 ETH gas on the dispatcher EOA | max loss from a leaked dispatcher key or a contract bug = float, never the cap |
+
+      Rules that make those numbers hold:
+      - **Float ≤ 10 % of `totalCap`, topped up in tranches** from the Safe —
+        never the mint authority, never the treasury. A leaked dispatcher key
+        drains at most the float; a wrong DB can't exceed `totalCap` or pay an
+        address twice.
+      - **Count the float toward the master ceiling.** Pre-LP TIMB has no
+        market, so its dollar VaR is ≈ 0 today — the cap bounds *post-`startGame`
+        dump pressure and marketing spend*, not cash. Re-price it the day LP
+        goes live and lower `totalCap` if it then breaches the ceiling
+        (`setTotalCap` is owner-only and can only go down without a re-fund).
+      - **Reward stays TIMB**, not ETH/WETH (spec §2 — illiquid = a free Sybil
+        brake; a liquid reward gated on a free testnet action is a faucet drain).
+      - **Deploy-time fill-in** (leave blank until the leg is actually live):
+        distributor `0x________` · deploy tx `0x________` · `owner()` = Safe ·
+        `dispatcher()` = the `airdrop-dispatch` EOA · `guardian()` = fast-pause
+        key · `TIMBSToken` transfer-cap path confirmed for `amountPerClaim`
+        (spec §8) · row added to `MAINNET_ADDRESSES.md` + `SECURITY.md` scope.
 
 ## 2. Emergency controls — wire and test BEFORE opening
 
@@ -49,6 +75,13 @@ item maps to a real contract lever or a concrete op. Companion to
       `PrizeEscrow.emergencyWithdraw`, `TimbYieldVault.emergencyWithdraw`
       (recover pot / vault backing if compromised), and the reward-liability-
       capped `recoverERC20` on staking/farm.
+- [ ] **Airdrop distributor stop** *(if the leg is live)*:
+      `TimbAirdropDistributor.setPaused(true)` — callable by **owner or
+      `guardian`**, so the guardian must be a fast key (same posture as §4).
+      Pause halts every `distribute()`; the dispatcher's next run sees the
+      revert and leaves rows `pending` (no half-sends). Then `recover(to,
+      amount)` (owner) pulls the float back to the Safe. Rehearse both on
+      Sepolia before funding on Arb One.
 - [ ] **Dry-run on testnet:** pause → confirm entries/swaps halt → unpause.
 
 ## 3. User exit must always work — verify each (the "no funds trapped" property)
@@ -85,6 +118,13 @@ is `onlyOwner`). Decide this before opening:
       `treasury.updateTwap` (before buybacks).
 - [ ] Watch **Total Pot vs Prize Pot**, VRF sub balance, pair reserves/price,
       treasury balance.
+- [ ] **Airdrop leg** *(if live)*: distributor TIMB balance vs `MIN_TIMB_FLOAT`
+      and dispatcher gas vs `MIN_GAS_ETH` (the dispatcher pauses itself and
+      alerts once below either); `airdrop_outbox` rows stuck in `sending`
+      past one cycle (a crashed run — the sweeper reopens them only after the
+      pinned nonce is confirmed absent on-chain); `totalDistributed` vs
+      `totalCap` (approaching = the leg is about to close; a *jump* between
+      cycles larger than one batch = investigate the dispatcher key).
 - [ ] **On-call:** who responds, how fast, with which keys — written down.
 
 ## 6. Whitehat channel — turn "real money live" into a discovery channel
