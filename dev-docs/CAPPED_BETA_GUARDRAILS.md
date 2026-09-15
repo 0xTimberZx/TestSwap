@@ -57,11 +57,18 @@ item maps to a real contract lever or a concrete op. Companion to
         (`setTotalCap` is owner-only and can only go down without a re-fund).
       - **Reward stays TIMB**, not ETH/WETH (spec §2 — illiquid = a free Sybil
         brake; a liquid reward gated on a free testnet action is a faucet drain).
-      - **Deploy-time fill-in** (leave blank until the leg is actually live):
-        distributor `0x________` · deploy tx `0x________` · `owner()` = Safe ·
-        `dispatcher()` = the `airdrop-dispatch` EOA · `guardian()` = fast-pause
-        key · `TIMBSToken` transfer-cap path confirmed for `amountPerClaim`
-        (spec §8) · row added to `MAINNET_ADDRESSES.md` + `SECURITY.md` scope.
+      - [x] **Deployed 2026-09-15 (Arbitrum One):**
+        distributor `0x955e5800245164EC4DCd1da9062115bBdA132c83` · deploy tx
+        `0x3436fe14397cd6dc564ac85dfefc912fafd591f70f7747b1982d5e2723d5a9b2`
+        (block 505442198) · `owner()` = Safe `0xFbcD…79F9` (Ownable2Step accepted)
+        · `dispatcher()` = `0x77F434D288Ca29a322ae4C947Ae3ae6a04e29921`
+        (`airdrop-dispatch` hot key, 0.002 ETH gas) · `guardian()` = deployer
+        `0x4253…9800` · `amountPerClaim` 1e18 · `totalCap` = `perRoundCap` = 1e22
+        · float **1,000 TIMB** (10 % of cap) from the Safe · `TIMBSToken`:
+        `paused=false`, `maxTransferAmount=0` (no per-tx cap; spec §8 satisfied)
+        · smoke test: 1 TIMB distributed to the deployer, `isClaimed(1)=true`,
+        `remaining(1)=9,999`, second enqueue deduped · rows in
+        `MAINNET_ADDRESSES.md` + `SECURITY.md` scope.
 
 ## 2. Emergency controls — wire and test BEFORE opening
 
