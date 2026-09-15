@@ -1,158 +1,181 @@
-// TimbSwap gas faucet — claim gatekeeper (Supabase Edge Function, Deno).
+// TimbSwap faucet — claim gatekeeper edge function (Supabase, Deno).
 //
-// The frontend POSTs { address } (the connected wallet). This function does NOT
-// send ETH. It (1) validates the address, (2) reads the chain to confirm the
-// address holds a LIVE active ticket, (3) atomically reserves the 24h slot in
-// Postgres, and (4) enqueues the claim. A single worker (scripts/faucet-worker.js)
-// drains the queue and sends — keeping all hot-wallet sends on one nonce stream.
+// The faucet page posts { address, cfTurnstileToken } to the same-origin Worker
+// route POST /api/faucet-claim (workers/timbswap-api.js), which relays here with
+// an optional shared secret (X-Proxy-Secret). This function NEVER sends anything
+// on-chain — it validates, reserves a claim slot, and returns 202. The keeper
+// (scripts/faucet-worker.js) is the only thing that touches a hot wallet and
+// calls GasFaucet.dispense().
 //
-// Why the split: concurrent claims from different wallets would collide on the
-// hot-wallet nonce if the edge function sent inline. Gatekeep here, send there.
+// Flow:
+//   1. verify the Cloudflare Turnstile token (anti-bot friction)
+//   2. validate the address; read the TESTNET chain for a live Active ticket
+//      (GameRegistry.activeTicketOf → effectiveStatus == Active) — never a mirror
+//   3. read TimbYieldVault.weightOf(ticketId) (soft observability, never blocks)
+//   4. reserve_faucet_claim(address, ticketId, weight) — advisory-locked 24h
+//      cooldown + enqueue a `reserved` row (service_role, bypasses RLS)
+//   5. if AIRDROP_ENABLED, enqueue_airdrop(address, round) for the mainnet-TIMB
+//      leg — best-effort; a failure here never fails the faucet claim
+//   6. 202 { queued } — the keeper dispenses within seconds
 //
-// Env (Supabase → Project Settings → Edge Functions):
-//   RPC_URL                 chain RPC for read-only eligibility reads
-//   GAME_REGISTRY_ADDR      GameRegistry address
-//   YIELD_VAULT_ADDR        TimbYieldVault (soft reserve-weight check)
-//   SUPABASE_URL            (auto-injected)
-//   SUPABASE_SERVICE_ROLE_KEY  (auto-injected) — bypasses RLS
-//
-// RPC_URL, GAME_REGISTRY_ADDR and YIELD_VAULT_ADDR are NOT secret — all ship
-// publicly in config.js. They default to the current Arbitrum Sepolia (gen-3)
-// values below, so no dashboard step is needed on testnet; set the env vars to
-// OVERRIDE for mainnet (keep them in lockstep with config.js — the SOT).
+// Secrets (Supabase → Project Settings → Edge Functions):
+//   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY   (auto-injected) — bypasses RLS
+//   FAUCET_RPC_URL             Arbitrum Sepolia RPC (read-only eligibility calls)
+//   GAME_REGISTRY_ADDR         GameRegistry on Sepolia (eligibility oracle)
+//   TIMB_YIELD_VAULT_ADDR      TimbYieldVault on Sepolia (weightOf soft-check)
+//   TURNSTILE_SECRET           Cloudflare Turnstile secret key
+//   FAUCET_PROXY_SECRET        optional; if set, only requests carrying the
+//                              matching X-Proxy-Secret header are accepted
+//   AIRDROP_ENABLED            "true" to enqueue the mainnet-TIMB leg (Phase 2)
+//   AIRDROP_ROUND              airdrop round id (default "1")
 //
 // Deploy: supabase functions deploy faucet-claim --no-verify-jwt
+// (public like waitlist; Turnstile + the Worker + the SQL cooldown are the guard.)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ethers } from "https://esm.sh/ethers@6.13.4";
 
-// Defaults mirror config.js (Arbitrum Sepolia, gen-3). Override via env for mainnet.
-const DEFAULT_RPC_URL     = "https://arb-sepolia.g.alchemy.com/v2/PDKCOXR05xcN4AkdaVqNp";
-const DEFAULT_REGISTRY    = "0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65";
-const DEFAULT_YIELD_VAULT = "0x43D833e828e2AF951527C2b573Eb70c358FfEB0B";
+const SB_URL        = Deno.env.get("SUPABASE_URL")!;
+const SB_SERVICE    = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const RPC_URL       = Deno.env.get("FAUCET_RPC_URL") ?? "";
+const REGISTRY_ADDR = Deno.env.get("GAME_REGISTRY_ADDR") ?? "";
+const YIELD_ADDR    = Deno.env.get("TIMB_YIELD_VAULT_ADDR") ?? "";
+const TS_SECRET     = Deno.env.get("TURNSTILE_SECRET") ?? "";
+const PROXY_SECRET  = Deno.env.get("FAUCET_PROXY_SECRET") ?? "";
+const AIRDROP_ON    = (Deno.env.get("AIRDROP_ENABLED") ?? "").toLowerCase() === "true";
+const AIRDROP_ROUND = Number(Deno.env.get("AIRDROP_ROUND") ?? "1");
 
-const RPC_URL      = Deno.env.get("RPC_URL")            || DEFAULT_RPC_URL;
-const REGISTRY     = Deno.env.get("GAME_REGISTRY_ADDR") || DEFAULT_REGISTRY;
-const YIELD_VAULT  = Deno.env.get("YIELD_VAULT_ADDR")   || DEFAULT_YIELD_VAULT;
-const SB_URL       = Deno.env.get("SUPABASE_URL")!;
-const SB_SERVICE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ALLOWED_ORIGINS = new Set([
+  "https://timbswap.xyz",
+  "https://www.timbswap.xyz",
+  "https://0xtimberzx.github.io",
+]);
 
-// Active is enum index 1 (Pending=0, Active=1, Conceded=2, Ineligible=3, …).
-const STATUS_ACTIVE = 1n;
+// Mirror of GameRegistry.TicketStatus — Active is index 1.
+const TICKET_ACTIVE = 1n;
 
 const REGISTRY_ABI = [
-  "function activeTicketOf(address) view returns (uint256)",
-  "function effectiveStatus(uint256) view returns (uint8)",
+  "function activeTicketOf(address wallet) external view returns (uint256)",
+  "function effectiveStatus(uint256 ticketId) external view returns (uint8)",
 ];
-// Soft-check: the yield vault's per-ticket weight — the wallet's stake in the
-// reserve that funds yield. weightOf is keyed by ticketId.
-const YIELD_ABI = ["function weightOf(uint256) view returns (uint256)"];
+const YIELD_ABI = [
+  "function weightOf(uint256 ticketId) external view returns (uint256)",
+];
 
-// M7: scope CORS to the site origin(s). FAUCET_ALLOWED_ORIGIN is a comma-
-// separated allowlist (e.g. "https://timbswap.xyz,https://www.timbswap.xyz");
-// the matching request origin is echoed back, so several legit origins can be
-// pinned at once. Defaults to "*" so a fresh deploy still works. This is a
-// per-WEBSITE control, never per-wallet/session — a browser holding many wallets
-// is unaffected. NOTE: CORS is browser-enforced only; it does not stop a scripted
-// (curl) caller — the daily circuit-breaker in faucet-worker.js bounds that abuse.
-const ALLOWED_ORIGINS = (Deno.env.get("FAUCET_ALLOWED_ORIGIN") || "*")
-  .split(",").map((s) => s.trim()).filter(Boolean);
+const WALLET_RE = /^0x[a-fA-F0-9]{40}$/;
 
-function corsFor(req: Request): Record<string, string> {
-  let allow = "*";
-  if (!(ALLOWED_ORIGINS.length === 1 && ALLOWED_ORIGINS[0] === "*")) {
-    // Pinned: echo the request origin only if it's on the allowlist; otherwise
-    // fall back to the first listed origin (so a non-match browser is blocked).
-    const reqOrigin = req.headers.get("origin") || "";
-    allow = ALLOWED_ORIGINS.includes(reqOrigin) ? reqOrigin : ALLOWED_ORIGINS[0];
-  }
+function cors(origin: string) {
+  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://timbswap.xyz";
   return {
-    "Access-Control-Allow-Origin": allow,
-    "Vary": "Origin",
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "content-type, x-proxy-secret, x-real-ip",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "content-type, authorization, apikey",
+    Vary: "Origin",
   };
+}
+function json(body: unknown, status: number, origin: string) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors(origin), "Content-Type": "application/json" },
+  });
+}
+
+// Cloudflare Turnstile server-side verification.
+async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
+  if (!TS_SECRET) return true; // not configured → skip (dev); set it in prod
+  try {
+    const form = new URLSearchParams();
+    form.set("secret", TS_SECRET);
+    form.set("response", token);
+    if (ip) form.set("remoteip", ip);
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+    const out = await r.json();
+    return out?.success === true;
+  } catch (_e) {
+    return false; // verification unreachable → fail closed
+  }
 }
 
 Deno.serve(async (req) => {
-  const cors = corsFor(req);
-  const json = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { ...cors, "content-type": "application/json" },
-    });
+  const origin = req.headers.get("Origin") || "";
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
+  if (req.method !== "POST")    return json({ ok: false, error: "POST only" }, 405, origin);
 
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method !== "POST")    return json({ error: "POST only" }, 405);
-
-  // ── 1. validate the address ────────────────────────────────────────────────
-  let address: string;
-  try {
-    const body = await req.json();
-    address = ethers.getAddress(String(body.address).trim());   // checksums or throws
-  } catch {
-    return json({ error: "Paste a valid wallet address." }, 400);
+  // If a proxy secret is configured, only the Worker (which carries it) is trusted.
+  if (PROXY_SECRET && req.headers.get("X-Proxy-Secret") !== PROXY_SECRET) {
+    return json({ ok: false, error: "forbidden" }, 401, origin);
+  }
+  if (!RPC_URL || !REGISTRY_ADDR) {
+    return json({ ok: false, error: "Faucet is not configured yet." }, 503, origin);
   }
 
-  // ── 2. on-chain eligibility: must hold a LIVE active ticket ─────────────────
-  //     Read the chain, never a mirror — the ticket is the Sybil gate.
+  let body: any;
+  try { body = await req.json(); } catch { return json({ ok: false, error: "bad request" }, 400, origin); }
+
+  // ── Address ──
+  const raw = String(body?.address ?? "").trim();
+  if (!WALLET_RE.test(raw)) {
+    return json({ ok: false, error: "Enter a valid wallet address." }, 422, origin);
+  }
+  let address: string;
+  try { address = ethers.getAddress(raw); } catch { return json({ ok: false, error: "Enter a valid wallet address." }, 422, origin); }
+
+  // ── Turnstile ──
+  const ip = req.headers.get("X-Real-IP") || req.headers.get("CF-Connecting-IP") || "";
+  const token = String(body?.cfTurnstileToken ?? body?.turnstileToken ?? "");
+  if (!(await verifyTurnstile(token, ip))) {
+    return json({ ok: false, error: "Human check failed — please retry the challenge." }, 403, origin);
+  }
+
+  // ── Eligibility: a live Active ticket on the target (testnet) chain ──
   let ticketId: bigint;
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  let weight = 0n;
   try {
-    const registry = new ethers.Contract(REGISTRY, REGISTRY_ABI, provider);
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const registry = new ethers.Contract(REGISTRY_ADDR, REGISTRY_ABI, provider);
     ticketId = await registry.activeTicketOf(address);
     if (ticketId === 0n) {
-      return json({ error: "No active ticket for this address. Enter a round first." }, 403);
+      return json({ ok: false, error: "No active ticket for this address. Enter a round first." }, 403, origin);
     }
-    const status: bigint = await registry.effectiveStatus(ticketId);
-    if (status !== STATUS_ACTIVE) {
-      return json({ error: "Your ticket isn't active — nothing to top up." }, 403);
+    const status: bigint = BigInt(await registry.effectiveStatus(ticketId));
+    if (status !== TICKET_ACTIVE) {
+      return json({ ok: false, error: "Your ticket isn't Active right now." }, 403, origin);
     }
-  } catch (e) {
-    return json({ error: "Couldn't reach the chain — try again in a moment." }, 502);
+    // Soft observability weight — never blocks a claim.
+    if (YIELD_ADDR) {
+      try {
+        const vault = new ethers.Contract(YIELD_ADDR, YIELD_ABI, provider);
+        weight = await vault.weightOf(ticketId);
+      } catch (_e) { weight = 0n; }
+    }
+  } catch (_e) {
+    return json({ ok: false, error: "Couldn't read the chain just now — try again shortly." }, 502, origin);
   }
 
-  // ── 2b. SOFT check (double measure): does the ticket hold weight in the yield
-  //     vault's reserve? Recorded for observability only — NEVER blocks. Any
-  //     failure here leaves it null and the claim proceeds on the ticket gate.
-  let reserveWeight: string | null = null;
-  try {
-    const yv = new ethers.Contract(YIELD_VAULT, YIELD_ABI, provider);
-    reserveWeight = (await yv.weightOf(ticketId)).toString();
-  } catch (_) { /* soft — ignore */ }
-
-  // ── 3. atomic 24h reserve (Postgres advisory-locked) ───────────────────────
+  // ── Reserve the 24h slot (advisory-locked, service_role) ──
   const sb = createClient(SB_URL, SB_SERVICE);
   const { data: claimId, error: rpcErr } = await sb.rpc("reserve_faucet_claim", {
-    p_address:  address.toLowerCase(),
+    p_address: address.toLowerCase(),
     p_ticket_id: ticketId.toString(),
-    p_reserve_weight: reserveWeight,
+    p_reserve_weight: weight.toString(),
   });
-
-  if (rpcErr) return json({ error: "Faucet is busy — try again shortly." }, 503);
-
-  if (claimId === null) {
-    // On cooldown — compute remaining for a friendly message.
-    const { data: last } = await sb
-      .from("faucet_claims")
-      .select("reserved_at")
-      .eq("address", address.toLowerCase())
-      .neq("status", "failed")
-      .order("reserved_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    let hours = 24;
-    if (last?.reserved_at) {
-      const next = new Date(last.reserved_at).getTime() + 24 * 3600 * 1000;
-      hours = Math.max(0, Math.ceil((next - Date.now()) / 3600_000));
-    }
-    return json({ error: `Already claimed. Come back in about ${hours}h.` }, 429);
+  if (rpcErr) {
+    return json({ ok: false, error: "Couldn't reserve a claim right now — try again." }, 500, origin);
+  }
+  if (claimId === null || claimId === undefined) {
+    return json({ ok: false, error: "Already claimed. Come back in about 24h." }, 429, origin);
   }
 
-  // ── 4. queued — the worker sends the drip + pot contribution ───────────────
-  return json({
-    status: "queued",
-    claimId,
-    message: "You're in. Gas is on the way — usually within a few seconds.",
-  }, 202);
+  // ── Mainnet-TIMB leg (Phase 2): enqueue, best-effort ──
+  if (AIRDROP_ON) {
+    try {
+      await sb.rpc("enqueue_airdrop", { p_address: address.toLowerCase(), p_round: AIRDROP_ROUND });
+    } catch (_e) { /* airdrop is a bonus leg — never fail the faucet claim */ }
+  }
+
+  return json({ ok: true, status: "queued", claimId }, 202, origin);
 });
