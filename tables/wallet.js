@@ -39,7 +39,7 @@ export async function acquireWallet({ silent = false } = {}) {
 async function restoreWallet() {
   const saved = _getSavedAddress();
   if (!saved) return null;
-  if (_idleExpired()) { _endSession(true); return null; }
+  if (_idleExpired()) { _endSession(); return null; }
   if (_idleFor() === 0) _touchActivity();
   if (_getSessionKind() === "email") {
     if (!window.PRIVY_APP_ID || !(await _loadEmailLogin())) { _clearSession(); return null; }
