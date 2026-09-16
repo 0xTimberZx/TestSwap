@@ -34,3 +34,6 @@ scratchpad/
 
 # ─── Scratch (was tracked once by accident; regenerable or dead) ──────────────
 tmp/
+
+# ─── Node (dev-only tooling for vendored bundles; see scripts/build-vendor.mjs) ─
+node_modules/
