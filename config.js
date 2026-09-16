@@ -19,7 +19,7 @@ window.TURNSTILE_SITE_KEY = "";
 // then behaves exactly as before (browser-extension wallets only). Use a
 // separate Privy app per environment (dev mirror vs live site); the app's
 // allowed origins must include this site's origin.
-window.PRIVY_APP_ID = ""; // set to the LIVE-site Privy app id to turn on "Continue with email" (see dev-docs/EMAIL_LOGIN.md)
+window.PRIVY_APP_ID = "cmu3ofl2r01h90clecz8wtrhc"; // "TimbSwapArb" live-site app (allowed origin https://timbswap.xyz); see dev-docs/EMAIL_LOGIN.md
 
 // Where this site is served from ("https://host/" or "https://host/sub/"),
 // derived from this script's own URL so lazily-loaded assets (the email login
