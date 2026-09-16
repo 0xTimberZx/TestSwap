@@ -818,7 +818,9 @@ catch (e1) {
   try { ({ ethers } = await import("https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm")); }
   catch (e2) { console.warn("[SwapTables] ethers unavailable — lobby-only mode", e2); }
 }
-import { acquireWallet, recordSession, registerCalls } from "./wallet.js";
+// Versioned import so a wallet.js change is picked up straight away (static
+// files are cached ~10 min by Pages + the CDN); ASSET_VER comes from config.js.
+const { acquireWallet, recordSession, registerCalls } = await import("./wallet.js?v=" + (window.ASSET_VER || "1"));
 
 const ADDR = {
   board:  "0xB2D10cA505909b909835f4b5684B205b157b5Bf2",
@@ -2859,9 +2861,31 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
 }
 
 
-// Silent restore from the saved per-tab session (extension or email wallet):
-// no popups; on success it runs the same connect path as the button.
-acquireWallet({ silent: true }).then((w) => { if (w) { pendingWallet = w; $("connect").onclick(); } }).catch(() => {});
+// Connect is single-flight, and the silent restore is folded into it: a manual
+// tap while the restore is still resolving WAITS for it and uses its wallet
+// (no sign-in sheet), and the restore never starts a second connect once a
+// tap has consumed its result. Running the handler twice used to leave the
+// page connected AND showing the sign-in sheet.
+{
+  const _connectImpl = $("connect").onclick;
+  let _connecting = false, _restoreUsed = false;
+  const hasSaved = (typeof _getSavedAddress === "function") && !!_getSavedAddress();
+  if (hasSaved) { $("connect").disabled = true; $("connect").textContent = "Reconnecting…"; }
+  const _restore = acquireWallet({ silent: true }).catch(() => null);
+  $("connect").onclick = async () => {
+    if (_connecting) return;
+    _connecting = true;
+    try {
+      const w = await _restore;                       // resolved → instant
+      if (w && !_restoreUsed) { _restoreUsed = true; pendingWallet = w; }
+      await _connectImpl();
+    } finally { _connecting = false; }
+  };
+  _restore.then((w) => {
+    if (w && !_restoreUsed) return $("connect").onclick();
+    if (!w && hasSaved && !_connecting) { $("connect").disabled = false; $("connect").textContent = "Connect wallet"; }
+  });
+}
 </script>
 </body>
 </html>
