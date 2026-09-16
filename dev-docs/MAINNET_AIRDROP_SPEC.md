@@ -6,8 +6,14 @@ bug-bounty window, **before any LP exists** — so the TIMB isn't tradeable thro
 TimbSwap until mainnet `startGame`; this is pre-seeding a holder base, not a
 market.
 
-Status: **design only.** Companion to `FAUCET_SPEC.md` (the Sepolia leg, already
-built) and `CAPPED_BETA_GUARDRAILS.md` (where the float + cap belong).
+Status: **built, deployed 2026-09-15, on hold — and being retired before
+mainnet launch (§15).** The distributor
+`0x955e5800245164EC4DCd1da9062115bBdA132c83` is paused, `AIRDROP_ENABLED` is
+off, and the float goes back to the Safe at launch. The mainnet `GasFaucet`'s
+TIMBS leg (`GAS_FAUCET_MAINNET.md`, `MAINNET_FAUCET_PROPOSALS.md`) takes over as
+the only TIMB release, gated on a *mainnet* ticket instead of a free testnet
+one. Companion to `FAUCET_SPEC.md` (the Sepolia leg) and
+`CAPPED_BETA_GUARDRAILS.md` (where the float + cap live until retirement).
 
 > **The one-line shape:** Turnstile-gated claim → eligibility + reserve in
 > Supabase (unchanged) → an **airdrop outbox row** (unique per claim) → a
@@ -298,3 +304,32 @@ service_role internally.
 6. Add caps to `CAPPED_BETA_GUARDRAILS.md`; add scope line to `SECURITY.md` (§10).
 7. Smoke test: claim (TIMB lands), re-claim (deduped/capped), bad Turnstile
    (rejected), cap hit (Sepolia still works, TIMB declines cleanly).
+
+## 15. Retirement (decided 2026-09-16)
+
+The route is **retired before mainnet launch**, not re-enabled at the
+announcement. Reason: §2's own analysis — the gate is a *free* testnet action,
+so every defence here is a brake, not a wall. On mainnet the same "1 TIMB per
+eligible claim" comes from the `GasFaucet` TIMBS leg, gated on a **mainnet**
+`Active` ticket (real escrow + real gas), with the treasury's rolling ETH cap
+as the budget. One release path, gated on the costly action, is strictly better
+than two.
+
+State at retirement (all already true except the float): distributor `paused =
+true`, `AIRDROP_ENABLED=false`, `config.js` `AIRDROP_ENABLED=false`, 2 TIMB
+distributed in total (the smoke test), 998 TIMB float on the contract.
+
+Steps, in order (payloads in `MAINNET_FAUCET_PROPOSALS.md` §5):
+
+1. Unschedule pg_cron `airdrop-dispatch`; leave the secret off.
+2. Safe → `recover(Safe, <balanceOf>)` on the distributor; optionally
+   `setDispatcher(0x0)`, then discard the `0x77F4…` hot key.
+3. Remove `enqueue_airdrop` from `faucet-claim`; the outbox table and RPCs can
+   stay (RLS on, service_role only) or be dropped in a later migration.
+4. Mark the ledger row RETIRED (`MAINNET_ADDRESSES.md`), drop the distributor
+   lever rows from `CAPPED_BETA_GUARDRAILS.md` once the float reads 0, and
+   narrow the `SECURITY.md` scope line to "paused, unfunded".
+
+The contract itself stays on-chain (immutable, unfunded, paused, no dispatcher)
+and needs no further attention. The open decisions in §13 are closed by this
+section.

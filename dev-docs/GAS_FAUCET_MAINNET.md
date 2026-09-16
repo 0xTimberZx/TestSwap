@@ -7,8 +7,17 @@ a participation-gated "fair release". This doc covers the on-chain side
 (`contracts/GasFaucet.sol`); eligibility, cooldown, and the off-chain gatekeeper
 are unchanged from `FAUCET_SPEC.md`.
 
-Status: **contract drafted (design stub, UNAUDITED)**. Not wired on testnet —
-testnet keeps the simple hot-wallet worker. Audit before mainnet.
+Status: **contract deployed on Sepolia (TIMBS-only, UNAUDITED)**; mainnet
+deploy **prepared, not executed** — env template in `env.mainnet.example`,
+sizing sheet + the three treasury payloads + kill switches in
+`MAINNET_FAUCET_PROPOSALS.md`, lever rows in `CAPPED_BETA_GUARDRAILS.md` §1.
+On Sepolia the ETH legs stay off because the deployed testnet treasury predates
+the operator role; the mainnet treasury has it. Audit before mainnet.
+
+Scope note: the faucet is **launch facilitation, not core protocol scope**. It
+replaces the retired testnet→mainnet airdrop route as the only TIMB release
+(`MAINNET_AIRDROP_SPEC.md` §15) and may or may not be kept for a later era of
+TIMBS; every lever is reversible in one tx.
 
 ## Decisions (locked)
 
@@ -75,13 +84,18 @@ with the timelock owner on purpose (`GOVERNANCE_HARDENING.md`). So:
    sends (worker rewrite — see below); keep the edge-function gatekeeper +
    Postgres cooldown as the first line, with the on-chain checks as backstop.
 
+Steps 2 and 4 are treasury-owner calls — deployer txs before the governance
+handoff, a Safe→timelock batch after it. Both forms, with calldata, are in
+`MAINNET_FAUCET_PROPOSALS.md` §2.
+
 ## Still to do (not in this drop)
 
 - **Audit** — custodies treasury ETH access + a TIMBS budget.
-- **Foundry tests** — `tests/GasFaucet.t.sol` (happy dual-dispense, each pause,
-  each cap, cooldown, eligibility, recovery).
-- **Worker rewrite** — `faucet-worker.js` to call `dispense` as dispatcher (one
-  tx per claim) instead of drip + `addToPot` as two raw sends.
-- **Deploy script** — `scripts/DeployGasFaucet.s.sol`.
+- ~~Foundry tests~~ — `tests/GasFaucet.t.sol` exists.
+- ~~Worker rewrite~~ — `scripts/faucet-worker.js` calls `dispense()` as the
+  dispatcher, one tx per claim.
+- ~~Deploy script~~ — `scripts/DeployFaucet.s.sol`.
+- **Mainnet execution** — deploy, hand the faucet to the Safe, send the three
+  treasury calls, verify, smoke-test (`MAINNET_FAUCET_PROPOSALS.md` §2.4/§3).
 - **Cold-start** is still out of scope (a zero-ETH wallet can't mint the first
   ticket) — same caveat as `FAUCET_SPEC.md` §7.
