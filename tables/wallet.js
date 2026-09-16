@@ -75,9 +75,10 @@ export async function endSession() {
 
 // ── Wallet chip actions ───────────────────────────────────────────────────────
 // The tables pages have no wallet dropdown. Tapping the connected chip (#acct)
-// reveals two icon buttons beside it for 10 seconds: copy the address, and
-// disconnect the session (reloads to the gated view). Tapping again restarts
-// the 10 s; tapping the chip while they are shown hides them.
+// reveals icon buttons beside it for 10 seconds: copy the address, disconnect
+// the session (reloads to the gated view) and, for email sessions, Wallet
+// security (the authenticator-app sheet). Tapping again restarts the 10 s;
+// tapping the chip while they are shown hides them.
 const CHIP_HIDE_MS = 10000;
 const CHIP_CSS = `
 .wchip-actions{display:inline-flex;gap:8px;margin-left:10px;vertical-align:middle;align-items:center}
@@ -92,6 +93,7 @@ const CHIP_CSS = `
 `;
 const ICON_COPY = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
 const ICON_OFF  = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg>';
+const ICON_LOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>';
 
 let _chipTimer = null;
 function mountChipActions(chip, address) {
@@ -120,7 +122,19 @@ function mountChipActions(chip, address) {
       await endSession();
       window.location.reload();
     });
-    box.append(copy, off);
+    box.append(copy);
+    if (_getSessionKind() === "email" && window.PRIVY_APP_ID) {
+      const sec = document.createElement("button");
+      sec.type = "button"; sec.className = "wchip-btn"; sec.title = "Wallet security"; sec.setAttribute("aria-label", "Wallet security"); sec.innerHTML = ICON_LOCK;
+      sec.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        box.classList.add("hidden"); clearTimeout(_chipTimer);
+        if (!(await _loadEmailLogin())) return;
+        try { await window.TimbEmailWallet.security(); } catch (_e) {}
+      });
+      box.append(sec);
+    }
+    box.append(off);
     chip.insertAdjacentElement("afterend", box);
     chip.style.cursor = "pointer";
     chip.setAttribute("title", "Tap for copy / disconnect");
