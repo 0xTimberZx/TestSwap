@@ -73,7 +73,7 @@
 
   /* Tall enough to hold a whole close-out sequence — arm, six locks, retire —
      without scrolling, since that is exactly when you need to read it back. */
-  #log{background:#0a110e;border:1px solid var(--line);border-radius:8px;padding:10px;
+  #log{overflow-wrap:anywhere;background:#0a110e;border:1px solid var(--line);border-radius:8px;padding:10px;
        height:auto;max-height:min(60vh,620px);min-height:64px;overflow:auto;font-size:.72rem;white-space:pre-wrap;word-break:break-word;
        resize:vertical}
   #log:empty{min-height:0}
@@ -685,8 +685,17 @@ function explain(e){
     } catch { /* fall through */ }
     return `reverted, undecodable — data ${data.slice(0,10)}`;
   }
-  return e?.info?.error?.message || e?.shortMessage || e?.message || String(e);
+  if(/reverted for an unknown reason/i.test(String(e?.shortMessage||e?.message||""))) return "the contract rejected it — that action may not be open right now";
+  return tidyErr(e?.info?.error?.message || e?.shortMessage || e?.message || String(e));
 }
+function tidyErr(m){
+  // one line, no calldata dumps, capped — the embedded wallet's provider can
+  // throw multi-line messages with the full hex payload embedded
+  const first = String(m||"").split("\n").map(x=>x.trim()).filter(Boolean)[0] || "unknown error";
+  const noHex = first.replace(/0x[0-9a-fA-F]{20,}/g, h=>h.slice(0,10)+"…");
+  return noHex.length>200 ? noHex.slice(0,200)+"…" : noHex;
+}
+
 
 /// Walk an arbitrary wallet/RPC error object looking for revert return data:
 /// a 0x-prefixed hex blob at least a 4-byte selector long.

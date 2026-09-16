@@ -203,7 +203,7 @@
   .rail{margin:14px 0 0;min-height:64px;border:1px solid var(--gold-dim);border-radius:10px;
     background:linear-gradient(180deg,#0e1a13,#0a130d);display:flex;align-items:center;gap:16px;padding:12px 16px}
   .rail .chiplbl{flex:none;font-family:Georgia,serif;font-weight:700;color:var(--ink);background:var(--gold);border-radius:6px;padding:6px 11px;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
-  .rail .txt{font-size:14px;line-height:1.5;color:#dfe7df}
+  .rail .txt{font-size:14px;line-height:1.5;color:#dfe7df;overflow-wrap:anywhere;min-width:0}
   .rail .txt b{color:var(--gold);font-family:Georgia,serif}
   .rail .win{color:var(--ok);font-weight:700}.rail .lose{color:var(--err)}
   .approve{display:none;align-items:center;flex-wrap:wrap;gap:12px 16px;margin:12px 0 0;
@@ -797,8 +797,17 @@ function explain(e){
   if(data){ for(const iface of [board?.interface, ledger?.interface, timbs?.interface, crank?.interface]){
     let p=null; try{ p=iface?.parseError(data);}catch{} if(p) return named(p);
   } return "reverted ("+data.slice(0,10)+"…)"; }
-  return e?.info?.error?.message || e?.shortMessage || e?.message || String(e);
+  if(/reverted for an unknown reason/i.test(String(e?.shortMessage||e?.message||""))) return "the contract rejected it — that action may not be open right now";
+  return tidyErr(e?.info?.error?.message || e?.shortMessage || e?.message || String(e));
 }
+function tidyErr(m){
+  // one line, no calldata dumps, capped — the embedded wallet's provider can
+  // throw multi-line messages with the full hex payload embedded
+  const first = String(m||"").split("\n").map(x=>x.trim()).filter(Boolean)[0] || "unknown error";
+  const noHex = first.replace(/0x[0-9a-fA-F]{20,}/g, h=>h.slice(0,10)+"…");
+  return noHex.length>200 ? noHex.slice(0,200)+"…" : noHex;
+}
+
 function findData(e,d=0){
   if(d>6||e==null) return null;
   if(typeof e==="string") return /^0x[0-9a-fA-F]{8,}$/.test(e)&&e.length%2===0?e:null;
