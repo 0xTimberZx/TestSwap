@@ -576,7 +576,11 @@ const CRANK_ABI = [
 ];
 // TimbSwap Compete — the ticket gate. The felt only seats wallets holding an
 // active Compete ticket, and that ticket IS the player's letters here.
-const GAME = "0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530";
+// The compete gate reads the LIVE GameRegistry. Taken from config.js (loaded
+// before this module) so the tables can never drift from the rest of the site
+// again; the literal is the gen-3 registry as a fallback. Prev (gen-2, retired):
+// 0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530.
+const GAME = (typeof ADDRESSES !== "undefined" && ADDRESSES.GameRegistry) || "0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65";
 const GAME_ABI = [
   "function activeTicketOf(address owner) view returns (uint256)",
   "function getTicketsOf(address owner) view returns (tuple(uint256 id,address owner,bytes6 string6,uint256 playRound,uint256 lastEligibleRound,uint256 escrowAmount,address escrowToken,uint8 status,uint256 supersedes,uint256 supersededBy,uint256 createdAt,uint256 forfeitRound,uint256 generation)[] list, uint8[] displayStatuses)",
