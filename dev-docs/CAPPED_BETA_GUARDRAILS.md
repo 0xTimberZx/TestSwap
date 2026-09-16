@@ -69,6 +69,46 @@ item maps to a real contract lever or a concrete op. Companion to
         · smoke test: 1 TIMB distributed to the deployer, `isClaimed(1)=true`,
         `remaining(1)=9,999`, second enqueue deduped · rows in
         `MAINNET_ADDRESSES.md` + `SECURITY.md` scope.
+      - **Retiring before mainnet launch** (decided 2026-09-16): stays paused,
+        float recovered to the Safe, plumbing unscheduled — sequence in
+        `MAINNET_FAUCET_PROPOSALS.md` §5. The mainnet faucet's TIMBS leg (below)
+        becomes the only TIMB release.
+- [ ] **Mainnet gas faucet** *(launch facilitation, not core scope — see
+      `GAS_FAUCET_MAINNET.md`, sizing + payloads in `MAINNET_FAUCET_PROPOSALS.md`)*.
+      An atomic `GasFaucet` on Arb One that, per eligible claim (a live
+      **mainnet** `Active` ticket, 24 h cooldown, both enforced on-chain), pulls
+      ETH from the treasury as its rate-limited operator and hands out gas +
+      pot + 1 TIMB. Two ETH ceilings apply — the treasury's rolling cap and the
+      faucet's cumulative cap — and a leaked dispatcher key can only spend into
+      ticket-holding wallets, once a day each. Set every lever before the first
+      `dispense()` and verify on-chain:
+
+      | Lever | Contract | Proposed (confirm at deploy) | Bound it gives |
+      |---|---|---|---|
+      | `dripEth` | faucet owner `setParams` | **0.0002 ETH** (2e14) | gas to the claimant per claim; with `potEth` must stay `< GameRegistry.entryCostETH()` (floor 0.001 ETH) so a claim is never worth a ticket |
+      | `potEth` | faucet owner `setParams` | **0.0001 ETH** (1e14) | ETH to the live round pot per claim (~10 % of the floor entry price) |
+      | `timbsPerClaim` | faucet owner `setParams` | **1 TIMB** (1e18) | the fair-release unit — dispatcher chooses *who*, never *how much* |
+      | `cooldown` | faucet owner `setParams` | **86400** | one claim per wallet per day, on-chain (the edge fn mirrors it) |
+      | `operatorEthCap` / `operatorPeriod` | **treasury** owner `setOperatorEthCap` | **0.05 ETH / 24 h** (≈ 100 tickets × 0.0003 × 1.5) | the daily brake: past it `dispense()` reverts, so Sybils dilute each other, never the treasury. `0` = operator off |
+      | `ethCap` | faucet owner `setEthCap` | **1.5 ETH** (~1 month) | lifetime ETH ceiling; raising it is the "approve more" tx |
+      | `timbsCap` | faucet owner `setTimbsCap` | **10,000 TIMB** | lifetime TIMBS ceiling, independent of balance on hand |
+      | TIMBS float on the faucet | **treasury** owner `withdrawToken(TIMBS, faucet, …)` | **3,000 TIMB** per pre-fund (~1 month), tranches | max TIMBS loss from a leaked key or bug = float, never the cap; `recoverTimbs` returns the rest |
+      | treasury ETH on hand | ops | **≥ 1.5 ETH** before enabling the operator | the ETH legs revert on `InsufficientETH` otherwise — keep 30 × daily cap on hand |
+
+      Rules that make those numbers hold:
+      - **Count `operatorEthCap × 30` toward the master ceiling.** Unlike the
+        airdrop's illiquid TIMB, this is treasury ETH leaving daily — hard
+        assets, real VaR.
+      - **Re-read `entryCostETH()` before any `setParams` that raises
+        `dripEth + potEth`.** The price floors at 0.001 ETH and climbs with
+        escrow; the invariant must hold at the *current* price.
+      - **One key per leg.** Fresh mainnet dispatcher EOA (gas only); never the
+        Sepolia faucet key or the airdrop key.
+      - [ ] **Deployed (Arbitrum One):** *pending* — fill in address, deploy tx,
+        `owner()` = Safe, `dispatcher()`, `guardian()`, on-chain lever values,
+        treasury `operator()` / `operatorEthCap()`, smoke-test result, and the
+        `MAINNET_ADDRESSES.md` row, in the same shape as the distributor entry
+        above.
 
 ## 2. Emergency controls — wire and test BEFORE opening
 
@@ -89,6 +129,15 @@ item maps to a real contract lever or a concrete op. Companion to
       revert and leaves rows `pending` (no half-sends). Then `recover(to,
       amount)` (owner) pulls the float back to the Safe. Rehearse both on
       Sepolia before funding on Arb One.
+- [ ] **Mainnet gas faucet stop** *(once live)*: three independent brakes, all
+      one tx — `GasFaucet.setEthPaused(true)` / `setTimbsPaused(true)`
+      (**guardian or owner**, instant; pause one leg and the other keeps
+      running), and `TimbTreasury.setOperatorEthCap(0, 86400)` (treasury
+      owner) which cuts the faucet off from treasury ETH regardless of the
+      faucet's own state. Then `recoverTimbs(Safe, balance)` (faucet owner).
+      Payloads in `MAINNET_FAUCET_PROPOSALS.md` §4. Rehearse on Sepolia — the
+      pause switches and `recoverTimbs` exist there; the treasury cap does not
+      (old treasury), so rehearse that one on a fork.
 - [ ] **Dry-run on testnet:** pause → confirm entries/swaps halt → unpause.
 
 ## 3. User exit must always work — verify each (the "no funds trapped" property)
@@ -132,6 +181,16 @@ is `onlyOwner`). Decide this before opening:
       pinned nonce is confirmed absent on-chain); `totalDistributed` vs
       `totalCap` (approaching = the leg is about to close; a *jump* between
       cycles larger than one batch = investigate the dispatcher key).
+- [ ] **Mainnet gas faucet** *(once live)*: treasury `operatorSpentInWindow`
+      vs `operatorEthCap` (hitting the cap daily = raise it or accept the
+      queue; hitting it *early* in the window = investigate — more claims than
+      tickets); faucet `ethDistributed` / `timbsDistributed` vs their caps;
+      TIMBS `balanceOf(faucet)` vs the next month's burn (top up in tranches);
+      treasury ETH balance vs 30 × daily cap; `faucet_claims` rows failing with
+      `OperatorCapExceeded` / `InsufficientTimbsBalance` (the worker logs the
+      revert reason). Any `Dispensed` event whose claimant has no `Active`
+      ticket is impossible by construction — if you see one, the registry
+      binding is wrong; pause both legs.
 - [ ] **On-call:** who responds, how fast, with which keys — written down.
 
 ## 6. Whitehat channel — turn "real money live" into a discovery channel
