@@ -307,8 +307,10 @@
   </div>
 </div>
 
+<script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
 <script type="module">
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm";
+import { acquireWallet, recordSession, registerCalls } from "./wallet.js";
 
 const ADDR = {
   board:  "0xB2D10cA505909b909835f4b5684B205b157b5Bf2",
@@ -622,7 +624,7 @@ async function send(label, contract, method, ...args){
   try{
     const data = contract.interface.encodeFunctionData(method, args);
     const to   = await contract.getAddress();
-    const hash = await window.ethereum.request({
+    const hash = await (wallet || window.ethereum).request({
       method: "eth_sendTransaction",
       params: [{ from: me, to, data }],
     });
@@ -704,12 +706,18 @@ function findRevertData(e, depth = 0){
 }
 
 // ── connect ────────────────────────────────────────────
+let wallet = null;        // the EIP-1193 provider in use (extension or email wallet)
+let pendingWallet = null; // set by the silent restore below, consumed by the handler
 $("connect").onclick = async () => {
-  if (!window.ethereum) return log("No wallet found. Install/enable a browser wallet.", "l-err");
-  provider = new ethers.BrowserProvider(window.ethereum);
+  let w = pendingWallet; pendingWallet = null;
+  if (!w) w = await acquireWallet();       // chooser → extension or "Continue with email"
+  if (!w) return log("No wallet connected. Use a browser wallet or sign in with email.", "l-err");
+  wallet = w.eip;
+  provider = new ethers.BrowserProvider(wallet);
   await provider.send("eth_requestAccounts", []);
   signer = await provider.getSigner();
   me = await signer.getAddress();
+  recordSession(me, w.method);
   const net = await provider.getNetwork();
   $("acct").textContent = me.slice(0,6)+"…"+me.slice(-4);
   $("acct").className = "pill ok";
@@ -721,6 +729,9 @@ $("connect").onclick = async () => {
   GEN = await detectGen(signer);
   if(ADDR.jackpot) jack = new ethers.Contract(ADDR.jackpot, JACKPOT_ABI, signer);
   board  = new ethers.Contract(ADDR.board,  boardAbiFor(GEN),  signer);
+  // Labels + names for the email wallet's confirm sheet (no-op for extensions).
+  registerCalls([board, jack].filter(Boolean),
+    { [ADDR.board]: "SwapTables board", [ADDR.ledger]: "PoolLedger", ...(ADDR.jackpot ? { [ADDR.jackpot]: "DDJackpot" } : {}) });
   dialEntry = Number(await board.entryWindow());
   if(GEN>=8){
     // The VRF board has no secrets and no fallback path, so leaving either
@@ -1358,6 +1369,10 @@ async function apTickVRF(t, now, mask){
 
 setInterval(apTick, 4000);
 
+
+// Silent restore from the saved per-tab session (extension or email wallet):
+// no popups; on success it runs the same connect path as the button.
+acquireWallet({ silent: true }).then((w) => { if (w) { pendingWallet = w; $("connect").onclick(); } }).catch(() => {});
 </script>
 </body>
 </html>

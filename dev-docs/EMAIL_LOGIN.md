@@ -157,7 +157,16 @@ bridge uses, so a rename upstream fails the build instead of a user's browser.
 
 ## Not in this drop
 
-- The three `tables/*` pages (SwapTables) use their own provider code with
-  direct `window.ethereum` calls and ethers v6 — same treatment, separate PR.
+- ~~The three `tables/*` pages~~ — done: `tables/wallet.js` (ES module) asks
+  config.js for the wallet (`acquireWallet()` → chooser / email sheet /
+  extension; `{silent:true}` → per-tab session restore with the idle check)
+  and hands back an EIP-1193 provider that `new ethers.BrowserProvider(eip)`
+  (v6) wraps unchanged; `recordSession()` starts the idle clock;
+  `registerCalls()` teaches the confirm sheet the board / crank / game /
+  jackpot function names ("Lock segment", "Load tokens", …) and contract
+  names via `TimbEmailWallet.registerCalls` / `registerContracts`. The pages
+  load `config.js` (classic) before their module script; ethers v5 is not
+  loaded there, so the sheet's parameter decoding is off on those pages
+  (labels, fee and advanced panel still work). `games.html` is read-only.
 - Gas sponsorship / smart accounts; key export UI; MFA / recovery password UI.
 - Gas sponsorship phase two; the `tables/*` follow-up PR.

@@ -810,6 +810,7 @@
   </p>
 </div>
 
+<script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
 <script type="module">
 let ethers;
 try { ({ ethers } = await import("./vendor/ethers-6.13.4.min.js")); }
@@ -817,6 +818,7 @@ catch (e1) {
   try { ({ ethers } = await import("https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm")); }
   catch (e2) { console.warn("[SwapTables] ethers unavailable — lobby-only mode", e2); }
 }
+import { acquireWallet, recordSession, registerCalls } from "./wallet.js";
 
 const ADDR = {
   board:  "0xB2D10cA505909b909835f4b5684B205b157b5Bf2",
@@ -1024,7 +1026,7 @@ async function send(label, contract, method, ...args){
   try{
     const data = contract.interface.encodeFunctionData(method, args);
     const to = await contract.getAddress();
-    const hash = await window.ethereum.request({method:"eth_sendTransaction",params:[{from:me,to,data}]});
+    const hash = await (wallet || window.ethereum).request({method:"eth_sendTransaction",params:[{from:me,to,data}]});
     rail("<b>"+label+"</b> sent raw ("+String(hash).slice(0,14)+"…) — waiting…");
     const rec = await provider.waitForTransaction(hash);
     if(rec && Number(rec.status)===0){ try{ window.DebugHub && DebugHub.logError(label, "reverted on chain"); }catch(_){}
@@ -1061,19 +1063,24 @@ function findData(e,d=0){
 }
 
 // ── connect ────────────────────────────────────────────
+let wallet = null;     // the EIP-1193 provider in use (extension or email wallet)
+let pendingWallet = null; // set by the silent restore below, consumed by the handler
 $("connect").onclick = async () => {
-  if(!window.ethereum){
-    $("connect").textContent="No wallet found"; setTimeout(()=>$("connect").textContent="Connect wallet",2200);
-    return rail("No wallet found — open this page in a wallet browser.");
-  }
   $("connect").disabled=true; $("connect").textContent="Connecting…";
   let net;
   try{
-    provider = new ethers.BrowserProvider(window.ethereum);
+    let w = pendingWallet; pendingWallet = null;
+    if(!w) w = await acquireWallet();     // chooser → extension or "Continue with email"
+    if(!w){ $("connect").disabled=false; $("connect").textContent="Connect wallet";
+      if(!window.ethereum && !window.PRIVY_APP_ID) rail("No wallet found — open this page in a wallet browser, or sign in with email.");
+      return; }
+    wallet = w.eip;
+    provider = new ethers.BrowserProvider(wallet);
     await provider.send("eth_requestAccounts", []);
     signer = await provider.getSigner();
     me = await signer.getAddress();
     net = await provider.getNetwork();
+    recordSession(me, w.method);
   }catch(e){
     $("connect").disabled=false; $("connect").textContent="Connect wallet";
     return rail(explain(e));
@@ -1092,8 +1099,8 @@ $("connect").onclick = async () => {
   $("acct").title = me+" · Arbitrum Sepolia";
   document.body.classList.remove("pre");
   try{
-    window.ethereum.on?.("accountsChanged", ()=>location.reload());
-    window.ethereum.on?.("chainChanged",  ()=>location.reload());
+    wallet?.on?.("accountsChanged", ()=>location.reload());
+    wallet?.on?.("chainChanged",  ()=>location.reload());
   }catch{}
   GEN = await detectGen(signer);
   board  = new ethers.Contract(ADDR.board, boardAbiFor(GEN), signer);
@@ -1102,6 +1109,10 @@ $("connect").onclick = async () => {
               ERR_HINT.ExceedsCredit = "that is more than your withdrawable credit"; }
   crank  = new ethers.Contract(ADDR.crank, CRANK_ABI, signer);
   game   = new ethers.Contract(GAME, GAME_ABI, signer);
+  // Labels + names for the email wallet's confirm sheet (no-op for extensions).
+  registerCalls([board, crank, game, jack].filter(Boolean),
+    { [ADDR.board]: "SwapTables board", [ADDR.crank]: "Crank", [GAME]: "GameRegistry",
+      [ADDR.ledger]: "PoolLedger", ...(ADDR.jackpot ? { [ADDR.jackpot]: "DDJackpot" } : {}) });
   await checkCompete();
   ledger = new ethers.Contract(ADDR.ledger, LEDGER_ABI, signer);
   timbs  = new ethers.Contract(ADDR.timbs, ERC20_ABI, signer);
@@ -2834,6 +2845,10 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
   }
 }
 
+
+// Silent restore from the saved per-tab session (extension or email wallet):
+// no popups; on success it runs the same connect path as the button.
+acquireWallet({ silent: true }).then((w) => { if (w) { pendingWallet = w; $("connect").onclick(); } }).catch(() => {});
 </script>
 </body>
 </html>
