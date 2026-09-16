@@ -4,12 +4,11 @@
 **Token:** TIMBS  
 **Network:** Arbitrum Sepolia (Chain ID: 421614)  
 **Repo:** github.com/0xTimberZx/TimbSwap  
-**Live:** 0xtimberzx.github.io/TimbSwap/  
-**DebugHub:** 0xtimberzx.github.io/MyDapp/debughub/  
+**Live:** timbswap.xyz (served from this repo)  
 **Pragma:** `pragma solidity 0.8.24` — exact, never `^`  
 **Compiler:** viaIR enabled, optimizer 200 runs, EVM cancun  
 **Verification:** Sourcify preferred  
-**Last updated:** August 2026
+**Last updated:** September 2026 — see `CHANGELOG.md`
 
 ---
 
@@ -22,9 +21,11 @@
 | TimbSwapFactory | 0xCCd6d3f0A86042d2B7056eDd381d367126628AF5 | Sourcify ✅ |
 | TimbSwapRouter v8 | 0x40C7Caf90817C9891D278Ec1400B9deb180911f1 | Sourcify ✅ |
 | EligibleTokenRegistry | 0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04 | Sourcify ✅ |
-| GameRegistry (v5, dynamic pricing) | 0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530 | Sourcify ✅ — **the live registry**, confirmed on-chain (`TimbPrize.gameRegistry()` → `0xBAb1…`); dynamic per-round entry pricing (ETH floats off escrow, TIMBS steps with entries) |
-| TimbPrize (generations) | 0x35976f4D2260127848a6274D2eC89ee054412432 | Sourcify ✅ (startGame bumps the registry generation) |
-| TimbYieldVault | 0x43D833e828e2AF951527C2b573Eb70c358FfEB0B | Sourcify ✅ |
+| GameRegistry (gen-3) | 0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65 | **The live registry** (`TimbPrize.gameRegistry()` → `0x11C24…`). Permissionless `activateRoundEntries` so the keeper activates rounds 2+; dynamic per-round entry pricing; vault calls try/catch-fenced |
+| TimbPrize (gen-3) | 0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF | Keeper-driven activation, bound to the gen-3 registry; `startGame` bumped the registry generation |
+| Prize VRFEntropy | 0xa2AC62BF0FdD1D1ED148ea1c0555eEcD8829A393 | Chainlink VRF v2.5 consumer for the prize draws (sub `50316…6967`) |
+| GasFaucet | 0x0a59b7d61a4db317fad8697c3e3e1e6df4c7a04b | Active-ticket faucet; TIMBS-only on testnet (the Sepolia treasury predates the operator role its ETH legs need). Dispatcher = keeper EOA |
+| TimbYieldVault | 0x43D833e828e2AF951527C2b573Eb70c358FfEB0B | Sourcify ✅ — `gameRegistry` = gen-3 registry (rebound 2026-09-15, see CHANGELOG) |
 | TimbStaking | 0xe776c7b700B190ED8248741F9b518B08d8733C8F | Sourcify ✅ |
 | TimbFarm | 0xE319E2206F71A5cD8dd2c411C6F29712935f9011 | Sourcify ✅ |
 | TimbLockVault | 0x0157086E7670D1eFb15DC6b5158eE78279927a41 | Sourcify ✅ |
@@ -133,7 +134,11 @@ guardian can halt strikes instantly. Reasoning and numbers in `dev-docs/AUDIT_SE
 | 0xc3fB39E0da3312c7f95bD7aD511ac76C4B86eE40 | TimbPrize v3.2 — retired; superseded by v4 (jittered locks, 2-round prize claim). Old rounds readable here |
 | 0xD6c9001c6Bbb55761f7476009AaF5F71C21Fe0b5 | GameRegistry v5 — retired; superseded by the generations rewrite. Old game history readable here |
 | 0xcDd1633F9FBD4dD189cF69FF82a005B4fcBe09eB | GameRegistry — retired; last non-generation registry, superseded by the generations rewrite. Un-terminated tickets here refund on their own round windows |
-| 0xfca8C2A107298273508BE8C5f469344b0Fc8B5B4 | GameRegistry "generations rewrite" — documented here as current but **NOT the live registry**: the deployed TimbPrize (`0x35976f4D…`) points at `0xBAb1…` instead (verified on-chain). Treat as unadopted; the live registry is the v5 row above. |
+| 0xfca8C2A107298273508BE8C5f469344b0Fc8B5B4 | GameRegistry "generations rewrite" — never adopted (the prize of the day pointed at `0xBAb1…`) |
+| 0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530 | GameRegistry gen-2 (v5, dynamic pricing) — retired 2026-09 by the gen-3 migration: its `activateRoundEntries` was `onlyTimbPrize`, which the keeper-driven prize never calls, so tickets stuck Pending past round 1. Gen-2 tickets hold their principal here — **reclaim on the compete page** |
+| 0x5AEDDf3f2132266929C9DB4783399d8be24121df | TimbPrize gen-2 (keeper-driven) — retired 2026-09 with the registry above |
+| 0xB3B40bFACf4dc881666a615593134CAc7DF2389a | TimbPrize pre-gen-2 — retired |
+| 0x35976f4D2260127848a6274D2eC89ee054412432 | TimbPrize (first "generations" prize) — retired; old rounds readable here |
 | 0xBBcb21Ef7DBEef21d8a0DE5972E61fd0369Ed3c0 | TimbPrize v6 — retired; superseded by v7 (meter resumes from jittered winning char) |
 | 0x52dF701BD15B63Ece56141c22392a5435B608B72 | TimbPrize v7 — retired; superseded by the generations-compatible prize. Old rounds readable here |
 | 0x619374B3BfB8E0B23406033e56cF2fCcb36FE57F | TimbYieldVault — retired; superseded by 0x43D833… (fresh weight on the registry cutover) |
@@ -151,8 +156,8 @@ guardian can halt strikes instantly. Reasoning and numbers in `dev-docs/AUDIT_SE
 - [x] TimbFarm funded: 50e18 TIMBS, 2592000s
 - [x] startGame() called — Round #1 LIVE
 - [x] GitHub Actions settler running — confirmed green run #63
-- [x] DebugHub TimbSwap tab live
 - [x] All 7 frontend pages deployed to GitHub Pages
+- [x] 2026-09-15 — gen-3 game live (registry `0x11C24…`, prize `0x6027a1…`); faucet live (`0x0a59b7…`, TIMBS-only); `TimbAirdropDistributor` deployed on Arbitrum One (`0x955e58…`, paused until announcement); DebugHub telemetry retired (localStorage-only). Details in `CHANGELOG.md`
 
 ### Permanent Burn Event
 
@@ -309,13 +314,16 @@ so they work on any host/custom domain.
 
 ---
 
-## DebugHub Integration
+## Diagnostics (DebugHub SDK, local-only)
 
 **appName:** `TimbSwap`
 
-Error catalog lives in `MyDapp/debughub/app.js` → `ERROR_EXPLANATIONS`.  
-**Must evolve** — add new entries every time a new error pattern is encountered.  
-Never treat the catalog as complete.
+The pages still load the DebugHub SDK (`assets/dh.js`) and emit checkpoints, but since
+2026-09-15 **no network sink is configured** — `DEBUGHUB_CONFIG` carries only `appName`, so
+`transmit()` is a no-op and everything stays in the visitor's localStorage. The `/api/debughub_events`
+Worker relay and the `debughub_events` table are gone. Per-user debugging uses the local `#debug`
+snapshot. Re-enabling an aggregated hub is a post-audit item and must bring it into bounty scope
+(see the `config.js` note and `SECURITY.md` in the official repo).
 
 ### Checkpoint Format
 
@@ -329,7 +337,6 @@ e.g. Swap:Approve Confirmed / Prize:Claim Failed / Gov:Vote Submitted
 ## Ecosystem Notes
 
 TimbSwap is isolated from BlockpotDAO/MessageBoard/0xFaucet at launch.  
-All four share the DebugHub dashboard.  
 Deployer: `0x42536623b503D4926DfAF6173B0357b7DfD19800`
 
 Optional future hook: partner pool flag routes LP fees to BlockpotDAO PrizeVault v3 (not active at launch).

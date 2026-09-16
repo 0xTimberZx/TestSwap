@@ -15,12 +15,15 @@ and payouts need no privileged operator, and you always hold your own keys.
 **Live:** [timbswap.xyz](https://timbswap.xyz/)  
 **Network:** Arbitrum Sepolia (Chain ID: 421614)  
 **GitHub:** [github.com/0xTimberZx/TimbSwap](https://github.com/0xTimberZx/TimbSwap)  
-**DebugHub:** [0xtimberzx.github.io/MyDapp/debughub](https://0xtimberzx.github.io/MyDapp/debughub/)  
-**Litepaper:** [timbswap.xyz/litepaper](https://timbswap.xyz/litepaper/)
+**Faucet:** [timbswap.xyz/faucet](https://timbswap.xyz/faucet/) — testnet TIMBS for wallets holding an Active ticket  
+**Litepaper:** [timbswap.xyz/litepaper](https://timbswap.xyz/litepaper/)  
+**Changelog:** [CHANGELOG.md](./CHANGELOG.md)
 
-> **Status:** live on Arbitrum **Sepolia testnet** — all tokens are test assets with no
+> **Status (Sept 2026):** live on Arbitrum **Sepolia testnet** — all tokens are test assets with no
 > monetary value. Unaudited; an independent audit is a gating condition for any mainnet launch.
-> See [Roadmap](./ROADMAP.md) and the [Risks](https://timbswap.xyz/docs/#risks) section.
+> The prize game runs on its **gen-3** contracts; the **faucet** is live (TIMBS-only on testnet);
+> the mainnet-TIMB **airdrop** leg is deployed on Arbitrum One but **paused until the public
+> announcement**. See [Roadmap](./ROADMAP.md) and the [Risks](https://timbswap.xyz/docs/#risks) section.
 
 ---
 
@@ -59,8 +62,10 @@ machine — read them as gears, not a product menu.
 | TimbSwapFactory | `0xCCd6d3f0A86042d2B7056eDd381d367126628AF5` |
 | TimbSwapRouter v8 | `0x40C7Caf90817C9891D278Ec1400B9deb180911f1` |
 | EligibleTokenRegistry | `0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04` |
-| GameRegistry (v5, dynamic pricing) | `0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530` |
-| TimbPrize (generations) | `0x35976f4D2260127848a6274D2eC89ee054412432` |
+| GameRegistry (gen-3, keeper-driven activation) | `0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65` |
+| TimbPrize (gen-3) | `0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF` |
+| Prize VRFEntropy (Chainlink VRF v2.5) | `0xa2AC62BF0FdD1D1ED148ea1c0555eEcD8829A393` |
+| GasFaucet (TIMBS-only on testnet) | `0x0a59b7d61a4db317fad8697c3e3e1e6df4c7a04b` |
 | TimbYieldVault | `0x43D833e828e2AF951527C2b573Eb70c358FfEB0B` |
 | PrizeEscrow | `0x865C50d933e63BbE388EEAFa017AE634B0A6fB6D` |
 | TimbStaking | `0xe776c7b700B190ED8248741F9b518B08d8733C8F` |
@@ -74,13 +79,17 @@ machine — read them as gears, not a product menu.
 | USDC (Circle canonical, 6 dec) | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` |
 | LINK (Chainlink canonical) | `0xb1D4538B4571d411F07960EF2838Ce337FE1E80E` |
 
-All TimbSwap contracts verified on [Sourcify](https://repo.sourcify.dev/421614/). WETH and USDC are the canonical Arbitrum Sepolia testnet tokens.
+All TimbSwap contracts verified on [Sourcify](https://repo.sourcify.dev/421614/). WETH and USDC are the canonical Arbitrum Sepolia testnet tokens. `config.js` is the source of truth for addresses; the settler and keepers read it directly. Prior-generation game contracts are listed in [SPECS.md](./SPECS.md) — old tickets remain reclaimable there.
+
+**Arbitrum One (mainnet):** `TimbAirdropDistributor` `0x955e5800245164EC4DCd1da9062115bBdA132c83` — the sink for the testnet-claim → mainnet-TIMB airdrop (1 TIMB per eligible claim, 10,000 TIMB cap, owner = Safe). **Paused until the public announcement.**
 
 ---
 
 ## Testnet Faucets
 
 Everything runs on **Arbitrum Sepolia (Chain ID 421614)**. Grab gas and stables before you swap, farm, or play.
+
+**TIMBS — [timbswap.xyz/faucet](https://timbswap.xyz/faucet/)** — for live players: hold an **Active** ticket in the prize game and claim **1 TIMBS every 24 h**. Cloudflare Turnstile on claim; eligibility and cooldown are enforced on-chain by `GasFaucet` as well as by the gatekeeper.
 
 **Gas — Arbitrum Sepolia ETH** *(pick up to 3; each has its own daily limit)*
 
@@ -146,6 +155,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 ├── gov/                 ← Governance proposals + voting     → /gov/
 ├── analytics/           ← Live metrics + event history      → /analytics/
 ├── explore/             ← V2 Pools explorer                 → /explore/
+├── faucet/              ← Active-ticket TIMBS faucet        → /faucet/
 ├── docs/                ← User-facing documentation page    → /docs/
 ├── tables/              ← SwapTables: console, felt, watch, lobby → /tables/
 │   ├── index.html       ←   operator console (open / arm / reveal / retire)
@@ -156,10 +166,18 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 ├── dev-docs/            ← Internal design specs (not the /docs/ web page)
 ├── scripts/
 │   ├── settler.js       ← Automated segment settler
+│   ├── faucet-worker.js ← Faucet keeper (drains reserved claims → dispense())
+│   ├── Deploy*.s.sol    ← Foundry deploy scripts (gen-3 migration has a pre-flight guard)
 │   └── package.json
+├── supabase/
+│   ├── functions/       ← faucet-claim (gatekeeper), airdrop-dispatch (mainnet sender)
+│   └── migrations/      ← faucet_claims, airdrop_outbox + service_role-only RPCs
+├── workers/             ← Cloudflare Worker: same-origin /api/rpc + /api/faucet-claim relay
 ├── .github/workflows/
-│   └── settler.yml      ← GitHub Actions cron (10 min + daily health)
+│   ├── settler.yml      ← GitHub Actions cron (10 min + daily health) + self-chaining
+│   └── faucet.yml       ← Faucet keeper (10 min)
 ├── abi/                 ← hand-kept contract ABIs (for integrators)
+├── CHANGELOG.md         ← Operator-facing log of live-deployment changes
 ├── SPECS.md             ← Full technical specs + addresses
 ├── ROADMAP.md           ← Shipped / next / vision + the mainnet graduation gate
 ├── CLAUDE.md            ← Agent rules for Claude Code
@@ -170,7 +188,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 
 ## Settler
 
-Segments settle automatically via GitHub Actions every 10 minutes. Health check fires daily at noon UTC. Telegram notifications on success and failure.
+Segments settle automatically via GitHub Actions every 10 minutes (each run lingers across segment boundaries and dispatches the next, with the cron as backstop — the "cancelled" scheduled ticks in Actions are the concurrency group dropping redundant backstops, not failures). Health check fires daily at noon UTC. Telegram: an **ops** stream to a private chat and a **community** stream (round rollovers only) to the public group.
 
 **Required secrets** (repo → Settings → Secrets → Actions):
 
@@ -186,10 +204,11 @@ Segments settle automatically via GitHub Actions every 10 minutes. Health check 
 
 Manual trigger: Actions → TimbSwap Settler → Run workflow → choose `settle` or `health`.
 
-X posting (repo **Variables**, not secrets — these are public):
+Notification volume and X posting (repo **Variables**, not secrets — these are public):
 
 | Variable | Value |
 |----------|-------|
+| `TELEGRAM_OPS_MODE` | `all` (default: every arm/lock/settle beat to the ops chat), `errors` (only ❌ ⚠️ 💥 ♻️ alerts), or `off`. Never affects the community stream |
 | `X_POST_MODE` | `all` (default), `winners` (only rounds that paid out), or `off` |
 | `X_HASHTAGS` | (Optional) trailing hashtag line, e.g. `TimbSwap Arbitrum DeFi Markets DApp Testnet`. Space/comma separated (`#` added if missing); several `\|`-separated groups rotate by round number so posts aren't identical. Trimmed to fit X's 280-char limit. Unset ⇒ no hashtags |
 | `X_HASHTAGS_WINNER` | (Optional) hashtag line for winner posts only; falls back to `X_HASHTAGS` when unset |
@@ -235,7 +254,7 @@ forge script scripts/Deploy.s.sol \
 ## Ecosystem
 
 Part of the 0xTimberZx ecosystem alongside BlockpotDAO, MessageBoard, and 0xFaucet.  
-All four share the [DebugHub](https://0xtimberzx.github.io/MyDapp/debughub/) dashboard. 
+Frontend diagnostics are **local-only** during the capped beta (no telemetry leaves the browser); see the note in `config.js`.
 
 ---
 

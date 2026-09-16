@@ -46,6 +46,10 @@ const PRIVATE_KEY   = process.env.SETTLER_PRIVATE_KEY;
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;        // ops: every message, incl. failures
 const TG_CHAT_ID_PUBLIC = process.env.TELEGRAM_CHAT_ID_PUBLIC; // community group: round rollovers only
+// Ops-stream volume (repo VARIABLE, not a secret): "all" (default) sends every
+// arm/lock/settle beat; "errors" sends only ❌ ⚠️ 💥 ♻️ alerts; "off" silences the
+// ops DM entirely. The public community stream is never affected.
+const TG_OPS_MODE   = (process.env.TELEGRAM_OPS_MODE || "all").toLowerCase();
 // Contract addresses come straight from config.js — the single source of
 // truth the frontend already uses — so a redeploy only ever needs config.js
 // edited and the settler follows automatically (no more drifting hardcodes).
@@ -177,6 +181,10 @@ async function notify(msg) {
     console.log("[notify] No Telegram config:", msg);
     return;
   }
+  if (TG_OPS_MODE === "off") return;
+  // "errors": only alerts get through — anything whose first character is an
+  // alert glyph. Routine beats (🎲 armed, 🔒 locked, ✅ settled) stay in the log.
+  if (TG_OPS_MODE === "errors" && !/^[❌⚠️💥♻️]/u.test(msg)) return;
   await sendTelegram(TG_CHAT_ID, `🔄 *TimbSwap Settler*\n${msg}`);
 }
 
