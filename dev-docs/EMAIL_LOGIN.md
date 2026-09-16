@@ -163,7 +163,9 @@ bridge uses, so a rename upstream fails the build instead of a user's browser.
   (v6) wraps unchanged; `recordSession()` starts the idle clock;
   `registerCalls()` teaches the confirm sheet the board / crank / game /
   jackpot function names ("Lock segment", "Load tokens", …) and contract
-  names via `TimbEmailWallet.registerCalls` / `registerContracts`. The pages
+  names via `TimbEmailWallet.registerCalls` / `registerContracts`; tapping the
+  connected chip (`#acct`) reveals copy-address and disconnect icons for
+  10 s (disconnect awaits the Privy logout, then reloads gated). The pages
   load `config.js` (classic) before their module script; ethers v5 is not
   loaded there, so the sheet's parameter decoding is off on those pages
   (labels, fee and advanced panel still work). `games.html` is read-only.
