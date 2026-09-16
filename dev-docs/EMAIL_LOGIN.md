@@ -5,12 +5,12 @@ with no wallet extension (most phones) can still connect, mint a ticket and
 claim from the faucet. Nothing on-chain changes: the embedded wallet is an EOA
 and every contract keys on `msg.sender` as before.
 
-Status: **built; OFF on the live site** (`window.PRIVY_APP_ID = ""` in
-`config.js`), which hides the option completely and leaves every page behaving
-exactly as before. The dev mirror (TimbSwap repo) runs it ON with its own Privy
-app and passed the checklist below (phone browser without an extension, Brave
-with its built-in wallet). To turn it on here: create the live Privy app
-(allowed origin `https://timbswap.xyz`), paste its App ID into `config.js`.
+Status: **ON — live site** (`window.PRIVY_APP_ID` set in `config.js` to the
+"TimbSwapArb" Privy app, allowed origin `https://timbswap.xyz`). Setting it to
+`""` hides the option completely and leaves every page behaving exactly as
+before — that is the kill switch. The dev mirror (TimbSwap repo) runs its own
+Privy app and passed the checklist below first (phone browser without an
+extension, Brave with its built-in wallet).
 
 ## How it fits the existing connect flow
 
@@ -85,7 +85,8 @@ never needed by the frontend and must not be put anywhere in this repo.
    React modal / funding UI, which this site does not use.)
 6. Copy the **App ID** (App settings → Basics) into `config.js` →
    `window.PRIVY_APP_ID`. Dev mirror: `cmu3mq0in04v90bjyc1y38iij`
-   ("TimbSwap Dev", development mode). Live site: its own app, not yet created.
+   ("TimbSwap Dev", development mode). Live site: `cmu3ofl2r01h90clecz8wtrhc`
+   ("TimbSwapArb").
 
 ## Rebuilding the vendored SDK
 
