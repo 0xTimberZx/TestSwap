@@ -75,8 +75,6 @@ MULTICHAIN_METER_SPEC), the vault lives on the home chain and reads the
 
 ## 5. Rewards are a separate policy from the unlock
 
-The unlock and the reward rates are **decoupled by design.**
-
 - The vault moves TIMBS from locked → treasury on the fixed schedule above.
 - **Reward grants follow the taper in §6**, not the unlock. The per-round figure
   is policy the keeper applies; it is changeable by governance and is in no way
@@ -85,12 +83,6 @@ The unlock and the reward rates are **decoupled by design.**
 - Reward funding draws from the **spendable treasury float** (whatever has
   unlocked) plus the **buyback waterfall** and the WETH `BoostRewarder` real
   yield — exactly as today.
-
-The only relationship between the two: the unlock schedule is a **ceiling** on
-how much float the hand-set policy has available at any time. Within that
-ceiling, distribution is entirely discretionary. This keeps rate-setting
-flexible and reversible while the supply-availability curve stays fixed and
-credible.
 
 ## 6. Farm emission schedule — the n-taper
 
@@ -188,17 +180,157 @@ This replaces the earlier adaptive sizing (`EMIT_FLOOR_DAYS`, the observed epoch
 length, and a slack multiplier), which produced windows anywhere from 4 to 60
 days and quietly rewrote the pace on each settlement.
 
-**Steady state.** With a grant `G` arriving every `T` days into a `W`-day window,
-the pool's reserve settles at `G(W − T)/T` and pays out `G` per cycle. At W = 90
-and the nominal 1.5-day epoch that is a standing buffer of about 59 epochs of
-grant. The buffer is intentional: it is fully payable to stakers, it is what makes
-the window un-lapseable, and it means the farm page's "ends in" always reads
-~90 days instead of counting down to a cliff. A shorter period holds less float
-but reintroduces the lapse risk.
+**Steady state.** A grant `G` every `T` days into a `W`-day window settles the
+pool's reserve at `G(W − T)/T`, paying out `G` per cycle — about 59 epochs of
+grant sitting as float at W = 90. That float is payable to stakers and is what
+makes the window un-lapseable, so the farm page always reads ~90 days rather
+than counting down to a cliff.
 
 ---
 
-## 7. `TimbReleaseVault` — contract (stub, needs audit)
+## 7. Allocation — lifetime frame, and the Era-1 split
+
+### Eras
+
+Nothing here is a single-shot budget. The unlock milestones (§2) cut the timeline
+into **eras**, and both the taper and the wider allocation spread across them.
+
+| Era | Rounds | Ends | Unlocked at its start | §6 taper draws |
+|---|---|---|---|---|
+| 1 | 1 – 1,000 | ~8 mo | **50.0M** (genesis) | 2,875,500 |
+| 2 | 1,001 – 2,000 | ~1.4 yr | 75.0M | 2,625,500 |
+| 3 | 2,001 – 4,000 | ~2.7 yr | 87.5M | 4,501,000 |
+| 4 | 4,001 – 8,000 | ~5.5 yr | 93.75M | 6,002,000 |
+| 5 | 8,001 – 12,000 | ~8.2 yr | 96.9M | 2,002,000 |
+
+The farm layer's **18.0M is a lifetime figure** and no era takes more than about a
+third of it. The other ~82.0M is likewise lifetime, and most of it is simply
+**not allocated in Era 1** — it stays locked in the release vault and unlocks at
+the milestones above.
+
+### Launch price — decided
+
+| Input | Value |
+|---|---|
+| ETH seeded into TIMBS/WETH | **5 ETH** |
+| Target FDV | **100 ETH** |
+| → launch price | **0.000001 ETH per TIMBS** (1 ETH = 1,000,000 TIMBS) |
+| → TIMBS into the pair | **5,000,000** |
+| → pool value at launch | 10 ETH (5 ETH + 5M TIMBS) |
+
+### Era 1 — the genesis 50M
+
+| Bucket | TIMBS | % of 50M | Note |
+|---|---|---|---|
+| Team | **7,500,000** | 15% | vested, see below |
+| Founder / dev | **6,000,000** | 12% | vested, same schedule |
+| Liquidity — LP seed at launch | **5,000,000** | 10% | 5 ETH @ 100 ETH FDV |
+| Liquidity — depth reserve | **18,124,500** | 36.2% | later depth adds |
+| Marketing | **10,000,000** | 20% | |
+| Farm + staking taper, Era 1 (§6) | **2,875,500** | 5.75% | fixed by the taper |
+| Faucet, Era-1 budget | **500,000** | 1.0% | 100 TIMBS per claim |
+| **Total** | **50,000,000** | **100%** | |
+
+Team and founder/dev percentages are **of the genesis 50M**, so 13.5% of the 100M
+cap between them. Liquidity totals 23,124,500 (46.2%) across the seed and the
+reserve.
+
+> The liquidity / marketing **ratio** is the one number not yet chosen — "the rest
+> split for liquidity and marketing" leaves it open. The table proposes
+> 18,124,500 / 10,000,000, weighted to liquidity because pair depth is a
+> game-integrity parameter (below) and because marketing spend is the harder line
+> to reverse once distributed. Adjust freely; the two must sum to 28,124,500.
+
+### Vesting — team and founder/dev
+
+Both tranches **vest: a 6-month cliff, then linear over 24 months.** They do not
+land unlocked in the Safe at genesis.
+
+No contract in the repo does this today. `TimbReleaseVault` is milestone-keyed
+and custodies the locked 50M; it is not a beneficiary vesting schedule. A vesting
+contract holding 13.5M TIMBS is **new code custodying real supply**, so it needs
+writing *and* auditing alongside the release vault — see §9.
+
+### Fair release — faucet only, for now
+
+**Decided: the mainnet faucet is the only release channel, gated on a live
+mainnet ticket. It drips 100 TIMBS per claim against a 500,000 TIMBS Era-1
+budget.** The testnet-claim → mainnet-TIMB bridge stays **off**, matching the
+retirement already recorded in `MAINNET_FAUCET_PROPOSALS.md` §0 and §5. An
+airdrop campaign may be added later; nothing in this table depends on one.
+
+`timbsCap` on the contract is cumulative-for-life, so it is set to the Era-1
+budget; raising it for Era 2 is one owner tx. At 100 per claim the budget is
+**5,000 claims**. Era 1 runs 250 days, so ~20 claims a day sustains it for the
+whole era, while 100 claimers a day exhausts it in 50.
+
+> **Check before enabling.** The faucet doc's guard is that a claim must never be
+> worth a ticket. A claim is now worth 0.0004 ETH (0.0002 drip + 0.0001 pot +
+> 100 TIMBS at 0.0001), against a cheapest ticket — the TIMBS leg — of 0.0005
+> ETH. That is 80% of a ticket, so one ticket pays for itself in about a day and
+> a quarter of claiming, and the ticket gate stops being an economic barrier.
+> Levers if that proves too loose: a per-address lifetime cap (already discussed
+> in `MAINNET_AIRDROP_SPEC.md` §5), a longer cooldown, or a smaller drip. The
+> rolling `operatorEthCap` bounds the ETH legs but **not** the TIMBS leg, which
+> is bounded only by the cumulative cap.
+
+### The TIMBS ticket leg — repriced at deploy, not pegged to the pair
+
+A ticket is paid in ETH or TIMBS and `GameRegistry` prices the legs independently.
+At the chosen launch price the stock constants put them 500× apart:
+
+| Leg | Rule | At 1e-6 ETH/TIMBS |
+|---|---|---|
+| ETH | `ETH_ENTRY_FLOOR` 0.001 ETH, then `escrow / 1000` | 0.001 ETH |
+| TIMBS (old) | floor 2 TIMBS `+ 1` per active TIMBS entry | 0.000002 ETH |
+
+That matters beyond pricing. ETH entries fill `totalEthEscrow`, which funds the
+yield vault whose accrual grows the pot. If every entry takes the TIMBS leg the
+pot's funding stays empty, and `entryCostETH()` never leaves its floor because
+escrow never grows — self-reinforcing. The constants were tuned on a testnet
+where TIMBS had no market price.
+
+**Decision: reprice at deploy; do not peg to the pair.** `TIMBS_ENTRY_FLOOR` and
+`TIMBS_STEP` are now `immutable`, set in the `GameRegistry` constructor, instead
+of hard-coded `constant`. They are still fixed forever at deploy and still have
+no owner setter — the TIMBS leg stays a token-denominated price whose ETH value
+drifts with the market, and that drift is accepted rather than tracked.
+
+Deploy-time values:
+
+| Deployment | Floor | Step | Floor in ETH |
+|---|---|---|---|
+| Mainnet, at 1e-6 ETH/TIMBS | **500 TIMBS** | 100 TIMBS | 0.0005 ETH — half an ETH ticket |
+| Testnet | 2 TIMBS | 1 TIMBS | unchanged |
+
+Testnet keeps the old numbers because TIMBS is faucet-dripped there and a
+launch-priced floor would put the leg out of reach. Immutable is what lets one
+source serve both without forking it.
+
+**The mainnet floor is deliberately under the ETH leg.** At launch a TIMBS ticket
+costs 0.0005 ETH against the ETH leg's 0.001 ETH floor, so paying in TIMBS is
+half price — a standing incentive to hold and use the token. Congestion closes
+the gap rather than the floor doing it: each concurrent TIMBS entry adds 100
+TIMBS, so at **five** concurrent TIMBS entries the leg costs 1,000 TIMBS, exactly
+an ETH ticket, and past that it is the dearer route.
+
+> Worth watching once live: while fewer than five TIMBS tickets are active, the
+> TIMBS leg is the cheaper seat, so the ETH escrow that funds the pot fills more
+> slowly than the ticket count suggests. That is the intended trade, not a bug,
+> but it is the number to check against real play before Era 2.
+
+Derive the floor as `ETH_ENTRY_FLOOR ÷ launch price`, and re-derive if the launch
+price moves. `Deploy.s.sol` **requires** `TIMBS_ENTRY_FLOOR` and `TIMBS_STEP`
+with no default, so a mainnet deploy cannot silently inherit testnet pricing; the
+constructor rejects a zero floor or a step above the floor.
+
+This is cheap now and expensive later: mainnet is deployed but `startGame` has
+**not** run, so there are no live tickets to migrate. After launch it is a
+registry redeploy plus a generation migration.
+
+---
+
+## 8. `TimbReleaseVault` — contract (stub, needs audit)
 
 See `contracts/TimbReleaseVault.sol`. Shape:
 
@@ -214,7 +346,7 @@ See `contracts/TimbReleaseVault.sol`. Shape:
 Genesis (deploy script): `_mint(treasury, 50M)` + `_mint(vault, 50M)` — replaces
 the current single `_mint(treasury, 100M)`.
 
-## 8. Launch checklist
+## 9. Launch checklist
 
 1. Add `cumulativeRounds` to `GameRegistry` (monotonic, generation-safe) + a
    view the vault reads.
@@ -225,3 +357,14 @@ the current single `_mint(treasury, 100M)`.
 5. Fix `scripts/docs/TOKENOMICS_AND_GAME_THEORY.md` (stale: says 1B cap +
    inflationary; corrected to 100M fixed + this schedule).
 6. Audit the vault before mainnet — it custodies 50M TIMBS.
+7. **Era-1 split is decided** (§7) — 5 ETH at 100 ETH FDV, team 15% / founder-dev
+   12% of the genesis 50M, faucet-only fair release. Remaining choice: the
+   liquidity / marketing ratio inside 28,614,500.
+8. **Write and audit a vesting contract** for the 13.5M team + founder-dev
+   tranche (6-month cliff, 24-month linear). None exists; `TimbReleaseVault` is
+   milestone-keyed and does not do this. New code custodying real supply.
+9. **Redeploy `GameRegistry`** with the repriced TIMBS leg (§7). The constants are
+   now constructor immutables; set `TIMBS_ENTRY_FLOOR=500e18` / `TIMBS_STEP=100e18`
+   for mainnet. Must happen **before `startGame`** — no live tickets to migrate
+   today, a generation migration afterwards. Re-run the §4 wiring matrix after,
+   since every contract pointing at the old registry has to be re-pointed.
