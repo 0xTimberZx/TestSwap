@@ -4,6 +4,38 @@ Operator-facing log of what changed on the live deployment. Contract addresses
 live in `config.js` (the source of truth) and are mirrored in `README.md` /
 `SPECS.md`.
 
+## 2026-09-16 — email wallet: MFA, passkeys, key export
+
+**Continue with email — hardened.** The Privy embedded wallet (live since the
+email-login drop) now carries the safety rails an extension would provide:
+
+- **Authenticator-app MFA** (TOTP, QR enrol) and **passkey MFA** (Face ID /
+  fingerprint / device PIN), both from *Wallet security* in the wallet menu.
+  Once enrolled Privy asks for a check before the wallet signs, at most once
+  every 15 minutes; either method can be removed from the same sheet.
+- **Export private key** — warnings + disclaimer gate → fresh emailed code →
+  MFA check → key masked on-page with *Copy key*. Client-side export (HPKE to
+  the browser) is wired and switches on automatically once Privy enables it
+  for the app; until then the sheet falls back to Privy's hosted copy button.
+  Three "Invalid JWT" fixes along the way: the export page needs the *Privy*
+  access token (reached through the SDK's internal object), and the
+  authenticator must be verified first.
+- *Wallet security* now appears on the first connect (was missing until a
+  refresh).
+- Confirmation sheet before every send / sign from the email wallet (decoded
+  call, fee estimate, advanced gas / nonce) and a **360-minute idle timeout**
+  for every wallet kind — shipped earlier in the same series.
+
+**Decided against:** gas sponsorship through Privy (built as #432, closed
+unmerged) — participants keep real tokens and allocate gas themselves; the
+mainnet `GasFaucet` is the on-ramp. Recovery password, SMS MFA and smart
+accounts are struck (see `dev-docs/EMAIL_LOGIN.md`, "Not in this drop").
+
+**Site.** `Start Here` onboarding page (`/start/`) and a canonical nav on every
+page; Quests & Points, Campaigns (Prize Month, Sep 25 – Oct 25) and Bug Bounty
+pages; mainnet waitlist with Resend confirmation; Slither static-analysis gate
+in CI.
+
 ## 2026-09-15 — faucet live, game repaired, airdrop deployed (held)
 
 **Faucet (Arbitrum Sepolia) — live.** `GasFaucet 0x0a59b7d6…` bound to the
