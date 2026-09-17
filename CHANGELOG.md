@@ -31,6 +31,12 @@ unmerged) — participants keep real tokens and allocate gas themselves; the
 mainnet `GasFaucet` is the on-ramp. Recovery password, SMS MFA and smart
 accounts are struck (see `dev-docs/EMAIL_LOGIN.md`, "Not in this drop").
 
+**Plan — boosted farms deferred.** `TimbBoostFarm` stays closed until the
+airdrop launch campaign ends: `BOOST_FARMS_OPEN = false` in `config.js` turns
+the Farm page's boosted section into a notice and the boost leg of the
+waterfall is not drawn. Open seats: TIMBS single-asset staking and the
+TIMBS/ETH farm. Pool creation stays permissionless.
+
 **Site.** `Start Here` onboarding page (`/start/`) and a canonical nav on every
 page; Quests & Points, Campaigns (Prize Month, Sep 25 – Oct 25) and Bug Bounty
 pages; mainnet waitlist with Resend confirmation; Slither static-analysis gate

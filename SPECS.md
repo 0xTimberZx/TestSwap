@@ -280,6 +280,7 @@ so they work on any host/custom domain.
 - Wallet persistence: `autoReconnect()` via sessionStorage on every page load
 - Connect flow: `connectWallet()` offers the injected provider or **Continue with email** (Privy embedded wallet, `PRIVY_APP_ID` in `config.js` — empty string = kill switch); `assets/email-login.js` loads on demand and wraps the provider with a confirmation sheet, authenticator / passkey MFA and key export (`dev-docs/EMAIL_LOGIN.md`)
 - Idle timeout: 360 minutes without interaction ends any session and hard-refreshes the page
+- Boosted farms: `BOOST_FARMS_OPEN` in `config.js` (false until the airdrop launch campaign ends) — the Farm page shows a notice instead of `TimbBoostFarm` pools
 - Lazily-loaded assets carry `?v=ASSET_VER` — bump it in `config.js` whenever `assets/`, `tables/wallet.js` or a `vendor/` bundle changes
 - DebugHub stub: always defined after SDK script tag — never let it break the page
 

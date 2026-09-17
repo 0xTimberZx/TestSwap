@@ -47,6 +47,9 @@ One inflow drives every module. Value moves in one direction, on a fixed cadence
 - **Funded, never printed.** Emissions retarget to what the treasury actually collected; a
   **solvency stop** freezes accrual at 99% of outstanding obligations. The system cannot promise
   tokens it does not hold.
+- **Boost comes last — and later.** The boost leg opens only after the airdrop launch campaign
+  ends; until then the sweep stops at staking and the only emission seats are TIMBS staking and the
+  TIMBS/ETH farm.
 - **Fixed supply.** 100,000,000 TIMBS, hard-capped. No mint beyond it.
 - **Prize-linked, not extractive.** The pot is paid from *yield on deposited capital* (the
   `TimbYieldVault`), so a player's principal stays theirs and refundable — closer to a
@@ -161,7 +164,9 @@ character comes from its own Chainlink VRF draw (closing the selection edge the 
 fallback gave whoever opened the table), and the 100-TIMBS table seed is routed whole to the
 UnderwriteReserve rather than split across pools, closing a two-wallet seed farm.
 
-**LP Farming** — Stake TIMBS/ETH LP tokens to earn TIMBS emissions.
+**LP Farming** — Stake TIMBS/ETH LP tokens to earn TIMBS emissions. The TIMBS/ETH pair is the only farm seat today; pool creation for any pair stays permissionless.
+
+**Boosted Farms** — `TimbBoostFarm` is deployed (extra pairs on the waterfall's boost tier) but **deferred until the airdrop launch campaign ends**; `BOOST_FARMS_OPEN` in `config.js` keeps the Farm page's section as a notice and the boost leg stays unfunded.
 
 **Single-Asset Staking** — Stake TIMBS to earn distributions from protocol buybacks.
 
