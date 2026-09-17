@@ -13,6 +13,7 @@ smart contracts** on Arbitrum, verified on Sourcify, that anyone can call direct
 and payouts need no privileged operator, and you always hold your own keys.
 
 **Live:** [timbswap.xyz](https://timbswap.xyz/)  
+**Start here:** [timbswap.xyz/start](https://timbswap.xyz/start/) — first round in 2 minutes, no extension needed  
 **Network:** Arbitrum Sepolia (Chain ID: 421614)  
 **GitHub:** [github.com/0xTimberZx/TimbSwap](https://github.com/0xTimberZx/TimbSwap)  
 **Faucet:** [timbswap.xyz/faucet](https://timbswap.xyz/faucet/) — testnet TIMBS for wallets holding an Active ticket  
@@ -22,8 +23,10 @@ and payouts need no privileged operator, and you always hold your own keys.
 > **Status (Sept 2026):** live on Arbitrum **Sepolia testnet** — all tokens are test assets with no
 > monetary value. Unaudited; an independent audit is a gating condition for any mainnet launch.
 > The prize game runs on its **gen-3** contracts; the **faucet** is live (TIMBS-only on testnet);
-> the mainnet-TIMB **airdrop** leg is deployed on Arbitrum One but **paused until the public
-> announcement**. See [Roadmap](./ROADMAP.md) and the [Risks](https://timbswap.xyz/docs/#risks) section.
+> **email sign-in** (an embedded wallet with optional authenticator / passkey MFA and key export) is
+> live next to extension wallets; the mainnet-TIMB **airdrop** leg is deployed on Arbitrum One but
+> **paused until the public announcement**. See [Roadmap](./ROADMAP.md) and the
+> [Risks](https://timbswap.xyz/docs/#risks) section.
 
 ---
 
@@ -106,6 +109,35 @@ Everything runs on **Arbitrum Sepolia (Chain ID 421614)**. Grab gas and stables 
 
 ---
 
+## Connecting — extension or email
+
+Every page connects through one flow in `config.js`. **Connect Wallet** offers two ways in:
+
+- **Extension / in-app wallet** — MetaMask, Rabby, Brave, or a mobile wallet browser. Unchanged.
+- **Continue with email** — a one-time code creates an embedded wallet ([Privy](https://www.privy.io/)),
+  a plain `0x…` EOA, so a phone with no extension can still mint a ticket and claim from the faucet.
+  Nothing on-chain changes — every contract keys on `msg.sender` as before. The key is split
+  between Privy and the user's browser; TimbSwap never sees it and only receives the address.
+
+Email wallets get the safety rails an extension would normally provide, all in `assets/email-login.js`:
+
+- **Confirmation sheet** before every send / sign — the call decoded from a human-readable ABI
+  (ticket, swap "you pay / receive ≥ min", claims), fee estimate, advanced gas / nonce, errors in place.
+- **Wallet security** (wallet menu, email sessions only) — **authenticator-app MFA** (TOTP, QR enrol)
+  and/or **passkey MFA** (Face ID / fingerprint / device PIN); once enrolled, Privy asks for a check
+  before signing, at most once every 15 minutes. Either method can be removed again from the same sheet.
+- **Export private key** — a warnings + disclaimer gate, then an emailed code and the MFA check,
+  then the key masked on-page with a copy button (Privy's hosted copy button until client-side
+  export is switched on for the app). For moving the wallet into MetaMask; treat the key as burned if
+  it is ever pasted anywhere else.
+- **Idle timeout** — any session (email or extension) older than 360 minutes idle is torn down and
+  the page hard-refreshes to the gated view.
+
+`PRIVY_APP_ID = ""` in `config.js` is the kill switch: the option disappears and every page behaves
+exactly as before. Design notes, dashboard setup and the test checklist: [`dev-docs/EMAIL_LOGIN.md`](./dev-docs/EMAIL_LOGIN.md).
+
+---
+
 ## The modules
 
 Each is a gear in the engine above, not a standalone feature.
@@ -146,8 +178,13 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 ├── contracts/           ← 13 Solidity contracts (0.8.24, viaIR)
 ├── index.html           ← Landing page (site root: timbswap.xyz/)
 ├── style.css            ← global design system (all pages)
-├── config.js            ← addresses + ethers helpers + autoReconnect (all pages)
+├── config.js            ← addresses + ethers helpers + connect flow (extension or email) + autoReconnect + idle timeout (all pages)
 ├── landing.js           ← landing-page script
+├── waitlist.js / .css   ← mainnet waitlist form on the landing page (Supabase `waitlist` function + Resend)
+├── assets/
+│   └── email-login.js   ← "Continue with email": Privy bridge, confirm sheet, MFA, Wallet security, key export (loaded on demand)
+├── vendor/              ← esbuild bundles: privy-core.js, webauthn.js, hpke.js, qrcode.js (see scripts/build-vendor.mjs)
+├── start/               ← "First round in 2 minutes" onboarding   → /start/
 ├── swap/                ← Swap + Add/Remove Liquidity      → /swap/
 ├── compete/             ← Prize entry + claimWinnings       → /compete/
 ├── farm/                ← LP farm + TIMBS staking           → /farm/
@@ -156,6 +193,10 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 ├── analytics/           ← Live metrics + event history      → /analytics/
 ├── explore/             ← V2 Pools explorer                 → /explore/
 ├── faucet/              ← Active-ticket TIMBS faucet        → /faucet/
+├── quests/              ← Quests & points leaderboard       → /quests/
+├── campaigns/           ← Competitions (dates, prizes)      → /campaigns/
+├── bounty/              ← Bug bounty scope + rules          → /bounty/
+├── litepaper/           ← One-document overview             → /litepaper/
 ├── docs/                ← User-facing documentation page    → /docs/
 ├── tables/              ← SwapTables: console, felt, watch, lobby → /tables/
 │   ├── index.html       ←   operator console (open / arm / reveal / retire)
@@ -163,19 +204,23 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── live.html        ←   the stream page (spectate, no wallet)
 │   └── games.html       ←   every running table, read-only
 ├── CNAME                ← Custom domain (timbswap.xyz) for GitHub Pages
-├── dev-docs/            ← Internal design specs (not the /docs/ web page)
+├── dev-docs/            ← Internal design specs (not the /docs/ web page); EMAIL_LOGIN.md covers the email wallet
 ├── scripts/
 │   ├── settler.js       ← Automated segment settler
+│   ├── epoch.js         ← Reward-sweep distributor (every 6 rounds)
 │   ├── faucet-worker.js ← Faucet keeper (drains reserved claims → dispense())
+│   ├── build-vendor.mjs ← Rebuilds vendor/*.js from pinned npm packages (esbuild)
 │   ├── Deploy*.s.sol    ← Foundry deploy scripts (gen-3 migration has a pre-flight guard)
 │   └── package.json
 ├── supabase/
-│   ├── functions/       ← faucet-claim (gatekeeper), airdrop-dispatch (mainnet sender)
+│   ├── functions/       ← faucet-claim (gatekeeper), airdrop-dispatch (mainnet sender), waitlist, quests, rpc
 │   └── migrations/      ← faucet_claims, airdrop_outbox + service_role-only RPCs
 ├── workers/             ← Cloudflare Worker: same-origin /api/rpc + /api/faucet-claim relay
 ├── .github/workflows/
 │   ├── settler.yml      ← GitHub Actions cron (10 min + daily health) + self-chaining
-│   └── faucet.yml       ← Faucet keeper (10 min)
+│   ├── epoch.yml        ← Reward sweep
+│   ├── faucet.yml       ← Faucet keeper (10 min)
+│   └── slither.yml      ← Static-analysis gate on the contracts
 ├── abi/                 ← hand-kept contract ABIs (for integrators)
 ├── CHANGELOG.md         ← Operator-facing log of live-deployment changes
 ├── SPECS.md             ← Full technical specs + addresses
