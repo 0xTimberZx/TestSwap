@@ -112,6 +112,13 @@ contract GasFaucetTest is Test {
 
     // ── Per-wallet TIMBS ceiling (concentration guard) ──
     //
+    // NB: these warp off `faucet.lastClaimAt()` rather than `block.timestamp`.
+    // Under viaIR the optimiser common-subexpression-eliminates repeated
+    // `block.timestamp` reads inside one function — legitimately, since within a
+    // real transaction it cannot change — so a second
+    // `vm.warp(block.timestamp + ...)` recomputes from the ORIGINAL timestamp and
+    // silently fails to advance. An external staticcall cannot be folded away.
+    //
     // The cooldown paces a wallet but never stops it: across an era it can claim
     // (era / cooldown) + 1 times. At the Era-1 mainnet numbers that lets ~20
     // wallets absorb the entire budget, which is what this cap bounds.
@@ -128,12 +135,12 @@ contract GasFaucetTest is Test {
         _eligible(alice);
 
         faucet.dispense(alice);
-        vm.warp(block.timestamp + COOLDOWN + 1);
+        vm.warp(faucet.lastClaimAt(alice) + faucet.cooldown() + 1);
         faucet.dispense(alice);
         assertEq(faucet.timbsClaimedBy(alice), 2 * TIMB, "two claims taken");
 
         // Off cooldown and under the global cap, but out of personal headroom.
-        vm.warp(block.timestamp + COOLDOWN + 1);
+        vm.warp(faucet.lastClaimAt(alice) + faucet.cooldown() + 1);
         vm.expectRevert(abi.encodeWithSelector(GasFaucet.WalletTimbsCapExceeded.selector, TIMB, 0));
         faucet.dispense(alice);
     }
@@ -144,7 +151,7 @@ contract GasFaucetTest is Test {
         _eligible(bob);
 
         faucet.dispense(alice);
-        vm.warp(block.timestamp + COOLDOWN + 1);
+        vm.warp(faucet.lastClaimAt(alice) + faucet.cooldown() + 1);
         vm.expectRevert(abi.encodeWithSelector(GasFaucet.WalletTimbsCapExceeded.selector, TIMB, 0));
         faucet.dispense(alice);
 
@@ -160,7 +167,7 @@ contract GasFaucetTest is Test {
 
         assertTrue(faucet.claimable(alice), "claimable before");
         faucet.dispense(alice);
-        vm.warp(block.timestamp + COOLDOWN + 1);
+        vm.warp(faucet.lastClaimAt(alice) + faucet.cooldown() + 1);
         assertFalse(faucet.claimable(alice), "view agrees with dispense once capped");
     }
 
@@ -168,7 +175,7 @@ contract GasFaucetTest is Test {
         faucet.setMaxTimbsPerWallet(TIMB);
         _eligible(alice);
         faucet.dispense(alice);
-        vm.warp(block.timestamp + COOLDOWN + 1);
+        vm.warp(faucet.lastClaimAt(alice) + faucet.cooldown() + 1);
 
         faucet.setMaxTimbsPerWallet(3 * TIMB);
         faucet.dispense(alice);
