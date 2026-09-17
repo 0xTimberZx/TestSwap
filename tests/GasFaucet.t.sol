@@ -110,6 +110,77 @@ contract GasFaucetTest is Test {
         assertEq(timbs.balanceOf(alice), TIMB);
     }
 
+    // ── Per-wallet TIMBS ceiling (concentration guard) ──
+    //
+    // The cooldown paces a wallet but never stops it: across an era it can claim
+    // (era / cooldown) + 1 times. At the Era-1 mainnet numbers that lets ~20
+    // wallets absorb the entire budget, which is what this cap bounds.
+
+    function test_PerWalletCapDefaultsToUnlimited() public {
+        assertEq(faucet.maxTimbsPerWallet(), 0, "off by default");
+        _eligible(alice);
+        faucet.dispense(alice);
+        assertEq(faucet.timbsClaimedBy(alice), TIMB, "per-wallet tally still accrues");
+    }
+
+    function test_PerWalletCapBlocksOnceExhausted() public {
+        faucet.setMaxTimbsPerWallet(2 * TIMB); // exactly two claims
+        _eligible(alice);
+
+        faucet.dispense(alice);
+        vm.warp(block.timestamp + COOLDOWN);
+        faucet.dispense(alice);
+        assertEq(faucet.timbsClaimedBy(alice), 2 * TIMB, "two claims taken");
+
+        // Off cooldown and under the global cap, but out of personal headroom.
+        vm.warp(block.timestamp + COOLDOWN);
+        vm.expectRevert(abi.encodeWithSelector(GasFaucet.WalletTimbsCapExceeded.selector, TIMB, 0));
+        faucet.dispense(alice);
+    }
+
+    function test_PerWalletCapIsPerWalletNotGlobal() public {
+        faucet.setMaxTimbsPerWallet(TIMB); // one claim each
+        _eligible(alice);
+        _eligible(bob);
+
+        faucet.dispense(alice);
+        vm.warp(block.timestamp + COOLDOWN);
+        vm.expectRevert(abi.encodeWithSelector(GasFaucet.WalletTimbsCapExceeded.selector, TIMB, 0));
+        faucet.dispense(alice);
+
+        // bob is untouched by alice exhausting hers.
+        faucet.dispense(bob);
+        assertEq(timbs.balanceOf(bob), TIMB, "bob still served");
+    }
+
+    function test_ClaimableReflectsPerWalletCap() public {
+        faucet.setMaxTimbsPerWallet(TIMB);
+        faucet.setEthPaused(true); // TIMBS leg alone decides claimable
+        _eligible(alice);
+
+        assertTrue(faucet.claimable(alice), "claimable before");
+        faucet.dispense(alice);
+        vm.warp(block.timestamp + COOLDOWN);
+        assertFalse(faucet.claimable(alice), "view agrees with dispense once capped");
+    }
+
+    function test_RaisingPerWalletCapReopensHeadroom() public {
+        faucet.setMaxTimbsPerWallet(TIMB);
+        _eligible(alice);
+        faucet.dispense(alice);
+        vm.warp(block.timestamp + COOLDOWN);
+
+        faucet.setMaxTimbsPerWallet(3 * TIMB);
+        faucet.dispense(alice);
+        assertEq(faucet.timbsClaimedBy(alice), 2 * TIMB, "reopened, never clawed back");
+    }
+
+    function test_OnlyOwnerSetsPerWalletCap() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        faucet.setMaxTimbsPerWallet(TIMB);
+    }
+
     // ── Cooldown ──
 
     function test_CooldownBlocksSecondClaim() public {

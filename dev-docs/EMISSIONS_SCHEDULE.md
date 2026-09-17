@@ -269,10 +269,29 @@ whole era, while 100 claimers a day exhausts it in 50.
 > 100 TIMBS at 0.0001), against a cheapest ticket — the TIMBS leg — of 0.0005
 > ETH. That is 80% of a ticket, so one ticket pays for itself in about a day and
 > a quarter of claiming, and the ticket gate stops being an economic barrier.
-> Levers if that proves too loose: a per-address lifetime cap (already discussed
-> in `MAINNET_AIRDROP_SPEC.md` §5), a longer cooldown, or a smaller drip. The
-> rolling `operatorEthCap` bounds the ETH legs but **not** the TIMBS leg, which
-> is bounded only by the cumulative cap.
+> The rolling `operatorEthCap` bounds the ETH legs but **not** the TIMBS leg.
+
+**The concentration guard.** The cooldown paces a wallet; it never stops one.
+Over an era of `E` days at one claim per day a wallet can claim `E + 1` times, so
+Era 1 allows **251 claims = 25,100 TIMBS per wallet** — meaning roughly **20
+dedicated wallets absorb the whole 500,000 budget**. `GasFaucet.maxTimbsPerWallet`
+bounds that per address, leaving the cooldown and the ticket gate untouched. 0
+disables it; the mainnet value is **5,000 TIMBS** (50 claims), which guarantees at
+least 100 distinct wallets are served and caps any single wallet at 1% of the era
+budget. It is owner-settable in one tx:
+
+| Per-wallet cap | Wallets guaranteed served | Claims each |
+|---|---|---|
+| 1,000 TIMBS | 500 | 10 |
+| 2,500 TIMBS | 200 | 25 |
+| **5,000 TIMBS** | **100** | **50** |
+| 10,000 TIMBS | 50 | 100 |
+
+The same arithmetic gives a **monitoring invariant** for the claim record: no
+wallet may show more than `elapsed_days + 1` claims, and in aggregate
+`total_claims ≤ unique_wallets × (elapsed_days + 1)`. A breach means the cooldown
+was bypassed rather than merely exhausted, which is a different and worse
+failure than the budget draining.
 
 ### The TIMBS ticket leg — repriced at deploy, not pegged to the pair
 
