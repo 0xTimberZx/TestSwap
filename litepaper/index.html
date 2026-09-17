@@ -61,12 +61,13 @@
         <div class="nav-dropdown">
           <a href="../swap/">Swap</a>
           <a href="../analytics/">Analytics</a>
-          <a class="nav-off">Governance</a>
+          <a href="/gov/">Protocol</a>
         </div>
       </div>
       <div class="nav-group">
         <button class="nav-group-btn">Earn TIMBS <span class="nav-caret">▾</span></button>
         <div class="nav-dropdown">
+          <a href="../start/">Start Here</a>
           <a href="../farm/">Farm</a>
           <a href="../compete/">Compete</a>
           <a href="../faucet/">Faucet</a>
@@ -108,8 +109,9 @@
     <div class="nav-mobile-section">DASHBOARD</div>
     <a href="../swap/">Swap</a>
     <a href="../analytics/">Analytics</a>
-    <a class="nav-off">Governance</a>
+    <a href="/gov/">Protocol</a>
     <div class="nav-mobile-section">EARN TIMBS</div>
+    <a href="../start/">Start Here</a>
     <a href="../farm/">Farm</a>
     <a href="../compete/">Compete</a>
     <a href="../faucet/">Faucet</a>
@@ -329,7 +331,7 @@
     }
     function handleDisconnect() {
       DebugHub.endSession();
-      provider = null; signer = null; userAddress = null;
+      disconnectWallet(); // clears the saved session too — a manual null left sessionStorage intact, so Disconnect was undone on the next page
       document.getElementById("connect-btn").classList.remove("hidden");
       document.getElementById("wallet-info").classList.add("hidden");
       document.getElementById("network-badge").classList.add("hidden");
