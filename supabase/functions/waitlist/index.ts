@@ -35,7 +35,18 @@ const IP_SALT      = Deno.env.get("WAITLIST_IP_SALT") ?? "timbswap-waitlist";
 const PROXY_SECRET = Deno.env.get("WAITLIST_PROXY_SECRET") ?? "";
 const TG_TOKEN     = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const TG_CHAT      = Deno.env.get("WAITLIST_TG_CHAT_ID") ?? "";
-const RESEND_KEY   = Deno.env.get("RESEND_API_KEY") ?? "";
+// Secrets pasted from a phone often arrive wrapped in smart quotes or with stray
+// whitespace; a non-ASCII byte in the Authorization header makes fetch() throw
+// before Resend is ever reached. Trim the usual junk and refuse the rest loudly.
+function cleanSecret(name: string): string {
+  const raw = (Deno.env.get(name) ?? "").trim().replace(/^["'\u2018\u2019\u201c\u201d]+|["'\u2018\u2019\u201c\u201d]+$/g, "").trim();
+  if (raw && !/^[\x21-\x7e]+$/.test(raw)) {
+    console.error(`${name} contains non-ASCII or whitespace characters — re-set it with a clean paste`);
+    return "";
+  }
+  return raw;
+}
+const RESEND_KEY   = cleanSecret("RESEND_API_KEY");
 const MAIL_FROM    = Deno.env.get("WAITLIST_FROM") ?? "TimbSwap <hello@timbswap.xyz>";
 const UNSUB_MAILTO = Deno.env.get("WAITLIST_UNSUB_MAILTO") ?? "hello@timbswap.xyz";
 
@@ -157,7 +168,7 @@ function confirmHtml(unsub: string): string {
 }
 
 async function sendConfirmation(to: string) {
-  if (!RESEND_KEY) return; // email disabled until a key is configured
+  if (!RESEND_KEY) { console.log("resend skipped: no usable RESEND_API_KEY"); return; }
   const unsub = `mailto:${UNSUB_MAILTO}?subject=${encodeURIComponent("Unsubscribe " + to)}`;
   try {
     const r = await fetch("https://api.resend.com/emails", {
