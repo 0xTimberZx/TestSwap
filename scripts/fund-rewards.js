@@ -10,11 +10,13 @@
 // period is still running, its leftover rolls into the new window.
 //
 // Usage (GitHub Actions "Admin — Fund Rewards" workflow, or locally):
-//   FARM_TIMBS=10000 STAKE_TIMBS=10000 DAYS=30 SOURCE=treasury \
+//   FARM_TIMBS=10000 STAKE_TIMBS=10000 DAYS=90 SOURCE=treasury \
 //     node scripts/fund-rewards.js [--dry-run]
 //
 //   FARM_TIMBS / STAKE_TIMBS  whole TIMBS (decimal string); 0 skips that pool
-//   DAYS                      emission window in days (decimal ok)
+//   DAYS                      emission period in days (decimal ok). Default 90,
+//                             matching the keeper's EMIT_PERIOD_DAYS — every
+//                             notify re-anchors periodFinish to now + this.
 //   SOURCE                    treasury (default) — Treasury.withdrawToken first
 //                             wallet   — spend the signer's own TIMBS
 //
@@ -31,7 +33,7 @@ const TX_RPC_URL  = process.env.ARB_SEPOLIA_RPC;
 const PRIVATE_KEY = process.env.EPOCH_PRIVATE_KEY;
 const FARM_TIMBS  = (process.env.FARM_TIMBS  ?? "10000").trim();
 const STAKE_TIMBS = (process.env.STAKE_TIMBS ?? "10000").trim();
-const DAYS        = (process.env.DAYS        ?? "30").trim();
+const DAYS        = (process.env.DAYS        ?? "90").trim();  // match the keeper's fixed period
 const SOURCE      = (process.env.SOURCE      ?? "treasury").trim().toLowerCase();
 const DRY_RUN     = process.argv.includes("--dry-run");
 const RPC_OVERRIDE = process.env.READ_RPC_URL; // tests only

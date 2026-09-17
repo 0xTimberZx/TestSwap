@@ -56,11 +56,11 @@ jobs:
           # withdrawToken() are onlyOwner. Bigger key than the settler's.
           EPOCH_PRIVATE_KEY:   ${{ secrets.EPOCH_PRIVATE_KEY }}
           EPOCH_GENESIS_BLOCK: ${{ vars.EPOCH_GENESIS_BLOCK }}
-          # Minimum emission window. Raised 4 -> 24 days to stretch the
-          # farm's over-granted balance (~34.9k TIMBS from the #245 retry
-          # loop) thin instead of burning it down in 4 days. Lower it back
-          # to 4 once the surplus has drained.
-          EMIT_FLOOR_DAYS:     "24"
+          # Fixed emission period. notifyRewardAmount re-anchors periodFinish
+          # to now + this on every successful grant and rolls the leftover in,
+          # so the pools hold a steady 90-day window instead of the window the
+          # old adaptive sizing computed. dev-docs/EMISSIONS_SCHEDULE.md §6.
+          EMIT_PERIOD_DAYS:    "90"
           TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |

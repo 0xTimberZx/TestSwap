@@ -73,13 +73,14 @@ The vault reads `cumulativeRounds` only. On a multichain future (see
 MULTICHAIN_METER_SPEC), the vault lives on the home chain and reads the
 **canonical** cumulative round — same counter, unchanged.
 
-## 5. Rewards are a separate, hand-set policy
+## 5. Rewards are a separate policy from the unlock
 
 The unlock and the reward rates are **decoupled by design.**
 
 - The vault moves TIMBS from locked → treasury on the fixed schedule above.
-- **Reward rates are set by hand** — the owner/governance decides, per pool, how
-  much to distribute and how fast, via the existing `notifyRewardAmount(amount,
+- **Reward grants follow the taper in §6**, not the unlock. The per-round figure
+  is policy the keeper applies; it is changeable by governance and is in no way
+  bound to a milestone. Delivery is the existing `notifyRewardAmount(amount,
   duration)` / `setRewardRate` on `TimbStaking`, `TimbFarm`, and `TimbBoostFarm`.
 - Reward funding draws from the **spendable treasury float** (whatever has
   unlocked) plus the **buyback waterfall** and the WETH `BoostRewarder` real
@@ -91,7 +92,113 @@ ceiling, distribution is entirely discretionary. This keeps rate-setting
 flexible and reversible while the supply-availability curve stays fixed and
 credible.
 
-## 6. `TimbReleaseVault` — contract (stub, needs audit)
+## 6. Farm emission schedule — the n-taper
+
+The unlock (§1–2) says how much TIMBS the treasury *may* spend. This section says
+how much it actually hands to the reward pools each round. **Decision: n = 3,000
+at round 1.**
+
+### The rule
+
+```
+grant(round r) = max(1, n − floor((r − 1) / 4))        n = 3,000
+```
+
+Four rounds at the same figure, then down one. At the 6h round cadence four
+rounds is exactly one day, so the taper steps down by **1 TIMBS per round per
+day** and never drifts against the clock.
+
+The floor is deliberate. The taper's last step down lands on 1 at round
+**11,997** (that step runs rounds 11,997–12,000), and from there the grant
+**holds at 1 per round indefinitely**, until governance pauses it. It never
+reaches zero.
+
+### Closed form
+
+Through round `4m` (m complete four-round steps, while the taper is above the
+floor):
+
+```
+total(4m) = 4 · [ m·n − m(m−1)/2 ]
+```
+
+Shortcuts at n = 3,000:
+
+| Horizon | Expression | TIMBS |
+|---|---|---|
+| Through round 8,000 | `8000n − 7,996,000` | **16,004,000** |
+| Whole taper, through round 12,000 (its last step) | `2n(n+1)` | **18,006,000** |
+| Tail, per year from round 12,001 | `4 × 365` | **1,460** |
+
+### Milestones
+
+| Round | Per round | Per day | Cumulative granted | Treasury unlocked (§2) | ≈ Time |
+|---|---|---|---|---|---|
+| 1 | 3,000 | 12,000 | 3,000 | 50.0M | day 0 |
+| 1,000 | 2,751 | 11,004 | 2,875,500 | 75.0M | ~8 mo |
+| 2,000 | 2,501 | 10,004 | 5,501,000 | 87.5M | ~1.4 yr |
+| 4,000 | 2,001 | 8,004 | 10,002,000 | 93.75M | ~2.7 yr |
+| 8,000 | 1,001 | 4,004 | 16,004,000 | 96.9M | ~5.5 yr |
+| 12,000 | 1 | 4 | 18,006,000 | 96.9M | ~8.2 yr |
+| beyond | 1 | 4 | +1,460 / yr | → 100M | — |
+
+The taper spends **18.0M of the 100M cap** across its full run. Cumulative grants
+sit well under the unlocked column at every milestone — the tightest point is the
+end of the taper, 18.0M of grants against 96.9M unlocked — so the release curve is
+never the binding constraint. The two curves are shaped differently on purpose:
+the unlock is geometric and infinite, the taper is linear and lands on a flat
+floor.
+
+### Splitting the grant between pools
+
+The per-round figure is the **total** for the emission layer. How it divides
+between `TimbStaking` and `TimbFarm` remains the waterfall's job (claim-driven,
+`scripts/epoch.js`) or an explicit owner split. The taper caps the sum; it does
+not dictate the ratio.
+
+### The 90-day period — every grant re-anchors it
+
+`TimbStaking` and `TimbFarm` are Synthetix-style. `notifyRewardAmount(amount,
+duration)` does this:
+
+```solidity
+if (block.timestamp < periodFinish) {
+    uint256 remaining = periodFinish - block.timestamp;
+    uint256 leftover  = remaining * rewardRatePerSecond;
+    rewardRatePerSecond = (amount + leftover) / duration;
+} else {
+    rewardRatePerSecond = amount / duration;
+}
+periodFinish = block.timestamp + duration;      // unconditional
+```
+
+Two properties matter:
+
+1. `periodFinish` is rewritten to `now + duration` on **every** successful call,
+   on both branches. A grant therefore **corrects** the time remaining rather
+   than extending it.
+2. Unspent rewards are never lost — `leftover` rolls into the new rate.
+
+So a constant duration pins the window. **`EMIT_PERIOD_DAYS = 90`** in the epoch
+keeper, and the same default on the `Admin — Fund Rewards` workflow, means every
+successful grant snaps both pools back to a 90-day runway. They can only
+dead-zone if no grant lands for 90 straight days.
+
+This replaces the earlier adaptive sizing (`EMIT_FLOOR_DAYS`, the observed epoch
+length, and a slack multiplier), which produced windows anywhere from 4 to 60
+days and quietly rewrote the pace on each settlement.
+
+**Steady state.** With a grant `G` arriving every `T` days into a `W`-day window,
+the pool's reserve settles at `G(W − T)/T` and pays out `G` per cycle. At W = 90
+and the nominal 1.5-day epoch that is a standing buffer of about 59 epochs of
+grant. The buffer is intentional: it is fully payable to stakers, it is what makes
+the window un-lapseable, and it means the farm page's "ends in" always reads
+~90 days instead of counting down to a cliff. A shorter period holds less float
+but reintroduces the lapse risk.
+
+---
+
+## 7. `TimbReleaseVault` — contract (stub, needs audit)
 
 See `contracts/TimbReleaseVault.sol`. Shape:
 
@@ -107,13 +214,14 @@ See `contracts/TimbReleaseVault.sol`. Shape:
 Genesis (deploy script): `_mint(treasury, 50M)` + `_mint(vault, 50M)` — replaces
 the current single `_mint(treasury, 100M)`.
 
-## 7. Launch checklist
+## 8. Launch checklist
 
 1. Add `cumulativeRounds` to `GameRegistry` (monotonic, generation-safe) + a
    view the vault reads.
 2. Deploy `TimbReleaseVault(timbs, treasury, gameRegistry)`.
 3. Genesis split in the deploy script: 50M treasury / 50M vault.
-4. Reward rates stay hand-set (§5) — no keeper wiring tied to the unlock.
+4. Reward grants follow the §6 taper (n = 3,000, 90-day period) — policy in the
+   keeper, never wired to an unlock milestone.
 5. Fix `scripts/docs/TOKENOMICS_AND_GAME_THEORY.md` (stale: says 1B cap +
    inflationary; corrected to 100M fixed + this schedule).
 6. Audit the vault before mainnet — it custodies 50M TIMBS.
