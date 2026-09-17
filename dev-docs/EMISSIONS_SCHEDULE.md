@@ -243,13 +243,45 @@ reserve.
 
 ### Vesting — team and founder/dev
 
-Both tranches **vest: a 6-month cliff, then linear over 24 months.** They do not
+Both tranches **vest on a 6-month cliff inside a 24-month window.** They do not
 land unlocked in the Safe at genesis.
 
-No contract in the repo does this today. `TimbReleaseVault` is milestone-keyed
-and custodies the locked 50M; it is not a beneficiary vesting schedule. A vesting
-contract holding 13.5M TIMBS is **new code custodying real supply**, so it needs
-writing *and* auditing alongside the release vault — see §9.
+**Contract: `contracts/TimbVesting.sol`** — one wallet per beneficiary, a thin
+concrete wrapper over OpenZeppelin 5.6.1's audited `VestingWallet` +
+`VestingWalletCliff`. It adds no custody logic of its own, so the audit surface
+is the two OZ bases plus a refused `receive()`.
+
+| Parameter | Era-1 value | Meaning |
+|---|---|---|
+| `start` | launch | the clock's origin |
+| `cliff` | 180 days | nothing releasable before `start + cliff` |
+| `duration` | 730 days | the **whole** window; fully vested at `start + duration` |
+
+**Cliff semantics (OZ):** at the cliff, the linear amount for time already
+elapsed unlocks in one step — a catch-up of 180/730 ≈ 24.7% — then it streams
+linearly to month twenty-four. If the intended reading is "six months, *then*
+twenty-four months of linear", that is the same contract with `duration = 910
+days` and nothing else changes; a test pins both shapes.
+
+The wallet vests **whatever it holds plus what it has released**, so the
+allocation is simply the amount the Safe transfers in. A later top-up joins the
+*same* schedule as if present from `start`, so fund each wallet **once, before
+its cliff**. `scripts/DeployVesting.s.sol` deploys the wallets and prints the
+exact Safe transfers; it moves no tokens itself.
+
+Properties, and the decisions they encode:
+
+- **Irrevocable.** No clawback. A departing team member keeps their schedule.
+  Trustless for the beneficiary; the cost is that there is no lever for a bad
+  leaver. If one is wanted it is a different contract, not a flag on this one.
+- **Ownership is transferable** (key rotation). OZ's own caveat applies: unvested
+  tokens can effectively be sold by selling the wallet. Accepted.
+- **`release` is permissionless** and always pays the owner.
+- **TIMBS only.** ETH is refused.
+- **Beneficiary count is a deploy input.** "Team" at 7.5M is one wallet or
+  several; the script takes a list and the sum is what matters.
+
+Still needs the audit alongside the release vault — see §9.
 
 ### Fair release — faucet only, for now
 
@@ -379,9 +411,10 @@ the current single `_mint(treasury, 100M)`.
 7. **Era-1 split is decided** (§7) — 5 ETH at 100 ETH FDV, team 15% / founder-dev
    12% of the genesis 50M, faucet-only fair release. Remaining choice: the
    liquidity / marketing ratio inside 28,614,500.
-8. **Write and audit a vesting contract** for the 13.5M team + founder-dev
-   tranche (6-month cliff, 24-month linear). None exists; `TimbReleaseVault` is
-   milestone-keyed and does not do this. New code custodying real supply.
+8. **Audit `TimbVesting`** (written: `contracts/TimbVesting.sol`, tests, deploy
+   script). It is a wrapper over OZ `VestingWalletCliff`, so the review is the
+   two OZ bases plus the refused `receive()`. Decide the beneficiary list for
+   the 7.5M team tranche, and confirm `duration` = 730 vs 910 days (§7).
 9. **Redeploy `GameRegistry`** with the repriced TIMBS leg (§7). The constants are
    now constructor immutables; set `TIMBS_ENTRY_FLOOR=500e18` / `TIMBS_STEP=100e18`
    for mainnet. Must happen **before `startGame`** — no live tickets to migrate
