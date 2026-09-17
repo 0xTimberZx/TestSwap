@@ -111,6 +111,12 @@ contract Deploy is Script {
         uint256 timelockDelay   = vm.envOr("TIMELOCK_MIN_DELAY", uint256(48 hours));
 
         uint256 entryCostTIMBS  = vm.envUint("ENTRY_COST_TIMBS"); // TIMBSToken faucet/mint param
+        // GameRegistry TIMBS entry pricing — REQUIRED, no default on purpose:
+        // the right value depends on this deployment's launch price, and a
+        // silent testnet default on mainnet starves the ETH escrow behind the
+        // pot (dev-docs/EMISSIONS_SCHEDULE.md §7).
+        uint256 timbsEntryFloor = vm.envUint("TIMBS_ENTRY_FLOOR");
+        uint256 timbsStep       = vm.envUint("TIMBS_STEP");
         uint256 initialSupply   = vm.envUint("INITIAL_SUPPLY");
         uint256 rewardRateSec   = vm.envUint("REWARD_RATE_PER_SEC");
         uint256 farmRateSec     = vm.envUint("FARM_REWARD_RATE");
@@ -163,7 +169,9 @@ contract Deploy is Script {
         gameRegistry = new GameRegistry(
             address(timbs),
             protocolSink,
-            address(0) // timbPrize — set after
+            address(0), // timbPrize — set after
+            timbsEntryFloor,
+            timbsStep
         );
         console.log("GameRegistry:       ", address(gameRegistry));
 

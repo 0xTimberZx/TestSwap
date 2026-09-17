@@ -38,7 +38,7 @@ contract GovernanceHardeningTest is Test {
 
     function setUp() public {
         timbs    = new GovMockERC20();
-        registry = new GameRegistry(address(timbs), sink, address(0));
+        registry = new GameRegistry(address(timbs), sink, address(0), 2e18, 1e18);
         reserve  = new UnderwriteReserve(address(timbs), treasury, guardian);
         vm.deal(player, 1 ether);
     }

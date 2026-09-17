@@ -20,7 +20,7 @@ are sent (§2.3) but not *what* they are.
 
 | Decision | Choice |
 |---|---|
-| Mainnet "fair release" of TIMBS | **The faucet's TIMBS leg only** — 1 TIMB per eligible claim, gated on a live *mainnet* ticket. |
+| Mainnet "fair release" of TIMBS | **The faucet's TIMBS leg only** — 100 TIMBS per eligible claim against a 500,000 TIMBS Era-1 budget, gated on a live *mainnet* ticket. See `EMISSIONS_SCHEDULE.md` §7. |
 | Testnet-claim → mainnet-TIMB airdrop route | **Retired before mainnet launch.** Stays paused, float recovered to the Safe (§5; `MAINNET_AIRDROP_SPEC.md` §15). |
 | Faucet owner during the beta | **The Safe directly** (fast pause), same posture as the airdrop distributor — not the timelock. |
 | Treasury calls | Owner-only, so **deployer tx pre-handoff / timelock proposal post-handoff** (§2.3). |
@@ -57,12 +57,12 @@ size the per-claim numbers for a *good player experience* and size the caps for
 | `dripEth` | ~5–10 Arbitrum txs of gas | — | **0.0002 ETH** (`2e14`) |
 | `potEth` | ~10 % of `entryCostETH()` | floor 0.001 ETH | **0.0001 ETH** (`1e14`) |
 | per-claim ETH | `dripEth + potEth` | must be `< entryCostETH()` | **0.0003 ETH** (30 % of floor ✓) |
-| `timbsPerClaim` | fixed | — | **1 TIMB** (`1e18`) |
+| `timbsPerClaim` | fixed | — | **100 TIMBS** (`1e20`) |
 | `cooldown` | one claim per wallet per day | — | **86400** |
 | `operatorEthCap` (treasury) | `active_tickets × per-claim ETH × 1.5` | 100 tickets | **0.05 ETH / 24 h** (`5e16`, period `86400`) |
 | `ethCap` (faucet, lifetime) | ~1 month at the daily cap | 30 × 0.03 ETH = 0.9 | **1.5 ETH** (`1.5e18`) |
-| `timbsCap` (faucet, lifetime) | approved fair-release budget | 30 × 100 = 3,000 | **10,000 TIMB** (`1e22`) |
-| TIMBS pre-fund (float) | ~1 month | — | **3,000 TIMB** (`3e21`), top up in tranches |
+| `timbsCap` (faucet, cumulative) | Era-1 fair-release budget | 100/day × 100 × 30 d = 300,000 | **500,000 TIMBS** (`5e23`) |
+| TIMBS pre-fund (float) | ~30 % of the cap | — | **150,000 TIMBS** (`1.5e23`), top up in tranches |
 | treasury ETH on hand | ≥ 30 days × `operatorEthCap` | — | **≥ 1.5 ETH** before enabling the operator |
 
 Rules that keep the table honest:
@@ -201,7 +201,7 @@ cast call $FAUCET "owner()(address)"               --rpc-url $R1   # Safe 0xFbcD
 cast call $FAUCET "dispatcher()(address)"          --rpc-url $R1   # the new mainnet keeper key
 cast call $FAUCET "guardian()(address)"            --rpc-url $R1
 cast call $FAUCET "ethCap()(uint256)"              --rpc-url $R1   # 1500000000000000000
-cast call $FAUCET "timbsCap()(uint256)"            --rpc-url $R1   # 10000000000000000000000
+cast call $FAUCET "timbsCap()(uint256)"            --rpc-url $R1   # 500000000000000000000000
 cast call $FAUCET "dripEth()(uint256)"             --rpc-url $R1   # 200000000000000
 cast call $FAUCET "potEth()(uint256)"              --rpc-url $R1   # 100000000000000
 cast call 0x8c40ed0cce3585b694a45106314b09dff4e04137 "entryCostETH()(uint256)" --rpc-url $R1   # must exceed drip+pot
