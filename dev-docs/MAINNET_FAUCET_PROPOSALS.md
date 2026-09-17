@@ -63,6 +63,7 @@ size the per-claim numbers for a *good player experience* and size the caps for
 | `ethCap` (faucet, lifetime) | ~1 month at the daily cap | 30 × 0.03 ETH = 0.9 | **1.5 ETH** (`1.5e18`) |
 | `timbsCap` (faucet, cumulative) | Era-1 fair-release budget | 100/day × 100 × 30 d = 300,000 | **500,000 TIMBS** (`5e23`) |
 | TIMBS pre-fund (float) | ~30 % of the cap | — | **150,000 TIMBS** (`1.5e23`), top up in tranches |
+| `maxTimbsPerWallet` | era budget ÷ wallets to serve | 500,000 ÷ 100 | **5,000 TIMBS** (`5e21`) — 50 claims a wallet |
 | treasury ETH on hand | ≥ 30 days × `operatorEthCap` | — | **≥ 1.5 ETH** before enabling the operator |
 
 Rules that keep the table honest:
@@ -70,6 +71,12 @@ Rules that keep the table honest:
 - **Both ETH ceilings apply** — the treasury's rolling `operatorEthCap` *and*
   the faucet's cumulative `ethCap`. The rolling one is the daily brake; the
   cumulative one is the "approve more" lever (raise it in one owner tx).
+- **Cap what one wallet can take.** The cooldown paces a wallet, it does not
+  stop it: over Era 1 (250 days at one claim a day) a single wallet can claim
+  251 times for 25,100 TIMBS, so **~20 dedicated wallets absorb the entire
+  500,000 budget**. `setMaxTimbsPerWallet` bounds that without touching the
+  cooldown or the ticket gate; 0 disables it. At 5,000 TIMBS a wallet, at least
+  100 distinct wallets are served and no one wallet exceeds 1 % of the budget.
 - **Float ≤ ~30 % of `timbsCap`**, topped up from the treasury via
   `withdrawToken`. A leaked dispatcher key can only spend the float *and* only
   to wallets that hold an `Active` ticket *and* only once per wallet per day —
