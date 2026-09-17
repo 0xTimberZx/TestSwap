@@ -160,7 +160,7 @@ async function sendConfirmation(to: string) {
   if (!RESEND_KEY) return; // email disabled until a key is configured
   const unsub = `mailto:${UNSUB_MAILTO}?subject=${encodeURIComponent("Unsubscribe " + to)}`;
   try {
-    await fetch("https://api.resend.com/emails", {
+    const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${RESEND_KEY}`,
@@ -175,7 +175,9 @@ async function sendConfirmation(to: string) {
         headers: { "List-Unsubscribe": `<${unsub}>` },
       }),
     });
-  } catch (_e) { /* a failed email must not fail the signup */ }
+    const body = await r.text().catch(() => "");
+    console.log(`resend ${r.status} ${to.replace(/^(.{2}).*(@.*)$/, "$1…$2")} ${body.slice(0, 300)}`);
+  } catch (e) { console.error("resend fetch failed", String(e)); /* a failed email must not fail the signup */ }
 }
 
 Deno.serve(async (req) => {
