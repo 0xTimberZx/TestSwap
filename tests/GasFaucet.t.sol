@@ -128,12 +128,12 @@ contract GasFaucetTest is Test {
         _eligible(alice);
 
         faucet.dispense(alice);
-        vm.warp(block.timestamp + COOLDOWN);
+        vm.warp(block.timestamp + COOLDOWN + 1);
         faucet.dispense(alice);
         assertEq(faucet.timbsClaimedBy(alice), 2 * TIMB, "two claims taken");
 
         // Off cooldown and under the global cap, but out of personal headroom.
-        vm.warp(block.timestamp + COOLDOWN);
+        vm.warp(block.timestamp + COOLDOWN + 1);
         vm.expectRevert(abi.encodeWithSelector(GasFaucet.WalletTimbsCapExceeded.selector, TIMB, 0));
         faucet.dispense(alice);
     }
@@ -144,7 +144,7 @@ contract GasFaucetTest is Test {
         _eligible(bob);
 
         faucet.dispense(alice);
-        vm.warp(block.timestamp + COOLDOWN);
+        vm.warp(block.timestamp + COOLDOWN + 1);
         vm.expectRevert(abi.encodeWithSelector(GasFaucet.WalletTimbsCapExceeded.selector, TIMB, 0));
         faucet.dispense(alice);
 
@@ -160,7 +160,7 @@ contract GasFaucetTest is Test {
 
         assertTrue(faucet.claimable(alice), "claimable before");
         faucet.dispense(alice);
-        vm.warp(block.timestamp + COOLDOWN);
+        vm.warp(block.timestamp + COOLDOWN + 1);
         assertFalse(faucet.claimable(alice), "view agrees with dispense once capped");
     }
 
@@ -168,7 +168,7 @@ contract GasFaucetTest is Test {
         faucet.setMaxTimbsPerWallet(TIMB);
         _eligible(alice);
         faucet.dispense(alice);
-        vm.warp(block.timestamp + COOLDOWN);
+        vm.warp(block.timestamp + COOLDOWN + 1);
 
         faucet.setMaxTimbsPerWallet(3 * TIMB);
         faucet.dispense(alice);
