@@ -23,6 +23,7 @@ depending on another to succeed.
 | Epoch reconciliation | `epoch-recon.yml` | lingers 2 h, self-chains; `:47` every 2 h cron backstop | witness | none | `epoch-recon-state.json` |
 | Faucet reconciliation | `faucet-recon.yml` | lingers 1 h, self-chains; `:37` hourly cron backstop | witness | none | `faucet-recon-state.json` |
 | Points reconciliation | `points-recon.yml` | lingers 1 h, self-chains; `:52` hourly cron backstop | witness | none | `points-recon-state.json` |
+| Dead-man switch | `dead-man.yml` | lingers 30 min, self-chains; `:19`/`:49` cron backstop | witness | none | `dead-man-state.json` |
 
 Three kinds:
 
@@ -114,10 +115,8 @@ cannot loop. Its own two cron ticks were the first thing it failed to see:
 on the day it shipped, neither fired.
 
 **Blind spot, by construction.** If GitHub Actions stops entirely, the
-heartbeat stops with everything else. The only guard for that is an external
-dead-man's switch that expects a call from this job and alerts when it
-does not arrive. Not wired yet; the hook is a one-line `curl` at the end of
-the check step.
+heartbeat stops with everything else, and it cannot see its own absence
+either. The dead-man switch (§8) covers both from outside.
 
 ## 4. The settler liveness witness
 
@@ -267,7 +266,34 @@ season or a redeploy starts it over. It self-chains hourly with the `:52`
 cron as backstop, on the heartbeat's `assessed`/`findings` outputs, and the
 heartbeat watches it.
 
-## 8. The library
+## 8. The dead-man switch
+
+`scripts/dead-man.js` is the one call that leaves Actions. An outside
+service (a Healthchecks.io check, a Cronitor or Uptime Kuma push URL, any
+service that alerts when an expected call stops) is told to expect a ping
+every thirty minutes. This job reads the heartbeat's runs from the Actions
+API, judges them with the heartbeat's own assessment applied to the
+heartbeat itself (a 30-minute cadence, the same slack, grace, streak and
+runaway rules), and pings only while the heartbeat is alive. So the outside
+service alerts when Actions has stopped (nothing runs, no ping), when this
+job's own chain has died (no ping, and the heartbeat also reports it stale),
+and when the heartbeat has died (this job runs and withholds the ping, and
+hits the optional fail URL so the silence is marked deliberate). The
+heartbeat watches this job back. Neither dispatches the other, and neither
+needs the other to have run.
+
+| Finding | Meaning |
+|---|---|
+| `heartbeat` | the heartbeat is stale, failing, runaway or unreadable by its own rules; the ping is withheld |
+| `ping` | the outside service could not be reached; the switch may fire for the wrong reason |
+| `unset` | `DEADMAN_PING_URL` is not set: the switch is not wired. Reported every re-alert interval so an unwired switch is never mistaken for a working one |
+
+An unreadable API counts as a dead heartbeat, because the ping must never be
+sent on a guess. The switch is only complete once the outside check exists,
+with a period of thirty minutes and a grace of thirty, and its ping URL is in
+the `DEADMAN_PING_URL` secret; the job runs and reports `unset` until then.
+
+## 9. The library
 
 `scripts/lib/` is the plumbing every job shares, extracted so a new witness
 is a page of logic rather than a page of logic plus a page of boilerplate:
@@ -289,11 +315,12 @@ logic exported, a `--self-test` of synthetic cases that runs in the workflow
 before the live check, and a `--dry-run` that reads everything and writes
 nothing.
 
-## 9. Witnesses still to build
+## 10. Witnesses built
 
-Each of these shares a clock with a writer and catches a failure the writer
-cannot see in itself. None of them can block the writer. Settler liveness (§4),
-epoch reconciliation (§5), faucet reconciliation (§6) and points
-reconciliation (§7) are built.
-
-- **External dead-man's switch** for the heartbeat itself (§3).
+Each shares a clock with a writer and catches a failure the writer cannot
+see in itself, and none can block the writer: settler liveness (§4), epoch
+reconciliation (§5), faucet reconciliation (§6), points reconciliation (§7)
+and the dead-man switch (§8). The list from the first draft of this document
+is complete. What remains is the library migration (§9): the invariants
+monitor, the epoch keeper and the settler still carry their own copies of the
+shared plumbing.
