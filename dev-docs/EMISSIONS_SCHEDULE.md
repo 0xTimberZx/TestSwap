@@ -339,7 +339,10 @@ contract bug, or a redeploy that lost `lastClaimAt` — which is a different and
 worse failure than the budget draining, and the cap cannot catch it. The
 monitor keeps one compact entry per wallet as its cursor, so only new claims
 are fetched each run; set `FAUCET_GENESIS_BLOCK` to the faucet's deploy block
-before the first run or older claims fall outside the record.
+before the first mainnet run or older claims fall outside the record (the
+testnet deploy block is the script's built-in default). The scan goes through
+the canonical public RPC, as the epoch keeper's does: metered endpoints cap
+`eth_getLogs` to a handful of blocks and the first backfill is millions wide.
 
 ### The TIMBS ticket leg — repriced at deploy, not pegged to the pair
 

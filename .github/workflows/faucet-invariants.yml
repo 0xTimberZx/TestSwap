@@ -57,11 +57,15 @@ jobs:
         id: check
         working-directory: scripts
         env:
-          ARB_SEPOLIA_RPC:      ${{ secrets.ARB_SEPOLIA_RPC }}
+          # No RPC secret on purpose: the metered endpoint caps eth_getLogs to
+          # tiny ranges and the backfill is millions of blocks wide. The script
+          # scans the canonical public RPC from config.js like the epoch keeper.
+          # FAUCET_RPC (a repo variable) overrides it if that ever changes.
+          FAUCET_RPC:           ${{ vars.FAUCET_RPC }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
-          # First-run scan start. Set it to the GasFaucet deploy block; the
-          # fallback (latest − 3,000,000) can miss older claims.
+          # First-run scan start. Testnet defaults to the deploy block inside the
+          # script; set the variable to the GasFaucet deploy block on mainnet.
           FAUCET_GENESIS_BLOCK: ${{ vars.FAUCET_GENESIS_BLOCK }}
           FAUCET_ERA_DAYS:      ${{ vars.FAUCET_ERA_DAYS }}
           FAUCET_ERA_START:     ${{ vars.FAUCET_ERA_START }}
@@ -79,6 +83,12 @@ jobs:
       - name: Commit state
         if: always()
         run: |
+          # A run that died before its first save leaves no file; that is not a
+          # state change (and `git add` on a missing path would fail the step).
+          if [ ! -f scripts/faucet-invariants-state.json ]; then
+            echo "No state file — nothing to commit."
+            exit 0
+          fi
           if git diff --quiet scripts/faucet-invariants-state.json 2>/dev/null && \
              ! git status --porcelain scripts/faucet-invariants-state.json | grep -q .; then
             echo "No state change — nothing to commit."
