@@ -225,21 +225,26 @@ the milestones above.
 | Team | **7,500,000** | 15% | vested, see below |
 | Founder / dev | **6,000,000** | 12% | vested, same schedule |
 | Liquidity — LP seed at launch | **5,000,000** | 10% | 5 ETH @ 100 ETH FDV |
-| Liquidity — depth reserve | **18,124,500** | 36.2% | later depth adds |
+| Liquidity & farms — reserve | **15,000,000** | 30% | later depth adds; farm top-ups beyond the taper |
 | Marketing | **10,000,000** | 20% | |
 | Farm + staking taper, Era 1 (§6) | **2,875,500** | 5.75% | fixed by the taper |
 | Faucet, Era-1 budget | **500,000** | 1.0% | 100 TIMBS per claim |
+| Discretionary — platform expansion | **3,124,500** | 6.25% | unassigned at genesis |
 | **Total** | **50,000,000** | **100%** | |
 
 Team and founder/dev percentages are **of the genesis 50M**, so 13.5% of the 100M
-cap between them. Liquidity totals 23,124,500 (46.2%) across the seed and the
+cap between them. Liquidity totals 20,000,000 (40%) across the seed and the
 reserve.
 
-> The liquidity / marketing **ratio** is the one number not yet chosen — "the rest
-> split for liquidity and marketing" leaves it open. The table proposes
-> 18,124,500 / 10,000,000, weighted to liquidity because pair depth is a
-> game-integrity parameter (below) and because marketing spend is the harder line
-> to reverse once distributed. Adjust freely; the two must sum to 28,124,500.
+**Decided.** The 28,124,500 left after team, founder/dev, the LP seed, the Era-1
+taper and the faucet budget is split **10,000,000 marketing / 15,000,000 liquidity
+and farms / 3,124,500 discretionary**. The liquidity-and-farms reserve is one
+bucket on purpose: pair depth is a game-integrity parameter (below) and the §6
+taper is a floor, not a ceiling, so a farm grant above the taper draws from here
+rather than from a separate line. Discretionary is platform expansion — new
+modules, integrations, listings — and is the only bucket with no committed use
+at genesis. The LP seed (5,000,000) and the Era-1 taper (2,875,500) keep their
+own lines because both are fixed by decisions above, not by this split.
 
 ### Vesting — team and founder/dev
 
@@ -428,12 +433,13 @@ the current single `_mint(treasury, 100M)`.
    inflationary; corrected to 100M fixed + this schedule).
 6. Audit the vault before mainnet — it custodies 50M TIMBS.
 7. **Era-1 split is decided** (§7) — 5 ETH at 100 ETH FDV, team 15% / founder-dev
-   12% of the genesis 50M, faucet-only fair release. Remaining choice: the
-   liquidity / marketing ratio inside 28,614,500.
+   12% of the genesis 50M, faucet-only fair release, and the remainder
+   10,000,000 marketing / 15,000,000 liquidity and farms / 3,124,500
+   discretionary. No open numbers remain in the table.
 8. **Audit `TimbVesting`** (written: `contracts/TimbVesting.sol`, tests, deploy
    script). It is a wrapper over OZ `VestingWalletCliff`, so the review is the
-   two OZ bases plus the refused `receive()`. Decide the beneficiary list for
-   the 7.5M team tranche, and confirm `duration` = 730 vs 910 days (§7).
+   two OZ bases plus the refused `receive()`. Decided: `duration` = 730 days,
+   and the 7.5M team tranche goes to one wallet (§7).
 9. **Redeploy `GameRegistry`** with the repriced TIMBS leg (§7). The constants are
    now constructor immutables; set `TIMBS_ENTRY_FLOOR=500e18` / `TIMBS_STEP=100e18`
    for mainnet. Must happen **before `startGame`** — no live tickets to migrate
