@@ -209,6 +209,8 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── settler.js       ← Automated segment settler
 │   ├── epoch.js         ← Reward-sweep distributor (every 6 rounds)
 │   ├── faucet-worker.js ← Faucet keeper (drains reserved claims → dispense())
+│   ├── fleet-heartbeat.js ← Liveness witness over the Actions API (alerts, never acts)
+│   ├── lib/             ← Shared keeper plumbing: config.js readers, chunked log scans, state files, Telegram
 │   ├── build-vendor.mjs ← Rebuilds vendor/*.js from pinned npm packages (esbuild)
 │   ├── Deploy*.s.sol    ← Foundry deploy scripts (gen-3 migration has a pre-flight guard)
 │   └── package.json
@@ -222,6 +224,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── faucet.yml       ← Faucet keeper (10 min)
 │   ├── admin-fund-rewards.yml ← Manual owner grant to farm / staking when the waterfall has nothing to pour
 │   ├── faucet-invariants.yml ← Read-only monitor: does the faucet claim record fit what the cooldown permits?
+│   ├── fleet-heartbeat.yml ← Read-only witness: is every scheduled keeper still running? (dev-docs/KEEPER_FLEET.md)
 │   └── slither.yml      ← Static-analysis gate on the contracts
 ├── abi/                 ← hand-kept contract ABIs (for integrators)
 ├── CHANGELOG.md         ← Operator-facing log of live-deployment changes

@@ -10,7 +10,8 @@ out/
 broadcast/
 
 # ─── Dependencies ─────────────────────────────────────────────────────────────
-lib/
+# Root-anchored: the Foundry submodules live at /lib; scripts/lib is source.
+/lib/
 
 # ─── IDE ──────────────────────────────────────────────────────────────────────
 .vscode/
@@ -91,6 +92,7 @@ dev-docs/*
 !dev-docs/debughub-network/hub-app-patch.md
 !dev-docs/debughub-network/schema.sql
 !dev-docs/supabase-rls-policies.sql
+!dev-docs/KEEPER_FLEET.md
 
 # ─── Node (dev-only tooling for vendored bundles; see scripts/build-vendor.mjs) ─
 node_modules/
