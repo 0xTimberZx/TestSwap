@@ -84,7 +84,14 @@ async function scanEvents(contract, filter, fromBlock, toBlock) {
   const out = [];
   for (let a = fromBlock; a <= toBlock; a += CHUNK_BLOCKS) {
     const b = Math.min(a + CHUNK_BLOCKS - 1, toBlock);
-    out.push(...await contract.queryFilter(filter, a, b));
+    try {
+      out.push(...await contract.queryFilter(filter, a, b));
+    } catch (e) {
+      // ethers hides the RPC's own message behind "could not coalesce error";
+      // surface it so a getLogs cap / unsupported method is diagnosable from the run log.
+      const inner = e?.error?.message || e?.info?.error?.message || e?.info?.responseBody || "";
+      throw new Error(`getLogs ${a}-${b}: ${e.shortMessage || e.message}${inner ? " — " + String(inner).slice(0, 300) : ""}`);
+    }
   }
   return out;
 }
