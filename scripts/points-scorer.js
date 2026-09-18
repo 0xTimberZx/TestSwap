@@ -28,13 +28,16 @@ const { ethers } = require("ethers");
 const fs   = require("fs");
 const path = require("path");
 
-const RPC_URL  = process.env.ARB_RPC || process.env.ARB_SEPOLIA_RPC;
+// POINTS_RPC wins when set: getLogs over wide ranges needs an endpoint without a
+// per-call block cap (free-tier keyed RPCs often allow 10 blocks). The workflow
+// defaults it to the official public Arbitrum Sepolia RPC.
+const RPC_URL  = process.env.POINTS_RPC || process.env.ARB_RPC || process.env.ARB_SEPOLIA_RPC;
 const SB_URL   = process.env.SUPABASE_URL;
 const SB_KEY   = process.env.SUPABASE_SERVICE_KEY;
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TG_OPS   = process.env.TELEGRAM_CHAT_ID;
 
-const CHUNK_BLOCKS   = Number(process.env.POINTS_CHUNK_BLOCKS || 100000); // getLogs window
+const CHUNK_BLOCKS   = Number(process.env.POINTS_CHUNK_BLOCKS || 5000);   // getLogs window (public RPC-safe)
 const MAX_ROUNDS_RUN = Number(process.env.POINTS_MAX_ROUNDS  || 200);     // rounds folded per run
 
 const sbHeaders = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
@@ -97,7 +100,8 @@ async function scanEvents(contract, filter, fromBlock, toBlock) {
 }
 
 async function main() {
-  if (!RPC_URL) throw new Error("Missing ARB_RPC / ARB_SEPOLIA_RPC");
+  if (!RPC_URL) throw new Error("Missing POINTS_RPC / ARB_RPC / ARB_SEPOLIA_RPC");
+  let scanOk = true; // a failed event scan must not advance last_scored_block
   if (!SB_URL || !SB_KEY) throw new Error("Missing SUPABASE_URL / SUPABASE_SERVICE_KEY");
 
   // Active season + cursors.
@@ -166,7 +170,7 @@ async function main() {
       const rows = [...perTrader.entries()].map(([a, v]) => ({ a, n: v.n, fb: v.fb }));
       if (rows.length) await sbRpc("points_apply_swaps", { p_season: s.id, p_rows: rows });
       swapsAdded = evs.length;
-    } catch (e) { console.warn("[points] swap pass:", e.shortMessage || e.message); }
+    } catch (e) { scanOk = false; console.warn("[points] swap pass:", e.shortMessage || e.message); }
 
     // Wins: WinningsClaimed.
     try {
@@ -178,7 +182,7 @@ async function main() {
       }
       const winRows = [...perWinner.entries()].map(([a, n]) => ({ a, n }));
       if (winRows.length) await sbRpc("points_apply_wins", { p_season: s.id, p_rows: winRows });
-    } catch (e) { console.warn("[points] win pass:", e.shortMessage || e.message); }
+    } catch (e) { scanOk = false; console.warn("[points] win pass:", e.shortMessage || e.message); }
 
     // Participation flags: stake / LP-farm / boost / lock. The indexed user/locker
     // is the real actor, so no tx.from mapping is needed. Missing modules skip.
@@ -200,14 +204,16 @@ async function main() {
 
       const rows = [...flags.entries()].map(([a, f]) => ({ a, stake: !!f.stake, lp: !!f.lp, lock: !!f.lock }));
       if (rows.length) await sbRpc("points_apply_flags", { p_season: s.id, p_rows: rows });
-    } catch (e) { console.warn("[points] flags pass:", e.shortMessage || e.message); }
+    } catch (e) { scanOk = false; console.warn("[points] flags pass:", e.shortMessage || e.message); }
   }
 
   // ── 3) Recompute display_tp + advance cursors ──
   const walletsTotal = await sbRpc("points_recompute", { p_season: s.id });
-  await sbPatch(`seasons?id=eq.${s.id}`, {
-    last_scored_block: toBlock, last_processed_round: lastRound, updated_at: new Date().toISOString(),
-  });
+  // Only advance the block cursor when every event scan succeeded; otherwise the
+  // window is retried next run instead of being silently skipped.
+  const cursor = { last_processed_round: lastRound, updated_at: new Date().toISOString() };
+  if (scanOk) cursor.last_scored_block = toBlock;
+  await sbPatch(`seasons?id=eq.${s.id}`, cursor);
   await fetch(`${SB_URL}/rest/v1/points_runs`, {
     method: "POST", headers: { ...sbHeaders, Prefer: "return=minimal" },
     body: JSON.stringify({
@@ -218,6 +224,7 @@ async function main() {
   }).catch(() => {});
 
   console.log(`[points] ${s.slug}: +${roundsAdded} rounds, ${swapsAdded} swap events, ${walletsTotal} wallets scored (blocks ${fromBlock}–${toBlock}).`);
+  if (!scanOk) throw new Error(`event scan failed for blocks ${fromBlock}–${toBlock}; cursor not advanced — will retry next run`);
 }
 
 main().catch(async (err) => {
