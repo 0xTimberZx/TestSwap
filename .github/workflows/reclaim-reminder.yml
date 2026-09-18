@@ -2,11 +2,12 @@ name: TimbSwap Reclaim Reminder
 
 on:
   schedule:
-    - cron: "17 * * * *"           # hourly; reminders aren't second-sensitive
+    - cron: "17 * * * *"           # backstop only — see the self-chain below
   workflow_dispatch:
 
-# Read-only on-chain + idempotent DMs (deduped in Postgres), so overlap is
-# harmless — but one at a time keeps the logs and DB writes clean.
+# One reminder at a time: a run lingers ~55 min watching the round number
+# (REMIND_LINGER_MINUTES), so overlapping ticks queue. Read-only on-chain and
+# the DMs are deduped in Postgres, so a queued run starting late is harmless.
 concurrency:
   group: timbswap-reclaim-reminder
   cancel-in-progress: false
@@ -15,7 +16,8 @@ jobs:
   remind:
     name: DM holders before their refund lapses
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Must exceed REMIND_LINGER_MINUTES (default 55).
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v5
@@ -40,4 +42,35 @@ jobs:
           REMIND_LEAD_ROUNDS:    ${{ vars.REMIND_LEAD_ROUNDS }}
           SCAN_BACK_ROUNDS:      ${{ vars.RECLAIM_SCAN_BACK_ROUNDS }}
           COMPETE_URL:           https://timbswap.xyz/compete
+          REMIND_LINGER_MINUTES: ${{ vars.REMIND_LINGER_MINUTES }}
+          REMIND_POLL_SECONDS:   ${{ vars.REMIND_POLL_SECONDS }}
+          REMIND_RESCAN_SECONDS: ${{ vars.REMIND_RESCAN_SECONDS }}
         run: node reclaim-reminder.js
+
+      # ── Self-chaining ─────────────────────────────────────────────────────
+      # GitHub fires the hourly cron late and unevenly (the fleet heartbeat
+      # measured runs up to three hours apart). Like the settler, the faucet,
+      # and the match notifier: each SUCCESSFUL run dispatches the next, so the
+      # reminder is self-perpetuating and cron only restarts a broken chain.
+      # Only on success — a run whose every poll failed exits non-zero so a
+      # dead RPC cannot become an infinite re-dispatch loop.
+      #
+      # Token: a fine-grained PAT with Actions read/write on this repo (the
+      # default GITHUB_TOKEN cannot trigger workflow runs). Falls back to the
+      # faucet's, then the settler's, so no new secret is needed to switch on.
+      - name: Dispatch next reminder run
+        if: success()
+        env:
+          DISPATCH_TOKEN: ${{ secrets.RECLAIM_REMINDER_DISPATCH_TOKEN || secrets.FAUCET_DISPATCH_TOKEN || secrets.SETTLER_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "No dispatch token secret — relying on cron for the next run."
+            exit 0
+          fi
+          curl -sS -X POST \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/reclaim-reminder.yml/dispatches" \
+            -d '{"ref":"main"}' \
+            && echo "Next reminder run dispatched." \
+            || echo "Dispatch failed — cron backstop will pick up."
