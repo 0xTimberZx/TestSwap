@@ -97,6 +97,10 @@ forge script scripts/DeployGame.s.sol \
       before its cliff, then verify `balanceOf(wallet)` and that `releasable()`
       is 0. Era-1: team 7,500,000 / founder-dev 6,000,000, cliff 180 d, window
       730 d (`EMISSIONS_SCHEDULE.md` §7).
+- [ ] **Blue-chip pools** (any time after Phase 1, before `startGame`; plain
+      pools, no emissions): `node scripts/seed-pools.js` dry run, then
+      `--execute`. WBTC/WETH, WBTC/USDC, WETH/USDT, LINK/WETH at Chainlink
+      ratios, LP to the Safe. `dev-docs/MAINNET_LP_SEED.md`.
 - [ ] Add liquidity to the TIMBS/WETH pair (sets the launch price).
 - [ ] `TimbStaking.notifyRewardAmount(amount, duration)` and
       `TimbFarm.notifyRewardAmount(...)` — fund reward periods. (Reward-solvency

@@ -211,6 +211,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── faucet-worker.js ← Faucet keeper (drains reserved claims → dispense())
 │   ├── fleet-heartbeat.js ← Liveness witness over the Actions API (alerts, never acts)
 │   ├── lib/             ← Shared keeper plumbing: config.js readers, chunked log scans, state files, Telegram
+│   ├── seed-pools.js    ← Mainnet: seed blue-chip pools at Chainlink ratios (dry run by default)
 │   ├── build-vendor.mjs ← Rebuilds vendor/*.js from pinned npm packages (esbuild)
 │   ├── Deploy*.s.sol    ← Foundry deploy scripts (gen-3 migration has a pre-flight guard)
 │   └── package.json
