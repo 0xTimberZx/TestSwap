@@ -14,7 +14,7 @@ depending on another to succeed.
 | Epoch keeper | `epoch.yml` | every 2 h | writer | epoch key | `epoch-state.json` |
 | Faucet keeper | `faucet.yml` | 10 min | writer | faucet dispatcher key | Supabase `faucet_claims` |
 | Fund rewards, boost window | `admin-*.yml` | manual | writer | epoch key | none |
-| Match notifier | `match-notifier.yml` | 15 min | notifier | none | Supabase |
+| Match notifier | `match-notifier.yml` | lingers 55 min, self-chains; 15 min cron backstop | notifier | none | Supabase |
 | Reclaim reminder | `reclaim-reminder.yml` | hourly | notifier | none | Supabase |
 | Points scorer | `points-scorer.yml` | hourly | notifier | none | Supabase cursors |
 | Faucet invariants | `faucet-invariants.yml` | every 6 h | witness | none | `faucet-invariants-state.json` |
