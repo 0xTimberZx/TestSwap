@@ -19,6 +19,7 @@ depending on another to succeed.
 | Points scorer | `points-scorer.yml` | lingers 1 h, self-chains; hourly cron backstop | notifier | none | Supabase cursors |
 | Faucet invariants | `faucet-invariants.yml` | every 6 h | witness | none | `faucet-invariants-state.json` |
 | Fleet heartbeat | `fleet-heartbeat.yml` | lingers 30 min, self-chains; `:09`/`:39` cron backstop | witness | none | `fleet-heartbeat-state.json` |
+| Settler liveness | `settler-liveness.yml` | lingers 15 min, self-chains; `:04`/`:34` cron backstop | witness | none | `settler-liveness-state.json` |
 
 Three kinds:
 
@@ -115,7 +116,40 @@ dead-man's switch that expects a call from this job and alerts when it
 does not arrive. Not wired yet; the hook is a one-line `curl` at the end of
 the check step.
 
-## 4. The library
+## 4. The settler liveness witness
+
+`scripts/settler-liveness.js` is the witness for the one keeper whose absence
+stops the game. The heartbeat can say a settler run happened; it cannot say
+the run did anything, and the settler's own self-chain only continues after a
+run that succeeded. So this witness ignores the settler entirely and asks the
+chain: is the current segment where the clock says it should be?
+
+It reads `TimbPrize` at one block (round, segment, segment start, the segment
+constants, the lock flags, the previous round's winning string) and the VRF
+module's state for the current segment's salt, and judges against the block's
+own timestamp, never the wall clock:
+
+| Finding | Meaning |
+|---|---|
+| `stuck` | the segment is more than `SETTLER_OVERDUE_MIN` (default 5) past its 60:00 grid mark. `cause` says what the next settle needs: `unarmed` (no draw requested: nothing has called `settleSegment`), `awaiting-vrf` (armed, callback pending, re-request not yet allowed), `vrf-stalled` (callback overdue and `rearmSegment` not called), `lockable` (the word is in and nobody is locking it) |
+| `paused` | settlement is paused by the owner; reported on its own, and `stuck` is suppressed while it holds |
+| `locks` | an earlier segment is unlocked, or the current or a later one is locked; the contract cannot produce this by itself, which is why a witness checks it |
+| `result` | the previous round's winning string has an empty character: a round settled with fewer than six locked segments |
+| `unknown` | the chain could not be read |
+
+The threshold is measured from the grid mark, not from the 59:45 close of the
+interaction window, because that is what the settler's own delay alert
+measures and because arm, callback and lock legitimately take up to a minute.
+A segment inside the window, or a few minutes past it in any VRF state, is
+the settler's business. Alerts are one per finding kind per
+`SETTLER_REALERT_MIN` (default 120), with one recovery when a kind clears.
+
+It self-chains at fifteen minutes with the `:04`/`:34` cron as backstop, on
+the same `assessed`/`findings` outputs as the heartbeat. The heartbeat watches
+it in turn. It cannot block the settler, and a match-notifier bug cannot hide
+a stuck settler, because it shares code with neither.
+
+## 5. The library
 
 `scripts/lib/` is the plumbing every job shares, extracted so a new witness
 is a page of logic rather than a page of logic plus a page of boilerplate:
@@ -127,7 +161,7 @@ is a page of logic rather than a page of logic plus a page of boilerplate:
 | `state.js` | `loadState(file, fresh, { matches })` that discards a file from another deployment, `saveState` |
 | `telegram.js` | `makeTelegram({ token, chatId, mode })` with `send` / `notify`, and `shouldRealert` |
 
-The heartbeat is its first consumer. The invariants monitor, the epoch keeper,
+The heartbeat and the settler liveness witness are its consumers. The invariants monitor, the epoch keeper,
 and the settler still carry their own copies of these functions; they migrate
 one at a time, each in its own PR, with a live dispatch after merge as the
 gate, because none of them can be exercised end to end outside CI.
@@ -137,17 +171,12 @@ logic exported, a `--self-test` of synthetic cases that runs in the workflow
 before the live check, and a `--dry-run` that reads everything and writes
 nothing.
 
-## 5. Witnesses still to build
+## 6. Witnesses still to build
 
 Each of these shares a clock with a writer and catches a failure the writer
-cannot see in itself. None of them can block the writer.
+cannot see in itself. None of them can block the writer. Settler liveness (§4)
+was the first built.
 
-- **Settler liveness.** Every 15 minutes read the prize contract's current
-  segment and its open time; alert if a segment is overdue by more than a few
-  minutes or the last settled round has fewer than six locked segments. The
-  self-chain covers scheduling gaps only on a successful run; this catches the
-  run that happens and fails silently. Keep it separate from the match notifier
-  so a notifier bug never hides a stuck settler.
 - **Epoch reconciliation.** After each epoch boundary, recompute the waterfall
   input from buyback events independently and compare it to the reward-added
   events on the farm and staking contracts, and the period end the contracts
