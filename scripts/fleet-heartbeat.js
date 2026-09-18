@@ -64,6 +64,7 @@ const FLEET = [
   { file: "reclaim-reminder.yml",  cadenceMin: 60,  label: "reclaim reminder" },
   { file: "epoch.yml",             cadenceMin: 120, label: "epoch keeper" },
   { file: "faucet-invariants.yml", cadenceMin: 360, label: "faucet invariants", slack: 2 },
+  { file: "settler-liveness.yml",  cadenceMin: 15,  label: "settler liveness" },
 ];
 
 const OPTS = {

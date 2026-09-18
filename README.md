@@ -210,6 +210,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── epoch.js         ← Reward-sweep distributor (every 6 rounds)
 │   ├── faucet-worker.js ← Faucet keeper (drains reserved claims → dispense())
 │   ├── fleet-heartbeat.js ← Liveness witness over the Actions API (alerts, never acts)
+│   ├── settler-liveness.js ← Game-clock witness: is the prize segment past its grid mark, and why? (alerts, never settles)
 │   ├── lib/             ← Shared keeper plumbing: config.js readers, chunked log scans, state files, Telegram
 │   ├── seed-pools.js    ← Mainnet: seed blue-chip pools at Chainlink ratios (dry run by default)
 │   ├── build-vendor.mjs ← Rebuilds vendor/*.js from pinned npm packages (esbuild)
@@ -226,6 +227,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── admin-fund-rewards.yml ← Manual owner grant to farm / staking when the waterfall has nothing to pour
 │   ├── faucet-invariants.yml ← Read-only monitor: does the faucet claim record fit what the cooldown permits?
 │   ├── fleet-heartbeat.yml ← Read-only witness: is every scheduled keeper still running? (dev-docs/KEEPER_FLEET.md)
+│   ├── settler-liveness.yml ← Read-only witness: is the prize game where its clock says it should be?
 │   └── slither.yml      ← Static-analysis gate on the contracts
 ├── abi/                 ← hand-kept contract ABIs (for integrators)
 ├── CHANGELOG.md         ← Operator-facing log of live-deployment changes
