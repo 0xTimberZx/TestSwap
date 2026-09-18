@@ -28,11 +28,18 @@
 // file is keyed by chain + faucet address and starts over if either changes.
 //
 // Env:
-//   ARB_SEPOLIA_RPC        optional; default = config.js PUBLIC_RPCS[0] / canonical
+//   FAUCET_RPC             optional; default = config.js PUBLIC_RPCS[0] / canonical.
+//                          NOT the ARB_SEPOLIA_RPC secret: metered providers cap
+//                          eth_getLogs to tiny block ranges (observed live: 10 blocks)
+//                          and the first-run backfill is millions of blocks wide. The
+//                          canonical public endpoint serves large ranges; the epoch
+//                          keeper scans it the same way.
 //   FAUCET_ADDRESS         optional override; default = config.js ADDRESSES.GasFaucet
-//   FAUCET_GENESIS_BLOCK   first block to scan on the first run. Unset → latest − 3,000,000
-//                          (~8 days on Arbitrum Sepolia). Set it — the fallback can miss
-//                          older claims and then A/B/C are checked on a partial record.
+//   FAUCET_GENESIS_BLOCK   first block to scan on the first run. Unset → the per-chain
+//                          default below (the testnet faucet's deploy) or, on a chain
+//                          with none, latest − 3,000,000 (~8 days on Arbitrum). Set it
+//                          on mainnet — the fallback can miss older claims and then
+//                          A/B/C are checked on a partial record.
 //   FAUCET_ERA_DAYS        era length for C and E (default 250)
 //   FAUCET_ERA_START       unix seconds; default = timestamp of the first claim seen
 //   FAUCET_PACE_SLACK      E tolerance (default 1.5 = spend may run 50 % ahead of time)
@@ -52,6 +59,11 @@ const LOG_CHUNK  = Number(process.env.FAUCET_LOG_CHUNK || 40_000);
 const ERA_DAYS   = Number(process.env.FAUCET_ERA_DAYS || 250);
 const PACE_SLACK = Number(process.env.FAUCET_PACE_SLACK || 1.5);
 const GENESIS_FALLBACK_SPAN = 3_000_000;
+// First-run scan start per chain when FAUCET_GENESIS_BLOCK is unset. The
+// testnet value is the epoch keeper's block from the run just before the
+// GasFaucet address landed in config.js (2026-09-15 04:56 UTC), so it precedes
+// the deploy. Mainnet has no entry on purpose: set the variable at deploy time.
+const GENESIS_DEFAULT_BY_CHAIN = { 421614: 309_038_324 };
 
 const TG_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
@@ -290,7 +302,7 @@ async function fetchNewEvents(provider, faucetAddr, iface, fromBlock, toBlock) {
 }
 
 async function main() {
-  const provider   = new ethers.JsonRpcProvider(process.env.ARB_SEPOLIA_RPC || rpcFromConfig());
+  const provider   = new ethers.JsonRpcProvider(process.env.FAUCET_RPC || rpcFromConfig());
   const chainId    = Number((await provider.getNetwork()).chainId);
   const faucetAddr = process.env.FAUCET_ADDRESS ? ethers.getAddress(process.env.FAUCET_ADDRESS) : addrFromConfig("GasFaucet");
   const faucet     = new ethers.Contract(faucetAddr, FAUCET_ABI, provider);
@@ -307,7 +319,10 @@ async function main() {
   let fromBlock;
   if (state.cursorBlock !== null) fromBlock = state.cursorBlock + 1;
   else if (process.env.FAUCET_GENESIS_BLOCK) fromBlock = Number(process.env.FAUCET_GENESIS_BLOCK);
-  else {
+  else if (GENESIS_DEFAULT_BY_CHAIN[chainId] !== undefined) {
+    fromBlock = GENESIS_DEFAULT_BY_CHAIN[chainId];
+    console.log(`FAUCET_GENESIS_BLOCK unset — using the chain ${chainId} default ${fromBlock}`);
+  } else {
     fromBlock = Math.max(0, latest - GENESIS_FALLBACK_SPAN);
     console.warn(`FAUCET_GENESIS_BLOCK unset — scanning from ${fromBlock} (latest − ${GENESIS_FALLBACK_SPAN}). Older claims are NOT in the record; set the var.`);
   }
@@ -367,4 +382,12 @@ async function main() {
   console.log("\ninvariants OK");
 }
 
-if (!SELF_TEST) main().catch((e) => { console.error(e.shortMessage || e.message || e); process.exit(2); });
+if (!SELF_TEST) main().catch((e) => {
+  // ethers wraps provider errors ("could not coalesce error"); surface the RPC's
+  // own message and the method so a range cap or a bad endpoint is readable.
+  const inner = e?.error?.message || e?.info?.error?.message;
+  const method = e?.info?.payload?.method;
+  console.error(e.shortMessage || e.message || e);
+  if (inner || method) console.error(`  rpc: ${method || "?"} → ${inner || "?"}`);
+  process.exit(2);
+});
