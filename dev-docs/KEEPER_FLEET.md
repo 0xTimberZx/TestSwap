@@ -11,7 +11,7 @@ depending on another to succeed.
 | Job | Workflow | Cadence | Kind | Holds a key | Own state |
 |---|---|---|---|---|---|
 | Settler | `settler.yml` | 10 min, lingers across segments; noon health | writer | settler key | none (chain is the state) |
-| Epoch keeper | `epoch.yml` | every 2 h | writer | epoch key | `epoch-state.json` |
+| Epoch keeper | `epoch.yml` | lingers 2 h, self-chains; 2 h cron backstop | writer | epoch key | `epoch-state.json` |
 | Faucet keeper | `faucet.yml` | 10 min | writer | faucet dispatcher key | Supabase `faucet_claims` |
 | Fund rewards, boost window | `admin-*.yml` | manual | writer | epoch key | none |
 | Match notifier | `match-notifier.yml` | lingers 55 min, self-chains; 15 min cron backstop | notifier | none | Supabase |
