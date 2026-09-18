@@ -77,6 +77,9 @@ Rules that keep the table honest:
   500,000 budget**. `setMaxTimbsPerWallet` bounds that without touching the
   cooldown or the ticket gate; 0 disables it. At 5,000 TIMBS a wallet, at least
   100 distinct wallets are served and no one wallet exceeds 1 % of the budget.
+  Its detection twin, `scripts/faucet-invariants.js`, checks the dispensed
+  record against the cooldown every six hours and alerts on a bypass — set
+  `FAUCET_GENESIS_BLOCK` to the faucet's deploy block when it goes live.
 - **Float ≤ ~30 % of `timbsCap`**, topped up from the treasury via
   `withdrawToken`. A leaked dispatcher key can only spend the float *and* only
   to wallets that hold an `Active` ticket *and* only once per wallet per day —
