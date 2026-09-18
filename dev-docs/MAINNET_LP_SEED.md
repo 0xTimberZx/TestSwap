@@ -50,17 +50,19 @@ Approvals are exact amounts, never unlimited.
 
 ## 3. Sizing
 
-`SEED_USD_PER_SIDE` is the dollar value of **each** token in a pool, so the
-default 500 makes a 1,000 USD pool and the four pools together cost about
-4,000 USD of inventory, spread as roughly 1,000 USD each of WBTC, USDC, USDT
-and LINK and 1,500 USD of WETH.
+`SEED_USD_PER_SIDE` is the dollar value of **each** token in a pool, so a
+pool costs twice it, and the four pools together cost eight times it in
+inventory, with WETH appearing in three of them. The number is a per-run
+decision and is deliberately not recorded here or defaulted in the script:
+the dry run prints exactly what it implies before anything is sent.
 
 What depth buys is low price impact. In a constant-product pool a trade of
-size `t` against reserves of `R` moves the price by about `t / R`. At 500 USD a
-side a 50 USD trade moves the price 10 %; at 5,000 USD a side the same trade
-moves it 1 %. The pools exist to make the exchange usable, not to compete on
-depth, so start where the inventory is comfortable and add later: adding to an
-existing pool at the feed ratio is the same script with the same guards.
+size `t` against reserves of `R` moves the price by about `t / R`, so a trade
+of a tenth of one side moves the price about ten percent, and a trade of a
+hundredth moves it about one. The pools exist to make the exchange usable,
+not to compete on depth, so start where the inventory is comfortable and add
+later: adding to an existing pool at the feed ratio is the same script with
+the same guards.
 
 Fee income is 0.25 % of volume to LPs. At these sizes it is small; the pools
 are infrastructure, not yield.

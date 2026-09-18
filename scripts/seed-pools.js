@@ -32,7 +32,7 @@
 //   TOKEN_WBTC, TOKEN_WETH, TOKEN_USDC, TOKEN_USDT, TOKEN_LINK   canonical tokens
 //   FEED_BTC_USD, FEED_ETH_USD, FEED_USDC_USD, FEED_USDT_USD, FEED_LINK_USD   Chainlink
 //   SEED_PAIRS               default "WBTC/WETH,WBTC/USDC,WETH/USDT,LINK/WETH"
-//   SEED_USD_PER_SIDE        USD of EACH token per pool (default 500 → $1,000 pool)
+//   SEED_USD_PER_SIDE        USD of EACH token per pool — REQUIRED, a per-run decision
 //   SEED_LP_TO               LP token recipient (default: the sending wallet; use the Safe)
 //   SEED_SLIPPAGE_BPS        min-amount tolerance on the add (default 100 = 1 %)
 //   SEED_MAX_DEVIATION_BPS   refuse an existing pool further than this from the feed (default 50)
@@ -71,7 +71,6 @@ const DEFAULTS = {
   router:    "0x4f33df838c0d357c7f1a44ffb5ee0fc49a62b5fe",   // MAINNET_ADDRESSES.md Phase 1
   factory:   "0x60d4f18fe205c0ed38507a8fbf89aaa1bd2ce183",
   pairs:     "WBTC/WETH,WBTC/USDC,WETH/USDT,LINK/WETH",
-  usdPerSide: 500,
   slippageBps: 100,
   maxDeviationBps: 50,
   feedMaxAge: 3600,
@@ -268,7 +267,8 @@ async function main() {
   const routerFactory = await router.factory();
   if (routerFactory.toLowerCase() !== factoryAddr.toLowerCase()) throw new Error(`router.factory() is ${routerFactory}, not SEED_FACTORY ${factoryAddr}`);
 
-  const usdPerSide      = Number(process.env.SEED_USD_PER_SIDE || DEFAULTS.usdPerSide);
+  const usdPerSide      = Number(process.env.SEED_USD_PER_SIDE);
+  if (!(usdPerSide > 0)) throw new Error("SEED_USD_PER_SIDE is required (USD of each token per pool) — it is a per-run decision, so there is no default");
   const slippageBps     = Number(process.env.SEED_SLIPPAGE_BPS || DEFAULTS.slippageBps);
   const maxDeviationBps = Number(process.env.SEED_MAX_DEVIATION_BPS || DEFAULTS.maxDeviationBps);
   const feedMaxAge      = Number(process.env.SEED_FEED_MAX_AGE || DEFAULTS.feedMaxAge);
