@@ -221,6 +221,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── epoch.yml        ← Reward sweep
 │   ├── faucet.yml       ← Faucet keeper (10 min)
 │   ├── admin-fund-rewards.yml ← Manual owner grant to farm / staking when the waterfall has nothing to pour
+│   ├── faucet-invariants.yml ← Read-only monitor: does the faucet claim record fit what the cooldown permits?
 │   └── slither.yml      ← Static-analysis gate on the contracts
 ├── abi/                 ← hand-kept contract ABIs (for integrators)
 ├── CHANGELOG.md         ← Operator-facing log of live-deployment changes

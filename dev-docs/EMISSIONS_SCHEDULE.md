@@ -319,11 +319,27 @@ budget. It is owner-settable in one tx:
 | **5,000 TIMBS** | **100** | **50** |
 | 10,000 TIMBS | 50 | 100 |
 
-The same arithmetic gives a **monitoring invariant** for the claim record: no
-wallet may show more than `elapsed_days + 1` claims, and in aggregate
-`total_claims ≤ unique_wallets × (elapsed_days + 1)`. A breach means the cooldown
-was bypassed rather than merely exhausted, which is a different and worse
-failure than the budget draining.
+The same arithmetic gives the **detection half** of the guard, built as
+`scripts/faucet-invariants.js` on the `TimbSwap Faucet Invariants` workflow
+(every six hours, read-only, no key). It scans `Dispensed` events and checks
+the record against what the cooldown and the era *permit*:
+
+| | Invariant | On breach |
+|---|---|---|
+| A | every wallet's consecutive claims are ≥ cooldown apart | fail + alert |
+| B | per wallet, claims ≤ `floor((last − first) / cooldown) + 1` | fail + alert |
+| C | `total ≤ unique_wallets × (floor((now − eraStart)/cooldown) + 1)` | fail + alert |
+| D | contract `timbsClaimedBy(w)` = Σ events, and ≤ `maxTimbsPerWallet` | fail + alert |
+| E | TIMBS spent / cap vs era elapsed, within a slack | warn |
+| F | top-5 wallets' share of the total | printed |
+
+A is exact; B and C are the bound as spoken and follow from it. A breach of
+A–D means the cooldown was **bypassed** rather than exhausted — a dispatcher or
+contract bug, or a redeploy that lost `lastClaimAt` — which is a different and
+worse failure than the budget draining, and the cap cannot catch it. The
+monitor keeps one compact entry per wallet as its cursor, so only new claims
+are fetched each run; set `FAUCET_GENESIS_BLOCK` to the faucet's deploy block
+before the first run or older claims fall outside the record.
 
 ### The TIMBS ticket leg — repriced at deploy, not pegged to the pair
 
