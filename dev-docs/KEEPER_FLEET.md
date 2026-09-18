@@ -18,7 +18,7 @@ depending on another to succeed.
 | Reclaim reminder | `reclaim-reminder.yml` | lingers 55 min on the round clock, self-chains; hourly cron backstop | notifier | none | Supabase |
 | Points scorer | `points-scorer.yml` | hourly | notifier | none | Supabase cursors |
 | Faucet invariants | `faucet-invariants.yml` | every 6 h | witness | none | `faucet-invariants-state.json` |
-| Fleet heartbeat | `fleet-heartbeat.yml` | twice an hour | witness | none | `fleet-heartbeat-state.json` |
+| Fleet heartbeat | `fleet-heartbeat.yml` | lingers 30 min, self-chains; `:09`/`:39` cron backstop | witness | none | `fleet-heartbeat-state.json` |
 
 Three kinds:
 
@@ -32,9 +32,12 @@ Three kinds:
 ## 2. The rules
 
 1. **Writers act. Witnesses alert.** A witness never calls a contract, never
-   re-dispatches a workflow, never edits another job's state. The settler's
-   self-chain is the one job that triggers another, and it triggers only itself,
-   only on success.
+   dispatches another job, never edits another job's state. The one trigger a
+   job may fire is its own next run, one cadence later, after a run that got
+   as far as doing its work; that is the self-chain, and it exists because
+   this repo's cron delivers roughly one tick in four to six (measured
+   2026-09-18 across every cron-only job). Cron is the backstop, never the
+   clock.
 2. **Every job owns exactly one state file, and nobody else reads it.** The
    epoch keeper's cursor is the epoch keeper's. A witness that wants to check
    the epoch recomputes from chain events; it does not read
@@ -99,7 +102,14 @@ It exits non-zero on any finding, so the heartbeat run itself shows red in
 Actions. It needs no private key and no npm install: only the repo's own
 token with `actions: read`.
 
-**Blind spot, by construction.** If GitHub stops firing cron entirely, the
+The heartbeat self-chains like the writers: check, commit state, sleep the
+linger (`FLEET_LINGER_MINUTES`, default 30), dispatch the next run. The chain
+continues after a run with findings, because a red fleet is when the watch
+matters most, but not after a crash before the assessment, so a missing token
+cannot loop. Its own two cron ticks were the first thing it failed to see:
+on the day it shipped, neither fired.
+
+**Blind spot, by construction.** If GitHub Actions stops entirely, the
 heartbeat stops with everything else. The only guard for that is an external
 dead-man's switch that expects a call from this job and alerts when it
 does not arrive. Not wired yet; the hook is a one-line `curl` at the end of
