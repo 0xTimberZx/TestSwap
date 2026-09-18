@@ -93,6 +93,7 @@ dev-docs/*
 !dev-docs/debughub-network/schema.sql
 !dev-docs/supabase-rls-policies.sql
 !dev-docs/KEEPER_FLEET.md
+!dev-docs/MAINNET_LP_SEED.md
 
 # ─── Node (dev-only tooling for vendored bundles; see scripts/build-vendor.mjs) ─
 node_modules/
