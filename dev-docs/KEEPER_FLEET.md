@@ -82,10 +82,15 @@ API and classifies:
 |---|---|
 | `stale` | nothing running and the last success started more than `max(cadence × slack, grace)` minutes ago, or there is no success at all |
 | `failing` | the most recent completed runs are all failures (cancelled and skipped runs are ignored; concurrency groups cancel redundant backstops by design) |
+| `runaway` | more than a handful of completed runs started inside one cadence window: a self-chain gone tight, a cron misfire, or a dispatch loop. Green runs count; cancelled backstops do not. Outranks every other finding |
 | `unknown` | the API could not be read for that workflow |
 
 Defaults: slack 3 cadences, grace 30 minutes, three failures make a streak,
-re-alert every 6 hours. The invariants monitor carries a per-entry slack of 2
+four completions in one cadence are a runaway, re-alert every 6 hours. The
+runaway finding exists because of an incident: a zero-minute linger once
+chained the notifier and the reminder into a run every fifteen seconds, every
+run green, and nothing in the fleet could have said so. Absence and failure
+were watched; excess was not. The invariants monitor carries a per-entry slack of 2
 so a six-hour job is not eighteen hours late before anyone hears. A run that
 is in progress counts as alive at any age: the settler lingers across
 segments by design and its own timeout bounds it.
