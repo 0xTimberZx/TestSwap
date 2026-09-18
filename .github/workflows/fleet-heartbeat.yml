@@ -64,6 +64,7 @@ jobs:
           FLEET_SLACK:        ${{ vars.FLEET_SLACK }}
           FLEET_GRACE_MIN:    ${{ vars.FLEET_GRACE_MIN }}
           FLEET_FAIL_STREAK:  ${{ vars.FLEET_FAIL_STREAK }}
+          FLEET_RUNAWAY_COUNT: ${{ vars.FLEET_RUNAWAY_COUNT }}
           FLEET_REALERT_MIN:  ${{ vars.FLEET_REALERT_MIN }}
         run: |
           if [ "${{ github.event.inputs.report }}" = "yes" ]; then

@@ -17,6 +17,12 @@
 //   failing   the most recent completed runs are all failures (cancelled and
 //             skipped runs are ignored: the concurrency groups cancel redundant
 //             cron backstops by design)
+//   runaway   more than FLEET_RUNAWAY_COUNT completed runs started inside one
+//             cadence window. A keeper that is far too present: a self-chain
+//             gone tight (a zero-minute linger once produced a run every fifteen
+//             seconds), a cron misfire, or a dispatch loop. Cancelled and
+//             skipped runs do not count, so queued backstops that the
+//             concurrency group drops are not mistaken for a loop.
 //   unknown   the API could not be read for that workflow
 //
 // State: scripts/fleet-heartbeat-state.json — one last-alerted stamp per
@@ -29,6 +35,7 @@
 //   FLEET_SLACK            cadences a keeper may miss before it is stale (default 3)
 //   FLEET_GRACE_MIN        minimum stale threshold in minutes (default 30)
 //   FLEET_FAIL_STREAK      consecutive failures that count as failing (default 3)
+//   FLEET_RUNAWAY_COUNT    completed runs inside one cadence that count as runaway (default 4)
 //   FLEET_REALERT_MIN      minutes between repeat alerts for one workflow (default 360)
 //   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_OPS_MODE   optional alerts
 //
@@ -62,6 +69,7 @@ const OPTS = {
   slack:      Number(process.env.FLEET_SLACK || 3),
   graceMin:   Number(process.env.FLEET_GRACE_MIN || 30),
   failStreak: Number(process.env.FLEET_FAIL_STREAK || 3),
+  runawayCount: Number(process.env.FLEET_RUNAWAY_COUNT || 4),
   realertMin: Number(process.env.FLEET_REALERT_MIN || 360),
 };
 
@@ -109,6 +117,18 @@ function assessOne(entry, runs, nowMs, opts) {
     row.status = "failing";
     row.detail = `${streak} consecutive failures; ${row.detail}`;
   }
+
+  // Runaway outranks everything: too many completed runs inside one cadence
+  // window means the keeper is being scheduled far too often, and that is true
+  // whether the runs are green or not. The API page is fifteen runs, so a
+  // tight loop saturates the window within minutes.
+  const windowMs = entry.cadenceMin * 60_000;
+  const recent = completed.filter((r) => nowMs - startMs(r) <= windowMs).length;
+  row.recent = recent;
+  if (recent >= opts.runawayCount) {
+    row.status = "runaway";
+    row.detail = `${recent} completed runs in the last ${entry.cadenceMin} min (expected about 1); ${row.detail}`;
+  }
   return row;
 }
 
@@ -150,7 +170,7 @@ function selfTest() {
   const bad = (minAgo) => ({ status: "completed", conclusion: "failure", run_started_at: iso(minAgo) });
   const can = (minAgo) => ({ status: "completed", conclusion: "cancelled", run_started_at: iso(minAgo) });
   const run = (minAgo) => ({ status: "in_progress", run_started_at: iso(minAgo) });
-  const opts = { slack: 3, graceMin: 30, failStreak: 3, realertMin: 360 };
+  const opts = { slack: 3, graceMin: 30, failStreak: 3, runawayCount: 4, realertMin: 360 };
   const e10  = { file: "a.yml", cadenceMin: 10 };
   const e360 = { file: "b.yml", cadenceMin: 360, slack: 2 };
 
@@ -179,6 +199,16 @@ function selfTest() {
   eq("failing outranks stale",              st(e10, [bad(40), bad(50), bad(60), ok(200)]), ["failing", 3]);
   eq("cancelled does not break a streak",   st(e10, [bad(2), can(5), bad(12), bad(22), ok(40)]), ["failing", 3]);
   eq("running after failures is ok",        st(e10, [run(1), bad(12), bad(22), bad(32)]), ["ok", 3]);
+
+  // Runaway: too many completions inside one cadence window.
+  eq("three completions in a cadence is ok",   st(e10, [ok(1), ok(4), ok(7)]),                    ["ok", 0]);
+  eq("four completions in a cadence is runaway", st(e10, [ok(1), ok(3), ok(5), ok(7)]),          ["runaway", 0]);
+  eq("cancelled backstops never count",        st(e10, [can(1), can(2), can(3), can(4), ok(5)]), ["ok", 0]);
+  eq("old completions are outside the window", st(e10, [ok(1), ok(12), ok(24), ok(36)]),         ["ok", 0]);
+  eq("runaway outranks a green streak",        assessOne(e10, [ok(1), ok(2), ok(3), ok(4), ok(5)], now, opts).recent, 5);
+  eq("failing loop is still runaway",          st(e10, [bad(1), bad(2), bad(3), bad(4), ok(20)]), ["runaway", 4]);
+  eq("running run does not count as completed", st(e10, [run(0), ok(2), ok(4), ok(6)]),          ["ok", 0]);
+  eq("slow job with a normal history is ok",   st(e360, [ok(10), ok(370), ok(730)]),              ["ok", 0]);
 
   // Fleet-level: one stale, one ok.
   const fleet = [e10, { file: "c.yml", cadenceMin: 10 }];
@@ -278,4 +308,6 @@ async function main() {
   console.log("\nfleet OK");
 }
 
-if (!SELF_TEST) main().catch((e) => { console.error(e.message || e); process.exit(2); });
+// Only run the live path when executed directly, so the assessment can be
+// required by a test or a replay without touching the API.
+if (!SELF_TEST && require.main === module) main().catch((e) => { console.error(e.message || e); process.exit(2); });
