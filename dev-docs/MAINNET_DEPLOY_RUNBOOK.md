@@ -90,6 +90,13 @@ forge script scripts/DeployGame.s.sol \
 
 - [ ] Verify all phase-2 contracts on Sourcify/Arbiscan.
 - [ ] Transfer initial TIMBS allocations from the treasury wallet.
+- [ ] **Vesting:** `forge script scripts/DeployVesting.s.sol` (env: `VEST_BENEFICIARIES`,
+      `VEST_AMOUNTS`, `VEST_CLIFF_SECONDS`, `VEST_DURATION_SECONDS`, optional
+      `VEST_START`). It deploys one `TimbVesting` per beneficiary and prints the
+      Safe transfers — it moves nothing. Fund each wallet from the Safe ONCE,
+      before its cliff, then verify `balanceOf(wallet)` and that `releasable()`
+      is 0. Era-1: team 7,500,000 / founder-dev 6,000,000, cliff 180 d, window
+      730 d (`EMISSIONS_SCHEDULE.md` §7).
 - [ ] Add liquidity to the TIMBS/WETH pair (sets the launch price).
 - [ ] `TimbStaking.notifyRewardAmount(amount, duration)` and
       `TimbFarm.notifyRewardAmount(...)` — fund reward periods. (Reward-solvency
