@@ -66,6 +66,7 @@ const FLEET = [
   { file: "faucet-invariants.yml", cadenceMin: 360, label: "faucet invariants", slack: 2 },
   { file: "settler-liveness.yml",  cadenceMin: 15,  label: "settler liveness" },
   { file: "epoch-recon.yml",       cadenceMin: 120, label: "epoch reconciliation" },
+  { file: "faucet-recon.yml",      cadenceMin: 60,  label: "faucet reconciliation" },
 ];
 
 const OPTS = {

@@ -21,6 +21,7 @@ depending on another to succeed.
 | Fleet heartbeat | `fleet-heartbeat.yml` | lingers 30 min, self-chains; `:09`/`:39` cron backstop | witness | none | `fleet-heartbeat-state.json` |
 | Settler liveness | `settler-liveness.yml` | lingers 15 min, self-chains; `:04`/`:34` cron backstop | witness | none | `settler-liveness-state.json` |
 | Epoch reconciliation | `epoch-recon.yml` | lingers 2 h, self-chains; `:47` every 2 h cron backstop | witness | none | `epoch-recon-state.json` |
+| Faucet reconciliation | `faucet-recon.yml` | lingers 1 h, self-chains; `:37` hourly cron backstop | witness | none | `faucet-recon-state.json` |
 
 Three kinds:
 
@@ -195,7 +196,39 @@ heartbeat's `assessed`/`findings` outputs, and the heartbeat watches it. Its
 genesis block is `RECON_GENESIS_BLOCK`, else the keeper's
 `EPOCH_GENESIS_BLOCK`, else eight days back.
 
-## 6. The library
+## 6. The faucet reconciliation witness
+
+`scripts/faucet-recon.js` is the three-way check the invariants monitor
+leaves open. A claim leaves three marks: a `faucet_claims` row the worker
+resolves to `sent` with the transaction hash, a `Dispensed` event in that
+transaction, and the contract's `lastClaimAt` for the wallet. The invariants
+monitor reconciles the events against the contract's tally; this witness adds
+the database leg and pairs the three, so a disagreement names the leg that
+lied instead of only saying that one did.
+
+Rows and events pair by transaction hash. They arrive seconds apart but not
+always in the same run, so unmatched items are carried in state and become
+findings only once older than `RECON_LAG_MIN` (default 20). The contract clock
+is read only for the items that failed to pair:
+
+| Finding | Meaning |
+|---|---|
+| `db-only` | a `sent` row whose transaction has no Dispensed event. `lastClaimAt` at or after the reservation means the chain saw a claim and the event scan missed it; earlier means the chain never saw it and the row is wrong |
+| `chain-only` | a Dispensed event that is no `sent` row's hash. A `failed` row for the same wallet within the lag means the worker paid and then failed to record it, so the wallet's day is not burned in the database and it can reserve again; no row at all means the dispatcher key was used outside the worker |
+| `mismatch` | a `sent` row whose transaction paid a different wallet |
+| `stale` | a `reserved` row older than the lag: the worker's fifteen-minute housekeeping is not running |
+| `unknown` | the chain or the database could not be read |
+
+The row cursor advances only past resolved rows, because a row read while
+`reserved` must be read again once resolved or its `sent` would look like an
+event with no row. It reads `faucet_claims` with the service key like the
+worker, the notifier and the scorer, because the table has no anon policy;
+it never writes. Genesis is `FAUCET_GENESIS_BLOCK`, else the invariants
+monitor's per-chain default; rows older than that block are outside the
+record. It self-chains hourly with the `:37` cron as backstop, on the
+heartbeat's `assessed`/`findings` outputs, and the heartbeat watches it.
+
+## 7. The library
 
 `scripts/lib/` is the plumbing every job shares, extracted so a new witness
 is a page of logic rather than a page of logic plus a page of boilerplate:
@@ -207,7 +240,7 @@ is a page of logic rather than a page of logic plus a page of boilerplate:
 | `state.js` | `loadState(file, fresh, { matches })` that discards a file from another deployment, `saveState` |
 | `telegram.js` | `makeTelegram({ token, chatId, mode })` with `send` / `notify`, and `shouldRealert` |
 
-The heartbeat, the settler liveness witness and the epoch reconciliation witness are its consumers. The invariants monitor, the epoch keeper,
+The heartbeat and the three reconciliation witnesses (settler, epoch, faucet) are its consumers. The invariants monitor, the epoch keeper,
 and the settler still carry their own copies of these functions; they migrate
 one at a time, each in its own PR, with a live dispatch after merge as the
 gate, because none of them can be exercised end to end outside CI.
@@ -217,16 +250,12 @@ logic exported, a `--self-test` of synthetic cases that runs in the workflow
 before the live check, and a `--dry-run` that reads everything and writes
 nothing.
 
-## 7. Witnesses still to build
+## 8. Witnesses still to build
 
 Each of these shares a clock with a writer and catches a failure the writer
-cannot see in itself. None of them can block the writer. Settler liveness (§4)
-and epoch reconciliation (§5) are built.
+cannot see in itself. None of them can block the writer. Settler liveness (§4),
+epoch reconciliation (§5) and faucet reconciliation (§6) are built.
 
-- **Faucet three-way.** The invariants monitor reconciles events against the
-  contract's tally. Add the database leg: every claim marked dispensed in
-  Supabase has a matching event, and no event lacks a row. Two of three
-  disagreeing says which leg lied.
 - **Points spot check.** Recompute one or two wallets' points from events each
   hour and compare to the leaderboard row. Catches cursor drift in the scorer
   the same way epoch drift was caught.
