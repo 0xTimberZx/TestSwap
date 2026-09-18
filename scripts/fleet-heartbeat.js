@@ -41,6 +41,7 @@
 //
 // Flags: --self-test  --dry-run (no Telegram, no state write)  --report (summary even when healthy)
 
+const fs   = require("fs");
 const path = require("path");
 const { loadState, saveState } = require("./lib/state");
 const { makeTelegram, shouldRealert } = require("./lib/telegram");
@@ -159,7 +160,7 @@ function plan(state, rows, nowSec, opts = OPTS) {
   return { alerts, recoveries };
 }
 
-module.exports = { FLEET, assess, assessOne, plan };
+module.exports = { FLEET, assess, assessOne, plan, main };
 
 // ─── Self-test ──────────────────────────────────────────────────────────────
 
@@ -274,6 +275,11 @@ async function main() {
 
   const nowMs = Date.now();
   const { rows, findings } = assess(FLEET, runsByFile, nowMs);
+  // Step outputs for the workflow: `assessed` gates the self-chain (a crash
+  // before this point must not re-dispatch), `findings` marks the run red
+  // after the linger and the dispatch have happened.
+  const out = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`); };
+  out("assessed", "true");
 
   console.log(`fleet heartbeat @ ${new Date(nowMs).toISOString()}  slack=${OPTS.slack} grace=${OPTS.graceMin}m`);
   for (const r of rows) {
@@ -301,6 +307,7 @@ async function main() {
     }
   }
 
+  out("findings", String(findings.length));
   if (findings.length) {
     console.error(`\n${findings.length} finding(s): ${findings.map((r) => `${r.file} ${r.status}`).join(", ")}`);
     process.exit(1);

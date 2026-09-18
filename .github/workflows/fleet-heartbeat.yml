@@ -7,13 +7,21 @@ name: TimbSwap Fleet Heartbeat
 # workflow and alerts when its last success is older than its cadence allows.
 # It holds no private key and needs no npm install: only the repo's own token.
 #
-# Blind spot, by construction: if GitHub stops firing cron entirely, this job
+# Pacing: GitHub delivers this repo's cron at roughly one tick in four to six
+# (measured 2026-09-18 across every cron-only job), so like the settler, the
+# faucet, the notifier and the reminder this job self-chains: check, commit
+# state, sleep FLEET_LINGER_MINUTES, dispatch the next run. Cron is only the
+# backstop that restarts a broken chain. The chain continues after a run WITH
+# findings (a red fleet is when the watch matters most) but not after a crash
+# before the assessment, so a missing token cannot loop.
+#
+# Blind spot, by construction: if GitHub Actions stops entirely, this job
 # stops with the rest. Only an external ping (a dead-man's-switch service that
 # expects a call from here) would catch that; not wired yet.
 
 on:
   schedule:
-    - cron: "9,39 * * * *"   # twice an hour, off the ticks the keepers use
+    - cron: "9,39 * * * *"   # backstop only — see the self-chain below
   workflow_dispatch:
     inputs:
       report:
@@ -37,7 +45,8 @@ jobs:
   check:
     name: Check keeper liveness
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Must exceed FLEET_LINGER_MINUTES (default 30) plus the check itself.
+    timeout-minutes: 40
 
     steps:
       - name: Checkout repo
@@ -54,7 +63,12 @@ jobs:
         working-directory: scripts
         run: node fleet-heartbeat.js --self-test
 
+      # continue-on-error: a run with findings exits 1 by design, but the state
+      # commit, the linger and the dispatch below must still happen. The job is
+      # marked red again at the end from the `findings` output.
       - name: Check the fleet
+        id: check
+        continue-on-error: true
         working-directory: scripts
         env:
           GITHUB_TOKEN:       ${{ secrets.GITHUB_TOKEN }}
@@ -93,3 +107,41 @@ jobs:
           git commit -m "[skip ci] heartbeat: update alert state"
           git pull --rebase --autostash origin main
           git push origin main
+
+      # ── Linger, then self-chain ────────────────────────────────────────────
+      # The sleep is what paces the chain: the next run starts one linger after
+      # this one's check, whatever cron does. Only after a completed assessment
+      # (`assessed` output) — a crash before that point falls back to cron.
+      - name: Linger until the next check is due
+        if: steps.check.outputs.assessed == 'true'
+        env:
+          FLEET_LINGER_MINUTES: ${{ vars.FLEET_LINGER_MINUTES }}
+        run: |
+          MIN="${FLEET_LINGER_MINUTES:-30}"
+          echo "Lingering ${MIN} min before dispatching the next check."
+          sleep "$(( MIN * 60 ))"
+
+      - name: Dispatch next heartbeat run
+        if: steps.check.outputs.assessed == 'true'
+        env:
+          DISPATCH_TOKEN: ${{ secrets.HEARTBEAT_DISPATCH_TOKEN || secrets.FAUCET_DISPATCH_TOKEN || secrets.SETTLER_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "No dispatch token secret — relying on cron for the next run."
+            exit 0
+          fi
+          curl -sS -X POST \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/fleet-heartbeat.yml/dispatches" \
+            -d '{"ref":"main"}' \
+            && echo "Next heartbeat run dispatched." \
+            || echo "Dispatch failed — cron backstop will pick up."
+
+      # The run shows red when the fleet had a finding, as before; this comes
+      # last so it cannot stop the state commit, the linger or the dispatch.
+      - name: Mark the run red on findings
+        if: steps.check.outputs.findings != '0'
+        run: |
+          echo "Fleet findings this run: ${{ steps.check.outputs.findings }} (see the check step)."
+          exit 1
