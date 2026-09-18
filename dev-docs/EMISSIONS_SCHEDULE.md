@@ -259,9 +259,10 @@ is the two OZ bases plus a refused `receive()`.
 
 **Cliff semantics (OZ):** at the cliff, the linear amount for time already
 elapsed unlocks in one step — a catch-up of 180/730 ≈ 24.7% — then it streams
-linearly to month twenty-four. If the intended reading is "six months, *then*
-twenty-four months of linear", that is the same contract with `duration = 910
-days` and nothing else changes; a test pins both shapes.
+linearly to month twenty-four. **Decided: `duration` = 730 days.** The other
+reading, "six months, *then* twenty-four months of linear", would be the same
+contract with a 910-day window; a test pins that shape too, but it is not the
+plan.
 
 The wallet vests **whatever it holds plus what it has released**, so the
 allocation is simply the amount the Safe transfers in. A later top-up joins the
@@ -278,8 +279,9 @@ Properties, and the decisions they encode:
   tokens can effectively be sold by selling the wallet. Accepted.
 - **`release` is permissionless** and always pays the owner.
 - **TIMBS only.** ETH is refused.
-- **Beneficiary count is a deploy input.** "Team" at 7.5M is one wallet or
-  several; the script takes a list and the sum is what matters.
+- **Two wallets, decided.** Team (7,500,000) vests to **one** wallet and
+  founder/dev (6,000,000) to another. The script takes a list, so this is the
+  Era-1 list rather than a limit of the contract.
 
 Still needs the audit alongside the release vault — see §9.
 
@@ -413,8 +415,9 @@ the current single `_mint(treasury, 100M)`.
    liquidity / marketing ratio inside 28,614,500.
 8. **Audit `TimbVesting`** (written: `contracts/TimbVesting.sol`, tests, deploy
    script). It is a wrapper over OZ `VestingWalletCliff`, so the review is the
-   two OZ bases plus the refused `receive()`. Decide the beneficiary list for
-   the 7.5M team tranche, and confirm `duration` = 730 vs 910 days (§7).
+   two OZ bases plus the refused `receive()`. Parameters are decided (§7):
+   `duration` 730 d, cliff 180 d, two wallets. What remains is the audit and
+   the two beneficiary addresses on deploy day.
 9. **Redeploy `GameRegistry`** with the repriced TIMBS leg (§7). The constants are
    now constructor immutables; set `TIMBS_ENTRY_FLOOR=500e18` / `TIMBS_STEP=100e18`
    for mainnet. Must happen **before `startGame`** — no live tickets to migrate
