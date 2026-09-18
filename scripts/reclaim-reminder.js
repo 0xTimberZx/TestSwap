@@ -125,7 +125,11 @@ function reclaimLink(wallet) {
   return BOT_USER ? `https://t.me/${BOT_USER}` : COMPETE;
 }
 
-const LINGER_MS = Number(process.env.REMIND_LINGER_MINUTES ?? 55) * 60 * 1000;
+// `||`, not `??`: the workflow passes an UNSET repo variable as an empty string,
+// which `??` keeps and Number("") turns into 0 — a zero-minute linger that
+// exits at once and, with a dispatch token present, chains runs back to back.
+// An explicit "0" is a non-empty string, so it still means a single pass.
+const LINGER_MS = Number(process.env.REMIND_LINGER_MINUTES || 55) * 60 * 1000;
 const POLL_MS   = Number(process.env.REMIND_POLL_SECONDS   || 60) * 1000;
 const RESCAN_MS = Number(process.env.REMIND_RESCAN_SECONDS || 900) * 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
