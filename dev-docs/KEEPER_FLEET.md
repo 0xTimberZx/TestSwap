@@ -20,6 +20,7 @@ depending on another to succeed.
 | Faucet invariants | `faucet-invariants.yml` | every 6 h | witness | none | `faucet-invariants-state.json` |
 | Fleet heartbeat | `fleet-heartbeat.yml` | lingers 30 min, self-chains; `:09`/`:39` cron backstop | witness | none | `fleet-heartbeat-state.json` |
 | Settler liveness | `settler-liveness.yml` | lingers 15 min, self-chains; `:04`/`:34` cron backstop | witness | none | `settler-liveness-state.json` |
+| Epoch reconciliation | `epoch-recon.yml` | lingers 2 h, self-chains; `:47` every 2 h cron backstop | witness | none | `epoch-recon-state.json` |
 
 Three kinds:
 
@@ -149,7 +150,52 @@ the same `assessed`/`findings` outputs as the heartbeat. The heartbeat watches
 it in turn. It cannot block the settler, and a match-notifier bug cannot hide
 a stuck settler, because it shares code with neither.
 
-## 5. The library
+## 5. The epoch reconciliation witness
+
+`scripts/epoch-recon.js` is the witness for the keeper that holds the biggest
+key. The epoch keeper's cursor is `epoch-state.json`, and the stale-cursor
+incident showed the failure class: a cursor that is wrong makes every
+settlement look right to the keeper while the pools run dry. Rule 2 says a
+witness never reads that file, so this one reconstructs the keeper's work
+from the chain alone.
+
+A farm `RewardNotified` is a settlement. The keeper reads its scan-end block
+before its own buyback of that run lands, so that buyback belongs to the next
+epoch; the witness takes a `BuybackExecuted` within `RECON_RUN_WINDOW_SEC`
+(default 600) before the grant as the run's start, and measures the window
+from the previous run's start to this one. Over that window it sums the
+buyback waterfall slice, the farm claims and the staking claims, replays the
+waterfall bit for bit (including the post-blackout bootstrap), and compares
+the farm grant and the same-run staking grant to the result:
+
+| Finding | Meaning |
+|---|---|
+| `grant` | a settlement's farm or staking grant is more than `RECON_TOLERANCE_BPS` (default 100) from the recomputed waterfall, or the staking grant is missing; the keeper funds the farm first and tolerates a staking failure by design, and this is how that gets noticed |
+| `duration` | a grant's emission period is not `EMIT_PERIOD_DAYS` |
+| `orphan` | a staking grant with no farm grant in the same run: manual funding, or a keeper granting out of order |
+| `overdue` | an epoch boundary passed more than `RECON_OVERDUE_MIN` (default 240) ago, budget has accrued since the last settlement, and nothing settled. Requires budget: a zero-budget epoch leaves no marker and is not overdue |
+| `dead-zone` | a pool's `periodFinish` is in the past; emissions have stopped |
+| `period` | a pool's `periodFinish` is not what its last seen grant set: a grant this record did not see |
+| `unknown` | the chain could not be read |
+
+Settlement findings are one-offs, reported when the settlement is first seen.
+Standing findings are throttled per kind and announce one recovery.
+
+Two limits, by construction. A zero-budget epoch is invisible on chain, so
+the settlement after it is reconciled over a window spanning both, and claims
+made during the silent epoch show as a shortfall: one alert, gone at the next
+settlement. And a keeper that is dead does no buybacks, so budget does not
+accrue and `overdue` stays quiet; absence is the heartbeat's finding, and this
+witness catches the keeper that runs and grants wrong, or runs and does not
+settle.
+
+The first settlement it sees is a baseline with nothing to measure from. It
+self-chains at two hours with the `:47` every-2-h cron as backstop, on the
+heartbeat's `assessed`/`findings` outputs, and the heartbeat watches it. Its
+genesis block is `RECON_GENESIS_BLOCK`, else the keeper's
+`EPOCH_GENESIS_BLOCK`, else eight days back.
+
+## 6. The library
 
 `scripts/lib/` is the plumbing every job shares, extracted so a new witness
 is a page of logic rather than a page of logic plus a page of boilerplate:
@@ -161,7 +207,7 @@ is a page of logic rather than a page of logic plus a page of boilerplate:
 | `state.js` | `loadState(file, fresh, { matches })` that discards a file from another deployment, `saveState` |
 | `telegram.js` | `makeTelegram({ token, chatId, mode })` with `send` / `notify`, and `shouldRealert` |
 
-The heartbeat and the settler liveness witness are its consumers. The invariants monitor, the epoch keeper,
+The heartbeat, the settler liveness witness and the epoch reconciliation witness are its consumers. The invariants monitor, the epoch keeper,
 and the settler still carry their own copies of these functions; they migrate
 one at a time, each in its own PR, with a live dispatch after merge as the
 gate, because none of them can be exercised end to end outside CI.
@@ -171,18 +217,12 @@ logic exported, a `--self-test` of synthetic cases that runs in the workflow
 before the live check, and a `--dry-run` that reads everything and writes
 nothing.
 
-## 6. Witnesses still to build
+## 7. Witnesses still to build
 
 Each of these shares a clock with a writer and catches a failure the writer
 cannot see in itself. None of them can block the writer. Settler liveness (§4)
-was the first built.
+and epoch reconciliation (§5) are built.
 
-- **Epoch reconciliation.** After each epoch boundary, recompute the waterfall
-  input from buyback events independently and compare it to the reward-added
-  events on the farm and staking contracts, and the period end the contracts
-  now hold. The state file says what the keeper believed; the chain says what
-  happened. The stale-cursor incident that produced the reset detection is
-  exactly this class.
 - **Faucet three-way.** The invariants monitor reconciles events against the
   contract's tally. Add the database leg: every claim marked dispensed in
   Supabase has a matching event, and no event lacks a row. Two of three
