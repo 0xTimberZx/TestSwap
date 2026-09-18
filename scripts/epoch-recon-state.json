@@ -1,0 +1,29 @@
+{
+  "chainId": 421614,
+  "farm": "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
+  "staking": "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
+  "treasury": "0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c",
+  "prize": "0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF",
+  "cursorBlock": 310341514,
+  "sinceSec": 1789773707,
+  "lastSettlement": {
+    "block": 309927184,
+    "runStartBlock": 309927184,
+    "ts": 1789670123,
+    "round": 55,
+    "farm": "1000000000000000000000",
+    "stake": null
+  },
+  "lastGrant": {
+    "farm": {
+      "ts": 1789670123,
+      "duration": 5184000
+    },
+    "stake": {
+      "ts": 1789669894,
+      "duration": 2592000
+    }
+  },
+  "zAccrued": "0",
+  "alerted": {}
+}
