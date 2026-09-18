@@ -22,6 +22,7 @@ depending on another to succeed.
 | Settler liveness | `settler-liveness.yml` | lingers 15 min, self-chains; `:04`/`:34` cron backstop | witness | none | `settler-liveness-state.json` |
 | Epoch reconciliation | `epoch-recon.yml` | lingers 2 h, self-chains; `:47` every 2 h cron backstop | witness | none | `epoch-recon-state.json` |
 | Faucet reconciliation | `faucet-recon.yml` | lingers 1 h, self-chains; `:37` hourly cron backstop | witness | none | `faucet-recon-state.json` |
+| Points reconciliation | `points-recon.yml` | lingers 1 h, self-chains; `:52` hourly cron backstop | witness | none | `points-recon-state.json` |
 
 Three kinds:
 
@@ -228,7 +229,45 @@ monitor's per-chain default; rows older than that block are outside the
 record. It self-chains hourly with the `:37` cron as backstop, on the
 heartbeat's `assessed`/`findings` outputs, and the heartbeat watches it.
 
-## 7. The library
+## 7. The points reconciliation witness
+
+`scripts/points-recon.js` is the spot check grown into a shadow. The scorer
+folds on-chain activity into the board behind a settlement lag and keeps its
+cursors in the `seasons` row; a cursor that skips a window under-scores every
+wallet, one that replays a window over-scores every wallet, and the board
+looks plausible either way. The cost of a witness here is the event scan,
+not the number of wallets compared, so this one keeps a full shadow ledger:
+it folds the same events by its own path, with its own block and round
+cursors, and compares every wallet's counters and display score to the board
+each run. It reads the season's configuration (start block and round, lag,
+minimum rounds, weights) and the board; it never reads the scorer's cursors
+and never writes to Supabase.
+
+Each counter is recomputed exactly as the scorer defines it: rounds from
+`getRoundEntrants` for every settled round inside the lag; nudge-swaps, plain
+swaps and panel nudges from `Swap` and `ScrollNudged` grouped by transaction
+and attributed to `tx.from`; ticket activations whose owner entered the
+round; farm and staking claims of at least 25 TIMBS; wins; faucet drips from
+the `faucet_claims` table up to the lag block's time. The window ends at the
+block where round (current − lag + 1) started, found from `RoundStarted` the
+way the scorer finds it. `display_tp` is checked against the row's own
+counters and the season's weights.
+
+| Finding | Meaning |
+|---|---|
+| `over` | the board's counter exceeds the shadow's: the scorer counted something the chain does not show, a replayed window or a cursor that moved backwards. Immediate |
+| `under` | the board's counter is below the shadow's and has been for `POINTS_GRACE_MIN` (default 180): a skipped window. The grace covers the scorer not having run since the lag block moved |
+| `tp` | `display_tp` is not what the row's counters and the weights give: the SQL recompute disagrees with the weights |
+| `unknown` | the chain or the database could not be read |
+
+Discrepancies are alerted once per kind per re-alert interval, because a
+skipped window is one problem across many wallets, not one per wallet. The
+ledger is keyed to chain, contracts, season id and start block, so a new
+season or a redeploy starts it over. It self-chains hourly with the `:52`
+cron as backstop, on the heartbeat's `assessed`/`findings` outputs, and the
+heartbeat watches it.
+
+## 8. The library
 
 `scripts/lib/` is the plumbing every job shares, extracted so a new witness
 is a page of logic rather than a page of logic plus a page of boilerplate:
@@ -240,7 +279,7 @@ is a page of logic rather than a page of logic plus a page of boilerplate:
 | `state.js` | `loadState(file, fresh, { matches })` that discards a file from another deployment, `saveState` |
 | `telegram.js` | `makeTelegram({ token, chatId, mode })` with `send` / `notify`, and `shouldRealert` |
 
-The heartbeat and the three reconciliation witnesses (settler, epoch, faucet) are its consumers. The invariants monitor, the epoch keeper,
+The heartbeat and the four reconciliation witnesses (settler, epoch, faucet, points) are its consumers. The invariants monitor, the epoch keeper,
 and the settler still carry their own copies of these functions; they migrate
 one at a time, each in its own PR, with a live dispatch after merge as the
 gate, because none of them can be exercised end to end outside CI.
@@ -250,13 +289,11 @@ logic exported, a `--self-test` of synthetic cases that runs in the workflow
 before the live check, and a `--dry-run` that reads everything and writes
 nothing.
 
-## 8. Witnesses still to build
+## 9. Witnesses still to build
 
 Each of these shares a clock with a writer and catches a failure the writer
 cannot see in itself. None of them can block the writer. Settler liveness (§4),
-epoch reconciliation (§5) and faucet reconciliation (§6) are built.
+epoch reconciliation (§5), faucet reconciliation (§6) and points
+reconciliation (§7) are built.
 
-- **Points spot check.** Recompute one or two wallets' points from events each
-  hour and compare to the leaderboard row. Catches cursor drift in the scorer
-  the same way epoch drift was caught.
 - **External dead-man's switch** for the heartbeat itself (§3).
