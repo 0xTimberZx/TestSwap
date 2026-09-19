@@ -211,6 +211,12 @@ function fmtMin(sec) {
 // the current state and are throttled with a recovery when they clear.
 const STANDING = new Set(["overdue", "dead-zone", "period", "unknown"]);
 
+/**
+ * Decide what to send. Returns { alerts: [{ kind, items }], recoveries }.
+ * One message per kind, never one per finding: a first-run backfill once sent
+ * twenty-three messages for what was one story. One-off kinds send every run
+ * they occur; standing kinds are throttled per kind and announce a recovery.
+ */
 function plan(state, findings, nowSec, opts = OPTS) {
   state.alerted ??= {};
   const alerts = [], recoveries = [];
@@ -218,14 +224,13 @@ function plan(state, findings, nowSec, opts = OPTS) {
   for (const kind of Object.keys(state.alerted)) {
     if (!present.has(kind)) { recoveries.push(kind); delete state.alerted[kind]; }
   }
-  const seenStanding = new Set();
-  for (const f of findings) {
-    if (!STANDING.has(f.kind)) { alerts.push(f); continue; }
-    if (seenStanding.has(f.kind)) continue;
-    seenStanding.add(f.kind);
-    if (shouldRealert(state.alerted[f.kind], nowSec, opts.realertMin * 60)) {
-      alerts.push(f);
-      state.alerted[f.kind] = nowSec;
+  const byKind = new Map();
+  for (const f of findings) (byKind.get(f.kind) ?? byKind.set(f.kind, []).get(f.kind)).push(f);
+  for (const [kind, items] of byKind) {
+    if (!STANDING.has(kind)) { alerts.push({ kind, items }); continue; }
+    if (shouldRealert(state.alerted[kind], nowSec, opts.realertMin * 60)) {
+      alerts.push({ kind, items });
+      state.alerted[kind] = nowSec;
     }
   }
   return { alerts, recoveries };
@@ -315,20 +320,23 @@ function selfTest() {
   eq("never settled, young record, ok",      kinds(assessLive(live({ lastSettlement: null, sinceSec: T - 86_400 }), opts)), []);
   eq("never settled, old record, overdue",   kinds(assessLive(live({ lastSettlement: null, sinceSec: T - 3 * 86_400 }), opts)), ["overdue"]);
 
-  // Alert planning: one-offs always, standing throttled with recovery.
+  // Alert planning: one message per kind; one-offs every run, standing
+  // throttled with recovery.
   const state = { alerted: {} };
-  let p = plan(state, [{ kind: "grant", detail: "a" }, { kind: "overdue", detail: "b" }], T, opts);
-  eq("first run alerts both",            p.alerts.map((f) => f.kind), ["grant", "overdue"]);
+  let p = plan(state, [{ kind: "grant", detail: "a" }, { kind: "grant", detail: "a2" }, { kind: "overdue", detail: "b" }], T, opts);
+  eq("first run alerts both kinds once",  p.alerts.map((a) => `${a.kind}×${a.items.length}`), ["grant×2", "overdue×1"]);
   p = plan(state, [{ kind: "grant", detail: "c" }, { kind: "overdue", detail: "b" }], T + 60, opts);
-  eq("one-off repeats, standing throttled", p.alerts.map((f) => f.kind), ["grant"]);
+  eq("one-off repeats, standing throttled", p.alerts.map((a) => a.kind), ["grant"]);
   p = plan(state, [{ kind: "overdue", detail: "b" }], T + 361 * 60, opts);
-  eq("standing re-alerts after interval", p.alerts.map((f) => f.kind), ["overdue"]);
+  eq("standing re-alerts after interval", p.alerts.map((a) => a.kind), ["overdue"]);
   p = plan(state, [], T + 400 * 60, opts);
   eq("standing recovery once",           p.recoveries, ["overdue"]);
   p = plan(state, [], T + 401 * 60, opts);
   eq("no second recovery",               p.recoveries.length, 0);
   p = plan(state, [{ kind: "dead-zone", detail: "f" }, { kind: "dead-zone", detail: "s" }], T + 500 * 60, opts);
-  eq("two of one standing kind alert once", p.alerts.length, 1);
+  eq("two of one standing kind alert once", [p.alerts.length, p.alerts[0].items.length], [1, 2]);
+  p = plan(state, Array.from({ length: 23 }, (_, i) => ({ kind: i % 2 ? "grant" : "duration", detail: String(i) })), T + 600 * 60, opts);
+  eq("twenty-three one-offs are two messages", p.alerts.map((a) => `${a.kind}×${a.items.length}`), ["duration×12", "grant×11"]);
 
   console.log(`self-test: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
@@ -377,13 +385,19 @@ async function main() {
     const g = process.env.RECON_GENESIS_BLOCK || process.env.EPOCH_GENESIS_BLOCK;
     const cursorBlock = g ? Number(g) - 1 : Math.max(0, latest.number - GENESIS_FALLBACK_SPAN);
     if (!g) console.warn(`no genesis block set — record starts at ${cursorBlock + 1} (latest − ${GENESIS_FALLBACK_SPAN})`);
-    return { chainId, ...addr, cursorBlock, sinceSec: nowSec, lastSettlement: null, lastGrant: { farm: null, stake: null }, zAccrued: "0", alerted: {} };
+    // `backfill`: the first run reads everything since genesis. Settlements
+    // from before this record existed are reconciled and logged as history,
+    // not alerted: they include manual fundings and earlier eras of the keeper
+    // that were never this witness's to judge. Standing checks still apply.
+    return { chainId, ...addr, cursorBlock, sinceSec: nowSec, lastSettlement: null, lastGrant: { farm: null, stake: null }, zAccrued: "0", backfill: true, alerted: {} };
   }, { matches: sameDeployment, label: "recon state" });
+  const backfill = state.backfill === true;
 
   const from = state.cursorBlock + 1, to = latest.number;
-  console.log(`epoch recon @ block ${to}  chain ${chainId}  scan ${from} → ${to}  tolerance ${OPTS.toleranceBps} bps`);
+  console.log(`epoch recon @ block ${to}  chain ${chainId}  scan ${from} → ${to}  tolerance ${OPTS.toleranceBps} bps${backfill ? "  (first run: history is logged, not alerted)" : ""}`);
 
   let findings = [];
+  const history = [];
   let summary = "";
   try {
     // 1. New grants and the buybacks around them.
@@ -427,11 +441,11 @@ async function main() {
         ]);
         const r = reconcile(s, { z, y, w });
         console.log(`  settlement @ ${s.farm.block} (round ${round ?? "?"}, window ${wFrom}–${wTo}): z=${fmt(z)} y=${fmt(y)} w=${fmt(w)} → farm ${fmt(s.farm.amount)} vs ${fmt(r.expected.farm)}, staking ${s.stake ? fmt(s.stake.amount) : "—"} vs ${fmt(r.expected.stake)} ${r.findings.length ? "✗" : "✓"}`);
-        findings.push(...r.findings);
+        (backfill ? history : findings).push(...r.findings);
       }
       state.lastSettlement = { block: s.farm.block, runStartBlock: s.runStartBlock, ts: s.farm.ts, round, farm: s.farm.amount.toString(), stake: s.stake ? s.stake.amount.toString() : null };
     }
-    for (const o of orphans) findings.push({ kind: "orphan", detail: `staking grant of ${fmt(o.amount)} @ block ${o.block} by ${o.notifier} with no farm grant in the same run` });
+    for (const o of orphans) (backfill ? history : findings).push({ kind: "orphan", detail: `staking grant of ${fmt(o.amount)} @ block ${o.block} by ${o.notifier} with no farm grant in the same run` });
     if (farmGrants.length)  state.lastGrant.farm  = { ts: farmGrants.at(-1).ts,  duration: farmGrants.at(-1).duration };
     if (stakeGrants.length) state.lastGrant.stake = { ts: stakeGrants.at(-1).ts, duration: stakeGrants.at(-1).duration };
 
@@ -459,24 +473,31 @@ async function main() {
     findings.push(...assessLive(live));
     summary = `round ${live.round} (epoch ${epochOf(live.round)}) · last settlement ${state.lastSettlement ? `round ${state.lastSettlement.round ?? "?"} @ ${state.lastSettlement.block}` : "none seen"} · budget since ${fmt(zSince)} · farm period ends in ${fmtMin(live.farmPeriodFinish - nowSec)} · staking in ${fmtMin(live.stakePeriodFinish - nowSec)}`;
     state.cursorBlock = to;
+    state.backfill = false;   // history is read once; from here every settlement is judged
   } catch (e) {
     const inner = e?.error?.message || e?.info?.error?.message;
     findings.push({ kind: "unknown", detail: `chain read failed: ${e.shortMessage || e.message}${inner ? ` (${inner})` : ""}` });
   }
   out("assessed", "true");
 
+  if (history.length) {
+    console.log(`  history before this record (${history.length}, logged only):`);
+    for (const f of history) console.log(`    [${f.kind}] ${f.detail}`);
+  }
   console.log(`  ${findings.length ? "✗" : "✓"} ${summary}`);
   for (const f of findings) console.log(`    [${f.kind}] ${f.detail}`);
 
   const { alerts, recoveries } = plan(state, findings, nowSec);
+  const message = (a) => `🚨 Epoch reconciliation [${a.kind}] × ${a.items.length}\n` +
+    a.items.slice(0, 5).map((f) => f.detail).join("\n") + (a.items.length > 5 ? `\n…and ${a.items.length - 5} more` : "");
   if (DRY_RUN) {
-    console.log(`\n(dry run) would alert: ${alerts.map((f) => f.kind).join(", ") || "none"}; recoveries: ${recoveries.join(", ") || "none"}`);
+    console.log(`\n(dry run) would alert: ${alerts.map((a) => `${a.kind}×${a.items.length}`).join(", ") || "none"}; recoveries: ${recoveries.join(", ") || "none"}`);
   } else {
     // The cursor advances only with a clean read; an `unknown` run leaves it.
     saveState(STATE_PATH, state);
-    for (const f of alerts) await tg.notify(`🚨 Epoch reconciliation [${f.kind}]\n${f.detail}`);
+    for (const a of alerts) await tg.notify(message(a));
     if (recoveries.length) await tg.notify(`✅ Epoch reconciliation recovered: ${recoveries.join(", ")}\n${summary}`);
-    if (!findings.length && REPORT) await tg.send(`✅ Epoch reconciliation OK\n${summary}`);
+    if (!findings.length && REPORT) await tg.send(`✅ Epoch reconciliation OK\n${summary}${history.length ? `\n(${history.length} historical finding(s) logged from before this record)` : ""}`);
   }
 
   out("findings", String(findings.length));

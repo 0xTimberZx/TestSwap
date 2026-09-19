@@ -180,7 +180,13 @@ the farm grant and the same-run staking grant to the result:
 | `unknown` | the chain could not be read |
 
 Settlement findings are one-offs, reported when the settlement is first seen.
-Standing findings are throttled per kind and announce one recovery.
+Standing findings are throttled per kind and announce one recovery. Every
+alert is one message per kind, never one per finding. The first run reads
+everything since genesis and treats the settlements it finds there as history:
+reconciled and logged, never alerted, because they include manual fundings
+and earlier eras of the keeper that were never this witness's to judge. Its
+first live run alerted on twenty-three of them, one message each, which is
+why both of these rules exist.
 
 Two limits, by construction. A zero-budget epoch is invisible on chain, so
 the settlement after it is reconciled over a window spanning both, and claims
