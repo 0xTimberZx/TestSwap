@@ -305,8 +305,8 @@ is a page of logic rather than a page of logic plus a page of boilerplate:
 | `state.js` | `loadState(file, fresh, { matches })` that discards a file from another deployment, `saveState` |
 | `telegram.js` | `makeTelegram({ token, chatId, mode })` with `send` / `notify`, and `shouldRealert` |
 
-The heartbeat, the four reconciliation witnesses (settler, epoch, faucet, points) and the settler itself are its consumers. The invariants monitor and the epoch keeper
-still carry their own copies of these functions; they migrate
+The heartbeat, the four reconciliation witnesses (settler, epoch, faucet, points), the settler and the epoch keeper are its consumers. The invariants monitor
+still carries its own copies of these functions; it migrates
 one at a time, each in its own PR, with a live dispatch after merge as the
 gate, because none of them can be exercised end to end outside CI.
 
