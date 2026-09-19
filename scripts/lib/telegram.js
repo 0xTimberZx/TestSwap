@@ -14,12 +14,14 @@
 const ALERT_GLYPH = /^[❌⚠️💥♻️🚨]/u;
 
 /**
- * makeTelegram({ token, chatId, mode, tag }) → { enabled, send, notify }
+ * makeTelegram({ token, chatId, mode, tag, preview }) → { enabled, mode, send, notify }
  *   send(text, { markdown })  always sends (mode "off" still suppresses)
  *   notify(text)              honours mode "errors": routine beats are dropped
  * `tag` prefixes log lines so several keepers' output stays attributable.
+ * `preview` keeps link previews (off by default: ops alerts carry tx links
+ * and error dumps; a community stream that links the site wants them on).
  */
-function makeTelegram({ token, chatId, mode = "all", tag = "tg" } = {}) {
+function makeTelegram({ token, chatId, mode = "all", tag = "tg", preview = false } = {}) {
   const m = String(mode || "all").toLowerCase();
   const enabled = Boolean(token && chatId) && m !== "off";
   const url = token ? `https://api.telegram.org/bot${token}/sendMessage` : null;
@@ -28,7 +30,7 @@ function makeTelegram({ token, chatId, mode = "all", tag = "tg" } = {}) {
     return fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, disable_web_page_preview: true, ...body }),
+      body: JSON.stringify({ chat_id: chatId, disable_web_page_preview: !preview, ...body }),
     });
   }
 
