@@ -4,7 +4,7 @@
   "staking": "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   "treasury": "0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c",
   "prize": "0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF",
-  "cursorBlock": 310485153,
+  "cursorBlock": 310513780,
   "sinceSec": 1789773707,
   "lastSettlement": {
     "block": 309927184,
