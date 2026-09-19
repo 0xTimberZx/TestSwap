@@ -311,22 +311,4 @@ is a page of logic rather than a page of logic plus a page of boilerplate:
 | `state.js` | `loadState(file, fresh, { matches })` that discards a file from another deployment, `saveState` |
 | `telegram.js` | `makeTelegram({ token, chatId, mode })` with `send` / `notify`, and `shouldRealert` |
 
-The heartbeat, the four reconciliation witnesses (settler, epoch, faucet, points), the settler and the epoch keeper are its consumers. The invariants monitor
-still carries its own copies of these functions; it migrates
-one at a time, each in its own PR, with a live dispatch after merge as the
-gate, because none of them can be exercised end to end outside CI.
-
-The convention the invariants monitor set applies to every witness: pure
-logic exported, a `--self-test` of synthetic cases that runs in the workflow
-before the live check, and a `--dry-run` that reads everything and writes
-nothing.
-
-## 10. Witnesses built
-
-Each shares a clock with a writer and catches a failure the writer cannot
-see in itself, and none can block the writer: settler liveness (§4), epoch
-reconciliation (§5), faucet reconciliation (§6), points reconciliation (§7)
-and the dead-man switch (§8). The list from the first draft of this document
-is complete. What remains is the library migration (§9): the invariants
-monitor, the epoch keeper and the settler still carry their own copies of the
-shared plumbing.
+Every job that reads config.js, scans events, keeps a state file or posts to Telegram is its consumer: the heartbeat, the four reconciliation witnesses, the dead-man switch, the settler, the epoch keeper and the invariants monitor.
