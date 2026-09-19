@@ -10,7 +10,7 @@ everything else through to the origin (GitHub Pages):
 | `POST /api/rpc` | Alchemy JSON-RPC (`ALCHEMY_RPC_URL`) | all on-chain reads (single + batch) |
 | `POST /api/waitlist` | Supabase `waitlist` edge fn (`WAITLIST_UPSTREAM`) | mainnet signup capture |
 | `POST /api/quests` | Supabase `quests` edge fn (`QUESTS_UPSTREAM`) | Timber Points leaderboard read |
-| `POST /api/faucet-claim` | Supabase `faucet-claim` edge fn (`FAUCET_UPSTREAM`) | testnet faucet claim (Turnstile-gated) |
+| `POST /api/faucet-claim` | Supabase `faucet-claim` edge fn (`FAUCET_UPSTREAM`) | testnet faucet claim gatekeeper (Turnstile-gated; adds `X-Real-IP`; optional `FAUCET_PROXY_SECRET`) |
 
 Because `/api/*` is **same-origin** with the site, the browser skips CORS and
 Brave treats it as first-party — the RPC issues (and the signup / claim POSTs)
@@ -56,19 +56,21 @@ so the public Supabase functions can trust only proxied calls. See `dev-docs/WAI
    curl -s https://timbswap.xyz/api/waitlist \
      -H 'content-type: application/json' \
      -d '{"email":"you@example.com","source":"smoke-test"}'
+
+   # Faucet — expect 403 "No active ticket…" for a random address (proves the
+   # route + edge fn are reachable; a real claim needs an Active ticket + Turnstile)
+   curl -s https://timbswap.xyz/api/faucet-claim \
+     -H 'content-type: application/json' \
+     -d '{"address":"0x0000000000000000000000000000000000000001"}'
    ```
 
 4. **Tell Claude "Cloudflare is live"** and the config flip lands:
    - `config.js`: `DEDICATED_RPC` → `https://timbswap.xyz/api/rpc`
-   - `config.js` DebugHub: `telemetryUrl` → `https://timbswap.xyz/api/debughub_events`
 
-   Until that flip, the app keeps using the Supabase-hosted proxy + direct
-   telemetry, so nothing breaks while DNS propagates.
+   Until that flip, the app keeps using the fallback RPC, so nothing breaks while
+   DNS propagates.
 
 ## Notes
-- The service-role key stays a Worker secret — never in page JS. (Anon key also
-  works, since RLS already allows the telemetry insert; service-role is what the
-  earlier relay used.)
 - The `ALCHEMY_RPC_URL` upstream is a public frontend RPC regardless; keeping it
   a Worker secret just lets you rotate it without a redeploy of the site.
 - The full waitlist deploy (DB migration + edge function + Worker) is documented
