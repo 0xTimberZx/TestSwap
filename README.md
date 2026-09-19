@@ -214,6 +214,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── epoch-recon.js   ← Epoch witness: recomputes each keeper settlement from chain events and compares (alerts, never grants)
 │   ├── faucet-recon.js  ← Faucet witness: pairs Supabase rows, Dispensed events and the contract clock (alerts, never dispenses)
 │   ├── points-recon.js  ← Points witness: shadow ledger from the same events, compared to the board (alerts, never scores)
+│   ├── dead-man.js      ← Pings an outside dead-man switch while the heartbeat is alive (the one call that leaves Actions)
 │   ├── lib/             ← Shared keeper plumbing: config.js readers, chunked log scans, state files, Telegram
 │   ├── seed-pools.js    ← Mainnet: seed blue-chip pools at Chainlink ratios (dry run by default)
 │   ├── build-vendor.mjs ← Rebuilds vendor/*.js from pinned npm packages (esbuild)
@@ -234,6 +235,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── epoch-recon.yml  ← Read-only witness: did the epoch keeper grant what the chain says it should have?
 │   ├── faucet-recon.yml ← Read-only witness: do the faucet's three records agree about who was paid?
 │   ├── points-recon.yml ← Read-only witness: does the leaderboard say what the chain says?
+│   ├── dead-man.yml     ← The external switch: no ping when Actions or the heartbeat stops
 │   └── slither.yml      ← Static-analysis gate on the contracts
 ├── abi/                 ← hand-kept contract ABIs (for integrators)
 ├── CHANGELOG.md         ← Operator-facing log of live-deployment changes

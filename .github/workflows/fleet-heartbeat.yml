@@ -16,8 +16,8 @@ name: TimbSwap Fleet Heartbeat
 # before the assessment, so a missing token cannot loop.
 #
 # Blind spot, by construction: if GitHub Actions stops entirely, this job
-# stops with the rest. Only an external ping (a dead-man's-switch service that
-# expects a call from here) would catch that; not wired yet.
+# stops with the rest, and it cannot see its own absence. dead-man.yml covers
+# both from outside: it pings an external switch only while this job is alive.
 
 on:
   schedule:

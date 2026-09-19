@@ -68,6 +68,7 @@ const FLEET = [
   { file: "epoch-recon.yml",       cadenceMin: 120, label: "epoch reconciliation" },
   { file: "faucet-recon.yml",      cadenceMin: 60,  label: "faucet reconciliation" },
   { file: "points-recon.yml",      cadenceMin: 60,  label: "points reconciliation" },
+  { file: "dead-man.yml",          cadenceMin: 30,  label: "dead-man switch" },
 ];
 
 const OPTS = {
@@ -164,7 +165,7 @@ function plan(state, rows, nowSec, opts = OPTS) {
   return { alerts, recoveries };
 }
 
-module.exports = { FLEET, assess, assessOne, plan, main };
+module.exports = { FLEET, OPTS, assess, assessOne, plan, fetchRuns, main };
 
 // ─── Self-test ──────────────────────────────────────────────────────────────
 
@@ -240,7 +241,7 @@ function selfTest() {
   process.exit(fail ? 1 : 0);
 }
 
-if (SELF_TEST) selfTest();
+if (SELF_TEST && require.main === module) selfTest();
 
 // ─── Live run ───────────────────────────────────────────────────────────────
 
