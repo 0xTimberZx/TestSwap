@@ -7,11 +7,11 @@
   "staking": "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   "seasonId": 1,
   "startBlock": 310224200,
-  "cursorBlock": 310268305,
-  "lastRound": 58,
+  "cursorBlock": 310354450,
+  "lastRound": 59,
   "ledger": {
     "0x42536623b503d4926dfaf6173b0357b7dfd19800": {
-      "rp": 1,
+      "rp": 2,
       "ta": 0,
       "ns": 0,
       "ps": 0,
@@ -21,7 +21,7 @@
       "w": 0
     },
     "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf": {
-      "rp": 1,
+      "rp": 2,
       "ta": 0,
       "ns": 0,
       "ps": 0,
