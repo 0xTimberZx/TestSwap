@@ -1,0 +1,133 @@
+name: Admin — Fund Pot
+
+# Manual-only owner action: top up the live prize pot with ETH
+# (scripts/vault-to-pot.js). Default source is the deployer wallet: one
+# transaction, TimbPrize.addToPot, which forwards into PrizeEscrow and books
+# the pot. Source "vault" instead moves the TimbYieldVault's free reserve in
+# two transactions (vault.emergencyWithdraw to the signer, then addToPot),
+# since the vault has no direct path to the pot outside settlement-time
+# harvest, and harvest moves only what accrual has already earned.
+#
+# Always run dry-run first: it prints the vault's balance, what the pot is
+# already owed, the free reserve, the drip runway before and after, the
+# signer's ETH, checks the signer is the vault owner when the vault is the
+# source, and sends nothing.
+#
+# TESTNET ONLY. The deployer key is an Actions secret here by decision; the
+# mainnet deployer key never leaves the owner's machine, and on mainnet this
+# script runs locally.
+#
+# The self-test job also runs on pull requests and pushes that touch the
+# script, so the planning math is gated the way seed-pools.js is.
+
+on:
+  workflow_dispatch:
+    inputs:
+      amountEth:
+        description: "ETH to add to the pot (decimal), or 'all' for the whole free vault reserve (source=vault only)"
+        required: true
+        default: "0.001"
+      source:
+        description: "Where the ETH comes from"
+        required: false
+        default: "wallet"
+        type: choice
+        options:
+          - wallet
+          - vault
+      key:
+        description: "Which key signs (wallet: the payer; vault: must be the vault owner)"
+        required: false
+        default: "deployer"
+        type: choice
+        options:
+          - deployer
+          - epoch
+      mode:
+        description: "Run mode"
+        required: false
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - run
+  pull_request:
+    paths:
+      - "scripts/vault-to-pot.js"
+      - ".github/workflows/admin-vault-to-pot.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/vault-to-pot.js"
+      - ".github/workflows/admin-vault-to-pot.yml"
+
+concurrency:
+  group: timbswap-admin
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: planning self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install ethers
+        working-directory: scripts
+
+      - name: Self-test the planning logic
+        run: node vault-to-pot.js --self-test
+        working-directory: scripts
+
+  move:
+    name: Fund the pot
+    if: github.event_name == 'workflow_dispatch'
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install ethers
+        working-directory: scripts
+
+      - name: Fund the pot
+        working-directory: scripts
+        env:
+          ARB_SEPOLIA_RPC: ${{ secrets.ARB_SEPOLIA_RPC }}
+          # deployer: DEPLOYER_PRIVATE_KEY (the contracts' owner; testnet only
+          # as an Actions secret). epoch: EPOCH_PRIVATE_KEY, the keeper's key,
+          # for a wallet-sourced top-up from the keeper's own balance. For
+          # source=vault the script reads vault.owner() and refuses a key that
+          # does not match.
+          SIGNER_PRIVATE_KEY: ${{ github.event.inputs.key == 'epoch' && secrets.EPOCH_PRIVATE_KEY || secrets.DEPLOYER_PRIVATE_KEY }}
+          AMOUNT_ETH: ${{ github.event.inputs.amountEth }}
+          SOURCE:     ${{ github.event.inputs.source }}
+        run: |
+          if [ "${{ github.event.inputs.mode }}" = "run" ]; then
+            node vault-to-pot.js
+          else
+            node vault-to-pot.js --dry-run
+          fi

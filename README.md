@@ -217,6 +217,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── dead-man.js      ← Pings an outside dead-man switch while the heartbeat is alive (the one call that leaves Actions)
 │   ├── lib/             ← Shared keeper plumbing: config.js readers, chunked log scans, state files, Telegram
 │   ├── seed-pools.js    ← Mainnet: seed blue-chip pools at Chainlink ratios (dry run by default)
+│   ├── vault-to-pot.js  ← Admin: top up the live pot with ETH from the deployer wallet or the yield vault's free reserve (dry run by default)
 │   ├── build-vendor.mjs ← Rebuilds vendor/*.js from pinned npm packages (esbuild)
 │   ├── Deploy*.s.sol    ← Foundry deploy scripts (gen-3 migration has a pre-flight guard)
 │   └── package.json
@@ -229,6 +230,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── epoch.yml        ← Reward sweep
 │   ├── faucet.yml       ← Faucet keeper (10 min)
 │   ├── admin-fund-rewards.yml ← Manual owner grant to farm / staking when the waterfall has nothing to pour
+│   ├── admin-vault-to-pot.yml ← Manual pot top-up from the deployer wallet or the yield-vault reserve (self-test gated on PRs)
 │   ├── faucet-invariants.yml ← Read-only monitor: does the faucet claim record fit what the cooldown permits?
 │   ├── fleet-heartbeat.yml ← Read-only witness: is every scheduled keeper still running? (dev-docs/KEEPER_FLEET.md)
 │   ├── settler-liveness.yml ← Read-only witness: is the prize game where its clock says it should be?
