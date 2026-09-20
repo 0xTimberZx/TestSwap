@@ -1,15 +1,21 @@
-name: Admin — Vault → Pot
+name: Admin — Fund Pot
 
-# Manual-only owner action: move ETH from the TimbYieldVault's free reserve
-# into the live prize pot (scripts/vault-to-pot.js). Two transactions from the
-# vault owner's key: vault.emergencyWithdraw to the signer, then
-# TimbPrize.addToPot, which forwards into PrizeEscrow and books the pot. The
-# vault has no direct path to the pot outside settlement-time harvest, and
-# harvest moves only what accrual has already earned.
+# Manual-only owner action: top up the live prize pot with ETH
+# (scripts/vault-to-pot.js). Default source is the deployer wallet: one
+# transaction, TimbPrize.addToPot, which forwards into PrizeEscrow and books
+# the pot. Source "vault" instead moves the TimbYieldVault's free reserve in
+# two transactions (vault.emergencyWithdraw to the signer, then addToPot),
+# since the vault has no direct path to the pot outside settlement-time
+# harvest, and harvest moves only what accrual has already earned.
 #
 # Always run dry-run first: it prints the vault's balance, what the pot is
-# already owed, the free reserve, the drip runway before and after, checks the
-# signer is the vault owner, and sends nothing.
+# already owed, the free reserve, the drip runway before and after, the
+# signer's ETH, checks the signer is the vault owner when the vault is the
+# source, and sends nothing.
+#
+# TESTNET ONLY. The deployer key is an Actions secret here by decision; the
+# mainnet deployer key never leaves the owner's machine, and on mainnet this
+# script runs locally.
 #
 # The self-test job also runs on pull requests and pushes that touch the
 # script, so the planning math is gated the way seed-pools.js is.
@@ -18,17 +24,25 @@ on:
   workflow_dispatch:
     inputs:
       amountEth:
-        description: "ETH to move into the pot (decimal), or 'all' for the whole free reserve"
+        description: "ETH to add to the pot (decimal), or 'all' for the whole free vault reserve (source=vault only)"
         required: true
         default: "0.001"
       source:
         description: "Where the ETH comes from"
         required: false
-        default: "vault"
+        default: "wallet"
         type: choice
         options:
-          - vault
           - wallet
+          - vault
+      key:
+        description: "Which key signs (wallet: the payer; vault: must be the vault owner)"
+        required: false
+        default: "deployer"
+        type: choice
+        options:
+          - deployer
+          - epoch
       mode:
         description: "Run mode"
         required: false
@@ -78,7 +92,7 @@ jobs:
         working-directory: scripts
 
   move:
-    name: Move vault reserve into the pot
+    name: Fund the pot
     if: github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: ubuntu-latest
@@ -99,15 +113,16 @@ jobs:
         run: npm install ethers
         working-directory: scripts
 
-      - name: Move ETH
+      - name: Fund the pot
         working-directory: scripts
         env:
           ARB_SEPOLIA_RPC: ${{ secrets.ARB_SEPOLIA_RPC }}
-          # The vault owner's key. Set VAULT_OWNER_PRIVATE_KEY if the vault is
-          # owned by a different wallet than the epoch keeper; otherwise the
-          # epoch key (owner of the pools and the Treasury) is tried. The
-          # script reads vault.owner() and refuses a key that does not match.
-          VAULT_OWNER_PRIVATE_KEY: ${{ secrets.VAULT_OWNER_PRIVATE_KEY || secrets.EPOCH_PRIVATE_KEY }}
+          # deployer: DEPLOYER_PRIVATE_KEY (the contracts' owner; testnet only
+          # as an Actions secret). epoch: EPOCH_PRIVATE_KEY, the keeper's key,
+          # for a wallet-sourced top-up from the keeper's own balance. For
+          # source=vault the script reads vault.owner() and refuses a key that
+          # does not match.
+          SIGNER_PRIVATE_KEY: ${{ github.event.inputs.key == 'epoch' && secrets.EPOCH_PRIVATE_KEY || secrets.DEPLOYER_PRIVATE_KEY }}
           AMOUNT_ETH: ${{ github.event.inputs.amountEth }}
           SOURCE:     ${{ github.event.inputs.source }}
         run: |

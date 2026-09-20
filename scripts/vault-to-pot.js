@@ -1,16 +1,20 @@
-// vault-to-pot.js — one-off admin: move ETH from the TimbYieldVault's free
-// reserve into the live prize pot.
+// vault-to-pot.js — one-off admin: top up the live prize pot with ETH, from
+// the deployer wallet (default) or from the TimbYieldVault's free reserve.
 //
-// WHY TWO HOPS
-// ------------
-// The vault has no "send reserve to the pot" function. Its only outbound path
-// to the prize is harvest(), which is onlyTimbPrize, runs inside settlement,
-// and moves only what accrual has already earmarked (accruedForPot). The
-// reserve behind that — subsidy ETH not yet earned by any ticket — can leave
-// the vault only through the owner's emergencyWithdraw(to, amount), and the
-// pot can only grow through TimbPrize.fundPot / addToPot (payable), which
-// forward the ETH into PrizeEscrow and bump currentAccumulatedRewards. So the
-// move is:
+// TWO SOURCES
+// -----------
+// SOURCE=wallet: one transaction, prize.addToPot{value: amount}() from the
+// signer's own ETH. addToPot is open to anyone; it forwards the ETH into
+// PrizeEscrow and bumps currentAccumulatedRewards, which is the only way the
+// winnable pot grows outside settlement. This is the default: the deployer
+// funds the pot directly.
+//
+// SOURCE=vault: the vault has no "send reserve to the pot" function. Its only
+// outbound path to the prize is harvest(), which is onlyTimbPrize, runs inside
+// settlement, and moves only what accrual has already earmarked
+// (accruedForPot). The reserve behind that — subsidy ETH not yet earned by any
+// ticket — can leave the vault only through the owner's
+// emergencyWithdraw(to, amount). So the move is two hops:
 //
 //   1. vault.emergencyWithdraw(signer, amount)   — owner only
 //   2. prize.addToPot{value: amount}()            — anyone
@@ -24,8 +28,8 @@
 // (currentAccumulatedRewards stays put, the ETH strands on the prize), and the
 // escrow would grow its balance without the winnable pot growing at all.
 //
-// WHAT IS "FREE"
-// --------------
+// WHAT IS "FREE" (SOURCE=vault)
+// -----------------------------
 // reserve() = balance − accruedForPot, but accrual is lazy: pending drip since
 // the last touch is not stored until the next register/remove/harvest. That
 // pending amount already belongs to the pot, so this tool caps the withdrawal
@@ -36,18 +40,22 @@
 // reserve is dry and resumes when it is refunded (vault.fund()). The dry run
 // prints the drip runway before and after so the trade-off is visible.
 //
-// Usage (GitHub Actions "Admin — Vault → Pot" workflow, or locally):
-//   AMOUNT_ETH=0.001 SOURCE=vault node scripts/vault-to-pot.js [--dry-run]
+// Usage (GitHub Actions "Admin — Fund Pot" workflow, or locally):
+//   AMOUNT_ETH=0.001 node scripts/vault-to-pot.js [--dry-run]
+//   AMOUNT_ETH=all SOURCE=vault node scripts/vault-to-pot.js [--dry-run]
 //   node scripts/vault-to-pot.js --self-test
 //
-//   AMOUNT_ETH   decimal ETH, or "all" for the whole free reserve
-//   SOURCE       vault  (default) — emergencyWithdraw first, then addToPot
-//                wallet           — addToPot from the signer's own ETH
+//   AMOUNT_ETH   decimal ETH, or "all" for the whole free vault reserve
+//   SOURCE       wallet (default) — addToPot from the signer's own ETH
+//                vault            — emergencyWithdraw first, then addToPot
 //   --dry-run    print the state and the plan, send nothing
 //
-// Key: VAULT_OWNER_PRIVATE_KEY, falling back to EPOCH_PRIVATE_KEY. For
-// SOURCE=vault it must be the vault's owner; the script reads owner() and
-// refuses otherwise. SOURCE=wallet needs no authority at all.
+// Key: SIGNER_PRIVATE_KEY, falling back to DEPLOYER_PRIVATE_KEY, then
+// EPOCH_PRIVATE_KEY. SOURCE=wallet needs no authority: any funded key works,
+// and the pot is credited whoever pays. SOURCE=vault must be the vault's
+// owner; the script reads owner() and refuses otherwise. Testnet only: the
+// deployer key sits in Actions secrets here by decision; on mainnet this runs
+// locally from the owner's machine.
 
 const { ethers } = require("ethers");
 const { addrFromConfig, rpcFromConfig } = require("./lib/config");
@@ -55,9 +63,9 @@ const { addrFromConfig, rpcFromConfig } = require("./lib/config");
 const SELF_TEST   = process.argv.includes("--self-test");
 const DRY_RUN     = process.argv.includes("--dry-run");
 const TX_RPC_URL  = process.env.ARB_SEPOLIA_RPC;
-const PRIVATE_KEY = process.env.VAULT_OWNER_PRIVATE_KEY || process.env.EPOCH_PRIVATE_KEY;
+const PRIVATE_KEY = process.env.SIGNER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY || process.env.EPOCH_PRIVATE_KEY;
 const AMOUNT_ETH  = (process.env.AMOUNT_ETH ?? "").trim();
-const SOURCE      = (process.env.SOURCE ?? "vault").trim().toLowerCase();
+const SOURCE      = (process.env.SOURCE ?? "wallet").trim().toLowerCase();
 
 // Gas held back on the signer so the two transactions can always be paid for.
 // Arbitrum gas is cheap; this is a ceiling, not an estimate, and the live
@@ -206,7 +214,7 @@ function selfTest() {
 
 async function main() {
   if (!AMOUNT_ETH) throw new Error("AMOUNT_ETH not set (decimal ETH or \"all\")");
-  if (!PRIVATE_KEY) throw new Error("VAULT_OWNER_PRIVATE_KEY / EPOCH_PRIVATE_KEY not set");
+  if (!PRIVATE_KEY) throw new Error("SIGNER_PRIVATE_KEY / DEPLOYER_PRIVATE_KEY / EPOCH_PRIVATE_KEY not set");
 
   const vaultAddr  = addrFromConfig("TimbYieldVault");
   const prizeAddr  = addrFromConfig("TimbPrize");
@@ -252,7 +260,7 @@ async function main() {
   } catch { /* fallback stands */ }
 
   const before = await snapshot();
-  print(before, `vault → pot  source=${SOURCE}  amount=${AMOUNT_ETH}${DRY_RUN ? "  (dry run)" : ""}\n\nBefore:`);
+  print(before, `fund pot  source=${SOURCE}  amount=${AMOUNT_ETH}${DRY_RUN ? "  (dry run)" : ""}\n\nBefore:`);
 
   // Wiring sanity: the vault and the prize must point at each other, or the
   // pot we are funding is not the one this vault serves.
