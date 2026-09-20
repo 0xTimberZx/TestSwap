@@ -26,7 +26,7 @@ on:
       amountEth:
         description: "ETH to add to the pot (decimal), or 'all' for the whole free vault reserve (source=vault only)"
         required: true
-        default: "0.001"
+        default: "0.0005"
       source:
         description: "Where the ETH comes from"
         required: false

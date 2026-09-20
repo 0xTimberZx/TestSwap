@@ -41,7 +41,7 @@
 // prints the drip runway before and after so the trade-off is visible.
 //
 // Usage (GitHub Actions "Admin — Fund Pot" workflow, or locally):
-//   AMOUNT_ETH=0.001 node scripts/vault-to-pot.js [--dry-run]
+//   AMOUNT_ETH=0.0005 node scripts/vault-to-pot.js [--dry-run]
 //   AMOUNT_ETH=all SOURCE=vault node scripts/vault-to-pot.js [--dry-run]
 //   node scripts/vault-to-pot.js --self-test
 //
@@ -252,6 +252,14 @@ async function main() {
     console.log(`  signer ${signer.address}  ${fmt(s.signerBalance)} ETH`);
   };
 
+  const catchUp = async (prov, block) => {
+    for (let i = 0; i < 20; i++) {
+      if ((await prov.getBlockNumber()) >= block) return;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    console.warn(`  read RPC still behind block ${block} after 30s — the after-state below may be stale`);
+  };
+
   let gasReserve = GAS_RESERVE_FALLBACK;
   try {
     const fee = await txProv.getFeeData();
@@ -308,6 +316,11 @@ async function main() {
   const rc2 = await tx2.wait();
   console.log(`    confirmed in block ${rc2.blockNumber}`);
 
+  // The receipt came from the transaction RPC; the snapshot reads through the
+  // public RPC, which can trail it by a block or two. Reading the "after"
+  // state before that node has the block reports +0 for a send that landed
+  // (seen live on the first real run), so wait for it to catch up first.
+  await catchUp(readProv, rc2.blockNumber);
   const after = await snapshot();
   print(after, "\nAfter:");
   const potDelta    = after.potRewards - before.potRewards;
