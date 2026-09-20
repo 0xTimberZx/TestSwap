@@ -1,0 +1,118 @@
+name: Admin — Vault → Pot
+
+# Manual-only owner action: move ETH from the TimbYieldVault's free reserve
+# into the live prize pot (scripts/vault-to-pot.js). Two transactions from the
+# vault owner's key: vault.emergencyWithdraw to the signer, then
+# TimbPrize.addToPot, which forwards into PrizeEscrow and books the pot. The
+# vault has no direct path to the pot outside settlement-time harvest, and
+# harvest moves only what accrual has already earned.
+#
+# Always run dry-run first: it prints the vault's balance, what the pot is
+# already owed, the free reserve, the drip runway before and after, checks the
+# signer is the vault owner, and sends nothing.
+#
+# The self-test job also runs on pull requests and pushes that touch the
+# script, so the planning math is gated the way seed-pools.js is.
+
+on:
+  workflow_dispatch:
+    inputs:
+      amountEth:
+        description: "ETH to move into the pot (decimal), or 'all' for the whole free reserve"
+        required: true
+        default: "0.001"
+      source:
+        description: "Where the ETH comes from"
+        required: false
+        default: "vault"
+        type: choice
+        options:
+          - vault
+          - wallet
+      mode:
+        description: "Run mode"
+        required: false
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - run
+  pull_request:
+    paths:
+      - "scripts/vault-to-pot.js"
+      - ".github/workflows/admin-vault-to-pot.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/vault-to-pot.js"
+      - ".github/workflows/admin-vault-to-pot.yml"
+
+concurrency:
+  group: timbswap-admin
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: planning self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install ethers
+        working-directory: scripts
+
+      - name: Self-test the planning logic
+        run: node vault-to-pot.js --self-test
+        working-directory: scripts
+
+  move:
+    name: Move vault reserve into the pot
+    if: github.event_name == 'workflow_dispatch'
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install ethers
+        working-directory: scripts
+
+      - name: Move ETH
+        working-directory: scripts
+        env:
+          ARB_SEPOLIA_RPC: ${{ secrets.ARB_SEPOLIA_RPC }}
+          # The vault owner's key. Set VAULT_OWNER_PRIVATE_KEY if the vault is
+          # owned by a different wallet than the epoch keeper; otherwise the
+          # epoch key (owner of the pools and the Treasury) is tried. The
+          # script reads vault.owner() and refuses a key that does not match.
+          VAULT_OWNER_PRIVATE_KEY: ${{ secrets.VAULT_OWNER_PRIVATE_KEY || secrets.EPOCH_PRIVATE_KEY }}
+          AMOUNT_ETH: ${{ github.event.inputs.amountEth }}
+          SOURCE:     ${{ github.event.inputs.source }}
+        run: |
+          if [ "${{ github.event.inputs.mode }}" = "run" ]; then
+            node vault-to-pot.js
+          else
+            node vault-to-pot.js --dry-run
+          fi
