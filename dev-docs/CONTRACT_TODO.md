@@ -747,6 +747,11 @@ contract fix is one or the other, not both:
 - give TimbStaking a push-style entry point that credits an already-received
   balance without a `transferFrom`.
 
+**Source fixed (Sept 2026, mirrors mainnet audit item M5):** `distributeToStaking`
+now approves and lets `notifyRewardAmount` pull, then clears the allowance;
+`tests/TimbTreasury.t.sol` pins the single payment. The deployed Sepolia v4
+still has the old code, so the keeper workaround below stays until a redeploy.
+
 Until a Treasury redeploy, the epoch keeper routes **around** it (#245) using the
 same path the farm already uses: `withdrawToken(TIMBS, keeper, amt)` →
 `approve(TimbStaking, amt)` → `staking.notifyRewardAmount(amt, duration)`. That
