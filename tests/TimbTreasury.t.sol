@@ -59,6 +59,23 @@ contract MockRouter {
     }
 }
 
+// Mirrors TimbStaking.notifyRewardAmount's funding model: it PULLS the amount
+// from msg.sender via transferFrom. Records what it received so a test can
+// prove the treasury paid exactly once.
+contract MockStaking {
+    IERC20  public timbs;
+    uint256 public notifyCalls;
+    uint256 public lastAmount;
+    uint256 public lastDuration;
+    constructor(address _timbs) { timbs = IERC20(_timbs); }
+    function notifyRewardAmount(uint256 amount, uint256 duration) external {
+        timbs.transferFrom(msg.sender, address(this), amount);
+        notifyCalls++;
+        lastAmount = amount;
+        lastDuration = duration;
+    }
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 contract TimbTreasuryTest is Test {
@@ -105,6 +122,28 @@ contract TimbTreasuryTest is Test {
         assertEq(timbs.balanceOf(address(treasury)) - balBefore, reserved + waterfall, "reserve+waterfall retained");
         // Burn reduced total supply by exactly `burned`.
         assertEq(supplyBefore - timbs.totalSupply(), burned, "supply burned");
+    }
+
+    // distributeToStaking funds the pool through ONE path: staking pulls the
+    // amount via notifyRewardAmount's transferFrom. The old code pre-transferred
+    // AND let it pull, so it reverted for lack of allowance (what Sepolia v4
+    // still does) or would have paid twice. Pin: treasury down by exactly the
+    // amount, staking up by exactly the amount, notify called once, and no
+    // allowance left dangling.
+    function testDistributeToStakingPaysExactlyOnce() public {
+        MockStaking mock = new MockStaking(address(timbs));
+        treasury.setTimbStaking(address(mock));
+        timbs.mint(address(treasury), 10_000e18);
+
+        uint256 tBefore = timbs.balanceOf(address(treasury));
+        treasury.distributeToStaking(1_000e18, 30 days);
+
+        assertEq(tBefore - timbs.balanceOf(address(treasury)), 1_000e18, "treasury paid once");
+        assertEq(timbs.balanceOf(address(mock)),               1_000e18, "staking received once");
+        assertEq(mock.notifyCalls(),  1,        "notify called once");
+        assertEq(mock.lastAmount(),   1_000e18, "notify amount");
+        assertEq(mock.lastDuration(), 30 days,  "notify duration");
+        assertEq(timbs.allowance(address(treasury), address(mock)), 0, "allowance cleared");
     }
 
     // Ratio setters cap at burn + reserve <= 100.

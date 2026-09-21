@@ -353,13 +353,15 @@ async function main() {
         console.log("  farm funded ✓");
       }
       if (stakeGrant > 0n) {
-        // NOT treasury.distributeToStaking(): that transfers TIMBS to the
-        // staking contract and THEN calls notifyRewardAmount, which itself does
-        // safeTransferFrom(msg.sender) — a second pull the Treasury never
-        // approved, so it always reverts ERC20InsufficientAllowance (and
-        // approving instead would make the Treasury pay twice). Use the same
-        // withdraw → approve → notify path the farm uses; the keeper wallet is
-        // a registered rewardNotifier on TimbStaking.
+        // NOT treasury.distributeToStaking(): the DEPLOYED Sepolia treasury (v4)
+        // transfers TIMBS to the staking contract and THEN calls
+        // notifyRewardAmount, which itself does safeTransferFrom(msg.sender) —
+        // a second pull the Treasury never approved, so it always reverts
+        // ERC20InsufficientAllowance (and approving instead would make the
+        // Treasury pay twice). The source is fixed (approve-and-let-it-pull,
+        // audit M5) but that only lands with a Treasury redeploy; until then
+        // use the same withdraw → approve → notify path the farm uses. The
+        // keeper wallet is a registered rewardNotifier on TimbStaking.
         try {
           await (await treasury.withdrawToken(TIMBS_ADDR, wallet.address, stakeGrant)).wait();
           await (await timbs.approve(TIMBSTAKING_ADDR, stakeGrant)).wait();

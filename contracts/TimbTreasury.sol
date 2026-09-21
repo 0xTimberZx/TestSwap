@@ -401,6 +401,14 @@ contract TimbTreasury is Ownable2Step, ReentrancyGuard {
     /**
      * @notice Top up TimbStaking rewards directly with TIMBS from treasury.
      * @dev Treasury must hold TIMBS (transferred from community allocation).
+     *      Single funding path: TimbStaking.notifyRewardAmount pulls the TIMBS
+     *      itself via transferFrom, so approve it and let it pull. The previous
+     *      code ALSO pre-transferred the amount, so the call either reverted for
+     *      lack of allowance (what the deployed Sepolia v4 does — the epoch
+     *      keeper routes around it) or, had the allowance been granted, would
+     *      have paid twice. Mirrors audit fix M5 on the mainnet lineage. The
+     *      residual allowance is cleared afterwards, as in the addLiquidity
+     *      paths below.
      * @param timbsAmount TIMBS amount to distribute.
      * @param duration    Distribution period in seconds.
      */
@@ -416,8 +424,9 @@ contract TimbTreasury is Ownable2Step, ReentrancyGuard {
         uint256 bal = timbsToken.balanceOf(address(this));
         if (timbsAmount > bal) revert ZeroAmount();
 
-        IERC20(address(timbsToken)).safeTransfer(timbStaking, timbsAmount);
+        IERC20(address(timbsToken)).forceApprove(timbStaking, timbsAmount);
         ITimbStaking(timbStaking).notifyRewardAmount(timbsAmount, duration);
+        IERC20(address(timbsToken)).forceApprove(timbStaking, 0);
 
         emit StakingFunded(timbsAmount, duration);
     }
