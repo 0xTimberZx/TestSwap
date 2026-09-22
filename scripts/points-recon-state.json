@@ -7,22 +7,22 @@
   "staking": "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   "seasonId": 1,
   "startBlock": 310224200,
-  "cursorBlock": 311293817,
-  "lastRound": 70,
+  "cursorBlock": 311378950,
+  "lastRound": 71,
   "ledger": {
     "0x42536623b503d4926dfaf6173b0357b7dfd19800": {
-      "rp": 12,
+      "rp": 13,
       "ta": 1,
       "ns": 0,
       "ps": 0,
-      "pn": 0,
+      "pn": 10,
       "fc": 0,
       "sc": 0,
       "w": 0,
-      "mt": 0
+      "mt": 30
     },
     "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf": {
-      "rp": 13,
+      "rp": 14,
       "ta": 1,
       "ns": 0,
       "ps": 0,
@@ -33,7 +33,7 @@
       "mt": 0
     },
     "0xe863f97da3601781f366711f5bbfe982f0c450da": {
-      "rp": 10,
+      "rp": 11,
       "ta": 1,
       "ns": 0,
       "ps": 0,
@@ -44,7 +44,7 @@
       "mt": 0
     },
     "0xb64408da327c7ed420b19b80d2a6b06fad975048": {
-      "rp": 8,
+      "rp": 9,
       "ta": 1,
       "ns": 0,
       "ps": 0,
@@ -55,7 +55,7 @@
       "mt": 0
     },
     "0xaacc688526169a21746d28ad9263eaea8625bc22": {
-      "rp": 8,
+      "rp": 9,
       "ta": 1,
       "ns": 0,
       "ps": 0,
@@ -66,18 +66,18 @@
       "mt": 0
     },
     "0x1aefb27fa7c78cfe7ab99794a722981c80b7d46c": {
-      "rp": 7,
+      "rp": 8,
       "ta": 1,
       "ns": 0,
       "ps": 0,
-      "pn": 10,
+      "pn": 20,
       "fc": 1,
       "sc": 1,
       "w": 0,
-      "mt": 30
+      "mt": 60
     },
     "0xd6629a2d988d5bbd3fc257e7cd7b782884bfd075": {
-      "rp": 6,
+      "rp": 7,
       "ta": 1,
       "ns": 0,
       "ps": 0,
@@ -88,6 +88,19 @@
       "mt": 30
     }
   },
-  "pendingUnder": {},
+  "pendingUnder": {
+    "0x42536623b503d4926dfaf6173b0357b7dfd19800:rounds_played": 1790101006,
+    "0x42536623b503d4926dfaf6173b0357b7dfd19800:panel_nudges": 1790101006,
+    "0x42536623b503d4926dfaf6173b0357b7dfd19800:faucet_claims": 1790101006,
+    "0x42536623b503d4926dfaf6173b0357b7dfd19800:meter_tp": 1790101006,
+    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:rounds_played": 1790101006,
+    "0xe863f97da3601781f366711f5bbfe982f0c450da:rounds_played": 1790101006,
+    "0xb64408da327c7ed420b19b80d2a6b06fad975048:rounds_played": 1790101006,
+    "0xaacc688526169a21746d28ad9263eaea8625bc22:rounds_played": 1790101006,
+    "0x1aefb27fa7c78cfe7ab99794a722981c80b7d46c:rounds_played": 1790101006,
+    "0x1aefb27fa7c78cfe7ab99794a722981c80b7d46c:panel_nudges": 1790101006,
+    "0x1aefb27fa7c78cfe7ab99794a722981c80b7d46c:meter_tp": 1790101006,
+    "0xd6629a2d988d5bbd3fc257e7cd7b782884bfd075:rounds_played": 1790101006
+  },
   "alerted": {}
 }
