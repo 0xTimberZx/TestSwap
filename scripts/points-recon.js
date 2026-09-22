@@ -35,6 +35,8 @@
 //   under    the board's counter is below the shadow's and has stayed so for
 //            POINTS_GRACE_MIN: the scorer skipped a window. The grace covers the
 //            scorer simply not having run since the lag block moved
+//            meter_tp is compared the same way, against the shadow's own
+//            capped meter points.
 //   tp       display_tp is not what the board's own counters and the weights
 //            give: the SQL recompute and the weights disagree
 //   unknown  the chain or the database could not be read
@@ -186,6 +188,26 @@ function compare(ledger, faucetOf, rows, weights, minRounds, pendingUnder, nowSe
         }
       }
     }
+    // meter_tp is numeric and priced at fold time, so it cannot ride the integer
+    // COUNTERS loop. Same over/under semantics, with an epsilon. Without this the
+    // board could bank the wrong capped points and nothing would notice: the tp
+    // check below reads the board's own meter_tp on both sides.
+    {
+      const want = Number(shadow.mt || 0), have = Number(row.meter_tp || 0);
+      if (Math.abs(have - want) > 0.005) {
+        ok = false;
+        if (have > want) {
+          findings.push({ kind: "over", detail: `${short(a)} meter_tp: board ${have}, chain ${want}` });
+        } else {
+          const k = `${a}:meter_tp`;
+          live.add(k);
+          pendingUnder[k] ??= nowSec;
+          if (nowSec - pendingUnder[k] > opts.graceMin * 60) {
+            findings.push({ kind: "under", detail: `${short(a)} meter_tp: board ${have}, chain ${want}, behind for ${fmtMin(nowSec - pendingUnder[k])}` });
+          }
+        }
+      }
+    }
     if (byAddr.has(a)) {
       const want = expectedTp(row, weights, minRounds), have = Number(row.display_tp || 0);
       if (Math.abs(have - want) > 0.005) { ok = false; findings.push({ kind: "tp", detail: `${short(a)} display_tp ${have} but the row's counters and weights give ${want}` }); }
@@ -281,10 +303,18 @@ function selfTest() {
   const led = () => ({ [A]: { ...blank(), rp: 2, ns: 1, mt: 25 } });
   { const p = {}; const r = compare(led(), { [A]: 1 }, [row()], W, 2, p, T, opts);
     eq("exact match is clean", [kinds(r), r.compared, r.matched], [[], 1, 1]); }
-  { const p = {}; const r = compare(led(), { [A]: 1 }, [row({ nudge_swaps: 2, meter_tp: 50, display_tp: 551 })], W, 2, p, T, opts);
+  { const p = {}; const r = compare(led(), { [A]: 1 }, [row({ nudge_swaps: 2 })], W, 2, p, T, opts);
     eq("board above chain is over", kinds(r), ["over"]); }
+  { const p = {}; const r = compare(led(), { [A]: 1 }, [row({ meter_tp: 0, display_tp: 501 })], W, 2, p, T, opts);
+    eq("meter_tp behind waits inside grace", [kinds(r), Object.keys(p)], [[], [`${A}:meter_tp`]]); }
+  { const p = { [`${A}:meter_tp`]: T - 181 * 60 }; const r = compare(led(), { [A]: 1 }, [row({ meter_tp: 0, display_tp: 501 })], W, 2, p, T, opts);
+    eq("meter_tp behind past grace is under", kinds(r), ["under"]); }
+  { const p = {}; const r = compare(led(), { [A]: 1 }, [row({ meter_tp: 60, display_tp: 561 })], W, 2, p, T, opts);
+    eq("meter_tp above chain is over", kinds(r), ["over"]); }
+  { const p = {}; const r = compare(led(), { [A]: 1 }, [row({ meter_tp: 25.004 })], W, 2, p, T, opts);
+    eq("meter_tp within epsilon is clean", kinds(r), []); }
   { const p = {}; const r = compare(led(), { [A]: 1 }, [row({ nudge_swaps: 0, meter_tp: 0, display_tp: 501 })], W, 2, p, T, opts);
-    eq("board below chain waits inside grace", [kinds(r), Object.keys(p)], [[], [`${A}:nudge_swaps`]]); }
+    eq("board below chain waits inside grace", [kinds(r), Object.keys(p)], [[], [`${A}:nudge_swaps`, `${A}:meter_tp`]]); }
   { const p = { [`${A}:nudge_swaps`]: T - 181 * 60 }; const r = compare(led(), { [A]: 1 }, [row({ nudge_swaps: 0, meter_tp: 0, display_tp: 501 })], W, 2, p, T, opts);
     eq("board below chain past grace is under", kinds(r), ["under"]); }
   { const p = { [`${A}:nudge_swaps`]: T - 181 * 60 }; compare(led(), { [A]: 1 }, [row()], W, 2, p, T, opts);
@@ -292,11 +322,11 @@ function selfTest() {
   { const p = {}; const r = compare(led(), { [A]: 1 }, [row({ display_tp: 500 })], W, 2, p, T, opts);
     eq("wrong display_tp is tp", kinds(r), ["tp"]); }
   { const p = {}; const r = compare(led(), { [A]: 1 }, [], W, 2, p, T, opts);
-    eq("missing row is under (pending)", [kinds(r), Object.keys(p).length], [[], 3]); }
-  { const p = {}; const r = compare({}, {}, [row({ rounds_played: 0, nudge_swaps: 0, faucet_claims: 0, display_tp: 0 })], W, 2, p, T, opts);
+    eq("missing row is under (pending)", [kinds(r), Object.keys(p).length], [[], 4]); }
+  { const p = {}; const r = compare({}, {}, [row({ rounds_played: 0, nudge_swaps: 0, faucet_claims: 0, meter_tp: 0, display_tp: 0 })], W, 2, p, T, opts);
     eq("all-zero row with no shadow is clean", kinds(r), []); }
   { const p = {}; const r = compare({}, {}, [row({ display_tp: 0 })], W, 2, p, T, opts);
-    eq("row with counters and no shadow is over", kinds(r).filter((k) => k === "over").length, 3); }
+    eq("row with counters and no shadow is over", kinds(r).filter((k) => k === "over").length, 4); }
   { const p = {}; const r = compare(led(), { [A]: 1 }, [row({ sybil_flag: "dup", display_tp: 0 })], W, 2, p, T, opts);
     eq("sybil row scores zero and matches", kinds(r), []); }
   { const p = {}; const r = compare(led(), { [A]: 1 }, [row({ rounds_played: 1, display_tp: 0 })], W, 2, p, T, opts);
