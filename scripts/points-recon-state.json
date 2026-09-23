@@ -88,16 +88,6 @@
       "mt": 30
     }
   },
-  "pendingUnder": {
-    "0x42536623b503d4926dfaf6173b0357b7dfd19800:rounds_played": 1790122707,
-    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:rounds_played": 1790122707,
-    "0xe863f97da3601781f366711f5bbfe982f0c450da:rounds_played": 1790122707,
-    "0xb64408da327c7ed420b19b80d2a6b06fad975048:rounds_played": 1790122707,
-    "0xb64408da327c7ed420b19b80d2a6b06fad975048:panel_nudges": 1790122707,
-    "0xb64408da327c7ed420b19b80d2a6b06fad975048:meter_tp": 1790122707,
-    "0xaacc688526169a21746d28ad9263eaea8625bc22:rounds_played": 1790122707,
-    "0x1aefb27fa7c78cfe7ab99794a722981c80b7d46c:rounds_played": 1790122707,
-    "0xd6629a2d988d5bbd3fc257e7cd7b782884bfd075:rounds_played": 1790122707
-  },
+  "pendingUnder": {},
   "alerted": {}
 }
