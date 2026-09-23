@@ -58,8 +58,10 @@ jobs:
       # Token: a fine-grained PAT with Actions read/write on this repo (the
       # default GITHUB_TOKEN cannot trigger workflow runs). Falls back to the
       # faucet's, then the settler's, so no new secret is needed to switch on.
+      # Default branch only: a branch-dispatched run must not hand the chain
+      # back to main. Checkout here is unpinned, so it ran branch code.
       - name: Dispatch next reminder run
-        if: success()
+        if: success() && github.ref == 'refs/heads/main'
         env:
           DISPATCH_TOKEN: ${{ secrets.RECLAIM_REMINDER_DISPATCH_TOKEN || secrets.FAUCET_DISPATCH_TOKEN || secrets.SETTLER_DISPATCH_TOKEN }}
         run: |

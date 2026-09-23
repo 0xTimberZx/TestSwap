@@ -55,8 +55,10 @@ jobs:
       # PAT, Actions read/write), each successful run dispatches the next so the
       # keeper is self-perpetuating, with the */10 cron as a backstop. Only on
       # success — a fast-failing run must not become an infinite re-dispatch loop.
+      # Default branch only: a branch-dispatched run must not hand the chain
+      # back to main. Checkout here is unpinned, so it ran branch code.
       - name: Dispatch next faucet run
-        if: success()
+        if: success() && github.ref == 'refs/heads/main'
         env:
           DISPATCH_TOKEN: ${{ secrets.FAUCET_DISPATCH_TOKEN }}
         run: |
