@@ -79,8 +79,10 @@ jobs:
       # turns `if: always()` into a ~15s infinite fail-loop that floods runs and
       # notifications. On failure the */10 cron is the backstop that restarts the
       # chain, exactly as intended.
+      # Default branch only: a branch-dispatched run must not hand the chain
+      # back to main. Checkout here is unpinned, so it ran branch code.
       - name: Dispatch next settler run
-        if: success() && github.event.inputs.mode != 'health' && github.event.schedule != '0 12 * * *'
+        if: success() && github.event.inputs.mode != 'health' && github.event.schedule != '0 12 * * *' && github.ref == 'refs/heads/main'
         env:
           DISPATCH_TOKEN: ${{ secrets.SETTLER_DISPATCH_TOKEN }}
         run: |

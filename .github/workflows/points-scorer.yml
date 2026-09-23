@@ -64,7 +64,16 @@ jobs:
       # ── Linger, then self-chain ────────────────────────────────────────────
       # The sleep is what paces the chain: the next run starts one linger after
       # this one's scan, whatever cron does.
+      #
+      # Default branch only. This workflow does NOT pin `ref: main` on checkout
+      # (unlike the reconcilers), because dispatching it from a branch is how a
+      # scorer change or a one-off rescore gets exercised against the live board.
+      # Such a run should scan and stop. Without this guard it also slept an hour
+      # holding the concurrency group — stalling main's chain behind branch code —
+      # and then dispatched main, so a second chain started from a run that was
+      # never part of one. Cron restarts the real chain either way.
       - name: Linger until the next run is due
+        if: github.ref == 'refs/heads/main'
         env:
           POINTS_LINGER_MINUTES: ${{ vars.POINTS_LINGER_MINUTES }}
         run: |
@@ -76,6 +85,7 @@ jobs:
       # default GITHUB_TOKEN cannot trigger workflow runs). Falls back to the
       # faucet's, then the settler's, so no new secret is needed to switch on.
       - name: Dispatch next scorer run
+        if: github.ref == 'refs/heads/main'
         env:
           DISPATCH_TOKEN: ${{ secrets.POINTS_DISPATCH_TOKEN || secrets.FAUCET_DISPATCH_TOKEN || secrets.SETTLER_DISPATCH_TOKEN }}
         run: |
