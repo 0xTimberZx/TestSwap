@@ -88,11 +88,6 @@
       "mt": 30
     }
   },
-  "pendingUnder": {
-    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:rounds_played": 1790231262,
-    "0xb64408da327c7ed420b19b80d2a6b06fad975048:panel_nudges": 1790231262,
-    "0xb64408da327c7ed420b19b80d2a6b06fad975048:meter_tp": 1790231262,
-    "0xd6629a2d988d5bbd3fc257e7cd7b782884bfd075:rounds_played": 1790231262
-  },
+  "pendingUnder": {},
   "alerted": {}
 }
