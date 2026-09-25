@@ -275,7 +275,7 @@ so they work on any host/custom domain.
 ### Key Frontend Rules
 
 - ethers CDN: `cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js`, no `type` attribute
-- Gas: `getFeeData()` × 1.30 on both fee params + 50% gasLimit buffer
+- Gas: fee cap = `eth_gasPrice` × 2 with priority 0 (`getGasParams()`); NOT ethers v5's `maxFeePerGas`, whose hard-coded 1.5 gwei tip makes the cap ~20× Arbitrum's real price and starves `eth_estimateGas` (bounded at balance ÷ cap) on heavy txs like 12-extra-round entries. Falls back to `getFeeData()` × 1.30 only when the node reports no gas price
 - Nonce: explicit `getTransactionCount(address, "pending")` on every write
 - Wallet persistence: `autoReconnect()` via sessionStorage on every page load
 - Connect flow: `connectWallet()` offers the injected provider or **Continue with email** (Privy embedded wallet, `PRIVY_APP_ID` in `config.js` — empty string = kill switch); `assets/email-login.js` loads on demand and wraps the provider with a confirmation sheet, authenticator / passkey MFA and key export (`dev-docs/EMAIL_LOGIN.md`)
