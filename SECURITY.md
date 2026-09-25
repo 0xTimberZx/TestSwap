@@ -13,6 +13,9 @@ Arbitrum One**, paid from a public bounty wallet.
 The full program terms, the reward tiers, and the live pool balance are on the
 [Protocol page](https://timbswap.xyz/gov/#bounty). This file is the short form.
 
+`devhub@timbswap.xyz` is for security reports only. Player support goes to
+`hello@timbswap.xyz`, partnerships and press to `marketing@timbswap.xyz`.
+
 ---
 
 ## How to report
