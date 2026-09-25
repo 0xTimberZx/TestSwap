@@ -321,6 +321,18 @@ Frontend diagnostics are **local-only** during the capped beta (no telemetry lea
 
 ---
 
+## Contact
+
+| Address | For |
+|---------|-----|
+| `devhub@timbswap.xyz` | Bug reports outside GitHub, bounty payout coordination, integration questions, abuse reports. See [SECURITY.md](./SECURITY.md) for the disclosure process. |
+| `marketing@timbswap.xyz` | Partnerships, listings, press, and sponsorship. |
+| `hello@timbswap.xyz` | Player support and anything else. |
+
+Public channels: [@timbswap](https://x.com/timbswap) on X and [t.me/timbswapann](https://t.me/timbswapann) on Telegram.
+
+---
+
 ## License
 
 TimbSwap is **source-available** under the [Business Source License 1.1](./LICENSE).
