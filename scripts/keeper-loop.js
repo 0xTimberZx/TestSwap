@@ -35,6 +35,13 @@ const KEEPERS = {
   "match-notifier":   { script: "match-notifier.js",   pause: 1  },
   "reclaim-reminder": { script: "reclaim-reminder.js", pause: 1  },
   "points-scorer":    { script: "points-scorer.js",    pause: 60 },
+  // The one witness that still has something to watch here: it reads the
+  // prize contract's clock, not GitHub, and alerts Telegram when a segment
+  // sits past its grid mark. It exits 1 when it has findings — that is a
+  // report, not a crash, so exit 1 is a clean run for backoff purposes. Its
+  // alert-throttle state lives in the container and survives between runs
+  // until a redeploy, which at worst repeats one alert.
+  "settler-liveness": { script: "settler-liveness.js", pause: 15, okExit: [0, 1] },
   // State-file keepers. They persist to scripts/*-state.json, which the
   // workflow committed back to git. On an ephemeral host that file is lost on
   // redeploy, so mount a volume before enabling these (see scripts/RAILWAY.md).
@@ -50,6 +57,10 @@ if (!spec) {
 }
 
 const pauseMin = Number(process.env.KEEPER_PAUSE_MINUTES || spec.pause);
+// Exit codes that count as a clean run (default: 0 only). A witness that
+// reports findings via exit 1 must not be treated as crashing, or its
+// re-check cadence turns into the crash backoff.
+const okExit = new Set(spec.okExit || [0]);
 const extraArgs = (process.env.KEEPER_ARGS || "").split(/\s+/).filter(Boolean);
 const script = path.join(__dirname, spec.script);
 
@@ -87,7 +98,7 @@ for (const sig of ["SIGTERM", "SIGINT"]) {
     const code = await runOnce();
     if (stopping) break;
     let waitMin;
-    if (code === 0) {
+    if (okExit.has(code)) {
       crashes = 0;
       waitMin = pauseMin;
     } else {
