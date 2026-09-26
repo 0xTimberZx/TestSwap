@@ -97,3 +97,4 @@ dev-docs/*
 
 # ─── Node (dev-only tooling for vendored bundles; see scripts/build-vendor.mjs) ─
 node_modules/
+dist/
