@@ -3,35 +3,55 @@
 The keeper fleet ran on GitHub Actions as self-chaining workflows. On
 2026-09-25 GitHub disabled Actions and Pages on the account after ~124k
 runner-minutes in a month (all discounted, all public, still enough to trip
-the abuse heuristic). The site moved to Cloudflare Pages; the keepers move
+the abuse heuristic). The site moved to a Cloudflare Worker; the keepers move
 here. Nothing in the keeper scripts changed: `scripts/keeper-loop.js` runs
 the same script the workflow ran, pauses the same interval, and repeats.
 
 Everything below is done in a browser. No terminal is needed.
 
-## One-time: project and repo
+## How the code reaches Railway
 
-1. railway.app → New Project → Deploy from GitHub repo → authorise Railway for
-   **TestSwap** only → select it.
-2. Railway creates one service. Rename it `settler` (Settings → Service name).
-3. Settings → **Root Directory**: `scripts`. Railway now reads
-   `scripts/railway.json` for the build and start commands, so leave those
-   fields empty.
-4. Variables → add the ones in the table below for this service → Deploy.
+Railway cannot clone the repo: while the account is flagged, GitHub returns
+404 to anonymous clones and refuses to authorise third-party apps. So each
+service runs the public `node:22` Docker image and fetches the keepers from
+the live site at start. The site bundle (the zip uploaded to the Cloudflare
+Worker) carries `keepers.tgz` at its root: `scripts/` from the current
+`main`, without `node_modules`. `config.js` is fetched separately because
+the keepers read it from the repo root, one level above `scripts/`.
+
+**Whenever `scripts/` changes on `main`, rebuild `keepers.tgz`, re-upload
+the site bundle, and redeploy every Railway service.** A service only
+re-downloads on restart, so an un-redeployed service keeps the old code.
+
+## One-time: first service
+
+1. railway.com → New Project → **Deploy a Docker image** → `node:22`.
+2. Rename the service `settler` (Settings → Service name).
+3. Settings → Deploy → **Custom Start Command**:
+
+   ```
+   sh -c "mkdir -p /app && curl -fsSL https://timbswap.xyz/keepers.tgz | tar xz -C /app && curl -fsSL https://timbswap.xyz/config.js -o /app/config.js && cd /app/scripts && npm install --omit=dev && node keeper-loop.js"
+   ```
+
+4. Variables → `KEEPER=settler` plus the settler row below → Deploy.
 5. Logs should show `[loop] keeper=settler pause=1m` then the familiar
    `[settler] Round #…` lines within a minute.
 
+`scripts/railway.json` is kept for the day the repo can be linked again
+(Root Directory `scripts`, Nixpacks); it is not used by the Docker path.
+
 ## Each further keeper
 
-New → GitHub repo → TestSwap again → same Root Directory `scripts` → set
-`KEEPER` to the service name → paste that keeper's variables → Deploy.
+New → Docker image `node:22` → same start command → set `KEEPER` first →
+paste that keeper's variables → Deploy. A service without `KEEPER` restarts
+every second with `KEEPER must be one of …`; add the variable and it settles.
 One service per keeper. **Never run two settlers.**
 
 | Service (KEEPER) | What it replaces | Variables |
 |---|---|---|
 | `settler` | settler.yml | `ARB_SEPOLIA_RPC`, `SETTLER_PRIVATE_KEY`, `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`, `X_POST_MODE=all`, optional `X_HASHTAGS`, `X_HASHTAGS_WINNER`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_CHAT_ID_PUBLIC`, `TELEGRAM_OPS_MODE` |
 | `faucet` | faucet.yml | `ARB_SEPOLIA_RPC`, `FAUCET_DISPATCHER_PRIVATE_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, optional `FAUCET_DRAIN_LIMIT`, `FAUCET_POLL_SECONDS`, `FAUCET_LINGER_MINUTES`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` |
-| `points-scorer` | points-scorer.yml | `ARB_SEPOLIA_RPC`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, optional `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` |
+| `points-scorer` | points-scorer.yml | `POINTS_RPC=https://sepolia-rollup.arbitrum.io/rpc`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, optional `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. The scorer scans thousands of blocks per `eth_getLogs`; a free-tier keyed RPC caps that at 10 and the run dies with `Fatal: could not coalesce error`, so it must point at the public endpoint, as the workflow always did. |
 | `match-notifier` | match-notifier.yml | `ARB_SEPOLIA_RPC`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME=SettlerTimbBot`, optional `TELEGRAM_CHAT_ID` |
 | `reclaim-reminder` | reclaim-reminder.yml | same as match-notifier |
 | `settler-liveness` | settler-liveness.yml | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, optional `LIVENESS_RPC` (defaults to the public read RPC in `config.js`), `SETTLER_OVERDUE_MIN`, `SETTLER_REALERT_MIN`, `TELEGRAM_OPS_MODE` |
