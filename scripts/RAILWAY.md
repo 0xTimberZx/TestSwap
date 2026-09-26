@@ -34,6 +34,7 @@ One service per keeper. **Never run two settlers.**
 | `points-scorer` | points-scorer.yml | `ARB_SEPOLIA_RPC`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, optional `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` |
 | `match-notifier` | match-notifier.yml | `ARB_SEPOLIA_RPC`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME=SettlerTimbBot`, optional `TELEGRAM_CHAT_ID` |
 | `reclaim-reminder` | reclaim-reminder.yml | same as match-notifier |
+| `settler-liveness` | settler-liveness.yml | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, optional `LIVENESS_RPC` (defaults to the public read RPC in `config.js`), `SETTLER_OVERDUE_MIN`, `SETTLER_REALERT_MIN`, `TELEGRAM_OPS_MODE` |
 
 Values are the same strings that were in GitHub → Settings → Secrets and
 Variables. `DISPATCH_TOKEN` and the `*_LINGER_MINUTES` self-chain knobs are
@@ -52,17 +53,44 @@ a Volume to the service, mount it at `/data`, and point the keeper's state
 path at it. Until then these stay off; nothing about the game depends on them
 hour to hour.
 
-`fleet-heartbeat`, `dead-man`, and `settler-liveness` watched GitHub Actions
-runs and have nothing to watch here. Railway's own service health panel and
-log alerts cover the same ground. Leave them off.
+`fleet-heartbeat` and `dead-man` watched GitHub Actions runs and have nothing
+to watch here. Railway's own service health panel and log alerts cover the
+same ground. Leave them off.
+
+`settler-liveness` is different: it never looked at Actions. It reads the
+prize contract's clock and alerts Telegram when a segment sits more than
+`SETTLER_OVERDUE_MIN` (5) minutes past its grid mark, whatever the settler
+process is doing. That is the one check that catches a settler that is
+running but not settling — hung on an RPC, stuck behind a VRF word, or
+crash-looping in the supervisor — and Railway's health panel cannot see any
+of those. Run it as a sixth service (row above). Its alert-throttle state
+sits in the container between runs and is lost on a redeploy, which at worst
+repeats one alert; no volume needed. It holds no key.
+
+## Redeploys
+
+A redeploy of a writer (`settler`, `faucet`) is the one moment two copies can
+be alive on the same key: Railway starts the new container and only then
+stops the old one. `keeper-loop.js` forwards SIGTERM to the running keeper so
+an in-flight settle finishes its transaction, but the new container may
+already be sending on the same nonce stream. Keep writer redeploys to quiet
+moments (not within a minute of a segment boundary), and check the service's
+deploy settings for the overlap and draining windows — Railway's
+`railway.json` supports `deploy.overlapSeconds` and `deploy.drainingSeconds`;
+the right values are overlap 0 and a draining window long enough for one
+confirmed transaction (60 s is plenty on Sepolia). Verify both keys against
+the current schema in the dashboard before adding them, since a rejected
+config fails every service that shares the file.
 
 ## Cost
 
-Hobby plan, $5/month, covers all five services. Each idles at a few MB of RAM
+Hobby plan, $5/month, covers all six services. Each idles at a few MB of RAM
 between boundaries.
 
 ## Rollback
 
 Stop a service in Railway (Settings → Remove, or scale to zero). The GitHub
-workflows are untouched and resume the moment Actions is re-enabled, so never
-run both at once: pick one host per keeper.
+workflows are untouched, but every scheduled keeper job is gated on the repo
+variable `KEEPERS_HOST` and skips unless it is set to `actions`. To move a
+keeper back, stop its Railway service first, then set the variable. Never run
+both hosts at once: pick one host per keeper.
