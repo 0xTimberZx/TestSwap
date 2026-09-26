@@ -7,8 +7,10 @@ found and fixed while nothing real is at stake. Rewards are real: **USDT on
 Arbitrum One**, paid from a public bounty wallet.
 
 > **Report privately — do not open a public issue.**
-> Primary channel: **GitHub → this repo → Security → "Report a vulnerability"**
-> (private advisory). Backup: **devhub@timbswap.xyz**.
+> Primary channel: **devhub@timbswap.xyz** (security-only inbox; put the
+> contract name in the subject). A GitHub private advisory on this repo
+> (Security → "Report a vulnerability") is also accepted whenever the repo is
+> reachable; email is the channel that is always open.
 
 The full program terms, the reward tiers, and the live pool balance are on the
 [Protocol page](https://timbswap.xyz/gov/#bounty). This file is the short form.
@@ -20,7 +22,7 @@ The full program terms, the reward tiers, and the live pool balance are on the
 
 ## How to report
 
-1. Send a report via the private channel above with: affected contract(s) +
+1. Email the report to devhub@timbswap.xyz with: affected contract(s) +
    address, a description, impact, and a **proof of concept** (a Foundry test
    or a fork script is ideal).
 2. Acknowledgement within **72 hours**, triage by severity, updates through
@@ -32,7 +34,7 @@ The full program terms, the reward tiers, and the live pool balance are on the
 
 **In:** the deployed Arbitrum Sepolia contracts listed in the
 [Docs address table](https://timbswap.xyz/docs/) and their source in
-`contracts/`: DEX core, prize game, token and incentives, governance.
+`contracts/` (also served at [timbswap.xyz/source](https://timbswap.xyz/source/)): DEX core, prize game, token and incentives, governance.
 
 **Out:** the frontend and static site (except a display bug that could mislead
 a user into a losing on-chain action, which is T1), off-chain keepers and
