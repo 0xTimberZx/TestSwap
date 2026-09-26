@@ -171,10 +171,30 @@ UnderwriteReserve rather than split across pools, closing a two-wallet seed farm
 
 ---
 
+## Hosting (since 2026-09-25)
+
+> GitHub disabled Actions and Pages on this account on 2026-09-25 (an
+> automated abuse flag on runner minutes; a support ticket is open). Nothing
+> in the protocol changed. What moved:
+>
+> | Was | Now |
+> |---|---|
+> | Site on GitHub Pages | Cloudflare Worker with static assets; the bundle is built by `scripts/build-site.sh` and uploaded in the dashboard |
+> | Keepers as GitHub Actions cron | Railway, one service per keeper under `scripts/keeper-loop.js`; see `scripts/RAILWAY.md` |
+> | Bug reports via GitHub private advisory | **devhub@timbswap.xyz**; the advisory is accepted again whenever the repo is reachable |
+> | Source browsed on GitHub | [timbswap.xyz/source](https://timbswap.xyz/source/), each contract cross-linked to Arbiscan and Sourcify |
+>
+> The workflows below are kept and gated on the repo variable
+> `KEEPERS_HOST`; they run only when it is set to `actions`. Sections that
+> describe GitHub Pages or Actions are left as written for when the account
+> is restored.
+
+---
+
 ## Repo Structure
 
 ```
-TimbSwap/                ← served at the site root (GitHub Pages, custom domain)
+TimbSwap/                ← served at the site root (Cloudflare Worker; GitHub Pages before 2026-09-25)
 ├── contracts/           ← 13 Solidity contracts (0.8.24, viaIR)
 ├── index.html           ← Landing page (site root: timbswap.xyz/)
 ├── style.css            ← global design system (all pages)
@@ -203,7 +223,7 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 │   ├── play.html        ←   the felt — sit, load, place
 │   ├── live.html        ←   the stream page (spectate, no wallet)
 │   └── games.html       ←   every running table, read-only
-├── CNAME                ← Custom domain (timbswap.xyz) for GitHub Pages
+├── CNAME                ← Custom domain (timbswap.xyz) for GitHub Pages (unused while hosted on Cloudflare)
 ├── dev-docs/            ← Internal design specs (not the /docs/ web page); EMAIL_LOGIN.md covers the email wallet
 ├── scripts/
 │   ├── settler.js       ← Automated segment settler
@@ -250,6 +270,8 @@ TimbSwap/                ← served at the site root (GitHub Pages, custom domai
 ---
 
 ## Settler
+
+*Runs on Railway since 2026-09-25 (`scripts/RAILWAY.md`); the Actions description below applies when `KEEPERS_HOST=actions`.*
 
 Segments settle automatically via GitHub Actions every 10 minutes (each run lingers across segment boundaries and dispatches the next, with the cron as backstop — the "cancelled" scheduled ticks in Actions are the concurrency group dropping redundant backstops, not failures). Health check fires daily at noon UTC. Telegram: an **ops** stream to a private chat and a **community** stream (round rollovers only) to the public group.
 
