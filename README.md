@@ -15,7 +15,7 @@ and payouts need no privileged operator, and you always hold your own keys.
 **Live:** [timbswap.xyz](https://timbswap.xyz/)  
 **Start here:** [timbswap.xyz/start](https://timbswap.xyz/start/) — first round in 2 minutes, no extension needed  
 **Network:** Arbitrum Sepolia (Chain ID: 421614)  
-**GitHub:** [github.com/0xTimberZx/TimbSwap](https://github.com/0xTimberZx/TimbSwap)  
+**GitHub:** [github.com/0xTimberZx/TimbSwap](https://github.com/0xTimberZx/TimbSwap) · **Source, served from the site:** [timbswap.xyz/source](https://timbswap.xyz/source/)  
 **Faucet:** [timbswap.xyz/faucet](https://timbswap.xyz/faucet/) — testnet TIMBS for wallets holding an Active ticket  
 **Litepaper:** [timbswap.xyz/litepaper](https://timbswap.xyz/litepaper/)  
 **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
