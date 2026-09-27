@@ -42,6 +42,40 @@ telemetry, third-party code and infra (Chainlink VRF, OpenZeppelin, the
 Arbitrum sequencer, RPC providers, wallets), already-documented behavior,
 gas-optimisation notes, and scanner output without a working PoC.
 
+## Known issues
+
+The items below are already known, are planned for the mainnet build, or have
+already been reported. Reports about them are closed as **known** and earn
+nothing. This list covers reports received after it was published; earlier
+reports are judged on their own merits.
+
+**Planned for mainnet (in the spec, not in the testnet deployment):**
+
+- **Winning-string repeats.** The deployed `TimbPrize` locks each segment
+  character independently, so a winning string can repeat a character that no
+  valid ticket may hold. The litepaper's no-repeat winning draw ships with the
+  mainnet `TimbPrize`.
+- **Randomness source.** Locked characters are jittered with the settling
+  block's hash, not Chainlink VRF. Sequencer or block-producer influence over
+  that hash is known; VRF is the mainnet source.
+- **Ownership and privileged roles.** Privileged contracts are owned by a
+  single testnet key. Owner-power and centralisation findings are out: at
+  mainnet, ownership moves to a timelock + multisig.
+- **Governance.** No on-chain governance module is live and on-chain voting is
+  switched off. Findings against a governance address or the `/gov/` voting
+  flow are known until governance ships.
+- **Boosted farms.** `TimbBoostFarm` is deployed but not open. Its emission
+  accounting is being reworked before it opens.
+
+**Already reported (duplicates earn nothing):**
+
+| Ref | Area | Issue |
+|---|---|---|
+| TS-001 | Frontend config | Governance address pointed at a retired router |
+| TS-002 | `TimbBoostFarm` | Rate retarget after `periodFinish` accrues across the dead window |
+| TS-003 | `TIMBSToken` | Transfer-cap whitelist misses `TimbFarm` / `TimbBoostFarm`; `farmPool` mis-set |
+| TS-004 | `TimbPrize` | Winning string can repeat characters |
+
 ## Severity & rewards
 
 Severity is **impact-based**: what the bug would do with real funds, guided by
