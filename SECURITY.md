@@ -38,7 +38,8 @@ The full program terms, the reward tiers, and the live pool balance are on the
 
 **Out:** the frontend and static site (except a display bug that could mislead
 a user into a losing on-chain action, which is T1), off-chain keepers and
-telemetry, third-party code and infra (Chainlink VRF, OpenZeppelin, the
+telemetry, **SwapTables** (`SegmentBoard*`, `SeedRegistry`, `PoolLedger`:
+testnet-only and not part of the mainnet deployment), third-party code and infra (Chainlink VRF, OpenZeppelin, the
 Arbitrum sequencer, RPC providers, wallets), already-documented behavior,
 gas-optimisation notes, and scanner output without a working PoC.
 
