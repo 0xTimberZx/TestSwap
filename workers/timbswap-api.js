@@ -52,7 +52,6 @@ const RPC_METHODS = new Set([
   "eth_getTransactionByHash", "eth_getTransactionReceipt",
   "eth_gasPrice", "eth_maxPriorityFeePerGas", "eth_feeHistory",
 ]);
-const MAX_RPC_BATCH = 50;
 
 // Returns an error Response if the body is not JSON-RPC made of allowed calls.
 function checkRpc(request, text, origin) {
@@ -63,9 +62,9 @@ function checkRpc(request, text, origin) {
   let body;
   try { body = JSON.parse(text); } catch { return json({ error: "invalid JSON" }, 400, origin); }
   const calls = Array.isArray(body) ? body : [body];
-  if (calls.length === 0 || calls.length > MAX_RPC_BATCH) {
-    return json({ error: "batch size out of range" }, 400, origin);
-  }
+  // No batch-count cap: config.js uses JsonRpcBatchProvider, which folds every
+  // read in a tick into one POST (page loads exceed 50). MAX_BODY_BYTES bounds it.
+  if (calls.length === 0) return json({ error: "empty batch" }, 400, origin);
   for (const c of calls) {
     if (!c || typeof c.method !== "string" || !RPC_METHODS.has(c.method)) {
       return json({ error: "method not allowed" }, 403, origin);
