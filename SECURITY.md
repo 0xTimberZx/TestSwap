@@ -44,28 +44,30 @@ gas-optimisation notes, and scanner output without a working PoC.
 
 ## Known issues
 
-The items below are already known, are planned for the mainnet build, or have
-already been reported. Reports about them are closed as **known** and earn
-nothing. This list covers reports received after it was published; earlier
-reports are judged on their own merits.
+The testnet contracts are an **earlier build** than the mainnet source in the
+[TimbSwap repository](https://github.com/0xTimberZx/TimbSwap/tree/main/contracts).
+A finding that is already fixed, or already configurable, in that mainnet
+source is **known** and earns nothing, even though the testnet build still
+shows it. The testnet will not be redeployed to fix it. Check a finding against
+the mainnet source before you submit. Reports about the items below are also
+closed as known. This list covers reports received after it was published.
 
-**Planned for mainnet (in the spec, not in the testnet deployment):**
+**Different by design on mainnet:**
 
-- **Winning-string repeats.** The deployed `TimbPrize` locks each segment
-  character independently, so a winning string can repeat a character that no
-  valid ticket may hold. The litepaper's no-repeat winning draw ships with the
-  mainnet `TimbPrize`.
-- **Randomness source.** Locked characters are jittered with the settling
-  block's hash, not Chainlink VRF. Sequencer or block-producer influence over
-  that hash is known; VRF is the mainnet source.
-- **Ownership and privileged roles.** Privileged contracts are owned by a
-  single testnet key. Owner-power and centralisation findings are out: at
-  mainnet, ownership moves to a timelock + multisig.
-- **Governance.** No on-chain governance module is live and on-chain voting is
-  switched off. Findings against a governance address or the `/gov/` voting
-  flow are known until governance ships.
-- **Boosted farms.** `TimbBoostFarm` is deployed but not open. Its emission
-  accounting is being reworked before it opens.
+- **Winning-string repeats.** Handled in the mainnet `TimbPrize`: the winning
+  string follows the same `GameRegistry.allowRepeatedChars` rule as tickets.
+- **Randomness source.** Testnet jitters with the settling block's hash;
+  mainnet draws from `VRFEntropy` (Chainlink VRF).
+- **Ownership and privileged roles.** Testnet contracts are owned by a single
+  key. On mainnet, ownership sits behind a timelock + multisig, so owner-power
+  and centralisation findings against the testnet key are out.
+- **Governance.** No governance module is live on testnet and on-chain voting
+  is switched off. Findings against a testnet governance address or the
+  `/gov/` voting flow are out.
+- **Testnet wiring and configuration.** Addresses, whitelists and parameters
+  that the owner can reset in one transaction on testnet are set separately
+  for mainnet. A testnet misconfiguration pays only if the same mistake is in
+  the mainnet deploy script.
 
 **Already reported (duplicates earn nothing):**
 
@@ -74,7 +76,7 @@ reports are judged on their own merits.
 | TS-001 | Frontend config | Governance address pointed at a retired router |
 | TS-002 | `TimbBoostFarm` | Rate retarget after `periodFinish` accrues across the dead window |
 | TS-003 | `TIMBSToken` | Transfer-cap whitelist misses `TimbFarm` / `TimbBoostFarm`; `farmPool` mis-set |
-| TS-004 | `TimbPrize` | Winning string can repeat characters |
+| TS-004 | `TimbPrize` | Winning string can repeat characters (handled in mainnet source) |
 
 ## Severity & rewards
 
