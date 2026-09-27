@@ -264,6 +264,7 @@
             <h3>Out of scope</h3>
             <ul>
               <li>The <strong>frontend / static site</strong> for cosmetic issues; off-chain keeper / telemetry infra.</li>
+              <li><strong>SwapTables</strong> (<code>SegmentBoard*</code>, <code>SeedRegistry</code>, <code>PoolLedger</code>): testnet-only, not part of the mainnet deployment.</li>
               <li><strong>Third-party</strong> code / infra: Chainlink VRF, OpenZeppelin, the Arbitrum sequencer / bridge, RPC providers, wallets.</li>
               <li><strong>Already-documented behavior</strong> (see <a href="/SECURITY.md">SECURITY.md</a>): FoT / rebasing unsupported; timelock-gated admin powers; read-only reentrancy on <code>getReserves()</code>.</li>
               <li>Wallet <em>connection</em> problems, gas-golf, and scanner output without a working PoC.</li>
