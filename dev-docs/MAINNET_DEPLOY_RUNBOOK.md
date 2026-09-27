@@ -99,9 +99,12 @@ forge script scripts/DeployGame.s.sol \
       730 d (`EMISSIONS_SCHEDULE.md` §7).
 - [ ] **Blue-chip pools** (any time after Phase 1, before `startGame`; plain
       pools, no emissions): `node scripts/seed-pools.js` dry run, then
-      `--execute`. WBTC/WETH, WBTC/USDC, WETH/USDT, LINK/WETH at Chainlink
-      ratios, LP to the Safe. `dev-docs/MAINNET_LP_SEED.md`.
-- [ ] Add liquidity to the TIMBS/WETH pair (sets the launch price).
+      `--execute`. WBTC/WETH, WBTC/USDC, WETH/USDT, LINK/WETH, ARB/WETH at
+      Chainlink ratios, LP to the Safe. `dev-docs/MAINNET_LP_SEED.md`.
+- [ ] ~~Add liquidity to the TIMBS/WETH pair (sets the launch price).~~ On hold
+      (2026-09-26): not part of the blue-chip seed and not scheduled; the
+      exchange opens on the five plain pools. Revisit with the launch-FDV
+      decision (`EMISSIONS_SCHEDULE.md` §7).
 - [ ] `TimbStaking.notifyRewardAmount(amount, duration)` and
       `TimbFarm.notifyRewardAmount(...)` — fund reward periods. (Reward-solvency
       assert now requires the contract to actually hold the rewards first.)

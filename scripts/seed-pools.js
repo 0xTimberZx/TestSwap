@@ -5,7 +5,7 @@
 // game starts and long before the airdrop, so that the first thing a visitor
 // can do on timbswap.xyz is trade. Pair creation is permissionless and the
 // router creates a missing pair on the first add, so this is a wallet with
-// tokens calling addLiquidity four times — with the guards that make that safe.
+// tokens calling addLiquidity five times — with the guards that make that safe.
 //
 // THE RISK THIS SCRIPT EXISTS FOR: the first add to a new pool SETS its price.
 // Seed WBTC/WETH at the wrong ratio and an arbitrage bot takes the difference
@@ -29,9 +29,9 @@
 //   SEED_RPC                 Arbitrum One RPC (default https://arb1.arbitrum.io/rpc)
 //   SEED_PRIVATE_KEY         the LP wallet key; --execute only; never pasted anywhere
 //   SEED_ROUTER, SEED_FACTORY   MAINNET_ADDRESSES.md Phase 1 (defaults below)
-//   TOKEN_WBTC, TOKEN_WETH, TOKEN_USDC, TOKEN_USDT, TOKEN_LINK   canonical tokens
-//   FEED_BTC_USD, FEED_ETH_USD, FEED_USDC_USD, FEED_USDT_USD, FEED_LINK_USD   Chainlink
-//   SEED_PAIRS               default "WBTC/WETH,WBTC/USDC,WETH/USDT,LINK/WETH"
+//   TOKEN_WBTC, TOKEN_WETH, TOKEN_USDC, TOKEN_USDT, TOKEN_LINK, TOKEN_ARB   canonical tokens
+//   FEED_BTC_USD, FEED_ETH_USD, FEED_USDC_USD, FEED_USDT_USD, FEED_LINK_USD, FEED_ARB_USD   Chainlink
+//   SEED_PAIRS               default "WBTC/WETH,WBTC/USDC,WETH/USDT,LINK/WETH,ARB/WETH"
 //   SEED_USD_PER_SIDE        USD of EACH token per pool — REQUIRED, a per-run decision
 //   SEED_LP_TO               LP token recipient (default: the sending wallet; use the Safe)
 //   SEED_SLIPPAGE_BPS        min-amount tolerance on the add (default 100 = 1 %)
@@ -56,6 +56,7 @@ const TOKENS = {
   USDC: { env: "TOKEN_USDC", symbol: "USDC", decimals: 6,  feed: "USDC_USD" },
   USDT: { env: "TOKEN_USDT", symbol: "USDT", decimals: 6,  feed: "USDT_USD" },
   LINK: { env: "TOKEN_LINK", symbol: "LINK", decimals: 18, feed: "LINK_USD" },
+  ARB:  { env: "TOKEN_ARB",  symbol: "ARB",  decimals: 18, feed: "ARB_USD"  },
 };
 const FEEDS = {
   BTC_USD:  { env: "FEED_BTC_USD",  description: "BTC / USD" },
@@ -63,6 +64,7 @@ const FEEDS = {
   USDC_USD: { env: "FEED_USDC_USD", description: "USDC / USD" },
   USDT_USD: { env: "FEED_USDT_USD", description: "USDT / USD" },
   LINK_USD: { env: "FEED_LINK_USD", description: "LINK / USD" },
+  ARB_USD:  { env: "FEED_ARB_USD",  description: "ARB / USD"  },
 };
 
 const DEFAULTS = {
@@ -70,7 +72,7 @@ const DEFAULTS = {
   chainId:   42161,
   router:    "0x4f33df838c0d357c7f1a44ffb5ee0fc49a62b5fe",   // MAINNET_ADDRESSES.md Phase 1
   factory:   "0x60d4f18fe205c0ed38507a8fbf89aaa1bd2ce183",
-  pairs:     "WBTC/WETH,WBTC/USDC,WETH/USDT,LINK/WETH",
+  pairs:     "WBTC/WETH,WBTC/USDC,WETH/USDT,LINK/WETH,ARB/WETH",
   slippageBps: 100,
   maxDeviationBps: 50,
   feedMaxAge: 3600,
@@ -163,8 +165,8 @@ function selfTest() {
   };
   const throws = (name, fn) => { try { fn(); fail++; console.error(`FAIL ${name}: did not throw`); } catch { pass++; } };
 
-  // Prices with 8 decimals: BTC 60,000, ETH 3,000, USDC 1, LINK 15.
-  const BTC = 60_000n * 10n ** 8n, ETH = 3_000n * 10n ** 8n, USD1 = 1n * 10n ** 8n, LINK = 15n * 10n ** 8n;
+  // Prices with 8 decimals: BTC 60,000, ETH 3,000, USDC 1, LINK 15, ARB 0.50.
+  const BTC = 60_000n * 10n ** 8n, ETH = 3_000n * 10n ** 8n, USD1 = 1n * 10n ** 8n, LINK = 15n * 10n ** 8n, ARB = 50_000_000n;
 
   eq("pairs parse",            parsePairs("wbtc/weth, LINK/WETH"), [["WBTC", "WETH"], ["LINK", "WETH"]]);
   throws("unknown token rejected", () => parsePairs("WBTC/DOGE"));
@@ -174,6 +176,8 @@ function selfTest() {
   eq("$600 of ETH is 0.2 ETH (18 dec)",   amountForUsd(600, ETH, 18),  200_000_000_000_000_000n);
   eq("$600 of USDC is 600 USDC (6 dec)",  amountForUsd(600, USD1, 6),  600_000_000n);
   eq("$600 of LINK is 40 LINK",           amountForUsd(600, LINK, 18), 40n * 10n ** 18n);
+  eq("$600 of ARB is 1,200 ARB",          amountForUsd(600, ARB, 18),  1_200n * 10n ** 18n);
+  eq("default pairs include ARB/WETH",     parsePairs(DEFAULTS.pairs).some(([a, b]) => a === "ARB" && b === "WETH"), true);
 
   // A pool holding 1 BTC and 20 ETH prices BTC at 20 ETH.
   eq("pool price 1 BTC = 20 ETH", poolPrice1e18(10n ** 8n, 20n * 10n ** 18n, 8, 18), 20n * 10n ** 18n);

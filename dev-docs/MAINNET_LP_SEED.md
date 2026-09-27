@@ -4,7 +4,7 @@ The DEX has been live on Arbitrum One since 2026-09-11 (Phase 1,
 `MAINNET_ADDRESSES.md`). The prize game, the farm and the staking seat come
 later, and the airdrop later still. Between now and then the exchange should
 have real markets, so the first thing a visitor can do is trade. This document
-covers seeding four pools and nothing else.
+covers seeding five pools and nothing else.
 
 **These are plain pools.** No emissions, no farm seat, no boost tier, no game
 hook. They earn the ordinary 0.25 % LP fee from the first swap, the protocol
@@ -19,10 +19,11 @@ do not interact with the TIMBS allocation, the emissions taper, or the airdrop.
 | WBTC/USDC | a dollar leg for BTC |
 | WETH/USDT | a dollar leg for ETH on the stable the campaigns already pay in |
 | LINK/WETH | the oracle token the game itself runs on |
+| ARB/WETH | the chain's own token; the pair Arbitrum-native traders look for first |
 
 Pair creation is permissionless on `TimbSwapFactory` and the router creates a
 missing pair on the first `addLiquidity`, so seeding is a wallet holding the
-tokens calling the router four times. `scripts/seed-pools.js` does exactly
+tokens calling the router five times. `scripts/seed-pools.js` does exactly
 that, with the guards below.
 
 ## 2. The one real risk: the first add sets the price
@@ -32,7 +33,7 @@ A new pool has no price until someone adds to it. The ratio of the first add
 bot takes that percent out of the pool in the next block, at the LP's expense,
 and keeps doing so on every later drift you seed. So no amount in the script is
 typed by hand: each side is derived at run time from a Chainlink feed on
-Arbitrum One, and the four feeds are identity-checked (`description()` must be
+Arbitrum One, and every feed is identity-checked (`description()` must be
 exactly `BTC / USD` and so on) and freshness-checked before anything is
 computed.
 
@@ -51,8 +52,8 @@ Approvals are exact amounts, never unlimited.
 ## 3. Sizing
 
 `SEED_USD_PER_SIDE` is the dollar value of **each** token in a pool, so a
-pool costs twice it, and the four pools together cost eight times it in
-inventory, with WETH appearing in three of them. The number is a per-run
+pool costs twice it, and the five pools together cost ten times it in
+inventory, with WETH appearing in four of them. The number is a per-run
 decision and is deliberately not recorded here or defaulted in the script:
 the dry run prints exactly what it implies before anything is sent.
 
@@ -74,7 +75,9 @@ the wiring matrix, the vesting wallets, the faucet or the airdrop, and none of
 them depend on it. The runbook lists it under §3 next to the TIMBS/WETH seed,
 which remains a separate step with its own price logic (the launch FDV,
 `EMISSIONS_SCHEDULE.md` §7), because that pool's first add is a policy
-decision and these four are market-following.
+decision and these five are market-following. The TIMBS/WETH add is on hold:
+it is not part of this seed and is not scheduled, so the exchange opens on the
+five blue-chip pools alone until that decision is taken.
 
 LP tokens go to `SEED_LP_TO`. Use the Safe, not the sending wallet: the LP
 position is protocol inventory and should sit with the other treasury assets,
@@ -98,9 +101,9 @@ the execute path differs except that it sends.
 
 ## 6. Frontend follow-ups (mainnet cutover, not now)
 
-- The mainnet `config.js` token list needs a WBTC entry (symbol, address,
-  8 decimals) so the swap page can pick it, and real addresses for USDC, USDT
-  and LINK where the mirror currently carries zeros.
+- The mainnet `config.js` token list needs WBTC (symbol, address, 8 decimals)
+  and ARB (18 decimals) entries so the swap page can pick them, and real
+  addresses for USDC, USDT and LINK where the mirror currently carries zeros.
 - The explore page prices pools in USD through the USDC/WETH pair. With no
   such pair, WETH-side values show unpriced until one exists; WBTC/USDC gives a
   dollar anchor for BTC but not for ETH. Either add a small USDC/WETH pool or
