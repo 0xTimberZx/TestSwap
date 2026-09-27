@@ -41,6 +41,39 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 const MAX_BODY_BYTES = 128 * 1024; // RPC batches + signup rows are small; generous cap
 
+// /api/rpc serves the app's chain READS only. Wallets broadcast through their own
+// provider (injected wallets, and the email wallet's Privy RPC), never this proxy,
+// so anything outside this list is refused instead of spending the Alchemy quota.
+const RPC_METHODS = new Set([
+  "eth_chainId", "net_version", "eth_blockNumber",
+  "eth_call", "eth_estimateGas", "eth_getLogs",
+  "eth_getBalance", "eth_getCode", "eth_getStorageAt", "eth_getTransactionCount",
+  "eth_getBlockByNumber", "eth_getBlockByHash",
+  "eth_getTransactionByHash", "eth_getTransactionReceipt",
+  "eth_gasPrice", "eth_maxPriorityFeePerGas", "eth_feeHistory",
+]);
+const MAX_RPC_BATCH = 50;
+
+// Returns an error Response if the body is not JSON-RPC made of allowed calls.
+function checkRpc(request, text, origin) {
+  const ct = (request.headers.get("Content-Type") || "").toLowerCase();
+  if (!ct.startsWith("application/json")) {
+    return json({ error: "Content-Type must be application/json" }, 415, origin);
+  }
+  let body;
+  try { body = JSON.parse(text); } catch { return json({ error: "invalid JSON" }, 400, origin); }
+  const calls = Array.isArray(body) ? body : [body];
+  if (calls.length === 0 || calls.length > MAX_RPC_BATCH) {
+    return json({ error: "batch size out of range" }, 400, origin);
+  }
+  for (const c of calls) {
+    if (!c || typeof c.method !== "string" || !RPC_METHODS.has(c.method)) {
+      return json({ error: "method not allowed" }, 403, origin);
+    }
+  }
+  return null;
+}
+
 function cors(origin) {
   // Same-origin calls send no Origin and need no CORS; echo an allowed Origin for
   // any cross-origin caller (e.g. the GitHub Pages mirror) and default otherwise.
@@ -154,6 +187,8 @@ export default {
 
     const { text, err } = await readBody(request, origin);
     if (err) return err;
+    const bad = checkRpc(request, text, origin);
+    if (bad) return bad;
 
     // ── /api/rpc → Alchemy (relay the JSON-RPC body verbatim; single + batch) ──
     try {

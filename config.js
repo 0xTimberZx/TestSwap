@@ -92,9 +92,8 @@ const PUBLIC_RPCS = [
 // the site's own origin under /api/*, these are first-party — Brave never touches
 // them, and the browser skips CORS entirely. Relaying to ONE Alchemy node keeps
 // reads consistent (no divergent-head reverts — see the note below). Upstream
-// Alchemy URL lives in the Worker's ALCHEMY_RPC_URL secret (defaults to the
-// public keyed URL, which a frontend RPC exposes regardless):
-//   https://arb-sepolia.g.alchemy.com/v2/PDKCOXR05xcN4AkdaVqNp
+// Alchemy URL lives only in the Worker's ALCHEMY_RPC_URL secret, and the Worker
+// relays read methods only (see RPC_METHODS in workers/timbswap-api.js).
 // (The Supabase-hosted `rpc` function remains deployed as a manual fallback.)
 const DEDICATED_RPC = "https://timbswap.xyz/api/rpc";
 const _hasDedicated = typeof DEDICATED_RPC === "string" &&
