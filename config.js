@@ -4,8 +4,93 @@
 
 // ─── Chain ───────────────────────────────────────────────────────────────────
 
-const CHAIN_ID   = 421614;
-const CHAIN_NAME = "Arbitrum Sepolia";
+// Network overrides. The testnet site runs with none (Sepolia below). The
+// mainnet bundle prepends config.mainnet.js, which sets window.TIMBSWAP_NET;
+// every network constant here reads it first. See scripts/build-site.sh.
+const _NET = (typeof window !== "undefined" && window.TIMBSWAP_NET) || {};
+
+const CHAIN_ID   = _NET.chainId   || 421614;
+const CHAIN_NAME = _NET.chainName || "Arbitrum Sepolia";
+const EXPLORER   = _NET.explorer  || "https://sepolia.arbiscan.io";
+const NET_IS_MAINNET = CHAIN_ID === 42161;
+// Short network label for the header pill and the footer.
+const NET_LABEL  = NET_IS_MAINNET ? "Arb One" : "Arb Sepolia";
+
+// ─── Network-aware page copy ─────────────────────────────────────────────────
+// Pages are written once and serve both networks. Two mechanisms:
+//   * data-net="sepolia" / data-net="mainnet" — twin blocks; only the current
+//     network's twin is shown (CSS injected at parse time, so no flash).
+//   * shared chrome (the header badge, the network pill, the footer line, any
+//     sepolia.arbiscan.io link) is rewritten in place on DOMContentLoaded.
+// <meta> descriptions are static text for crawlers; the mainnet build rewrites
+// those at build time (scripts/build-site.sh).
+(function netCopy() {
+  if (typeof document === "undefined") return;
+  const other = NET_IS_MAINNET ? "sepolia" : "mainnet";
+  const style = document.createElement("style");
+  style.textContent = `[data-net="${other}"]{display:none!important}`;
+  document.head.appendChild(style);
+  if (!NET_IS_MAINNET) return;
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".testnet-badge").forEach(el => {
+      el.textContent = "Beta"; el.title = "Capped beta on Arbitrum One";
+    });
+    document.querySelectorAll("#network-badge").forEach(el => { el.textContent = NET_LABEL; });
+    document.querySelectorAll(".footer-left").forEach(el => {
+      el.childNodes.forEach(n => {
+        if (n.nodeType === 3 && /Arbitrum Sepolia Testnet/.test(n.textContent)) {
+          n.textContent = n.textContent.replace("Arbitrum Sepolia Testnet", "Arbitrum One · Capped beta");
+        }
+      });
+    });
+    // Explorer links: swap the host; the Sepolia factory link also gets the
+    // mainnet factory address so "Factory ↗" stays true.
+    const sepFactory = /0xCCd6d3f0A86042d2B7056eDd381d367126628AF5/i;
+    document.querySelectorAll('a[href^="https://sepolia.arbiscan.io"]').forEach(a => {
+      let href = a.getAttribute("href").replace("https://sepolia.arbiscan.io", EXPLORER);
+      if (sepFactory.test(href) && ADDRESSES.TimbSwapFactory) href = href.replace(sepFactory, ADDRESSES.TimbSwapFactory);
+      a.setAttribute("href", href);
+    });
+  });
+})();
+
+// ─── TIMBS surfaces ──────────────────────────────────────────────────────────
+// Testnet TIMBS is in circulation, so every TIMBS surface shows here. A mainnet
+// build sets timbsLive:false in config.mainnet.js (the capped beta runs
+// ETH-only: TIMBS is deployed but not distributed). While false: TIMBS drops
+// out of the token lists and the ticket token choice, the Farm and Lock pages
+// are unlisted (a direct visit shows a notice), and any element marked
+// data-timbs is hidden.
+const TIMBS_LIVE = _NET.timbsLive !== undefined ? !!_NET.timbsLive : true;
+
+(function gateTimbsSurfaces() {
+  if (TIMBS_LIVE || typeof document === "undefined") return;
+  const style = document.createElement("style");
+  style.textContent =
+    'a[href="/farm/"],a[href="/lock/"],[data-timbs]{display:none!important}';
+  document.head.appendChild(style);
+  // The "Earn TIMBS" nav group also holds Compete and Faucet, so relabel it
+  // rather than hide it.
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".nav-group-btn, .nav-mobile-section").forEach(el => {
+      el.childNodes.forEach(n => {
+        if (n.nodeType === 3 && /earn timbs/i.test(n.textContent)) {
+          n.textContent = n.textContent.replace(/earn timbs/i, m => m === "EARN TIMBS" ? "PLAY" : "Play");
+        }
+      });
+    });
+  });
+  if (/^\/(farm|lock)\//.test(location.pathname)) {
+    document.addEventListener("DOMContentLoaded", () => {
+      document.body.innerHTML =
+        '<main style="max-width:560px;margin:15vh auto;padding:0 16px;text-align:center">' +
+        '<h1>Opens after the beta</h1>' +
+        '<p>Farming and locking pay out in TIMBS, which launches after the ' +
+        'independent audit. The beta runs on ETH.</p>' +
+        '<p><a href="/compete/">Enter a round</a> · <a href="/swap/">Swap</a></p></main>';
+    });
+  }
+})();
 
 // Cloudflare Turnstile site key (PUBLIC — safe in client JS) for the faucet claim
 // page. Set to your real site key; leave "" to render the faucet with no human
@@ -19,7 +104,9 @@ window.TURNSTILE_SITE_KEY = "0x4AAAAAAEyu8wJ7X6AVFLlS";
 // then behaves exactly as before (browser-extension wallets only). Use a
 // separate Privy app per environment (dev mirror vs live site); the app's
 // allowed origins must include this site's origin.
-window.PRIVY_APP_ID = "cmu3ofl2r01h90clecz8wtrhc"; // "TimbSwapArb" live-site app (allowed origin https://timbswap.xyz); see dev-docs/EMAIL_LOGIN.md
+window.PRIVY_APP_ID = _NET.privyAppId !== undefined
+  ? _NET.privyAppId
+  : "cmu3ofl2r01h90clecz8wtrhc"; // "TimbSwapArb" live-site app (allowed origin https://timbswap.xyz); see dev-docs/EMAIL_LOGIN.md
 
 // Where this site is served from ("https://host/" or "https://host/sub/"),
 // derived from this script's own URL so lazily-loaded assets (the email login
@@ -76,7 +163,7 @@ window.AIRDROP_ENABLED = false;
 // every page ("fine at first, spoils after exploring"). makeReadProvider()
 // spreads reads across all of them so no single endpoint's throttling freezes
 // the UI. Order = priority.
-const PUBLIC_RPCS = [
+const PUBLIC_RPCS = _NET.publicRpcs || [
   "https://sepolia-rollup.arbitrum.io/rpc",       // official Arbitrum
   "https://arbitrum-sepolia-rpc.publicnode.com",  // PublicNode
   "https://arbitrum-sepolia.drpc.org",            // dRPC
@@ -124,7 +211,7 @@ const CHAIN_CONFIG = {
   chainName: CHAIN_NAME,
   nativeCurrency: { name: "Ethereum", symbol: "ETH", decimals: 18 },
   rpcUrls:        PUBLIC_RPCS,
-  blockExplorerUrls: ["https://sepolia.arbiscan.io"]
+  blockExplorerUrls: [_NET.explorer || "https://sepolia.arbiscan.io"]
 };
 
 // ─── Resilient read provider ──────────────────────────────────────────────────
@@ -197,7 +284,10 @@ const ETH_USD_PRICE = 3000;
 
 // ─── Contract Addresses ───────────────────────────────────────────────────────
 
-const ADDRESSES = {
+// Sepolia addresses. On a mainnet build window.TIMBSWAP_NET.addresses is
+// merged over these (see config.mainnet.js); keepers regex-read the deployed
+// file and take the first match per key, which the prepended override wins.
+const _SEPOLIA_ADDRESSES = {
   PrizeEscrow:          "0x865C50d933e63BbE388EEAFa017AE634B0A6fB6D",
   TIMBSToken:           "0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa",
   TimbSwapFactory:      "0xCCd6d3f0A86042d2B7056eDd381d367126628AF5",
@@ -265,6 +355,7 @@ const ADDRESSES = {
   USDT:                 "0xbEEa6bc48adb31831bFCe5e91E48E08B3a836163", // TestUSDT — 6 decimals, 1M supply
   DAPP:                 "0x3d0cB8929c22F93A9dd33921E6f43C1621FCfC04",
 };
+const ADDRESSES = Object.assign({}, _SEPOLIA_ADDRESSES, _NET.addresses || {});
 
 // ─── Token Default List ───────────────────────────────────────────────────────
 
@@ -304,7 +395,7 @@ const DEFAULT_TOKENS = [
     decimals: 18,
     logoChar: "L"
   }
-];
+].filter(t => TIMBS_LIVE || t.symbol !== "TIMBS");
 
 // ─── Ethers Setup ─────────────────────────────────────────────────────────────
 
