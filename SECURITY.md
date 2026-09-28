@@ -70,6 +70,26 @@ closed as known. This list covers reports received after it was published.
   for mainnet. A testnet misconfiguration pays only if the same mistake is in
   the mainnet deploy script.
 
+**Accepted risks on mainnet (known, bounded, not bugs):**
+
+- **Oracle discretion on VRF re-requests.** When a VRF request stalls past
+  `REREQUEST_DELAY`, `rerequest` fires a replacement, and whichever word lands
+  first is used. Players and the protocol cannot predict either word, but the
+  Chainlink node that fulfils them can compute both before submitting. A node
+  operator could in principle withhold one fulfilment and deliver the other.
+  This is the standard Chainlink VRF trust assumption. It is bounded by the
+  per-segment re-request cap (`MAX_PUBLIC_REREQUESTS`, see TS-005), and every
+  re-request is alerted by the settler. Reports that restate it are closed as
+  known. A way to force or exceed extra draws beyond the cap is still in scope.
+- **Arbitrum node disagreement.** Arbitrum has a single canonical ordering set
+  by the sequencer, every node replays it deterministically, and faulty state
+  is resolved by the rollup's dispute protocol on Ethereum. The VRF word is
+  proof-checked by the coordinator and written once per segment
+  (`rawFulfillRandomWords` ignores late arrivals). Node disagreement cannot
+  produce two outcomes for a segment. A sequencer reorg can drop a request or
+  fulfilment, which the settler recovers by re-arming. Reports built on
+  node-level disagreement or reorg splitting the outcome are out of scope.
+
 **Already reported (duplicates earn nothing):**
 
 | Ref | Area | Issue |
