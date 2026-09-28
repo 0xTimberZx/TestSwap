@@ -53,7 +53,8 @@ function rpcFromConfig({ src, quiet = false } = {}) {
   }
   const lit = text.match(/\bRPC_URL\s*=\s*"(https?:\/\/[^"]+)"/);
   if (lit) return lit[1];
-  const arr = text.match(/\bPUBLIC_RPCS\s*=\s*\[([\s\S]*?)\]/);
+  // `PUBLIC_RPCS = [` or `PUBLIC_RPCS = _NET.publicRpcs || [` (network overrides).
+  const arr = text.match(/\bPUBLIC_RPCS\s*=[^\[\n]*\[([\s\S]*?)\]/);
   if (arr) {
     const first = arr[1].match(/"(https?:\/\/[^"]+)"/);
     if (first) return first[1];
