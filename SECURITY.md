@@ -80,7 +80,9 @@ closed as known. This list covers reports received after it was published.
   This is the standard Chainlink VRF trust assumption. It is bounded by the
   per-segment re-request cap (`MAX_PUBLIC_REREQUESTS`, see TS-005), and every
   re-request is alerted by the settler. Reports that restate it are closed as
-  known. A way to force or exceed extra draws beyond the cap is still in scope.
+  known. A way to force or exceed extra draws beyond the cap is still in scope:
+  **T2** if it only burns extra draws and subscription balance, **T5** if it
+  lets anyone choose among outcomes.
 - **Arbitrum node disagreement.** Arbitrum has a single canonical ordering set
   by the sequencer, every node replays it deterministically, and faulty state
   is resolved by the rollup's dispute protocol on Ethereum. The VRF word is
@@ -113,7 +115,7 @@ issue is eligible; duplicates earn nothing.
 | Tier | Class | What lands here | Reward (tier share, if unshared) |
 |---|---|---|---|
 | **T1** | UI / display | A display or labelling bug that could mislead a user into a losing on-chain action. | **credit + up to $50** |
-| **T2** | Operational / fallback | Keeper or automation failures, VRF stall or re-request griefing, recoverable settlement or liveness DoS. Value stuck, not lost. | **$50 – $100** |
+| **T2** | Operational / fallback | Keeper or automation failures, VRF stall or re-request griefing, recoverable settlement or liveness DoS. Value stuck, not lost. A stall must be one someone can cause, or one the protocol cannot recover from; slow fulfilment by Chainlink or Arbitrum infrastructure is not a finding. | **$50 – $100** |
 | **T3** | Misrouting / contractual | Value routed to the wrong place or mis-split: buyback, lapse, pot / escrow / refund accounting. Off-chain-signalling governance manipulation. | **$100 – $250** |
 | **T4** | Token & DEX structural | TIMBS mint / inflate / cap bypass, whitelist bypass, DEX k-invariant break, reward-solvency break, LP theft. | **$250 – $450** |
 | **T5** | Deep exploit / drain | Full drain of `PrizeEscrow` / `TimbYieldVault` / `TimbTreasury` / the pair; prize-outcome manipulation; owner or privilege escalation; chained exploit. | **up to $500** (cap) |
