@@ -78,6 +78,7 @@ closed as known. This list covers reports received after it was published.
 | TS-002 | `TimbBoostFarm` | Rate retarget after `periodFinish` accrues across the dead window |
 | TS-003 | `TIMBSToken` | Transfer-cap whitelist misses `TimbFarm` / `TimbBoostFarm`; `farmPool` mis-set |
 | TS-004 | `TimbPrize` | Winning string can repeat characters (handled in mainnet source) |
+| TS-005 | `VRFEntropy` | Permissionless `rerequest` has no per-salt retry cap; each call spends the VRF subscription |
 
 ## Severity & rewards
 
