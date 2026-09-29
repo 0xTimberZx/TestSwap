@@ -133,6 +133,7 @@
         <a href="#analytics" class="toc-link">Analytics</a>
         <a href="#timbs" class="toc-link">TIMBS token</a>
         <a href="#tokenomics" class="toc-link">Tokenomics &amp; emissions</a>
+        <a href="#bounty-log" class="toc-link">Bounty log</a>
         <a href="#risks" class="toc-link">Risks</a>
         <a href="#authenticity" class="toc-link">Verify authenticity</a>
         <a href="#privacy" class="toc-link">Privacy &amp; data</a>
@@ -286,6 +287,32 @@
           <li><strong>Solvency stop.</strong> Reward contracts track every wallet's accrued-but-unclaimed balance as an explicit liability. When total obligations reach <strong>99% of reserves</strong>, accrual halts until the next refill — the system cannot promise tokens it does not hold.</li>
           <li><strong>Self-retargeting rates.</strong> Emission rates are recomputed from free (unowed) reserves over the emission window, so a shrinking reserve slows emissions instead of over-committing.</li>
         </ul>
+      </section>
+
+      <!-- Bounty log -->
+      <section id="bounty-log" class="docs-section">
+        <h2>Bounty log</h2>
+        <p>Every issue reported through the <a href="/gov/#bounty">bug bounty</a> and accepted. Reports that repeat one of these are duplicates and earn nothing. The full policy and the other known issues are in <a href="/SECURITY.md">SECURITY.md</a>.</p>
+        <div class="table-wrap">
+          <table class="docs-table">
+            <thead><tr><th>Ref</th><th>Area</th><th>Issue</th></tr></thead>
+            <tbody>
+            <tr><td style="white-space:nowrap">TS-001</td><td>Frontend config</td><td>Governance address pointed at a retired router</td></tr>
+            <tr><td style="white-space:nowrap">TS-002</td><td><code>TimbBoostFarm</code></td><td>Rate retarget after <code>periodFinish</code> accrues across the dead window</td></tr>
+            <tr><td style="white-space:nowrap">TS-003</td><td><code>TIMBSToken</code></td><td>Transfer-cap whitelist misses <code>TimbFarm</code> / <code>TimbBoostFarm</code>; <code>farmPool</code> mis-set</td></tr>
+            <tr><td style="white-space:nowrap">TS-004</td><td><code>TimbPrize</code></td><td>Winning string can repeat characters (handled in mainnet source)</td></tr>
+            <tr><td style="white-space:nowrap">TS-005</td><td><code>VRFEntropy</code></td><td>Permissionless <code>rerequest</code> has no per-salt retry cap; each call spends the VRF subscription</td></tr>
+            <tr><td style="white-space:nowrap">TS-006</td><td><code>TimbTreasury</code></td><td><code>distributeToPot</code> deposits into <code>PrizeEscrow</code> without crediting <code>TimbPrize.currentAccumulatedRewards</code>, so the ETH never reaches a winner</td></tr>
+            <tr><td style="white-space:nowrap">TS-007</td><td>Frontend</td><td>Prize headline (landing "Up for Grabs", compete banner) showed the PrizeEscrow balance instead of the winnable pot</td></tr>
+            <tr><td style="white-space:nowrap">TS-008</td><td><code>GameRegistry</code> / <code>TimbPrize</code></td><td>Settlement counted only Active tickets, so selectively activating one's own ticket could exclude matching Pending winners</td></tr>
+            <tr><td style="white-space:nowrap">TS-009</td><td><code>TimbSwapRouter</code></td><td>Swap nudges had no minimum input, so dust swaps drove the meter for gas alone and bypassed the free-nudge cap</td></tr>
+            <tr><td style="white-space:nowrap">TS-010</td><td><code>TimbSwapRouter</code></td><td>Exact-output swaps checked only the swap input against <code>amountInMax</code>, so the protocol fee was charged beyond the caller's limit</td></tr>
+            <tr><td style="white-space:nowrap">TS-011</td><td><code>TimbStaking</code> / <code>TimbFarm</code></td><td><code>emergencyWithdraw</code> forfeited pending rewards without releasing them from <code>rewardReserve</code>, so <code>recoverERC20</code> could never reclaim them</td></tr>
+            <tr><td style="white-space:nowrap">TS-012</td><td>Frontend</td><td>Token <code>symbol()</code>/<code>name()</code> from permissionless pairs were rendered via <code>innerHTML</code> unescaped (stored XSS on Explore and Swap)</td></tr>
+            <tr><td style="white-space:nowrap">TS-013</td><td><code>TimbSwapRouter</code></td><td>An <code>advanceScroll</code> batch that settled the segment carried its remaining nudges into the next segment uncharged, bypassing the free-nudge cap</td></tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <!-- Risks -->
