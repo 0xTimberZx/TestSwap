@@ -142,7 +142,7 @@ exactly as before. Design notes, dashboard setup and the test checklist: [`dev-d
 
 Each is a gear in the engine above, not a standalone feature.
 
-**AMM Swap** — Uniswap v2-style. 0.3% fee split 0.25% to LPs / 0.05% to treasury. Supports `addLiquidity`, `addLiquidityETH`, `removeLiquidity`, `removeLiquidityETH`.
+**AMM Swap** — Uniswap v2-style. 0.3% pool fee split 0.25% to LPs / 0.05% to the protocol. Testnet adds a 0.05% router fee (0.35% all-in); mainnet is 0.30% all-in, with half the protocol share sent to the prize pot. Supports `addLiquidity`, `addLiquidityETH`, `removeLiquidity`, `removeLiquidityETH`.
 
 **Prize Game** — Perpetual round-based game. Each round = 6 segments of 60 min (59 min 45 s open + 15 s settlement). Players hold a **ticket** — a 6-character string (A–Z, 0–9, no repeats) that plays the next round. Every eligible swap nudges the active segment's digit upward on a continuous meter; when a segment closes its digit locks and the next becomes active. After all 6 lock, an exact match wins the pot. Segments settle **permissionlessly** once the open window elapses (anyone can call `settleSegment`). Entry can be paid in ETH or TIMBS; **extra rounds** cost `entryCostTIMBS` each (up to 12, non-refundable). Ticket principal stays refundable for **4 rounds** after the ticket's last eligible round (and if you win near the end, the refund window starts *after* your claim window closes — up to LER+6) and, while active, earns yield via the **TimbYieldVault** that grows the pot. Winners claim their prize on a separate, shorter clock — **2 rounds from the match** — and a lapsed prize recycles into the pot without touching the winner's principal window. At each segment close the locked letter is the nudge counter **jittered with the settling block's hash**, so swaps influence the outcome but nobody can aim it. The registry is keyed by a **game generation**: when a new TimbPrize is deployed and `startGame` runs, the generation bumps and every prior-game ticket goes inert — its principal is recoverable any time via **Reclaim principal** on the compete page — so a redeploy never contaminates the new game and never needs a fresh registry again.
 
@@ -332,7 +332,7 @@ forge script scripts/Deploy.s.sol \
 - **Entry cost:** paid in ETH (`entryCostETH`) or TIMBS (`entryCostTIMBS`), both governance-adjustable
 - **Extra rounds:** `entryCostTIMBS` each, up to 12 per ticket, non-refundable
 - **Buyback:** 5% burned, 20% to reserve, 75% into the reward waterfall
-- **Protocol fee:** 0.05% of swap volume → TimbTreasury
+- **Protocol fee:** 0.05% of swap volume (mainnet: half → prize pot, half → TimbTreasury)
 
 ---
 
