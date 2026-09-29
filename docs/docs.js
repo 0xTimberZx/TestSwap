@@ -28,10 +28,10 @@ function renderAddresses() {
   const tbody = document.getElementById("addr-tbody");
   if (!tbody || typeof ADDRESSES === "undefined") return;
   const rows = ADDR_ROWS
-    .filter(([, key]) => ADDRESSES[key])
+    .filter(([, key]) => ADDRESSES[key] && !/^0x0{40}$/i.test(ADDRESSES[key])) // skip undeployed
     .map(([name, key]) => {
       const addr = ADDRESSES[key];
-      const url = "https://sepolia.arbiscan.io/address/" + addr;
+      const url = EXPLORER + "/address/" + addr;
       return `<tr>
         <td class="docs-td-name">${name}</td>
         <td class="docs-td-addr" title="View on Arbiscan"

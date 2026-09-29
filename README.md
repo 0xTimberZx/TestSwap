@@ -76,7 +76,7 @@ machine — read them as gears, not a product menu.
 | TimbBoostFarm | `0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35` |
 | TimbLockVault | `0x0157086E7670D1eFb15DC6b5158eE78279927a41` |
 | TimbTreasury v4 | `0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c` |
-| TimbGovernance | `0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061` |
+| TimbGovernance | not deployed on testnet (governance is off) |
 | TIMBS/ETH Pair | `0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95` |
 | WETH (Arb Sepolia) | `0x980B62Da83eFf3D4576C647993b0c1D7faf17c73` |
 | USDC (Circle canonical, 6 dec) | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` |

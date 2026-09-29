@@ -303,7 +303,7 @@ const _SEPOLIA_ADDRESSES = {
   TimbLockVault:        "0x0157086E7670D1eFb15DC6b5158eE78279927a41",
   TimbYieldVault:       "0x43D833e828e2AF951527C2b573Eb70c358FfEB0B", // fresh deploy — clears stranded/colliding weight
   TimbTreasury:         "0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c", // v4 — three-way buyback split (burn/reserve/waterfall) + protocol-owned liquidity
-  TimbGovernance:       "0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061",
+  TimbGovernance:       "0x0000000000000000000000000000000000000000", // not deployed on testnet; the old value was a retired TimbSwapRouter (TS-001)
   TimbsEthPair:         "0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95",
   WETH:                 "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
 
