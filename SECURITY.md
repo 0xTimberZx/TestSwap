@@ -113,6 +113,7 @@ closed as known. This list covers reports received after it was published.
 | TS-009 | `TimbSwapRouter` | Swap nudges had no minimum input, so dust swaps drove the meter for gas alone and bypassed the free-nudge cap |
 | TS-010 | `TimbSwapRouter` | Exact-output swaps checked only the swap input against `amountInMax`, so the protocol fee was charged beyond the caller's limit |
 | TS-011 | `TimbStaking` / `TimbFarm` | `emergencyWithdraw` forfeited pending rewards without releasing them from `rewardReserve`, so `recoverERC20` could never reclaim them |
+| TS-012 | Frontend | Token `symbol()`/`name()` from permissionless pairs were rendered via `innerHTML` unescaped (stored XSS on Explore and Swap) |
 
 ## Severity & rewards
 
