@@ -101,6 +101,7 @@ closed as known. This list covers reports received after it was published.
 | TS-003 | `TIMBSToken` | Transfer-cap whitelist misses `TimbFarm` / `TimbBoostFarm`; `farmPool` mis-set |
 | TS-004 | `TimbPrize` | Winning string can repeat characters (handled in mainnet source) |
 | TS-005 | `VRFEntropy` | Permissionless `rerequest` has no per-salt retry cap; each call spends the VRF subscription |
+| TS-006 | `TimbTreasury` | `distributeToPot` deposits into `PrizeEscrow` without crediting `TimbPrize.currentAccumulatedRewards`, so the ETH never reaches a winner |
 
 ## Severity & rewards
 
