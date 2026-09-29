@@ -183,9 +183,9 @@ The game should be entertaining even if the token price is flat. Revenue comes f
 
 | Fee | Amount | Destination |
 |-----|--------|-------------|
-| Total swap fee | 0.3% | — |
+| Total swap fee | 0.35% testnet (0.3% pool + 0.05% router) · 0.30% mainnet | — |
 | LP share | 0.25% | Liquidity providers |
-| Protocol share | 0.05% | TimbTreasury |
+| Protocol share | 0.05% (mainnet: half to the prize pot, half to TimbTreasury) | TimbTreasury / PrizeEscrow |
 | Protocol game cut | Owner-set % | TimbTreasury |
 | Buyback burn | 50% of purchased TIMBS | Burned via burn() |
 | Buyback staking | 50% of purchased TIMBS | TimbStaking distributions |
