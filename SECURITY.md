@@ -69,6 +69,12 @@ closed as known. This list covers reports received after it was published.
   that the owner can reset in one transaction on testnet are set separately
   for mainnet. A testnet misconfiguration pays only if the same mistake is in
   the mainnet deploy script.
+- **Permissionless pair swaps.** `TimbSwapPair.swap()` is open to any caller,
+  as in Uniswap V2; the constant-product invariant is enforced after fees. The
+  router's extra protocol fee and the prize-game nudge apply only to swaps
+  routed through the router, so a direct swap skips both (and gives up its own
+  nudge). Earlier testnet builds carried an "only factory-registered router"
+  comment; the mainnet source documents the permissionless design.
 
 **Accepted risks on mainnet (known, bounded, not bugs):**
 
