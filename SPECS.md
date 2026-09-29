@@ -30,7 +30,7 @@
 | TimbFarm | 0xE319E2206F71A5cD8dd2c411C6F29712935f9011 | Sourcify ✅ |
 | TimbLockVault | 0x0157086E7670D1eFb15DC6b5158eE78279927a41 | Sourcify ✅ |
 | TimbTreasury v4 | 0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c | Sourcify ✅ — three-way buyback split (burn/reserve/waterfall) + protocol-owned liquidity; live per config.js and confirmed by on-chain drains |
-| TimbGovernance | 0x8a324EfDc457BfB9Cf3D077E4CBC5A16a1c6a061 | Sourcify ✅ |
+| TimbGovernance | — | Not deployed on testnet; governance is off (TS-001). The address previously listed here is a retired TimbSwapRouter |
 | TIMBS/ETH Pair | 0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95 | via Factory ✅ |
 | WETH (Arb Sepolia) | 0x980B62Da83eFf3D4576C647993b0c1D7faf17c73 | — |
 | USDC (Circle canonical, 6 dec) | 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d | — |
