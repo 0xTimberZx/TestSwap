@@ -33,6 +33,12 @@ using SafeERC20 for IERC20;
 
     interface IPrizeEscrow {
         function deposit() external payable;
+        function timbPrize() external view returns (address);
+    }
+
+    interface ITimbPrizePot {
+        function addToPot() external payable;
+        function prizeEscrow() external view returns (address);
     }
 
     interface ITimbSwapRouter {
@@ -228,6 +234,7 @@ contract TimbTreasury is Ownable2Step, ReentrancyGuard {
     error NotAuthorised();
     error TransferFailed();
     error OperatorCapExceeded(uint256 requested, uint256 remaining);
+    error EscrowMismatch(address timbPrize);
 
     // ─── Modifiers ─────────────────────────────────────────────────────────────
 
@@ -380,7 +387,13 @@ contract TimbTreasury is Ownable2Step, ReentrancyGuard {
     // ─── Distribution ─────────────────────────────────────────────────────────
 
     /**
-     * @notice Send ETH from treasury to PrizeEscrow to top up prize pot.
+     * @notice Send ETH from treasury to top up the prize pot.
+     * @dev    Goes through TimbPrize.addToPot, which credits
+     *         currentAccumulatedRewards before depositing into PrizeEscrow.
+     *         Depositing into the escrow directly (the old path) left the ETH
+     *         outside the counter settlement pays from, so it could never
+     *         reach a winner (TS-006). The prize is the one the escrow pays
+     *         for, and it must deposit into this treasury's escrow.
      * @param amount ETH amount to send.
      */
     function distributeToPot(uint256 amount)
@@ -392,7 +405,11 @@ contract TimbTreasury is Ownable2Step, ReentrancyGuard {
         if (prizeEscrow == address(0))       revert ZeroAddress();
         if (amount > address(this).balance)  revert InsufficientETH(amount, address(this).balance);
 
-        IPrizeEscrow(prizeEscrow).deposit{value: amount}();
+        address prize = IPrizeEscrow(prizeEscrow).timbPrize();
+        if (prize == address(0))                             revert ZeroAddress();
+        if (ITimbPrizePot(prize).prizeEscrow() != prizeEscrow) revert EscrowMismatch(prize);
+
+        ITimbPrizePot(prize).addToPot{value: amount}();
         totalPotFunded += amount;
 
         emit PotFunded(amount);
