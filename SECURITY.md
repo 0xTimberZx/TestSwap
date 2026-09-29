@@ -110,6 +110,7 @@ closed as known. This list covers reports received after it was published.
 | TS-006 | `TimbTreasury` | `distributeToPot` deposits into `PrizeEscrow` without crediting `TimbPrize.currentAccumulatedRewards`, so the ETH never reaches a winner |
 | TS-007 | Frontend | Prize headline (landing "Up for Grabs", compete banner) showed the PrizeEscrow balance instead of the winnable pot |
 | TS-008 | `GameRegistry` / `TimbPrize` | Settlement counted only Active tickets, so selectively activating one's own ticket could exclude matching Pending winners |
+| TS-009 | `TimbSwapRouter` | Swap nudges had no minimum input, so dust swaps drove the meter for gas alone and bypassed the free-nudge cap |
 
 ## Severity & rewards
 
