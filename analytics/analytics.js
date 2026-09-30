@@ -200,17 +200,11 @@ async function loadLiveMetrics() {
     set("m-pot", Number(ethers.utils.formatUnits(pot, 18))
       .toLocaleString("en-US", { maximumFractionDigits: 5 }) + " ETH");
     const potUsd = usd(parseFloat(ethers.utils.formatUnits(pot, 18)));
-    // Sub-line: USD value + the live vault yield accruing into the pot + the
-    // protocol cut. The pot only ever moves DOWN at settlement, and it does so
-    // by this cut whether or not anyone won — with no winner the rest carries
-    // forward, so a quiet stretch reads as a slow 2 %-per-round decline.
-    // Saying so here is what stops that looking like a leak.
+    // Sub-line: USD value + the live vault yield accruing into the pot. The
+    // 2% protocol cut taken at each settlement is documented (Docs → Compete)
+    // rather than shown here: it is not winnable, so it only distracts players.
     const accruedStr = accrued ? fmt(accrued, 18, 6) + " ETH" : "—";
-    const cutStr = cutBps != null && !cutBps.isZero()
-      ? ` · ${(cutBps.toNumber() / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}% cut at each settlement`
-      : "";
-    // Base sub: USD value + live vault yield + cut. Augmented below with the
-    // latest round-end carry (PotCarried) once the block window is resolved.
+    const cutStr = "";
     set("m-pot-sub",  (potUsd ? `≈ $${potUsd} · ` : "") + `yield ${accruedStr}` + cutStr);
 
     // Prize Escrow card (formerly "Total Pot") — ALL physical ETH held by PrizeEscrow (the winnable

@@ -209,6 +209,7 @@ These three buckets must never mingle.
 - **Lock (§13.2):** per segment, char jittered from keccak256(blockhash(n-1), counter, round, segment), kept in the live char's class — letter→letter (mod 26), digit→digit (mod 10). Class is aimable via nudging; exact char is not
 - **Rollover (v7):** at round settle, each segment's next-round counter is seeded to the index of the char it just locked, so the meter opens the new round on the previous round's **jittered winning string** and nudges up from there (pre-jitter continuity, now linked to the scored char, not the raw counter)
 - **Entry:** 6 chars, A-Z + 0-9, no repeats, plays in round N+1
+- **Protocol cut:** 2% of the pot (`protocolCutBps = 200`) at every settlement, winner or not; accrues in `protocolCutAccrued`, delivered by `withdrawProtocolCut(to)`. Not winnable, not shown on Compete
 - **Payout:** floor(pot/n) × n, remainder r snowballs
 - **Prize claim window:** 2 rounds from the winning round (flat, no grace)
 - **Principal refund window:** 4 rounds after lastEligibleRound (decoupled; a lapsed prize never shortens it)
@@ -321,6 +322,7 @@ so they work on any host/custom domain.
 | Buyback burn ratio | 50% (adjustable via TimbTreasury) |
 | Emissions | Governance-unlockable, off by default |
 | Protocol fee | 0.05% of swap volume |
+| Prize cut | 2% of each settled pot → treasury (every settlement, won or not) |
 
 ---
 

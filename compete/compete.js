@@ -313,32 +313,33 @@ async function pollRoundState() {
     // extra rounds the user is paying for are reflected as a range.
     renderPlaysRound(currentRoundNum);
 
-    // Pot substats as ordered segments: Pot · backed by · yield rate.
-    // "backed by" (escrow reserve) sits right after the pot; yield rate
+    // Pot substats as ordered segments: Pot · rolled over · yield rate.
+    // "rolled over" (last round's carry) sits right after the pot; yield rate
     // is its own segment (no longer parenthetical).
     // Each segment glues its own words with non-breaking spaces ( ) so it
     // never breaks mid-value; segments join with regular spaces around " · "
     // so the line wraps only *between* stats on a narrow (mobile) viewport.
     const potSegs = ["Pot: " + fmt(s.pot) + " ETH"];
 
-    // The three secondary reads (escrow backing, accruing yield, round
+    // The three secondary reads (last round's carry, accruing yield, round
     // entrants) are independent — fire them together instead of three serial
     // round-trips on every 4s poll. Each resolves to null on read failure.
     let activeEntries = null; // entrants that still carry live vault weight
     const hasVault = ADDRESSES.TimbYieldVault && !/^0x0{40}$/.test(ADDRESSES.TimbYieldVault.replace("0x",""));
-    const [escrowBal, accrued, entrants] = await Promise.all([
-      ADDRESSES.PrizeEscrow ? readProv().getBalance(ADDRESSES.PrizeEscrow).catch(() => null) : null,
+    const [rolledOver, accrued, entrants] = await Promise.all([
+      currentRoundNum > 1
+        ? contractRO(ADDRESSES.TimbPrize, TIMBPRIZE_ABI).getRoundResult(currentRoundNum - 1).then(r => r.remainder).catch(() => null)
+        : null,
       hasVault ? contractRO(ADDRESSES.TimbYieldVault, YIELD_VAULT_ABI).previewAccrued().catch(e => { _logYieldErrOnce(e); return null; }) : null,
       contractRO(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI).getRoundEntrants(currentRoundNum).catch(() => null),
     ]);
 
-    // "backed by" = the escrow RESERVE beyond the winnable pot (escrowBal − pot).
-    // The pot's ETH already lives inside the escrow, so showing the full balance
-    // would double-count the pot. Reporting the reserve makes Pot + backed by
-    // === escrowBal, matching the analytics "Total Pot" card exactly. Shown only
-    // when a reserve exists (escrowBal > pot): a direct seed or the round-end
-    // snowball carried behind the pot.
-    if (escrowBal && escrowBal.gt(s.pot)) potSegs.push(`backed by ${fmt(escrowBal.sub(s.pot))} ETH`);
+    // "rolled over" = what the previous round's settlement carried into this
+    // pot (no winner, or the indivisible remainder). It is player-relevant:
+    // it is part of what can be won. The escrow's reserve beyond the pot (the
+    // protocol cut + dust) is NOT winnable, so it is deliberately not shown
+    // here; the Analytics "Prize Escrow (backing)" card carries it instead.
+    if (rolledOver && !rolledOver.isZero()) potSegs.push(`rolled over ${fmt(rolledOver)} ETH from #${currentRoundNum - 1}`);
     document.getElementById("sub-pot").textContent = potSegs.join(" · ");
 
     // FLOW GROUP (right of the "|" divider): live yield rate + round entries.
