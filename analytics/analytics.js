@@ -14,6 +14,10 @@ const PRIZE_ABI = [
   "function positionCounter() external view returns (uint256)",
   // Basis points taken from the pot at every settlement, winner or not.
   "function protocolCutBps() external view returns (uint256)",
+  // Protocol cut still parked in PrizeEscrow (drops on withdrawProtocolCut).
+  "function protocolCutAccrued() external view returns (uint256)",
+  "event ProtocolCutTaken(uint256 amount)",
+  "event ProtocolCutWithdrawn(address indexed to, uint256 amount)",
   "function getRoundResult(uint256 round) external view returns (bytes6 winningString, uint256 potAmount, address[] winners, uint256 perWinner, uint256 remainder)",
   "event RoundSettled(uint256 indexed round, bytes6 winningString, uint256 potAmount, uint256 numWinners, uint256 remainderR, uint256 totalEntries, uint256 timestamp)",
   "event WinningsClaimed(address indexed winner, uint256 indexed round, uint256 amount)",
@@ -200,17 +204,11 @@ async function loadLiveMetrics() {
     set("m-pot", Number(ethers.utils.formatUnits(pot, 18))
       .toLocaleString("en-US", { maximumFractionDigits: 5 }) + " ETH");
     const potUsd = usd(parseFloat(ethers.utils.formatUnits(pot, 18)));
-    // Sub-line: USD value + the live vault yield accruing into the pot + the
-    // protocol cut. The pot only ever moves DOWN at settlement, and it does so
-    // by this cut whether or not anyone won — with no winner the rest carries
-    // forward, so a quiet stretch reads as a slow 2 %-per-round decline.
-    // Saying so here is what stops that looking like a leak.
+    // Sub-line: USD value + the live vault yield accruing into the pot. The
+    // 2% protocol cut taken at each settlement is documented (Docs → Compete)
+    // rather than shown here: it is not winnable, so it only distracts players.
     const accruedStr = accrued ? fmt(accrued, 18, 6) + " ETH" : "—";
-    const cutStr = cutBps != null && !cutBps.isZero()
-      ? ` · ${(cutBps.toNumber() / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}% cut at each settlement`
-      : "";
-    // Base sub: USD value + live vault yield + cut. Augmented below with the
-    // latest round-end carry (PotCarried) once the block window is resolved.
+    const cutStr = "";
     set("m-pot-sub",  (potUsd ? `≈ $${potUsd} · ` : "") + `yield ${accruedStr}` + cutStr);
 
     // Prize Escrow card (formerly "Total Pot") — ALL physical ETH held by PrizeEscrow (the winnable
@@ -249,6 +247,25 @@ async function loadLiveMetrics() {
         }
       } catch { /* leave base pot sub */ }
     } catch { set("m-escrow-sub", "last funded —"); }
+
+    // Protocol cut, to date — operator revenue from the prize game. The on-chain
+    // accumulator only holds what is still unwithdrawn, so the lifetime total is
+    // accrued + every ProtocolCutWithdrawn since deploy. Withdrawals are rare
+    // events, so the scan uses a wide window (queryFilterWindow shrinks it on an
+    // RPC limit). This figure never goes down.
+    try {
+      const accruedCut = await prize.protocolCutAccrued();
+      let withdrawn = ethers.BigNumber.from(0);
+      let scanNote = "";
+      try {
+        const { currentBlock, windowBlocks } = await scanRange(prov);
+        const ws = await queryFilterWindow(prize, prize.filters.ProtocolCutWithdrawn(), currentBlock, windowBlocks * 60);
+        for (const w of ws) withdrawn = withdrawn.add(w.args.amount);
+      } catch { scanNote = " · withdrawals unscanned"; }
+      const total = accruedCut.add(withdrawn);
+      set("m-cut", fmt(total, 18, 5) + " ETH");
+      set("m-cut-sub", `${fmt(accruedCut, 18, 5)} ETH unwithdrawn · ${fmt(withdrawn, 18, 5)} ETH withdrawn · 2% of each settled pot${scanNote}`);
+    } catch { set("m-cut-sub", "—"); }
 
     set("m-scroll",       counter.toString());
     set("m-staked",       fmt(staked, 18, 0) + " TIMBS");
