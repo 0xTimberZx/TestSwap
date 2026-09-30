@@ -338,7 +338,7 @@ async function pollRoundState() {
     // pot (no winner, or the indivisible remainder). It is player-relevant:
     // it is part of what can be won. The escrow's reserve beyond the pot (the
     // protocol cut + dust) is NOT winnable, so it is deliberately not shown
-    // here; the Analytics "Prize Escrow (backing)" card carries it instead.
+    // here; the Analytics "Contract Balance (Escrow)" card carries it instead.
     if (rolledOver && !rolledOver.isZero()) potSegs.push(`rolled over ${fmt(rolledOver)} ETH from #${currentRoundNum - 1}`);
     document.getElementById("sub-pot").textContent = potSegs.join(" · ");
 
