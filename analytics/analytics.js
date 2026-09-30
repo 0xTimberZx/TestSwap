@@ -213,7 +213,7 @@ async function loadLiveMetrics() {
     // latest round-end carry (PotCarried) once the block window is resolved.
     set("m-pot-sub",  (potUsd ? `≈ $${potUsd} · ` : "") + `yield ${accruedStr}` + cutStr);
 
-    // Total Pot card — ALL physical ETH held by PrizeEscrow (the winnable
+    // Prize Escrow card (formerly "Total Pot") — ALL physical ETH held by PrizeEscrow (the winnable
     // "Prize Pot" plus the reserve carried behind it), with when it was last
     // topped up (latest Deposited event) and by how
     // much. Note: the settlement snowball (remainder → next round) moves NO ETH
@@ -229,7 +229,7 @@ async function loadLiveMetrics() {
       const deps = await queryFilterWindow(escrow, escrow.filters.Deposited(), currentBlock, windowBlocks);
       if (deps.length) {
         const last = deps.reduce((a, b) => (b.blockNumber > a.blockNumber ? b : a));
-        set("m-escrow-sub", `last funded ${blockAge(last.blockNumber, currentBlock, bps)} · +${fmt(last.args.amount, 18, 5)} ETH`);
+        set("m-escrow-sub", `not the winnable pot · last funded ${blockAge(last.blockNumber, currentBlock, bps)} · +${fmt(last.args.amount, 18, 5)} ETH`);
       } else {
         set("m-escrow-sub", "no deposits in 7d");
       }
