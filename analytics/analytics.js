@@ -211,7 +211,7 @@ async function loadLiveMetrics() {
     const cutStr = "";
     set("m-pot-sub",  (potUsd ? `≈ $${potUsd} · ` : "") + `yield ${accruedStr}` + cutStr);
 
-    // Prize Escrow card (formerly "Total Pot") — ALL physical ETH held by PrizeEscrow (the winnable
+    // Contract Balance (Escrow) card (formerly "Total Pot") — ALL physical ETH held by PrizeEscrow (the winnable
     // "Prize Pot" plus the reserve carried behind it), with when it was last
     // topped up (latest Deposited event) and by how
     // much. Note: the settlement snowball (remainder → next round) moves NO ETH
