@@ -14,6 +14,10 @@ const PRIZE_ABI = [
   "function positionCounter() external view returns (uint256)",
   // Basis points taken from the pot at every settlement, winner or not.
   "function protocolCutBps() external view returns (uint256)",
+  // Protocol cut still parked in PrizeEscrow (drops on withdrawProtocolCut).
+  "function protocolCutAccrued() external view returns (uint256)",
+  "event ProtocolCutTaken(uint256 amount)",
+  "event ProtocolCutWithdrawn(address indexed to, uint256 amount)",
   "function getRoundResult(uint256 round) external view returns (bytes6 winningString, uint256 potAmount, address[] winners, uint256 perWinner, uint256 remainder)",
   "event RoundSettled(uint256 indexed round, bytes6 winningString, uint256 potAmount, uint256 numWinners, uint256 remainderR, uint256 totalEntries, uint256 timestamp)",
   "event WinningsClaimed(address indexed winner, uint256 indexed round, uint256 amount)",
@@ -243,6 +247,25 @@ async function loadLiveMetrics() {
         }
       } catch { /* leave base pot sub */ }
     } catch { set("m-escrow-sub", "last funded —"); }
+
+    // Protocol cut, to date — operator revenue from the prize game. The on-chain
+    // accumulator only holds what is still unwithdrawn, so the lifetime total is
+    // accrued + every ProtocolCutWithdrawn since deploy. Withdrawals are rare
+    // events, so the scan uses a wide window (queryFilterWindow shrinks it on an
+    // RPC limit). This figure never goes down.
+    try {
+      const accruedCut = await prize.protocolCutAccrued();
+      let withdrawn = ethers.BigNumber.from(0);
+      let scanNote = "";
+      try {
+        const { currentBlock, windowBlocks } = await scanRange(prov);
+        const ws = await queryFilterWindow(prize, prize.filters.ProtocolCutWithdrawn(), currentBlock, windowBlocks * 60);
+        for (const w of ws) withdrawn = withdrawn.add(w.args.amount);
+      } catch { scanNote = " · withdrawals unscanned"; }
+      const total = accruedCut.add(withdrawn);
+      set("m-cut", fmt(total, 18, 5) + " ETH");
+      set("m-cut-sub", `${fmt(accruedCut, 18, 5)} ETH unwithdrawn · ${fmt(withdrawn, 18, 5)} ETH withdrawn · 2% of each settled pot${scanNote}`);
+    } catch { set("m-cut-sub", "—"); }
 
     set("m-scroll",       counter.toString());
     set("m-staked",       fmt(staked, 18, 0) + " TIMBS");
