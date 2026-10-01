@@ -14,13 +14,16 @@
   var checkBtn = document.getElementById("qs-check");
 
   var WALLET_RE = /^0x[a-fA-F0-9]{40}$/;
-  function short(a) { return a ? a.slice(0, 6) + "…" + a.slice(-4) : ""; }
+  // Server rows are indexer-written, but every string that reaches innerHTML
+  // goes through esc() so a future field or a bad row can never inject markup.
+  function esc(v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
+  function short(a) { a = String(a || ""); return a ? esc(a.slice(0, 6) + "…" + a.slice(-4)) : ""; }
   function tp(n) { return Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 0 }); }
 
   function renderBoard(d) {
     if (seasonEl) {
       seasonEl.textContent = d && d.season
-        ? (d.season.name + " · " + d.season.status + (d.season.last_round ? " · through round " + d.season.last_round : ""))
+        ? (d.season.name + " · " + d.season.status + (d.season.last_round ? " · scored through round " + d.season.last_round + " (points post about a day behind)" : ""))
         : "No active season yet — scoring opens soon.";
     }
     if (!board) return;
@@ -31,13 +34,13 @@
     }
     board.innerHTML = rows.map(function (r) {
       return '<tr>'
-        + '<td class="qs-rank">' + r.rank + '</td>'
-        + '<td class="qs-addr" title="' + r.address + '">' + short(r.address)
+        + '<td class="qs-rank">' + esc(r.rank) + '</td>'
+        + '<td class="qs-addr" title="' + esc(r.address) + '">' + short(r.address)
             + (r.diversity ? ' <span class="qs-badge" title="Diversity bonus">✦</span>' : '') + '</td>'
         + '<td class="qs-tp">' + tp(r.display_tp) + '</td>'
-        + '<td>' + r.rounds_played + '</td>'
-        + '<td>' + r.swap_count + '</td>'
-        + '<td>' + (r.best_streak || 0) + '</td>'
+        + '<td>' + esc(r.rounds_played) + '</td>'
+        + '<td>' + esc(r.swap_count) + '</td>'
+        + '<td>' + esc(r.best_streak || 0) + '</td>'
         + '</tr>';
     }).join("");
   }
@@ -58,9 +61,9 @@
     }
     youWrap.innerHTML = '<div class="qs-you-card">'
       + '<div class="qs-you-h">' + short(you.address) + ' — <strong>' + tp(you.display_tp) + ' TP</strong>'
-        + (you.rank ? ' · rank #' + you.rank : '') + '</div>'
-      + '<div class="qs-you-sub">' + you.rounds_played + ' rounds · ' + you.swap_count + ' swaps · streak '
-        + (you.best_streak || 0) + (you.diversity ? ' · diversity ✦' : '') + '</div></div>';
+        + (you.rank ? ' · rank #' + esc(you.rank) : '') + '</div>'
+      + '<div class="qs-you-sub">' + esc(you.rounds_played) + ' rounds · ' + esc(you.swap_count) + ' swaps · streak '
+        + esc(you.best_streak || 0) + (you.diversity ? ' · diversity ✦' : '') + '</div></div>';
   }
 
   function load(address) {
