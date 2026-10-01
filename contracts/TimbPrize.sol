@@ -38,6 +38,7 @@ interface IGameRegistry {
         external view returns (address[] memory);
     function getRoundEntrants(uint256 round)
         external view returns (address[] memory);
+    function roundEntrantsLength(uint256 round) external view returns (uint256);
     function activateRoundEntries(uint256 round, address[] calldata players) external;
     function recordWinners(uint256 round, address[] calldata winners) external;
     function setCurrentRound(uint256 round) external;
@@ -541,8 +542,11 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         // §14 forfeiture anchors are set before the keeper's forfeiture sweep.
         // Advancement below is now O(1) and cannot be blocked by entrant count.
 
+        // TS-015: a bare length read. The array getter copied every entrant
+        // into memory, so a sybil flood could push settlement past the block
+        // gas limit and halt the game.
         uint256 totalEntries =
-            IGameRegistry(gameRegistry).getRoundEntrants(round).length;
+            IGameRegistry(gameRegistry).roundEntrantsLength(round);
 
         emit RoundSettled(
             round,

@@ -1025,6 +1025,15 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
         return roundEntrants[generation][round];
     }
 
+    /// @notice Number of wallets with a ticket eligible in a round (TS-015).
+    /// @dev    Settlement reads this instead of `getRoundEntrants(round).length`:
+    ///         the array getter ABI-copies every entrant into memory, which a
+    ///         griefer could inflate until the settling tx OOGs. A bare
+    ///         `.length` is a single SLOAD and cannot be griefed.
+    function roundEntrantsLength(uint256 round) external view returns (uint256) {
+        return roundEntrants[generation][round].length;
+    }
+
     // ─── Views: Tickets ──────────────────────────────────────────────────────
 
     /**

@@ -311,6 +311,7 @@
             <tr><td style="white-space:nowrap">TS-011</td><td><code>TimbStaking</code> / <code>TimbFarm</code></td><td><code>emergencyWithdraw</code> forfeited pending rewards without releasing them from <code>rewardReserve</code>, so <code>recoverERC20</code> could never reclaim them</td></tr>
             <tr><td style="white-space:nowrap">TS-012</td><td>Frontend</td><td>Token <code>symbol()</code>/<code>name()</code> from permissionless pairs were rendered via <code>innerHTML</code> unescaped (stored XSS on Explore and Swap)</td></tr>
             <tr><td style="white-space:nowrap">TS-013</td><td><code>TimbSwapRouter</code></td><td>An <code>advanceScroll</code> batch that settled the segment carried its remaining nudges into the next segment uncharged, bypassing the free-nudge cap</td></tr>
+            <tr><td style="white-space:nowrap">TS-015</td><td><code>TimbPrize</code></td><td><code>_settleRound</code> read the entrant count by copying the full <code>roundEntrants</code> array, so a sybil flood could push settlement past the block gas limit and halt the game</td></tr>
             </tbody>
           </table>
         </div>
