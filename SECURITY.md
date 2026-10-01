@@ -115,6 +115,7 @@ closed as known. This list covers reports received after it was published.
 | TS-011 | `TimbStaking` / `TimbFarm` | `emergencyWithdraw` forfeited pending rewards without releasing them from `rewardReserve`, so `recoverERC20` could never reclaim them |
 | TS-012 | Frontend | Token `symbol()`/`name()` from permissionless pairs were rendered via `innerHTML` unescaped (stored XSS on Explore and Swap) |
 | TS-013 | `TimbSwapRouter` | An `advanceScroll` batch that settled the segment carried its remaining nudges into the next segment uncharged, bypassing the free-nudge cap |
+| TS-015 | `TimbPrize` | `_settleRound` read the entrant count by copying the full `roundEntrants` array, so a sybil flood could push settlement past the block gas limit and halt the game |
 
 ## Severity & rewards
 
