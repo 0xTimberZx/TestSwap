@@ -119,6 +119,7 @@ closed as known. This list covers reports received after it was published.
 | TS-014 | `TimbYieldVault` / `GameRegistry` | Ticket yield weight outlived its game: a registry swap or generation bump left stale weight drawing on the reserve, and a fresh registry's ticket id aliased a retired one |
 | TS-016 | `TimbTreasury` (mainnet) | Permissionless `updateTwap` reset the single TWAP observation, so anyone could keep `executeBuyback`'s age gate unmet for ~40k gas per call |
 | TS-017 | `TimbPrize` | `startGame` activated the whole round-1 entrant array in one transaction, so a pre-launch submit-and-cancel flood could push it past the gas cap on every attempt |
+| TS-018 | `PrizeEscrow` | Repointing the escrow at a new prize cut the old game off from `pay()`, so its unclaimed winners and protocol-cut withdrawal reverted until the owner intervened |
 
 ## Severity & rewards
 
