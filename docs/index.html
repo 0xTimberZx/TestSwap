@@ -316,6 +316,7 @@
             <tr><td style="white-space:nowrap">TS-016</td><td><code>TimbTreasury</code> (mainnet)</td><td>Permissionless <code>updateTwap</code> reset the single TWAP observation, so anyone could keep <code>executeBuyback</code>'s age gate unmet for ~40k gas per call</td></tr>
             <tr><td style="white-space:nowrap">TS-017</td><td><code>TimbPrize</code></td><td><code>startGame</code> activated the whole round-1 entrant array in one transaction, so a pre-launch submit-and-cancel flood could push it past the gas cap on every attempt</td></tr>
             <tr><td style="white-space:nowrap">TS-018</td><td><code>PrizeEscrow</code></td><td>Repointing the escrow at a new prize cut the old game off from <code>pay()</code>, so its unclaimed winners and protocol-cut withdrawal reverted until the owner intervened</td></tr>
+            <tr><td style="white-space:nowrap">TS-019</td><td><code>TimbPrize</code></td><td><code>entriesPaused</code> was never read, so the owner's documented entry-pause control did nothing and meter nudges continued during a pause</td></tr>
             </tbody>
           </table>
         </div>
