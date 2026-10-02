@@ -118,6 +118,7 @@ closed as known. This list covers reports received after it was published.
 | TS-015 | `TimbPrize` | `_settleRound` read the entrant count by copying the full `roundEntrants` array, so a sybil flood could push settlement past the block gas limit and halt the game |
 | TS-014 | `TimbYieldVault` / `GameRegistry` | Ticket yield weight outlived its game: a registry swap or generation bump left stale weight drawing on the reserve, and a fresh registry's ticket id aliased a retired one |
 | TS-016 | `TimbTreasury` (mainnet) | Permissionless `updateTwap` reset the single TWAP observation, so anyone could keep `executeBuyback`'s age gate unmet for ~40k gas per call |
+| TS-017 | `TimbPrize` | `startGame` activated the whole round-1 entrant array in one transaction, so a pre-launch submit-and-cancel flood could push it past the gas cap on every attempt |
 
 ## Severity & rewards
 
