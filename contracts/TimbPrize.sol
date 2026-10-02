@@ -170,9 +170,6 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     ///         is built from. Cleared at each round start.
     mapping(uint256 => bytes1) public segmentLockedChar;
 
-    /// @notice Shuffle enabled — if true, alphabet reseeded each round.
-    bool public shuffleEnabled;
-
     /// @notice Current round number (starts at 0, first game round = 1).
     uint256 public currentRound;
 
@@ -190,9 +187,6 @@ contract TimbPrize is Ownable, ReentrancyGuard {
 
     /// @notice Undistributed winnings documented for winners pending claim.
     uint256 public gameUnclaimed_winningsPool;
-
-    /// @notice Number of winners per round (owner-configurable).
-    uint256 public winnersPerRound;
 
     /// @notice Owner-set protocol cut % from round settlement (basis points).
     uint256 public protocolCutBps;
@@ -250,7 +244,6 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     event ProtocolCutTaken(uint256 amount);
     event ProtocolCutWithdrawn(address indexed to, uint256 amount);
     event SettlerUpdated(address indexed newSettler);
-    event WinnersPerRoundSet(uint256 count);
     event ProtocolCutSet(uint256 bps);
     event EntropySet(address indexed entropy);
     event SegmentArmed(uint256 indexed round, uint256 indexed segment, uint256 requestId);
@@ -274,7 +267,6 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     error EntriesPaused();
     error EntropyNotSet();
     error SettlementPaused();
-    error InvalidWinnersCount();
     error InsufficientPotBalance();
     error SettlingDigit();
 
@@ -307,7 +299,6 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         gameRegistry = _gameRegistry;
         router       = _router;
         settler      = msg.sender;
-        winnersPerRound = 3;
         protocolCutBps  = 200;
     }
 
@@ -947,20 +938,10 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         yieldVault = _vault;
     }
 
-    function setWinnersPerRound(uint256 _count) external onlyOwner {
-        if (_count == 0) revert InvalidWinnersCount();
-        winnersPerRound = _count;
-        emit WinnersPerRoundSet(_count);
-    }
-
     function setProtocolCutBps(uint256 _bps) external onlyOwner {
         if (_bps > 1000) revert ZeroAmount();
         protocolCutBps = _bps;
         emit ProtocolCutSet(_bps);
-    }
-
-    function setShuffleEnabled(bool _enabled) external onlyOwner {
-        shuffleEnabled = _enabled;
     }
 
     function pauseEntries()      external onlyOwner { entriesPaused    = true; }
