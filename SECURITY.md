@@ -120,6 +120,7 @@ closed as known. This list covers reports received after it was published.
 | TS-016 | `TimbTreasury` (mainnet) | Permissionless `updateTwap` reset the single TWAP observation, so anyone could keep `executeBuyback`'s age gate unmet for ~40k gas per call |
 | TS-017 | `TimbPrize` | `startGame` activated the whole round-1 entrant array in one transaction, so a pre-launch submit-and-cancel flood could push it past the gas cap on every attempt |
 | TS-018 | `PrizeEscrow` | Repointing the escrow at a new prize cut the old game off from `pay()`, so its unclaimed winners and protocol-cut withdrawal reverted until the owner intervened |
+| TS-019 | `TimbPrize` | `entriesPaused` was never read, so the owner's documented entry-pause control did nothing and meter nudges continued during a pause |
 
 ## Severity & rewards
 
