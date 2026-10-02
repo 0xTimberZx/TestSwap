@@ -315,6 +315,7 @@
             <tr><td style="white-space:nowrap">TS-014</td><td><code>TimbYieldVault</code> / <code>GameRegistry</code></td><td>Ticket yield weight outlived its game: a registry swap or generation bump left stale weight drawing on the reserve, and a fresh registry's ticket id aliased a retired one</td></tr>
             <tr><td style="white-space:nowrap">TS-016</td><td><code>TimbTreasury</code> (mainnet)</td><td>Permissionless <code>updateTwap</code> reset the single TWAP observation, so anyone could keep <code>executeBuyback</code>'s age gate unmet for ~40k gas per call</td></tr>
             <tr><td style="white-space:nowrap">TS-017</td><td><code>TimbPrize</code></td><td><code>startGame</code> activated the whole round-1 entrant array in one transaction, so a pre-launch submit-and-cancel flood could push it past the gas cap on every attempt</td></tr>
+            <tr><td style="white-space:nowrap">TS-018</td><td><code>PrizeEscrow</code></td><td>Repointing the escrow at a new prize cut the old game off from <code>pay()</code>, so its unclaimed winners and protocol-cut withdrawal reverted until the owner intervened</td></tr>
             </tbody>
           </table>
         </div>
