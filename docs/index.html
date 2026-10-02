@@ -317,6 +317,8 @@
             <tr><td style="white-space:nowrap">TS-017</td><td><code>TimbPrize</code></td><td><code>startGame</code> activated the whole round-1 entrant array in one transaction, so a pre-launch submit-and-cancel flood could push it past the gas cap on every attempt</td></tr>
             <tr><td style="white-space:nowrap">TS-018</td><td><code>PrizeEscrow</code></td><td>Repointing the escrow at a new prize cut the old game off from <code>pay()</code>, so its unclaimed winners and protocol-cut withdrawal reverted until the owner intervened</td></tr>
             <tr><td style="white-space:nowrap">TS-019</td><td><code>TimbPrize</code></td><td><code>entriesPaused</code> was never read, so the owner's documented entry-pause control did nothing and meter nudges continued during a pause</td></tr>
+            <tr><td style="white-space:nowrap">TS-020</td><td><code>TimbSwapRouter</code></td><td>A 1-wei donation plus <code>sync()</code> on an unseeded pair left one reserve at zero, so every router add-liquidity call for that pair reverted</td></tr>
+            <tr><td style="white-space:nowrap">TS-021</td><td><code>TimbGovernance</code> (mainnet)</td><td>The quorum base was fixed at proposal creation, so deposits parked at creation and withdrawn mid-vote still raised the bar and could veto an honestly supported proposal</td></tr>
             </tbody>
           </table>
         </div>
