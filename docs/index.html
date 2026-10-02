@@ -312,6 +312,8 @@
             <tr><td style="white-space:nowrap">TS-012</td><td>Frontend</td><td>Token <code>symbol()</code>/<code>name()</code> from permissionless pairs were rendered via <code>innerHTML</code> unescaped (stored XSS on Explore and Swap)</td></tr>
             <tr><td style="white-space:nowrap">TS-013</td><td><code>TimbSwapRouter</code></td><td>An <code>advanceScroll</code> batch that settled the segment carried its remaining nudges into the next segment uncharged, bypassing the free-nudge cap</td></tr>
             <tr><td style="white-space:nowrap">TS-015</td><td><code>TimbPrize</code></td><td><code>_settleRound</code> read the entrant count by copying the full <code>roundEntrants</code> array, so a sybil flood could push settlement past the block gas limit and halt the game</td></tr>
+            <tr><td style="white-space:nowrap">TS-014</td><td><code>TimbYieldVault</code> / <code>GameRegistry</code></td><td>Ticket yield weight outlived its game: a registry swap or generation bump left stale weight drawing on the reserve, and a fresh registry's ticket id aliased a retired one</td></tr>
+            <tr><td style="white-space:nowrap">TS-016</td><td><code>TimbTreasury</code> (mainnet)</td><td>Permissionless <code>updateTwap</code> reset the single TWAP observation, so anyone could keep <code>executeBuyback</code>'s age gate unmet for ~40k gas per call</td></tr>
             </tbody>
           </table>
         </div>
