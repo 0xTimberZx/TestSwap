@@ -123,6 +123,7 @@ closed as known. This list covers reports received after it was published.
 | TS-019 | `TimbPrize` | `entriesPaused` was never read, so the owner's documented entry-pause control did nothing and meter nudges continued during a pause |
 | TS-020 | `TimbSwapRouter` | A 1-wei donation plus `sync()` on an unseeded pair left one reserve at zero, so every router add-liquidity call for that pair reverted |
 | TS-021 | `TimbGovernance` (mainnet) | The quorum base was fixed at proposal creation, so deposits parked at creation and withdrawn mid-vote still raised the bar and could veto an honestly supported proposal |
+| TS-022 | `GameRegistry` | A ticket whose activation was missed counted as live with no round bound, so its wallet could not re-enter until the LER+4 forfeiture sweep |
 
 ## Severity & rewards
 
