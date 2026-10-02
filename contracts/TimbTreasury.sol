@@ -195,6 +195,7 @@ contract TimbTreasury is Ownable2Step, ReentrancyGuard {
 
     // ─── Events ──────────────────────────────────────────────────────────────
 
+    event EthDeposited(address indexed from, uint256 amount);
     event FeesReceived(address indexed from, uint256 amount);
     event BuybackExecuted(
         uint256 ethSpent,
@@ -282,6 +283,7 @@ contract TimbTreasury is Ownable2Step, ReentrancyGuard {
      *      TimbPrize sends round settlement cut here.
      */
     function receiveFees() external payable {
+        if (!authorisedFeeSenders[msg.sender]) revert NotAuthorised(); // TS-023
         if (msg.value == 0) revert ZeroAmount();
         totalFeesReceived += msg.value;
         emit FeesReceived(msg.sender, msg.value);
@@ -444,6 +446,7 @@ contract TimbTreasury is Ownable2Step, ReentrancyGuard {
         IERC20(address(timbsToken)).forceApprove(timbStaking, timbsAmount);
         ITimbStaking(timbStaking).notifyRewardAmount(timbsAmount, duration);
         IERC20(address(timbsToken)).forceApprove(timbStaking, 0);
+        totalTimbsDistributed += timbsAmount; // TS-023: was declared but never written
 
         emit StakingFunded(timbsAmount, duration);
     }
@@ -718,9 +721,14 @@ contract TimbTreasury is Ownable2Step, ReentrancyGuard {
     ///      internal conversion, not new revenue).
     receive() external payable {
         if (msg.sender == weth) return;
-        if (msg.value > 0) {
+        if (msg.value == 0) return;
+        // TS-023: only authorised fee senders count as fee revenue; anything
+        // else is a plain deposit and must not inflate totalFeesReceived.
+        if (authorisedFeeSenders[msg.sender]) {
             totalFeesReceived += msg.value;
             emit FeesReceived(msg.sender, msg.value);
+        } else {
+            emit EthDeposited(msg.sender, msg.value);
         }
     }
 }
