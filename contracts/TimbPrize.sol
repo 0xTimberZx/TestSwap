@@ -331,7 +331,12 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         // prize deploy after the first, retiring the prior game's tickets) and
         // sets its round to 1. Replaces a bare setCurrentRound(1).
         IGameRegistry(gameRegistry).onGameStarted();
-        _activateRoundEntries(currentRound);
+        // TS-017: round-1 entrants are activated the SAME way as every later
+        // round — permissionlessly and in bounded chunks by the keeper via
+        // GameRegistry.activateRoundEntries(currentRound, chunk). Activating
+        // them synchronously here copied and looped the whole (sybil-floodable)
+        // round-1 array, so a pre-launch flood could OOG-revert startGame()
+        // on every attempt. Never touch the full array here.
 
         emit GameStarted(block.timestamp);
         emit RoundStarted(currentRound, block.timestamp);
@@ -726,17 +731,6 @@ contract TimbPrize is Ownable, ReentrancyGuard {
 
         gameUnclaimed_winningsPool += totalPaid;
         currentAccumulatedRewards   = remainder; // r snowballs to next round
-    }
-
-    /**
-     * @dev Activates Pending entries for the given round in GameRegistry.
-     */
-    function _activateRoundEntries(uint256 round) internal {
-        address[] memory entrants =
-            IGameRegistry(gameRegistry).getRoundEntrants(round);
-        if (entrants.length > 0) {
-            IGameRegistry(gameRegistry).activateRoundEntries(round, entrants);
-        }
     }
 
     /**
