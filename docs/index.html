@@ -321,6 +321,7 @@
             <tr><td style="white-space:nowrap">TS-021</td><td><code>TimbGovernance</code> (mainnet)</td><td>The quorum base was fixed at proposal creation, so deposits parked at creation and withdrawn mid-vote still raised the bar and could veto an honestly supported proposal</td></tr>
             <tr><td style="white-space:nowrap">TS-022</td><td><code>GameRegistry</code></td><td>A ticket whose activation was missed counted as live with no round bound, so its wallet could not re-enter until the LER+4 forfeiture sweep</td></tr>
             <tr><td style="white-space:nowrap">TS-023</td><td><code>TimbTreasury</code></td><td>Fee and distribution metrics were unreliable: <code>receiveFees</code> and plain ETH credited any sender to <code>totalFeesReceived</code> (testnet), and <code>totalTimbsDistributed</code> was never written</td></tr>
+            <tr><td style="white-space:nowrap">TS-024</td><td><code>TimbSwapRouter</code></td><td>The TS-020 guard covered only the token/token path; <code>addLiquidityETH</code> still quoted a dusted, unseeded pair against its reserves and reverted on every ETH-side seed</td></tr>
             </tbody>
           </table>
         </div>

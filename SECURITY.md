@@ -125,6 +125,7 @@ closed as known. This list covers reports received after it was published.
 | TS-021 | `TimbGovernance` (mainnet) | The quorum base was fixed at proposal creation, so deposits parked at creation and withdrawn mid-vote still raised the bar and could veto an honestly supported proposal |
 | TS-022 | `GameRegistry` | A ticket whose activation was missed counted as live with no round bound, so its wallet could not re-enter until the LER+4 forfeiture sweep |
 | TS-023 | `TimbTreasury` | Fee and distribution metrics were unreliable: `receiveFees` and plain ETH credited any sender to `totalFeesReceived` (testnet), and `totalTimbsDistributed` was never written |
+| TS-024 | `TimbSwapRouter` | The TS-020 guard covered only the token/token path; `addLiquidityETH` still quoted a dusted, unseeded pair against its reserves and reverted on every ETH-side seed |
 
 ## Severity & rewards
 
