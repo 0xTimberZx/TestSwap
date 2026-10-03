@@ -128,6 +128,7 @@ closed as known. This list covers reports received after it was published.
 | TS-024 | `TimbSwapRouter` | The TS-020 guard covered only the token/token path; `addLiquidityETH` still quoted a dusted, unseeded pair against its reserves and reverted on every ETH-side seed |
 | TS-025 | `GasFaucet` / `GameRegistry` | The faucet gated on a ticket's stored status, which a retired generation keeps forever, so a wallet whose game had ended stayed faucet-eligible without playing |
 | TS-026 | `TimbBoostFarm` | An emptied pool kept its weight in `totalWeight`, so its emission slice was skipped and live pools were diluted until the owner paused it (fix adopted from the reporter) |
+| TS-027 | `GasFaucet` | An exhausted ETH or TIMBS cap reverted the whole `dispense` call, halting the other leg although `claimable` still reported true (fix adopted from the reporter) |
 
 ## Severity & rewards
 
