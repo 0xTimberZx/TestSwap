@@ -130,6 +130,7 @@ closed as known. This list covers reports received after it was published.
 | TS-026 | `TimbBoostFarm` | An emptied pool kept its weight in `totalWeight`, so its emission slice was skipped and live pools were diluted until the owner paused it (fix adopted from the reporter) |
 | TS-027 | `GasFaucet` | An exhausted ETH or TIMBS cap reverted the whole `dispense` call, halting the other leg although `claimable` still reported true (fix adopted from the reporter) |
 | TS-028 | `GameRegistry` | The first `startGame` kept generation 1 so pre-start tickets stayed valid, but wiped the pricing meters anyway, under-pricing entries for the first game (fix adopted from the reporter) |
+| TS-029 | `TimbSwapRouter` | `advanceScroll` charged the free-nudge allowance for nudges the prize dropped as no-ops while awaiting its VRF word (fix adopted from the reporter) |
 
 ## Severity & rewards
 

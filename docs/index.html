@@ -326,6 +326,7 @@
             <tr><td style="white-space:nowrap">TS-026</td><td><code>TimbBoostFarm</code></td><td>An emptied pool kept its weight in <code>totalWeight</code>, so its emission slice was skipped and live pools were diluted until the owner paused it (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-027</td><td><code>GasFaucet</code></td><td>An exhausted ETH or TIMBS cap reverted the whole <code>dispense</code> call, halting the other leg although <code>claimable</code> still reported true (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-028</td><td><code>GameRegistry</code></td><td>The first <code>startGame</code> kept generation 1 so pre-start tickets stayed valid, but wiped the pricing meters anyway, under-pricing entries for the first game (fix adopted from the reporter)</td></tr>
+            <tr><td style="white-space:nowrap">TS-029</td><td><code>TimbSwapRouter</code></td><td><code>advanceScroll</code> charged the free-nudge allowance for nudges the prize dropped as no-ops while awaiting its VRF word (fix adopted from the reporter)</td></tr>
             </tbody>
           </table>
         </div>
