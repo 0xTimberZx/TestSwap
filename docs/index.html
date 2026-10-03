@@ -332,6 +332,7 @@
             <tr><td style="white-space:nowrap">TS-032</td><td><code>TimbTreasury</code></td><td>The router's excess-ETH refund from <code>provideLiquidityETH</code> landed in <code>receive()</code> from an authorised sender and was booked as fee revenue; the TS-023 sender gate left this open (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-033</td><td><code>GasFaucet</code></td><td>A TIMBS balance shortfall or a wallet's lifetime TIMBS cap still reverted the whole <code>dispense</code>, locking that wallet out of the ETH drip; the TS-027 leg retirement covered only the global caps (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-034</td><td><code>TimbGovernance</code> (mainnet)</td><td>Votes were weighed by the voter's live deposit while the quorum base was frozen at creation, so a deposit made after a proposal existed could vote at full weight; the mirror of TS-021 (fix adopted from the reporter)</td></tr>
+            <tr><td style="white-space:nowrap">TS-035</td><td><code>GasFaucet</code></td><td>The ETH leg's treasury pull and pot deposit were bare calls, so a counterparty revert took the independent, pre-funded TIMBS leg down with it (fix adopted from the reporter)</td></tr>
             </tbody>
           </table>
         </div>
