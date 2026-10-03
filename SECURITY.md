@@ -135,6 +135,7 @@ closed as known. This list covers reports received after it was published.
 | TS-031 | `GameRegistry` | The forfeit sweep's TIMBS leg was a bare transfer, so a paused token or transfer cap reverted the whole settlement call and parked the cursor, while the ETH legs were best-effort (fix adopted from the reporter) |
 | TS-032 | `TimbTreasury` | The router's excess-ETH refund from `provideLiquidityETH` landed in `receive()` from an authorised sender and was booked as fee revenue; the TS-023 sender gate left this open (fix adopted from the reporter) |
 | TS-033 | `GasFaucet` | A TIMBS balance shortfall or a wallet's lifetime TIMBS cap still reverted the whole `dispense`, locking that wallet out of the ETH drip; the TS-027 leg retirement covered only the global caps (fix adopted from the reporter) |
+| TS-034 | `TimbGovernance` (mainnet) | Votes were weighed by the voter's live deposit while the quorum base was frozen at creation, so a deposit made after a proposal existed could vote at full weight; the mirror of TS-021 (fix adopted from the reporter) |
 
 ## Severity & rewards
 
