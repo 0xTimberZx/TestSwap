@@ -132,6 +132,7 @@ closed as known. This list covers reports received after it was published.
 | TS-028 | `GameRegistry` | The first `startGame` kept generation 1 so pre-start tickets stayed valid, but wiped the pricing meters anyway, under-pricing entries for the first game (fix adopted from the reporter) |
 | TS-029 | `TimbSwapRouter` | `advanceScroll` charged the free-nudge allowance for nudges the prize dropped as no-ops while awaiting its VRF word (fix adopted from the reporter) |
 | TS-030 | `TimbBoostFarm` | Pool clocks parked at `periodFinish`, so a top-up after a keeper gap charged the dead window at the new rate; the TS-002 roll-forward left this open (fix adopted from the reporter) |
+| TS-031 | `GameRegistry` | The forfeit sweep's TIMBS leg was a bare transfer, so a paused token or transfer cap reverted the whole settlement call and parked the cursor, while the ETH legs were best-effort (fix adopted from the reporter) |
 
 ## Severity & rewards
 
