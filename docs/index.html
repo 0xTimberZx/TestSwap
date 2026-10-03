@@ -330,6 +330,7 @@
             <tr><td style="white-space:nowrap">TS-030</td><td><code>TimbBoostFarm</code></td><td>Pool clocks parked at <code>periodFinish</code>, so a top-up after a keeper gap charged the dead window at the new rate; the TS-002 roll-forward left this open (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-031</td><td><code>GameRegistry</code></td><td>The forfeit sweep's TIMBS leg was a bare transfer, so a paused token or transfer cap reverted the whole settlement call and parked the cursor, while the ETH legs were best-effort (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-032</td><td><code>TimbTreasury</code></td><td>The router's excess-ETH refund from <code>provideLiquidityETH</code> landed in <code>receive()</code> from an authorised sender and was booked as fee revenue; the TS-023 sender gate left this open (fix adopted from the reporter)</td></tr>
+            <tr><td style="white-space:nowrap">TS-033</td><td><code>GasFaucet</code></td><td>A TIMBS balance shortfall or a wallet's lifetime TIMBS cap still reverted the whole <code>dispense</code>, locking that wallet out of the ETH drip; the TS-027 leg retirement covered only the global caps (fix adopted from the reporter)</td></tr>
             </tbody>
           </table>
         </div>
