@@ -126,6 +126,7 @@ closed as known. This list covers reports received after it was published.
 | TS-022 | `GameRegistry` | A ticket whose activation was missed counted as live with no round bound, so its wallet could not re-enter until the LER+4 forfeiture sweep |
 | TS-023 | `TimbTreasury` | Fee and distribution metrics were unreliable: `receiveFees` and plain ETH credited any sender to `totalFeesReceived` (testnet), and `totalTimbsDistributed` was never written |
 | TS-024 | `TimbSwapRouter` | The TS-020 guard covered only the token/token path; `addLiquidityETH` still quoted a dusted, unseeded pair against its reserves and reverted on every ETH-side seed |
+| TS-025 | `GasFaucet` / `GameRegistry` | The faucet gated on a ticket's stored status, which a retired generation keeps forever, so a wallet whose game had ended stayed faucet-eligible without playing |
 
 ## Severity & rewards
 
