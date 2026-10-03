@@ -134,6 +134,7 @@ closed as known. This list covers reports received after it was published.
 | TS-030 | `TimbBoostFarm` | Pool clocks parked at `periodFinish`, so a top-up after a keeper gap charged the dead window at the new rate; the TS-002 roll-forward left this open (fix adopted from the reporter) |
 | TS-031 | `GameRegistry` | The forfeit sweep's TIMBS leg was a bare transfer, so a paused token or transfer cap reverted the whole settlement call and parked the cursor, while the ETH legs were best-effort (fix adopted from the reporter) |
 | TS-032 | `TimbTreasury` | The router's excess-ETH refund from `provideLiquidityETH` landed in `receive()` from an authorised sender and was booked as fee revenue; the TS-023 sender gate left this open (fix adopted from the reporter) |
+| TS-033 | `GasFaucet` | A TIMBS balance shortfall or a wallet's lifetime TIMBS cap still reverted the whole `dispense`, locking that wallet out of the ETH drip; the TS-027 leg retirement covered only the global caps (fix adopted from the reporter) |
 
 ## Severity & rewards
 
