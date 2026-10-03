@@ -328,6 +328,7 @@
             <tr><td style="white-space:nowrap">TS-028</td><td><code>GameRegistry</code></td><td>The first <code>startGame</code> kept generation 1 so pre-start tickets stayed valid, but wiped the pricing meters anyway, under-pricing entries for the first game (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-029</td><td><code>TimbSwapRouter</code></td><td><code>advanceScroll</code> charged the free-nudge allowance for nudges the prize dropped as no-ops while awaiting its VRF word (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-030</td><td><code>TimbBoostFarm</code></td><td>Pool clocks parked at <code>periodFinish</code>, so a top-up after a keeper gap charged the dead window at the new rate; the TS-002 roll-forward left this open (fix adopted from the reporter)</td></tr>
+            <tr><td style="white-space:nowrap">TS-031</td><td><code>GameRegistry</code></td><td>The forfeit sweep's TIMBS leg was a bare transfer, so a paused token or transfer cap reverted the whole settlement call and parked the cursor, while the ETH legs were best-effort (fix adopted from the reporter)</td></tr>
             </tbody>
           </table>
         </div>
