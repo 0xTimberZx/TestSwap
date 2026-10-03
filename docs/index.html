@@ -323,6 +323,7 @@
             <tr><td style="white-space:nowrap">TS-023</td><td><code>TimbTreasury</code></td><td>Fee and distribution metrics were unreliable: <code>receiveFees</code> and plain ETH credited any sender to <code>totalFeesReceived</code> (testnet), and <code>totalTimbsDistributed</code> was never written</td></tr>
             <tr><td style="white-space:nowrap">TS-024</td><td><code>TimbSwapRouter</code></td><td>The TS-020 guard covered only the token/token path; <code>addLiquidityETH</code> still quoted a dusted, unseeded pair against its reserves and reverted on every ETH-side seed</td></tr>
             <tr><td style="white-space:nowrap">TS-025</td><td><code>GasFaucet</code> / <code>GameRegistry</code></td><td>The faucet gated on a ticket's stored status, which a retired generation keeps forever, so a wallet whose game had ended stayed faucet-eligible without playing</td></tr>
+            <tr><td style="white-space:nowrap">TS-026</td><td><code>TimbBoostFarm</code></td><td>An emptied pool kept its weight in <code>totalWeight</code>, so its emission slice was skipped and live pools were diluted until the owner paused it (fix adopted from the reporter)</td></tr>
             </tbody>
           </table>
         </div>
