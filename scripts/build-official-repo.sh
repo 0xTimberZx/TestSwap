@@ -72,7 +72,6 @@ echo "  config.js + frontend addresses → zero placeholders"
 
 # ── 4. Public keys / project ref → REPLACE_WITH_* everywhere ─────────────────
 repl() { grep -rlZ "$1" . 2>/dev/null | xargs -0 -r sed -i "s#$1#$2#g"; }
-repl 'PDKCOXR05xcN4AkdaVqNp'                          'REPLACE_WITH_MAINNET_ALCHEMY_KEY'
 repl 'sb_publishable_yg4wjMwvGrlf5C9vqs2nkw_Hfks0Ux9' 'REPLACE_WITH_MAINNET_SUPABASE_PUBLISHABLE_KEY'
 repl 'ipyfodnidwsdvwqrcjrl'                           'REPLACE_WITH_MAINNET_SUPABASE_REF'
 echo "  rotated public keys/refs → placeholders"
