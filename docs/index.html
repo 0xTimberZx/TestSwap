@@ -334,6 +334,7 @@
             <tr><td style="white-space:nowrap">TS-034</td><td><code>TimbGovernance</code> (mainnet)</td><td>Votes were weighed by the voter's live deposit while the quorum base was frozen at creation, so a deposit made after a proposal existed could vote at full weight; the mirror of TS-021 (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-035</td><td><code>GasFaucet</code></td><td>The ETH leg's treasury pull and pot deposit were bare calls, so a counterparty revert took the independent, pre-funded TIMBS leg down with it (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-036</td><td>Frontend (<code>swap.js</code>)</td><td>Remove-liquidity signed with zero minimums while the preview quoted amounts, so a price move between preview and execution delivered less with no revert (fix adopted from the reporter)</td></tr>
+            <tr><td style="white-space:nowrap">TS-037</td><td><code>TimbFarm</code> / <code>TimbStaking</code> (mainnet)</td><td>The owner rate-change solvency check compared the new rate over the remaining period against the whole TIMBS balance, ignoring rewards already accrued but unclaimed, so a hike could pass the check and still leave claims reverting until a refill (fix adopted from the reporter)</td></tr>
             </tbody>
           </table>
         </div>
