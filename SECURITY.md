@@ -138,6 +138,7 @@ closed as known. This list covers reports received after it was published.
 | TS-034 | `TimbGovernance` (mainnet) | Votes were weighed by the voter's live deposit while the quorum base was frozen at creation, so a deposit made after a proposal existed could vote at full weight; the mirror of TS-021 (fix adopted from the reporter) |
 | TS-035 | `GasFaucet` | The ETH leg's treasury pull and pot deposit were bare calls, so a counterparty revert took the independent, pre-funded TIMBS leg down with it (fix adopted from the reporter) |
 | TS-036 | Frontend (`swap.js`) | Remove-liquidity signed with zero minimums while the preview quoted amounts, so a price move between preview and execution delivered less with no revert (fix adopted from the reporter) |
+| TS-037 | `TimbFarm` / `TimbStaking` (mainnet) | The owner rate-change solvency check compared the new rate over the remaining period against the whole TIMBS balance, ignoring rewards already accrued but unclaimed, so a hike could pass the check and still leave claims reverting until a refill (fix adopted from the reporter) |
 
 ## Severity & rewards
 
