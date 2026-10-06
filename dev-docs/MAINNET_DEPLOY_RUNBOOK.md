@@ -109,8 +109,36 @@ forge script scripts/DeployGame.s.sol \
       `TimbFarm.notifyRewardAmount(...)` — fund reward periods. (Reward-solvency
       assert now requires the contract to actually hold the rewards first.)
 - [ ] Seed `PrizeEscrow` with the initial ETH pot.
-- [ ] Fund the yield vault: `TimbYieldVault.fund{value:}()`; set the rate via
-      `VAULT_RATE_PER_SEC1E18` at deploy or `setRatePerSecond` / `setYieldAPRBps`.
+- [ ] **Yield vault** (decided 2026-10-06: **0.04 ETH starting reserve**). Do the
+      three steps in this order, in the same sitting as `startGame`; funding
+      earlier is harmless but idle, because with no tickets there is no weight
+      and nothing accrues.
+      1. **Rate.** `TimbYieldVault.setYieldAPRBps(1000)` (10 % of active escrow
+         per year flows to the pot). `DeployGame` sets a rate only when
+         `VAULT_RATE_PER_SEC1E18` was passed and defaults it to 0, so read
+         `ratePerSecond1e18()` first; at 0 the vault never accrues, however much
+         it holds.
+      2. **TIMBS weight.** `timbsWeight1e18` is never set by `DeployGame`, so
+         TIMBS-backed tickets carry zero weight and earn no yield. Parity with
+         the ETH leg is `timbsWeight1e18 = launch price in ETH per TIMBS × 1e18`
+         (e.g. 1e-6 ETH/TIMBS ⇒ `1e12`), which needs the TIMBS/WETH launch
+         price, and that pair is on hold (above). Until it is decided, leave the
+         weight at 0 and state on the compete page that only ETH-backed tickets
+         earn yield for the pot.
+      3. **Fund.** `TimbYieldVault.fund{value: 0.04 ether}()` from any wallet.
+         Check `reserve()` reads 0.04 ETH afterwards.
+
+      Runway: the vault moves active ETH escrow × APR into the pot each second
+      and pauses when the reserve is dry; no principal is ever held here. At
+      10 % APR, 0.04 ETH lasts about 8 years at 0.05 ETH of active escrow
+      (≈ 50 tickets at the 0.001 ETH floor), about 19 months at 0.25 ETH, and
+      about 5 months at 1 ETH. Top up with another `fund()` when `reserve()`
+      falls under a few months of runway at the current escrow. The reserve is
+      recoverable: un-earmarked ETH comes back through
+      `emergencyWithdraw(to, amount)`, a single owner call while the deployer
+      owns the vault and a 48 h timelock action after the §6 handoff. It counts
+      toward the reachable value the capped-beta bounty is sized against
+      (`CAPPED_BETA_GUARDRAILS.md` §1); 0.04 ETH sits well inside it.
 - [ ] Add **Prize VRFEntropy** as a consumer on the VRF subscription and confirm
       the sub is funded — BEFORE `startGame` (segments arm via VRF).
 
