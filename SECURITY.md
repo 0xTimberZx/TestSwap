@@ -141,6 +141,7 @@ closed as known. This list covers reports received after it was published.
 | TS-037 | `TimbFarm` / `TimbStaking` (mainnet) | The owner rate-change solvency check compared the new rate over the remaining period against the whole TIMBS balance, ignoring rewards already accrued but unclaimed, so a hike could pass the check and still leave claims reverting until a refill (fix adopted from the reporter) |
 | TS-038 | `GasFaucet` | The claimant ETH drip hard-reverted when the claimant could not receive ETH, which also reverted the independent, pre-funded TIMBS leg and left `claimable()` reporting true for a wallet that could never claim (fix adopted from the reporter) |
 | TS-039 | `GameRegistry` (mainnet) | The per-string entrant list was appended on every mint and never pruned on cancel or replace, so a mint-and-cancel loop could fill `maxEntrantsPerString` for gas alone and lock every other wallet out of that string (fix adopted from the reporter) |
+| TS-040 | `TimbGovernance` (mainnet) | Voting-power checkpoints had one-second granularity with same-second overwrite, so a deposit mined in the same second as `createProposal` was weighed as held at creation, bypassing the TS-034 snapshot within that second (credit: the reporter) |
 
 ## Severity & rewards
 
