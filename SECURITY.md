@@ -143,6 +143,7 @@ closed as known. This list covers reports received after it was published.
 | TS-039 | `GameRegistry` (mainnet) | The per-string entrant list was appended on every mint and never pruned on cancel or replace, so a mint-and-cancel loop could fill `maxEntrantsPerString` for gas alone and lock every other wallet out of that string (fix adopted from the reporter) |
 | TS-040 | `TimbGovernance` (mainnet) | Voting-power checkpoints had one-second granularity with same-second overwrite, so a deposit mined in the same second as `createProposal` was weighed as held at creation, bypassing the TS-034 snapshot within that second (credit: the reporter) |
 | TS-041 | `TimbTreasury` (mainnet) | `splitLpFees` took the pair on trust, so a contract claiming a WETH side and returning a chosen burn amount could make the treasury unwrap its real WETH into the prize pot and inflate the fee-split counter (fix adopted from the reporter) |
+| TS-042 | Frontend (Compete) | The pot line showed the previous round's carry as "rolled over X ETH" beside a pot that already contained it, so on a no-winner round the two labels read as twice the payable prize; now worded as a breakdown of the pot (fix adopted from the reporter) |
 
 ## Severity & rewards
 

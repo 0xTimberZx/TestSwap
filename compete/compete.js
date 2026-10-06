@@ -334,12 +334,15 @@ async function pollRoundState() {
       contractRO(ADDRESSES.GameRegistry, GAME_REGISTRY_ABI).getRoundEntrants(currentRoundNum).catch(() => null),
     ]);
 
-    // "rolled over" = what the previous round's settlement carried into this
+    // The carry = what the previous round's settlement carried into this
     // pot (no winner, or the indivisible remainder). It is player-relevant:
-    // it is part of what can be won. The escrow's reserve beyond the pot (the
-    // protocol cut + dust) is NOT winnable, so it is deliberately not shown
-    // here; the Analytics "Contract Balance (Escrow)" card carries it instead.
-    if (rolledOver && !rolledOver.isZero()) potSegs.push(`rolled over ${fmt(rolledOver)} ETH from #${currentRoundNum - 1}`);
+    // it is part of what can be won, and `s.pot` ALREADY contains it, so it
+    // is worded as a breakdown ("includes"), never as an addition (TS-042:
+    // "rolled over X" beside "Pot: X" read as 2X on a no-winner round). The
+    // escrow's reserve beyond the pot (the protocol cut + dust) is NOT
+    // winnable, so it is deliberately not shown here; the Analytics
+    // "Contract Balance (Escrow)" card carries it instead.
+    if (rolledOver && !rolledOver.isZero()) potSegs.push(`includes ${fmt(rolledOver)} ETH carried from #${currentRoundNum - 1}`);
     document.getElementById("sub-pot").textContent = potSegs.join(" · ");
 
     // FLOW GROUP (right of the "|" divider): live yield rate + round entries.
