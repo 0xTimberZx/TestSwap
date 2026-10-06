@@ -142,6 +142,7 @@ closed as known. This list covers reports received after it was published.
 | TS-038 | `GasFaucet` | The claimant ETH drip hard-reverted when the claimant could not receive ETH, which also reverted the independent, pre-funded TIMBS leg and left `claimable()` reporting true for a wallet that could never claim (fix adopted from the reporter) |
 | TS-039 | `GameRegistry` (mainnet) | The per-string entrant list was appended on every mint and never pruned on cancel or replace, so a mint-and-cancel loop could fill `maxEntrantsPerString` for gas alone and lock every other wallet out of that string (fix adopted from the reporter) |
 | TS-040 | `TimbGovernance` (mainnet) | Voting-power checkpoints had one-second granularity with same-second overwrite, so a deposit mined in the same second as `createProposal` was weighed as held at creation, bypassing the TS-034 snapshot within that second (credit: the reporter) |
+| TS-041 | `TimbTreasury` (mainnet) | `splitLpFees` took the pair on trust, so a contract claiming a WETH side and returning a chosen burn amount could make the treasury unwrap its real WETH into the prize pot and inflate the fee-split counter (fix adopted from the reporter) |
 
 ## Severity & rewards
 
