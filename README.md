@@ -50,7 +50,10 @@ One inflow drives every module. Value moves in one direction, on a fixed cadence
 - **Fixed supply.** 100,000,000 TIMBS, hard-capped. No mint beyond it.
 - **Prize-linked, not extractive.** The pot is paid from *yield on deposited capital* (the
   `TimbYieldVault`), so a player's principal stays theirs and refundable — closer to a
-  prize-linked savings account than a lottery.
+  prize-linked savings account than a lottery. **Disclosure:** the refund window is 4 rounds
+  (about a day) after a ticket's last eligible round. A deposit left unclaimed past it lapses:
+  70% of an ETH deposit goes to the live pot and 30% to the treasury, and a TIMBS deposit goes to
+  the treasury. Extra rounds are paid in TIMBS and are not refundable.
 
 The "modules" below (swap, farm, staking, game, treasury, governance) are the parts of this one
 machine — read them as gears, not a product menu.
