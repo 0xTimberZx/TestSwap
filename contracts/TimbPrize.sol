@@ -221,6 +221,13 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     bool public entriesPaused;
     bool public settlementPaused;
 
+    /// @notice Retired-prize fence (fix-list 48). Set by the owner at a
+    ///         migration. A retired prize can no longer arm, lock, settle or
+    ///         nudge and stops harvesting yield, but its already-settled rounds
+    ///         stay claimable and the protocol cut stays withdrawable. Mirrors
+    ///         PrizeEscrow.retiredPrize / GameRegistry.retired.
+    bool public retired;
+
     // ─── Events ──────────────────────────────────────────────────────────────
 
     event GameStarted(uint256 timestamp);
@@ -246,6 +253,12 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     event SettlerUpdated(address indexed newSettler);
     event ProtocolCutSet(uint256 bps);
     event EntropySet(address indexed entropy);
+    event RouterSet(address indexed router);
+    event EligibleRegistrySet(address indexed registry);
+    event GameRegistrySet(address indexed registry);
+    event PrizeEscrowSet(address indexed escrow);
+    event YieldVaultSet(address indexed vault);
+    event PrizeRetired();
     event SegmentArmed(uint256 indexed round, uint256 indexed segment, uint256 requestId);
 
     // ─── Errors ──────────────────────────────────────────────────────────────
@@ -253,6 +266,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error ZeroAmount();
     error GameNotStarted();
+    error PrizeIsRetired();
     error GameAlreadyStarted();
     error NotSettler();
     error NotRouter();
@@ -281,6 +295,13 @@ contract TimbPrize is Ownable, ReentrancyGuard {
 
     modifier whenGameStarted() {
         if (!gameStarted) revert GameNotStarted();
+        _;
+    }
+
+    /// @dev Retired-prize fence: only the paths that advance or settle the
+    ///      game. Claims and the protocol cut deliberately do not carry it.
+    modifier whenNotRetired() {
+        if (retired) revert PrizeIsRetired();
         _;
     }
 
@@ -353,6 +374,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         nonReentrant
         onlyRouter
         whenGameStarted
+        whenNotRetired
     {
         // TS-019: the owner's entry pause freezes every meter input. Swaps keep
         // working (the router catches this and skips the nudge); advanceScroll
@@ -452,6 +474,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         external
         nonReentrant
         whenGameStarted
+        whenNotRetired
     {
         _settleDueSegment();
     }
@@ -465,7 +488,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     /// @notice Replace a stalled VRF draw for the current segment. Permissionless
     ///         and safe: an unfulfilled draw has no knowable value, and the module
     ///         refuses once a draw has landed — so this can never reroll a result.
-    function rearmSegment() external whenGameStarted {
+    function rearmSegment() external whenGameStarted whenNotRetired {
         entropy.rerequest(saltFor(currentRound, currentSegment));
     }
 
@@ -735,7 +758,7 @@ contract TimbPrize is Ownable, ReentrancyGuard {
      *      pays msg-caller) and is forwarded straight into PrizeEscrow.
      */
     function _harvestYield(uint256 round) internal {
-        if (yieldVault == address(0)) return;
+        if (yieldVault == address(0) || retired) return;
         try ITimbYieldVaultPrize(yieldVault).harvest() returns (uint256 amount) {
             if (amount > 0) {
                 currentAccumulatedRewards += amount;
@@ -907,18 +930,31 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         emit SettlerUpdated(_settler);
     }
 
+    /// @notice Retire this prize at a migration. nudgeScroll, settleSegment
+    ///         and rearmSegment are refused from here on and yield is no
+    ///         longer harvested; claimWinnings, recycleUnclaimed and
+    ///         withdrawProtocolCut stay live. Irreversible; idempotent.
+    function retire() external onlyOwner {
+        if (retired) return;
+        retired = true;
+        emit PrizeRetired();
+    }
+
     function setRouter(address _router) external onlyOwner {
         if (_router == address(0)) revert ZeroAddress();
         router = _router;
+        emit RouterSet(_router);
     }
 
     function setEligibleRegistry(address _registry) external onlyOwner {
         eligibleRegistry = _registry;
+        emit EligibleRegistrySet(_registry);
     }
 
     function setGameRegistry(address _registry) external onlyOwner {
         if (_registry == address(0)) revert ZeroAddress();
         gameRegistry = _registry;
+        emit GameRegistrySet(_registry);
     }
 
     /// @notice Wire the prize game's VRFEntropy module (H1). Set before startGame.
@@ -931,11 +967,13 @@ contract TimbPrize is Ownable, ReentrancyGuard {
     function setPrizeEscrow(address _escrow) external onlyOwner {
         if (_escrow == address(0)) revert ZeroAddress();
         prizeEscrow = _escrow;
+        emit PrizeEscrowSet(_escrow);
     }
 
     /// @notice Set the yield vault (address(0) disables the yield source).
     function setYieldVault(address _vault) external onlyOwner {
         yieldVault = _vault;
+        emit YieldVaultSet(_vault);
     }
 
     function setProtocolCutBps(uint256 _bps) external onlyOwner {
