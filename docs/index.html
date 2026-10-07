@@ -340,6 +340,7 @@
             <tr><td style="white-space:nowrap">TS-040</td><td><code>TimbGovernance</code> (mainnet)</td><td>Voting-power checkpoints had one-second granularity with same-second overwrite, so a deposit mined in the same second as <code>createProposal</code> was weighed as held at creation, bypassing the TS-034 snapshot within that second (credit: the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-041</td><td><code>TimbTreasury</code> (mainnet)</td><td><code>splitLpFees</code> took the pair on trust, so a contract claiming a WETH side and returning a chosen burn amount could make the treasury unwrap its real WETH into the prize pot and inflate the fee-split counter (fix adopted from the reporter)</td></tr>
             <tr><td style="white-space:nowrap">TS-042</td><td>Frontend (Compete)</td><td>The pot line showed the previous round's carry as "rolled over X ETH" beside a pot that already contained it, so on a no-winner round the two labels read as twice the payable prize; now worded as a breakdown of the pot (fix adopted from the reporter)</td></tr>
+            <tr><td style="white-space:nowrap">TS-043</td><td><code>GameRegistry</code></td><td>A migration deploys a fresh registry and never advances the outgoing one's generation, so its outstanding tickets failed the <code>reclaimFromPastGame</code> guard and the runbook's recovery path could not execute; the owner can now retire a registry, opening reclaim for every ticket (fix adopted from the reporter)</td></tr>
             </tbody>
           </table>
         </div>
