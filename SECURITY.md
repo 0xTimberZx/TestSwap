@@ -145,6 +145,7 @@ closed as known. This list covers reports received after it was published.
 | TS-041 | `TimbTreasury` (mainnet) | `splitLpFees` took the pair on trust, so a contract claiming a WETH side and returning a chosen burn amount could make the treasury unwrap its real WETH into the prize pot and inflate the fee-split counter (fix adopted from the reporter) |
 | TS-042 | Frontend (Compete) | The pot line showed the previous round's carry as "rolled over X ETH" beside a pot that already contained it, so on a no-winner round the two labels read as twice the payable prize; now worded as a breakdown of the pot (fix adopted from the reporter) |
 | TS-043 | `GameRegistry` | A migration deploys a fresh registry and never advances the outgoing one's generation, so its outstanding tickets failed the `reclaimFromPastGame` guard and the runbook's recovery path could not execute; the owner can now retire a registry, opening reclaim for every ticket (fix adopted from the reporter) |
+| TS-044 | `TimbFarm` / `TimbStaking` (mainnet) | The TS-037 solvency check inferred accrued liability from the reward reserve, which is not recalibrated on a rate cut, so a later hike could revert while the contract was solvent; liability is now tracked explicitly (fix adopted from the reporter) |
 
 ## Severity & rewards
 
