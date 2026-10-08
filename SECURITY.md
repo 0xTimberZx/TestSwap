@@ -38,10 +38,15 @@ The full program terms, the reward tiers, and the live pool balance are on the
 
 **Out:** the frontend and static site (except a display bug that could mislead
 a user into a losing on-chain action, which is T1), off-chain keepers and
-telemetry, **SwapTables** (`SegmentBoard*`, `SeedRegistry`, `PoolLedger`:
-testnet-only and not part of the mainnet deployment), third-party code and infra (Chainlink VRF, OpenZeppelin, the
+telemetry, **SwapTables** (`SegmentBoard*`, `SeedRegistry`, `PoolLedger`,
+`UnderwriteReserve`: testnet-only and not part of the mainnet deployment), third-party code and infra (Chainlink VRF, OpenZeppelin, the
 Arbitrum sequencer, RPC providers, wallets), already-documented behavior,
 gas-optimisation notes, and scanner output without a working PoC.
+
+**Unsupported token classes:** the AMM is Uniswap V2-style and, like V2, does
+not support fee-on-transfer, rebasing or ERC-777 hook tokens. Reports that a
+swap, add or remove delivers less of such a token than quoted are by design
+and earn nothing.
 
 ## Known issues
 
