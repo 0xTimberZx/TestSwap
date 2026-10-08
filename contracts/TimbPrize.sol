@@ -43,6 +43,7 @@ interface IGameRegistry {
     function recordWinners(uint256 round, address[] calldata winners) external;
     function setCurrentRound(uint256 round) external;
     function onGameStarted() external;
+    function allowRepeatedChars() external view returns (bool);
 }
 
 interface ITimbYieldVaultPrize {
@@ -627,12 +628,33 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         // SAME class as the live char — so a player can aim the class by
         // nudging (letter ↔ digit), while the exact character within that
         // class remains unpredictable.
-        uint256 liveIdx = segmentDigitCounter[currentSegment] % 36;
-        if (liveIdx < 26) {
-            segmentLockedChar[currentSegment] = ALPHABET[mix % 26];        // letter → letter
-        } else {
-            segmentLockedChar[currentSegment] = ALPHABET[26 + (mix % 10)]; // digit → digit
+        uint256 liveIdx  = segmentDigitCounter[currentSegment] % 36;
+        bool    isLetter = liveIdx < 26;
+        uint256 base     = isLetter ? 0  : 26;           // A-Z start / 0-9 start
+        uint256 size     = isLetter ? 26 : 10;           // class size
+
+        // M1 / TS-004: unless governance has enabled "double letters", pick a
+        // class-preserving char DISTINCT from every already-locked segment, so
+        // the 6-char winning string is fully distinct — matching the entry
+        // no-repeat rule. Both sides read the SAME flag (GameRegistry.
+        // allowRepeatedChars), so entry space and outcome space never disagree:
+        // a repeat winning string against a distinct-only entry rule would be
+        // unmatchable (~36% of rounds unwinnable). Deterministic linear probe
+        // from the VRF-derived start; a free slot always exists (<= 5 earlier
+        // chars excluded, each class >= 10).
+        uint256 start  = mix % size;
+        bytes1  chosen = ALPHABET[base + start];
+        if (!IGameRegistry(gameRegistry).allowRepeatedChars()) {
+            for (uint256 off = 0; off < size; off++) {
+                bytes1 cand = ALPHABET[base + (start + off) % size];
+                bool taken = false;
+                for (uint256 sg = 1; sg < currentSegment; sg++) {
+                    if (segmentDigitLocked[sg] && segmentLockedChar[sg] == cand) { taken = true; break; }
+                }
+                if (!taken) { chosen = cand; break; }
+            }
         }
+        segmentLockedChar[currentSegment]  = chosen;
         segmentDigitLocked[currentSegment] = true;
     }
 

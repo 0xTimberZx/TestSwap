@@ -60,10 +60,14 @@ closed as known. This list covers reports received after it was published.
 
 **Different by design on mainnet:**
 
-- **Winning-string repeats.** Handled in the mainnet `TimbPrize`: the winning
-  string follows the same `GameRegistry.allowRepeatedChars` rule as tickets.
-- **Randomness source.** Testnet jitters with the settling block's hash;
-  mainnet draws from `VRFEntropy` (Chainlink VRF).
+- **Winning-string repeats.** The winning string follows the same
+  `GameRegistry.allowRepeatedChars` rule as tickets in both sources now
+  (TS-004); the deployed testnet prize and registry predate the port and
+  still draw six independent characters until the next testnet redeploy.
+- **Reward solvency and reserve guards.** `TimbFarm` and `TimbStaking` carry
+  the reward-reserve guard on `recoverERC20` and the funding-time solvency
+  checks in both sources (TS-011, TS-037, TS-044); the deployed testnet farm
+  and staking predate them until the next testnet redeploy.
 - **Ownership and privileged roles.** Testnet contracts are owned by a single
   key. On mainnet, ownership sits behind a timelock + multisig, so owner-power
   and centralisation findings against the testnet key are out.
@@ -110,7 +114,7 @@ closed as known. This list covers reports received after it was published.
 | TS-001 | Frontend config | Governance address pointed at a retired router |
 | TS-002 | `TimbBoostFarm` | Rate retarget after `periodFinish` accrues across the dead window |
 | TS-003 | `TIMBSToken` | Transfer-cap whitelist misses `TimbFarm` / `TimbBoostFarm`; `farmPool` mis-set |
-| TS-004 | `TimbPrize` | Winning string can repeat characters (handled in mainnet source) |
+| TS-004 | `TimbPrize` | Winning string can repeat characters (in both sources; deployed testnet build predates it) |
 | TS-005 | `VRFEntropy` | Permissionless `rerequest` has no per-salt retry cap; each call spends the VRF subscription. The cap shipped in the mainnet source first and reached the testnet source later (credit: Ginan Saputra for catching the gap) |
 | TS-006 | `TimbTreasury` | `distributeToPot` deposits into `PrizeEscrow` without crediting `TimbPrize.currentAccumulatedRewards`, so the ETH never reaches a winner |
 | TS-007 | Frontend | Prize headline (landing "Up for Grabs", compete banner) showed the PrizeEscrow balance instead of the winnable pot |

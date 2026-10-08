@@ -301,7 +301,7 @@
             <tr><td style="white-space:nowrap">TS-001</td><td>Frontend config</td><td>Governance address pointed at a retired router</td></tr>
             <tr><td style="white-space:nowrap">TS-002</td><td><code>TimbBoostFarm</code></td><td>Rate retarget after <code>periodFinish</code> accrues across the dead window</td></tr>
             <tr><td style="white-space:nowrap">TS-003</td><td><code>TIMBSToken</code></td><td>Transfer-cap whitelist misses <code>TimbFarm</code> / <code>TimbBoostFarm</code>; <code>farmPool</code> mis-set</td></tr>
-            <tr><td style="white-space:nowrap">TS-004</td><td><code>TimbPrize</code></td><td>Winning string can repeat characters (handled in mainnet source)</td></tr>
+            <tr><td style="white-space:nowrap">TS-004</td><td><code>TimbPrize</code></td><td>Winning string can repeat characters (in both sources; deployed testnet build predates it)</td></tr>
             <tr><td style="white-space:nowrap">TS-005</td><td><code>VRFEntropy</code></td><td>Permissionless <code>rerequest</code> has no per-salt retry cap; each call spends the VRF subscription. The cap shipped in the mainnet source first and reached the testnet source later (credit: Ginan Saputra for catching the gap)</td></tr>
             <tr><td style="white-space:nowrap">TS-006</td><td><code>TimbTreasury</code></td><td><code>distributeToPot</code> deposits into <code>PrizeEscrow</code> without crediting <code>TimbPrize.currentAccumulatedRewards</code>, so the ETH never reaches a winner</td></tr>
             <tr><td style="white-space:nowrap">TS-007</td><td>Frontend</td><td>Prize headline (landing "Up for Grabs", compete banner) showed the PrizeEscrow balance instead of the winnable pot</td></tr>

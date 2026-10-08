@@ -144,6 +144,15 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
     /// @notice TimbYieldVault — receives active-escrow weight updates.
     address public yieldVault;
 
+    /// @notice Whether "double letters" (repeated characters) are allowed in
+    ///         entry strings AND the winning string. Default false = both must be
+    ///         fully distinct (M1: entry space == outcome space, every round
+    ///         winnable). This is the SINGLE source of truth for both sides:
+    ///         _validateString reads it for entries, and
+    ///         TimbPrize._lockCurrentSegment reads it for the winning-string draw,
+    ///         so the two can never drift into an unwinnable configuration.
+    bool public allowRepeatedChars;
+
     // ─── Dynamic entry pricing (v5) ────────────────────────────────────────────
     // Entry costs are no longer static. Both are computed from live protocol
     // state, FIXED per round (predictable — what you see is what you pay), and
@@ -285,6 +294,7 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
     event TimbPrizeSet(address indexed timbPrize);
     event ProtocolSinkSet(address indexed sink);
     event YieldVaultSet(address indexed vault);
+    event AllowRepeatedCharsSet(bool allowed);
     event Paused(address indexed by);
     event Unpaused(address indexed by);
 
@@ -354,20 +364,28 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
 
     // ─── String Validation ───────────────────────────────────────────────────
 
-    /// @dev 6 chars, A-Z / 0-9 only, no repeats (bitmask over 36 symbols).
-    function _validateString(bytes6 s) internal pure {
+    /// @dev 6 chars, A-Z / 0-9 only. Repeats ("double letters") are forbidden
+    ///      unless governance has enabled them via allowRepeatedChars — the entry
+    ///      rule and the winning-string draw (TimbPrize._lockCurrentSegment) both
+    ///      key off this ONE flag so the entry space and outcome space can never
+    ///      disagree (a distinct-only entry rule against a repeat-allowed winning
+    ///      string would make ~36% of rounds unwinnable — the M1 bug, TS-004).
+    function _validateString(bytes6 s) internal view {
+        bool allowRepeats = allowRepeatedChars;
         uint64 seen = 0;
         for (uint256 i = 0; i < 6; i++) {
             bytes1 c = s[i];
             bool isUpper = c >= 0x41 && c <= 0x5A;
             bool isDigit = c >= 0x30 && c <= 0x39;
             if (!isUpper && !isDigit) revert InvalidCharacter(c);
-            uint256 idx = isUpper
-                ? uint256(uint8(c)) - 0x41
-                : uint256(uint8(c)) - 0x30 + 26;
-            uint64 bit = uint64(1 << idx);
-            if (seen & bit != 0) revert RepeatingCharacter(c);
-            seen |= bit;
+            if (!allowRepeats) {
+                uint256 idx = isUpper
+                    ? uint256(uint8(c)) - 0x41
+                    : uint256(uint8(c)) - 0x30 + 26;
+                uint64 bit = uint64(1 << idx);
+                if (seen & bit != 0) revert RepeatingCharacter(c);
+                seen |= bit;
+            }
         }
     }
 
@@ -1218,6 +1236,15 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
     // Entry costs are fully dynamic in v5 (computed from live protocol state and
     // fixed per round) — there is no governance setter. The pricing constants
     // (floors, threshold, divisor, deadband) are compile-time and immutable.
+
+    /// @notice Allow or forbid repeated characters in entries AND the
+    ///         winning string. Ships false (distinct-only, M1 / TS-004). Because
+    ///         both the entry rule and the winning-string draw read this one
+    ///         flag, they always agree; prefer flipping at a round boundary.
+    function setAllowRepeatedChars(bool allowed) external onlyOwner {
+        allowRepeatedChars = allowed;
+        emit AllowRepeatedCharsSet(allowed);
+    }
 
     function setTimbPrize(address _timbPrize) external onlyOwner {
         if (_timbPrize == address(0)) revert ZeroAddress();

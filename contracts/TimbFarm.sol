@@ -75,6 +75,30 @@ contract TimbFarm is Ownable, ReentrancyGuard {
     /// @notice Total LP tokens currently staked.
     uint256 public totalStaked;
 
+    /// @notice TIMBS committed to rewards but not yet paid out (H2). TIMBS is the
+    ///         reward token (LP is the staked token), so the whole TIMBS balance
+    ///         is the reward pool; recoverERC20 subtracts this so the owner can
+    ///         never pull the reward reserve — only foreign TIMBS above it.
+    uint256 public rewardReserve;
+
+    /// @notice TS-044: rewards emitted to farmers and not yet paid or forfeited —
+    ///         the exact accrued liability, tracked as rewardPerToken advances.
+    ///         setRewardRate's solvency check uses this instead of inferring it
+    ///         from rewardReserve, which is not recalibrated on a rate cut and
+    ///         so overstated the liability after one.
+    uint256 private _accruedLiability;
+
+    /// @notice Live accrued liability: the stored counter plus whatever has
+    ///         been emitted since the last updateReward.
+    function accruedLiability() public view returns (uint256) {
+        uint256 rpt = rewardPerToken();
+        uint256 live = _accruedLiability;
+        if (rpt > rewardPerTokenStored && totalStaked > 0) {
+            live += (rpt - rewardPerTokenStored) * totalStaked / 1e18;
+        }
+        return live;
+    }
+
     /// @notice LP staked balance per address.
     mapping(address => uint256) public stakedBalance;
 
@@ -134,7 +158,11 @@ contract TimbFarm is Ownable, ReentrancyGuard {
     }
 
     modifier updateReward(address account) {
-        rewardPerTokenStored = rewardPerToken();
+        uint256 rpt = rewardPerToken();
+        if (rpt > rewardPerTokenStored && totalStaked > 0) {
+            _accruedLiability += (rpt - rewardPerTokenStored) * totalStaked / 1e18; // TS-044
+        }
+        rewardPerTokenStored = rpt;
         lastUpdateTime       = lastTimeRewardApplicable();
         if (account != address(0)) {
             pendingRewards[account]         = earned(account);
@@ -281,6 +309,8 @@ contract TimbFarm is Ownable, ReentrancyGuard {
         }
 
         pendingRewards[msg.sender] = 0;
+        rewardReserve    = reward < rewardReserve    ? rewardReserve - reward    : 0; // H2
+        _accruedLiability = reward < _accruedLiability ? _accruedLiability - reward : 0; // TS-044
         timbsToken.safeTransfer(msg.sender, reward);
 
         emit RewardsClaimed(msg.sender, reward);
@@ -310,6 +340,8 @@ contract TimbFarm is Ownable, ReentrancyGuard {
             uint256 available = timbsToken.balanceOf(address(this));
             if (reward <= available) {
                 pendingRewards[msg.sender] = 0;
+                rewardReserve    = reward < rewardReserve    ? rewardReserve - reward    : 0; // H2
+                _accruedLiability = reward < _accruedLiability ? _accruedLiability - reward : 0; // TS-044
                 timbsToken.safeTransfer(msg.sender, reward);
                 emit RewardsClaimed(msg.sender, reward);
             }
@@ -338,6 +370,7 @@ contract TimbFarm is Ownable, ReentrancyGuard {
         if (duration == 0) revert ZeroAmount();
 
         timbsToken.safeTransferFrom(msg.sender, address(this), amount);
+        rewardReserve += amount; // H2: this TIMBS is now owed to farmers
 
         if (block.timestamp < periodFinish) {
             uint256 remaining   = periodFinish - block.timestamp;
@@ -350,6 +383,14 @@ contract TimbFarm is Ownable, ReentrancyGuard {
         lastUpdateTime = block.timestamp;
         periodFinish   = block.timestamp + duration;
 
+        // Low: reward-solvency assert. TIMBS is the reward token (LP is staked
+        // separately), so the whole TIMBS balance is the reward pool and must
+        // cover the entire new period at the resulting rate.
+        uint256 rewardBalance = timbsToken.balanceOf(address(this));
+        if (rewardRatePerSecond * duration > rewardBalance) {
+            revert InsufficientRewardBalance(rewardRatePerSecond * duration, rewardBalance);
+        }
+
         emit RewardNotified(msg.sender, amount, duration);
     }
 
@@ -361,6 +402,26 @@ contract TimbFarm is Ownable, ReentrancyGuard {
         onlyOwner
         updateReward(address(0))
     {
+        // Low: reward-solvency assert — while a period is active, the new rate
+        // must be coverable over the remaining period by the funded TIMBS balance.
+        // TS-037: the balance also carries rewards ALREADY accrued but not yet
+        // claimed, which the old check ignored, so a hike could pass and still
+        // leave claims reverting until a refill. rewardReserve is everything
+        // funded and not yet paid out; subtracting what the OLD rate would still
+        // emit leaves the accrued liability, which the new promise must sit on
+        // top of.
+        if (block.timestamp < periodFinish) {
+            uint256 remaining     = periodFinish - block.timestamp;
+            uint256 rewardBalance = timbsToken.balanceOf(address(this));
+            // TS-044: use the tracked liability. The former proxy
+            // (rewardReserve - remaining * oldRate) overstated it after a rate
+            // cut, since the reserve is never recalibrated to the lower rate,
+            // and a later hike reverted while the contract was solvent.
+            uint256 required      = _ratePerSecond * remaining + _accruedLiability; // fresh: updateReward ran
+            if (required > rewardBalance) {
+                revert InsufficientRewardBalance(required, rewardBalance);
+            }
+        }
         rewardRatePerSecond = _ratePerSecond;
         emit RewardRateSet(_ratePerSecond);
     }
@@ -422,6 +483,14 @@ contract TimbFarm is Ownable, ReentrancyGuard {
         uint256 staked = stakedBalance[msg.sender];
         if (staked == 0) revert ZeroAmount();
 
+        // TS-011: the forfeited reward is no longer owed to anyone — release it
+        // from rewardReserve (as claim/exit do) so recoverERC20 can reclaim it.
+        uint256 forfeited = pendingRewards[msg.sender];
+        if (forfeited > 0) {
+            rewardReserve    = forfeited < rewardReserve    ? rewardReserve - forfeited    : 0;
+            _accruedLiability = forfeited < _accruedLiability ? _accruedLiability - forfeited : 0; // TS-044
+        }
+
         stakedBalance[msg.sender]         = 0;
         pendingRewards[msg.sender]        = 0;
         userRewardPerTokenPaid[msg.sender] = 0;
@@ -437,7 +506,18 @@ contract TimbFarm is Ownable, ReentrancyGuard {
      */
     function recoverERC20(address token, uint256 amount) external onlyOwner {
         if (token == address(lpToken)) {
+            // Never recover staked LP principal.
             uint256 recoverable = lpToken.balanceOf(address(this)) - totalStaked;
+            if (amount > recoverable) {
+                revert InsufficientRewardBalance(amount, recoverable);
+            }
+        } else if (token == address(timbsToken)) {
+            // H2: TIMBS is the reward token — never recover the committed reward
+            // reserve (previously this fell through to an unconditional transfer,
+            // letting the owner drain the entire reserve). Only foreign TIMBS
+            // above the reserve is recoverable.
+            uint256 bal         = timbsToken.balanceOf(address(this));
+            uint256 recoverable = bal > rewardReserve ? bal - rewardReserve : 0;
             if (amount > recoverable) {
                 revert InsufficientRewardBalance(amount, recoverable);
             }
