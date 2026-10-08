@@ -67,6 +67,30 @@ contract TimbStaking is Ownable, ReentrancyGuard {
     /// @notice Total TIMBS currently staked across all users.
     uint256 public totalStaked;
 
+    /// @notice TIMBS committed to rewards but not yet paid out (H2). Funded in
+    ///         notifyRewardAmount, reduced as rewards are claimed. recoverERC20
+    ///         subtracts this so the owner can never pull earned-but-unclaimed
+    ///         rewards — only genuinely foreign TIMBS above staked + reserve.
+    uint256 public rewardReserve;
+
+    /// @notice TS-044: rewards emitted to stakers and not yet paid or forfeited —
+    ///         the exact accrued liability, tracked as rewardPerToken advances.
+    ///         setRewardRate's solvency check uses this instead of inferring it
+    ///         from rewardReserve, which is not recalibrated on a rate cut and
+    ///         so overstated the liability after one.
+    uint256 private _accruedLiability;
+
+    /// @notice Live accrued liability: the stored counter plus whatever has
+    ///         been emitted since the last updateReward.
+    function accruedLiability() public view returns (uint256) {
+        uint256 rpt = rewardPerToken();
+        uint256 live = _accruedLiability;
+        if (rpt > rewardPerTokenStored && totalStaked > 0) {
+            live += (rpt - rewardPerTokenStored) * totalStaked / 1e18;
+        }
+        return live;
+    }
+
     /// @notice Staked balance per address.
     mapping(address => uint256) public stakedBalance;
 
@@ -114,7 +138,11 @@ contract TimbStaking is Ownable, ReentrancyGuard {
     }
 
     modifier updateReward(address account) {
-        rewardPerTokenStored = rewardPerToken();
+        uint256 rpt = rewardPerToken();
+        if (rpt > rewardPerTokenStored && totalStaked > 0) {
+            _accruedLiability += (rpt - rewardPerTokenStored) * totalStaked / 1e18; // TS-044
+        }
+        rewardPerTokenStored = rpt;
         lastUpdateTime       = lastTimeRewardApplicable();
         if (account != address(0)) {
             pendingRewards[account]        = earned(account);
@@ -260,6 +288,8 @@ contract TimbStaking is Ownable, ReentrancyGuard {
         }
 
         pendingRewards[msg.sender] = 0;
+        rewardReserve    = reward < rewardReserve    ? rewardReserve - reward    : 0; // H2
+        _accruedLiability = reward < _accruedLiability ? _accruedLiability - reward : 0; // TS-044
         timbsToken.safeTransfer(msg.sender, reward);
 
         emit RewardsClaimed(msg.sender, reward);
@@ -288,6 +318,8 @@ contract TimbStaking is Ownable, ReentrancyGuard {
             uint256 contractBalance = timbsToken.balanceOf(address(this)) - totalStaked;
             if (reward <= contractBalance) {
                 pendingRewards[msg.sender] = 0;
+                rewardReserve    = reward < rewardReserve    ? rewardReserve - reward    : 0; // H2
+                _accruedLiability = reward < _accruedLiability ? _accruedLiability - reward : 0; // TS-044
                 timbsToken.safeTransfer(msg.sender, reward);
                 emit RewardsClaimed(msg.sender, reward);
             }
@@ -320,6 +352,7 @@ contract TimbStaking is Ownable, ReentrancyGuard {
         if (duration == 0) revert ZeroAmount();
 
         timbsToken.safeTransferFrom(msg.sender, address(this), amount);
+        rewardReserve += amount; // H2: this TIMBS is now owed to stakers
 
         if (block.timestamp < periodFinish) {
             // Roll remaining rewards into new period
@@ -332,6 +365,15 @@ contract TimbStaking is Ownable, ReentrancyGuard {
 
         lastUpdateTime = block.timestamp;
         periodFinish   = block.timestamp + duration;
+
+        // Low: reward-solvency assert. The contract must hold enough reward TIMBS
+        // to pay the entire new period at the resulting rate, so a claim can never
+        // fail for lack of funds. rewardBalance excludes staked principal (TIMBS
+        // is both the stake and the reward token here).
+        uint256 rewardBalance = timbsToken.balanceOf(address(this)) - totalStaked;
+        if (rewardRatePerSecond * duration > rewardBalance) {
+            revert InsufficientRewardBalance(rewardRatePerSecond * duration, rewardBalance);
+        }
 
         emit RewardNotified(msg.sender, amount, duration);
     }
@@ -346,6 +388,26 @@ contract TimbStaking is Ownable, ReentrancyGuard {
         onlyOwner
         updateReward(address(0))
     {
+        // Low: reward-solvency assert — while a period is active, the new rate
+        // must be coverable over the remaining period by the funded TIMBS balance.
+        // TS-037: the balance also carries rewards ALREADY accrued but not yet
+        // claimed, which the old check ignored, so a hike could pass and still
+        // leave claims reverting until a refill. rewardReserve is everything
+        // funded and not yet paid out; subtracting what the OLD rate would still
+        // emit leaves the accrued liability, which the new promise must sit on
+        // top of.
+        if (block.timestamp < periodFinish) {
+            uint256 remaining     = periodFinish - block.timestamp;
+            uint256 rewardBalance = timbsToken.balanceOf(address(this)) - totalStaked;
+            // TS-044: use the tracked liability. The former proxy
+            // (rewardReserve - remaining * oldRate) overstated it after a rate
+            // cut, since the reserve is never recalibrated to the lower rate,
+            // and a later hike reverted while the contract was solvent.
+            uint256 required      = _ratePerSecond * remaining + _accruedLiability; // fresh: updateReward ran
+            if (required > rewardBalance) {
+                revert InsufficientRewardBalance(required, rewardBalance);
+            }
+        }
         rewardRatePerSecond = _ratePerSecond;
         emit RewardRateSet(_ratePerSecond);
     }
@@ -396,6 +458,14 @@ contract TimbStaking is Ownable, ReentrancyGuard {
         uint256 staked = stakedBalance[msg.sender];
         if (staked == 0) revert ZeroAmount();
 
+        // TS-011: the forfeited reward is no longer owed to anyone — release it
+        // from rewardReserve (as claim/exit do) so recoverERC20 can reclaim it.
+        uint256 forfeited = pendingRewards[msg.sender];
+        if (forfeited > 0) {
+            rewardReserve    = forfeited < rewardReserve    ? rewardReserve - forfeited    : 0;
+            _accruedLiability = forfeited < _accruedLiability ? _accruedLiability - forfeited : 0; // TS-044
+        }
+
         stakedBalance[msg.sender]        = 0;
         pendingRewards[msg.sender]       = 0;
         userRewardPerTokenPaid[msg.sender] = 0;
@@ -411,8 +481,12 @@ contract TimbStaking is Ownable, ReentrancyGuard {
      */
     function recoverERC20(address token, uint256 amount) external onlyOwner {
         if (token == address(timbsToken)) {
-            // Only allow recovery of reward TIMBS above totalStaked
-            uint256 recoverable = timbsToken.balanceOf(address(this)) - totalStaked;
+            // H2: recover only TIMBS above BOTH staked principal AND committed
+            // rewards (rewardReserve) — never earned-but-unclaimed rewards. What
+            // remains is genuinely foreign TIMBS accidentally sent in.
+            uint256 committed   = totalStaked + rewardReserve;
+            uint256 bal         = timbsToken.balanceOf(address(this));
+            uint256 recoverable = bal > committed ? bal - committed : 0;
             if (amount > recoverable) revert InsufficientRewardBalance(amount, recoverable);
         }
         IERC20(token).safeTransfer(owner(), amount);
