@@ -44,9 +44,10 @@ One inflow drives every module. Value moves in one direction, on a fixed cadence
     0.05% treas.)  the treasury      accrual halts at 99% of obligations                    more volume
 ```
 
-- **Funded, never printed.** Emissions retarget to what the treasury actually collected; a
-  **solvency stop** freezes accrual at 99% of outstanding obligations. The system cannot promise
-  tokens it does not hold.
+- **Funded, never printed.** Emissions retarget to what the treasury actually collected. The
+  boost farm's **solvency stop** freezes accrual at 99% of outstanding obligations; the farm and
+  staking contracts enforce solvency up front instead, refusing any rate or top-up the funded
+  balance cannot cover. The system cannot promise tokens it does not hold.
 - **Fixed supply.** 100,000,000 TIMBS, hard-capped. No mint beyond it.
 - **Prize-linked, not extractive.** The pot is paid from *yield on deposited capital* (the
   `TimbYieldVault`), so a player's principal stays theirs and refundable — closer to a
