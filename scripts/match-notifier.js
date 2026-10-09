@@ -32,7 +32,7 @@
 //   TELEGRAM_BOT_TOKEN          the bot that DMs subscribers
 //   TELEGRAM_CHAT_ID            ops alerts (optional)
 //   TELEGRAM_BOT_USERNAME       for the in-DM link (optional)
-//   COMPETE_URL                 default https://timbswap.xyz/compete
+//   COMPETE_URL                 default https://testnet.timbswap.xyz/compete
 //   MATCH_LINGER_MINUTES        default 55; 0 = a single pass and exit
 //   MATCH_POLL_SECONDS          default 60
 //   MATCH_RESCAN_SECONDS        default 300 (re-scan a round already handled)
@@ -47,7 +47,7 @@ const SB_KEY    = process.env.SUPABASE_SERVICE_KEY;
 const TG_TOKEN  = process.env.TELEGRAM_BOT_TOKEN;
 const TG_OPS    = process.env.TELEGRAM_CHAT_ID;
 const BOT_USER  = process.env.TELEGRAM_BOT_USERNAME || "";
-const COMPETE   = process.env.COMPETE_URL || "https://timbswap.xyz/compete";
+const COMPETE   = process.env.COMPETE_URL || "https://testnet.timbswap.xyz/compete";
 
 const SEGMENTS_PER_ROUND = 6;
 const MATCH_SEGMENT = 1; // first letter

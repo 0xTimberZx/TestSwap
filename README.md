@@ -12,12 +12,12 @@ It is **source-available, permissionless, and non-custodial**: the protocol is a
 smart contracts** on Arbitrum, verified on Sourcify, that anyone can call directly — settlement
 and payouts need no privileged operator, and you always hold your own keys.
 
-**Live:** [timbswap.xyz](https://timbswap.xyz/)  
-**Start here:** [timbswap.xyz/start](https://timbswap.xyz/start/) — first round in 2 minutes, no extension needed  
+**Live (testnet):** [testnet.timbswap.xyz](https://testnet.timbswap.xyz/) · mainnet beta at [timbswap.xyz](https://timbswap.xyz/)  
+**Start here:** [testnet.timbswap.xyz/start](https://testnet.timbswap.xyz/start/) — first round in 2 minutes, no extension needed  
 **Network:** Arbitrum Sepolia (Chain ID: 421614)  
-**GitHub:** [github.com/0xTimberZx/TimbSwap](https://github.com/0xTimberZx/TimbSwap) · **Source, served from the site:** [timbswap.xyz/source](https://timbswap.xyz/source/)  
-**Faucet:** [timbswap.xyz/faucet](https://timbswap.xyz/faucet/) — testnet TIMBS for wallets holding an Active ticket  
-**Litepaper:** [timbswap.xyz/litepaper](https://timbswap.xyz/litepaper/)  
+**GitHub:** [github.com/0xTimberZx/TimbSwap](https://github.com/0xTimberZx/TimbSwap) · **Source, served from the site:** [testnet.timbswap.xyz/source](https://testnet.timbswap.xyz/source/)  
+**Faucet:** [testnet.timbswap.xyz/faucet](https://testnet.timbswap.xyz/faucet/) — testnet TIMBS for wallets holding an Active ticket  
+**Litepaper:** [testnet.timbswap.xyz/litepaper](https://testnet.timbswap.xyz/litepaper/)  
 **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
 
 > **Status (Sept 2026):** live on Arbitrum **Sepolia testnet** — all tokens are test assets with no
@@ -26,7 +26,7 @@ and payouts need no privileged operator, and you always hold your own keys.
 > **email sign-in** (an embedded wallet with optional authenticator / passkey MFA and key export) is
 > live next to extension wallets; the mainnet-TIMB **airdrop** leg is deployed on Arbitrum One but
 > **paused until the public announcement**. See [Roadmap](./ROADMAP.md) and the
-> [Risks](https://timbswap.xyz/docs/#risks) section.
+> [Risks](https://testnet.timbswap.xyz/docs/#risks) section.
 
 ---
 
@@ -96,7 +96,7 @@ All TimbSwap contracts verified on [Sourcify](https://repo.sourcify.dev/421614/)
 
 Everything runs on **Arbitrum Sepolia (Chain ID 421614)**. Grab gas and stables before you swap, farm, or play.
 
-**TIMBS — [timbswap.xyz/faucet](https://timbswap.xyz/faucet/)** — for live players: hold an **Active** ticket in the prize game and claim **1 TIMBS every 24 h**. Cloudflare Turnstile on claim; eligibility and cooldown are enforced on-chain by `GasFaucet` as well as by the gatekeeper.
+**TIMBS — [testnet.timbswap.xyz/faucet](https://testnet.timbswap.xyz/faucet/)** — for live players: hold an **Active** ticket in the prize game and claim **1 TIMBS every 24 h**. Cloudflare Turnstile on claim; eligibility and cooldown are enforced on-chain by `GasFaucet` as well as by the gatekeeper.
 
 **Gas — Arbitrum Sepolia ETH** *(pick up to 3; each has its own daily limit)*
 
@@ -186,7 +186,8 @@ UnderwriteReserve rather than split across pools, closing a two-wallet seed farm
 > | Site on GitHub Pages | Cloudflare Worker with static assets; the bundle is built by `scripts/build-site.sh` and uploaded in the dashboard |
 > | Keepers as GitHub Actions cron | Railway, one service per keeper under `scripts/keeper-loop.js`; see `scripts/RAILWAY.md` |
 > | Bug reports via GitHub private advisory | **devhub@timbswap.xyz**; the advisory is accepted again whenever the repo is reachable |
-> | Source browsed on GitHub | [timbswap.xyz/source](https://timbswap.xyz/source/), each contract cross-linked to Arbiscan and Sourcify |
+> | Source browsed on GitHub | [testnet.timbswap.xyz/source](https://testnet.timbswap.xyz/source/), each contract cross-linked to Arbiscan and Sourcify |
+> | Testnet at the apex `timbswap.xyz` | **testnet.timbswap.xyz** (this repo, its own site Worker and `timbswap-api-testnet` on `testnet.timbswap.xyz/api/*`); the apex serves the mainnet capped beta from the TimbSwap repo |
 >
 > The workflows below are kept and gated on the repo variable
 > `KEEPERS_HOST`; they run only when it is set to `actions`. Sections that
@@ -200,7 +201,7 @@ UnderwriteReserve rather than split across pools, closing a two-wallet seed farm
 ```
 TimbSwap/                ← served at the site root (Cloudflare Worker; GitHub Pages before 2026-09-25)
 ├── contracts/           ← 13 Solidity contracts (0.8.24, viaIR)
-├── index.html           ← Landing page (site root: timbswap.xyz/)
+├── index.html           ← Landing page (site root: testnet.timbswap.xyz/)
 ├── style.css            ← global design system (all pages)
 ├── config.js            ← addresses + ethers helpers + connect flow (extension or email) + autoReconnect + idle timeout (all pages)
 ├── landing.js           ← landing-page script
@@ -227,7 +228,7 @@ TimbSwap/                ← served at the site root (Cloudflare Worker; GitHub 
 │   ├── play.html        ←   the felt — sit, load, place
 │   ├── live.html        ←   the stream page (spectate, no wallet)
 │   └── games.html       ←   every running table, read-only
-├── CNAME                ← Custom domain (timbswap.xyz) for GitHub Pages (unused while hosted on Cloudflare)
+├── CNAME                ← Custom domain for GitHub Pages (unused while hosted on Cloudflare; the site lives at testnet.timbswap.xyz)
 ├── dev-docs/            ← Internal design specs (not the /docs/ web page); EMAIL_LOGIN.md covers the email wallet
 ├── scripts/
 │   ├── settler.js       ← Automated segment settler

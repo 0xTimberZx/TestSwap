@@ -1,11 +1,11 @@
-name = "timbswap-api"
+name = "timbswap-api-testnet"
 main = "timbswap-api.js"
 compatibility_date = "2026-09-05"
 
-# One route catches every /api/* path on the apex domain; all other paths fall
+# One route catches every /api/* path on the testnet host; all other paths fall
 # through to the origin (GitHub Pages). Requires the zone to be on Cloudflare.
 routes = [
-  { pattern = "timbswap.xyz/api/*", zone_name = "timbswap.xyz" }
+  { pattern = "testnet.timbswap.xyz/api/*", zone_name = "timbswap.xyz" }
 ]
 
 # Non-secret vars — the Supabase edge-function URLs the /api/* routes relay to.

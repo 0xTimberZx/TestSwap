@@ -225,7 +225,7 @@ function renderRoundCard({ round, string6, entries, potEth, winners }) {
 
   ctx.fillStyle = C.green;
   ctx.font = `30px ${font}`;
-  ctx.fillText("timbswap.xyz/compete", W / 2, H - 62);
+  ctx.fillText("testnet.timbswap.xyz/compete", W / 2, H - 62);
 
   return canvas.toBuffer("image/png");
 }
@@ -282,10 +282,10 @@ async function postRoundToX(result) {
   const baseText = won
     ? `🏆 Round #${result.round} SETTLED — we have ${result.winners === 1 ? "a winner" : result.winners + " winners"}!\n\n` +
       `Winning string: ${slashZeros(result.string6)}\n${result.entries} entries · ${result.potEth} ETH paid out\n\n` +
-      `A new round is already live → timbswap.xyz/compete`
+      `A new round is already live → testnet.timbswap.xyz/compete`
     : `📜 Round #${result.round} settled\n\n` +
       `Winning string: ${slashZeros(result.string6)} · ${result.entries} entries · pot snowballs\n\n` +
-      `Enter the next round → timbswap.xyz/compete`;
+      `Enter the next round → testnet.timbswap.xyz/compete`;
   const text = appendHashtags(baseText, hashtagLine(result.round, won));
 
   let mediaId = null;
