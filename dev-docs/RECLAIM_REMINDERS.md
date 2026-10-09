@@ -44,7 +44,7 @@ the faucet).
 supabase functions deploy telegram-webhook --no-verify-jwt
 ```
 Set its secrets (Project Settings → Edge Functions):
-- `TELEGRAM_BOT_TOKEN` — the bot (same token the settler/faucet send with).
+- `TELEGRAM_BOT_TOKEN` — the Alerts bot, `@TimbSwapTGBot` (the same token match-notifier and reclaim-reminder send with; not the settler bot).
 - `TELEGRAM_WEBHOOK_SECRET` — a random string you generate.
 - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are auto-injected.
 

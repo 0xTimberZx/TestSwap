@@ -285,7 +285,7 @@ Segments settle automatically via GitHub Actions every 10 minutes (each run ling
 |--------|-------|
 | `ARB_SEPOLIA_RPC` | Arbitrum Sepolia RPC URL |
 | `SETTLER_PRIVATE_KEY` | Deployer wallet private key |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token (three bots: settler, PSA, Alerts — see `scripts/RAILWAY.md` → Telegram bots) |
 | `TELEGRAM_CHAT_ID` | Your Telegram chat ID |
 | `TELEGRAM_CHAT_ID_PUBLIC` | (Optional) Community group chat ID — receives only confirmed round-rollover announcements |
 | `X_API_KEY` / `X_API_SECRET` | (Optional) X app consumer keys — enables auto-posting settled rounds to @timbswap |
