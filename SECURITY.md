@@ -13,7 +13,7 @@ Arbitrum One**, paid from a public bounty wallet.
 > reachable; email is the channel that is always open.
 
 The full program terms, the reward tiers, and the live pool balance are on the
-[Protocol page](https://timbswap.xyz/gov/#bounty). This file is the short form.
+[Protocol page](https://testnet.timbswap.xyz/gov/#bounty). This file is the short form.
 
 `devhub@timbswap.xyz` is for security reports only. Player support goes to
 `hello@timbswap.xyz`, partnerships and press to `marketing@timbswap.xyz`.
@@ -33,8 +33,8 @@ The full program terms, the reward tiers, and the live pool balance are on the
 ## Scope
 
 **In:** the deployed Arbitrum Sepolia contracts listed in the
-[Docs address table](https://timbswap.xyz/docs/) and their source in
-`contracts/` (also served at [timbswap.xyz/source](https://timbswap.xyz/source/)): DEX core, prize game, token and incentives, governance.
+[Docs address table](https://testnet.timbswap.xyz/docs/) and their source in
+`contracts/` (also served at [testnet.timbswap.xyz/source](https://testnet.timbswap.xyz/source/)): DEX core, prize game, token and incentives, governance.
 
 **Out:** the frontend and static site (except a display bug that could mislead
 a user into a losing on-chain action, which is T1), off-chain keepers and

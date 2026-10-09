@@ -26,7 +26,7 @@ so the public Supabase functions can trust only proxied calls. See `dev-docs/WAI
 
 ## Migration steps (one-time)
 
-1. **Move `timbswap.xyz` to Cloudflare (free plan).**
+1. **Move `timbswap.xyz` to Cloudflare (free plan)** and add a `testnet` host (a proxied DNS record for `testnet.timbswap.xyz`, served by the testnet site Worker).
    - Add the site in the Cloudflare dashboard; it imports your existing DNS.
    - Change the domain's nameservers (at your registrar) to the two Cloudflare
      nameservers Cloudflare shows you. Wait for "Active" (usually minutes–hours).
@@ -43,29 +43,29 @@ so the public Supabase functions can trust only proxied calls. See `dev-docs/WAI
    npx wrangler secret put FAUCET_PROXY_SECRET        # optional; must match the faucet-claim fn
    npx wrangler deploy
    ```
-   `wrangler.toml` already pins the route `timbswap.xyz/api/*` and the entrypoint.
+   `wrangler.toml` already pins the route `testnet.timbswap.xyz/api/*` and the entrypoint.
 
 3. **Smoke-test the routes** (from any terminal):
    ```sh
    # RPC — expect {"jsonrpc":"2.0","id":1,"result":"0x66eee"}
-   curl -s https://timbswap.xyz/api/rpc \
+   curl -s https://testnet.timbswap.xyz/api/rpc \
      -H 'content-type: application/json' \
      -d '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}'
 
    # Waitlist — expect {"ok":true,"status":"new"}
-   curl -s https://timbswap.xyz/api/waitlist \
+   curl -s https://testnet.timbswap.xyz/api/waitlist \
      -H 'content-type: application/json' \
      -d '{"email":"you@example.com","source":"smoke-test"}'
 
    # Faucet — expect 403 "No active ticket…" for a random address (proves the
    # route + edge fn are reachable; a real claim needs an Active ticket + Turnstile)
-   curl -s https://timbswap.xyz/api/faucet-claim \
+   curl -s https://testnet.timbswap.xyz/api/faucet-claim \
      -H 'content-type: application/json' \
      -d '{"address":"0x0000000000000000000000000000000000000001"}'
    ```
 
 4. **Tell Claude "Cloudflare is live"** and the config flip lands:
-   - `config.js`: `DEDICATED_RPC` → `https://timbswap.xyz/api/rpc`
+   - `config.js`: `DEDICATED_RPC` → `https://testnet.timbswap.xyz/api/rpc`
 
    Until that flip, the app keeps using the fallback RPC, so nothing breaks while
    DNS propagates.

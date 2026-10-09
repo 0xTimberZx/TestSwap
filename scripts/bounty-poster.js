@@ -68,49 +68,49 @@ const VARIANTS = [
 
 5 severity tiers, $500 cap per report.${pool}
 
-timbswap.xyz/gov/#bounty`,
+testnet.timbswap.xyz/gov/#bounty`,
 
   (pool) =>
 `Most bounties ask you to race an exploit on a contract holding strangers' savings.
 
 TimbSwap's are on testnet. Severity still priced by what the bug WOULD do with real funds. Paid in USDT on Arbitrum One.${pool}
 
-timbswap.xyz/gov/#bounty`,
+testnet.timbswap.xyz/gov/#bounty`,
 
   (pool) =>
 `The TimbSwap bounty pool wallet is public, and the page reads its balance straight from the chain in your own browser.${pool}
 
 Check a real number instead of taking a headline on faith.
 
-timbswap.xyz/gov/#bounty`,
+testnet.timbswap.xyz/gov/#bounty`,
 
   (pool) =>
 `Unaudited DEX + prize game on testnet. Find the drain before the audit does.
 
 T5 (full drain, prize manipulation, privilege escalation): up to $500, paid in USDT on Arbitrum One.${pool}
 
-timbswap.xyz/gov/#bounty`,
+testnet.timbswap.xyz/gov/#bounty`,
 
   (pool) =>
 `Bug bounty, still open.
 
 Pari-mutuel: each tier's share splits across every accepted report in it. First valid reporter of an issue is the one eligible.${pool}
 
-Scope and tiers → timbswap.xyz/gov/#bounty`,
+Scope and tiers → testnet.timbswap.xyz/gov/#bounty`,
 
   (pool) =>
 `If you've been meaning to read someone's contracts properly, read these.
 
 Arbitrum Sepolia, unaudited, open source. Real USDT for anything you break.${pool}
 
-timbswap.xyz/gov/#bounty`,
+testnet.timbswap.xyz/gov/#bounty`,
 
   (pool) =>
 `Shipping a DEX solo means the code has had exactly one set of eyes on it.
 
 That's the problem the bounty exists to fix. Up to $500 per report, USDT on Arbitrum One.${pool}
 
-timbswap.xyz/gov/#bounty`
+testnet.timbswap.xyz/gov/#bounty`
 ];
 
 function readState() {
