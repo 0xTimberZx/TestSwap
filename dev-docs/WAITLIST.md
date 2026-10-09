@@ -38,7 +38,8 @@ supabase functions deploy waitlist --no-verify-jwt
 #   RESEND_API_KEY          <resend key>             (optional — sends the confirmation email per NEW signup)
 #   WAITLIST_FROM           "TimbSwap <hello@timbswap.xyz>"  (optional — verified Resend domain, SPF/DKIM)
 #   WAITLIST_UNSUB_MAILTO   hello@timbswap.xyz       (optional — unsubscribe inbox)
-# SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are auto-injected; TELEGRAM_BOT_TOKEN is reused.
+# SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are auto-injected. Signup pings use
+# WAITLIST_TG_BOT_TOKEN (the PSA bot); TELEGRAM_BOT_TOKEN is the Alerts bot for telegram-webhook.
 # Without RESEND_API_KEY the function behaves exactly as before (no email; signup still saved).
 ```
 
