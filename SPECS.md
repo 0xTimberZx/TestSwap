@@ -303,8 +303,8 @@ so they work on any host/custom domain.
 |--------|-------------|
 | `ARB_SEPOLIA_RPC` | Arbitrum Sepolia RPC URL (Alchemy/Infura/public) |
 | `SETTLER_PRIVATE_KEY` | Deployer wallet private key (no 0x prefix) |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot token — regenerate after any exposure |
-| `TELEGRAM_CHAT_ID` | `8726225587` |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token — regenerate after any exposure. Three bots since 2026-10-09 (settler, PSA, Alerts); which service carries which is in `scripts/RAILWAY.md` → Telegram bots |
+| `TELEGRAM_CHAT_ID` | `8832338301` |
 
 ---
 
