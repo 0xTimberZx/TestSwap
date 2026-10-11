@@ -145,6 +145,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     // ─── Errors ──────────────────────────────────────────────────────────────
 
     error ZeroAddress();
+    error NotWeth();
     error Expired(uint256 deadline);
     error RouterPaused();
     error PairNotFound(address tokenA, address tokenB);
@@ -1079,5 +1080,12 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         if (!ok) revert RefundFailed();
     }
 
-    receive() external payable {}
+    /// @dev TS-048: ETH is accepted only from WETH (the unwrap in the *ForETH /
+    ///      removeLiquidityETH paths), as in the Uniswap V2 reference router. A
+    ///      direct transfer to the router used to be accepted and had no exit;
+    ///      it now reverts instead of locking the sender's ETH. Kept cheap so the
+    ///      WETH9 `transfer` stipend (2300 gas) still covers it.
+    receive() external payable {
+        if (msg.sender != weth) revert NotWeth();
+    }
 }
