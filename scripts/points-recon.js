@@ -13,7 +13,8 @@
 // What is recomputed, exactly as the scorer defines it (points-scorer.js and
 // the points_v3 migration):
 //   rounds_played      +1 per settled round r ≤ current − lag_rounds whose
-//                      GameRegistry.getRoundEntrants(r) lists the wallet
+//                      GameRegistry.getRoundEntrants(r) lists the wallet and
+//                      whose ticket for r (ticketAt) was not cancelled
 //   nudge_swaps        a TimbsEthPair Swap in a tx that also emitted ScrollNudged,
 //                      attributed to tx.from, one per Swap event
 //   plain_swaps        a Swap in a tx with no ScrollNudged
@@ -358,6 +359,8 @@ const PRIZE_ABI = [
 ];
 const REGISTRY_ABI = [
   "function getRoundEntrants(uint256 round) view returns (address[])",
+  "function generation() view returns (uint256)",
+  "function ticketAt(uint256 generation, address owner, uint256 round) view returns (uint256)",
   // The owner of record, read from the public `tickets` mapping. Rebuilding it
   // from TicketMinted does not work: a ticket is minted during round N and
   // activated when round N+1 opens, so the mint sits in an earlier window.
@@ -428,7 +431,26 @@ async function main() {
 
     // 1. Rounds.
     const entrantsOf = new Map();
-    const entrants = async (r) => { if (!entrantsOf.has(r)) entrantsOf.set(r, new Set((await registry.getRoundEntrants(r)).map((a) => a.toLowerCase()))); return entrantsOf.get(r); };
+    // Mirrors the scorer: a wallet whose ticket for round r was cancelled before
+    // it started (raw status Cancelled = 4) is still in the entrant list but
+    // never played, so it earns no round.
+    let generation = 1;
+    try { generation = Number(await registry.generation()); } catch {}
+    const ticketStatus = new Map();
+    const cancelledFor = async (a, r) => {
+      let id; try { id = (await registry.ticketAt(generation, a, r)).toString(); } catch { return false; }
+      if (id === "0") return false;
+      if (!ticketStatus.has(id)) { try { ticketStatus.set(id, Number((await registry.tickets(id)).status)); } catch { ticketStatus.set(id, -1); } }
+      return ticketStatus.get(id) === 4;
+    };
+    const entrants = async (r) => {
+      if (!entrantsOf.has(r)) {
+        const kept = new Set();
+        for (const a of new Set((await registry.getRoundEntrants(r)).map((x) => x.toLowerCase()))) if (!(await cancelledFor(a, r))) kept.add(a);
+        entrantsOf.set(r, kept);
+      }
+      return entrantsOf.get(r);
+    };
     let roundsAdded = 0;
     const endRound = Math.min(lastFoldable, state.lastRound + OPTS.maxRounds);
     for (let r = state.lastRound + 1; r <= endRound; r++) {

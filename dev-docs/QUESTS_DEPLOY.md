@@ -125,6 +125,16 @@ select address, display_tp, meter_tp, rounds_played, tickets_activated, nudge_sw
   from points_wallets where season_id = 1 order by display_tp desc limit 20;
 ```
 
+Streak rule (migration `20261014000000_points_streak_renew_gap.sql`): a round
+continues the streak when it is at most **two** rounds after the wallet's last
+played round. The contract expires a ticket whose last round is S only after the
+game has rolled to S+1, so the earliest re-entry starts at S+2; the one-round gap
+is structural and means "re-entered as soon as allowed". A replayed round is a
+no-op. The scorer and the recon also skip a wallet whose ticket for the round was
+**cancelled** before it started (`cancelEntry`): the entrant list is written at
+mint and never cleaned, so without the check a cancelled 13-round ticket scored
+13 rounds for nothing. Both changes need a rescore to apply to history.
+
 Rescore from scratch (e.g. after a weight change you want applied to history):
 ```sql
 delete from points_wallets where season_id = 1;
