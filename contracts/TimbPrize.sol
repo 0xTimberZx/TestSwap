@@ -639,19 +639,34 @@ contract TimbPrize is Ownable, ReentrancyGuard {
         // no-repeat rule. Both sides read the SAME flag (GameRegistry.
         // allowRepeatedChars), so entry space and outcome space never disagree:
         // a repeat winning string against a distinct-only entry rule would be
-        // unmatchable (~36% of rounds unwinnable). Deterministic linear probe
-        // from the VRF-derived start; a free slot always exists (<= 5 earlier
-        // chars excluded, each class >= 10).
-        uint256 start  = mix % size;
-        bytes1  chosen = ALPHABET[base + start];
+        // unmatchable (~36% of rounds unwinnable). The draw is uniform over the
+        // free chars of the class (TS-051); a free slot always exists (<= 5
+        // earlier chars excluded, each class >= 10).
+        bytes1 chosen = ALPHABET[base + (mix % size)];
         if (!IGameRegistry(gameRegistry).allowRepeatedChars()) {
-            for (uint256 off = 0; off < size; off++) {
-                bytes1 cand = ALPHABET[base + (start + off) % size];
-                bool taken = false;
-                for (uint256 sg = 1; sg < currentSegment; sg++) {
-                    if (segmentDigitLocked[sg] && segmentLockedChar[sg] == cand) { taken = true; break; }
+            // TS-051: draw UNIFORMLY over the chars of the class that are not
+            // yet locked. The earlier linear probe from `mix % size` slid a
+            // start that hit a locked char forward to the next free one, so
+            // the char after a run of locked chars absorbed every start on
+            // that run (ABCDEF won 720x a flat letter string, 012345 109x a
+            // fair digit draw). Count the free chars, draw an index over them
+            // and walk to it: every free char owns exactly one index.
+            uint256 takenMask;
+            uint256 taken;
+            for (uint256 sg = 1; sg < currentSegment; sg++) {
+                if (!segmentDigitLocked[sg]) continue;
+                bytes1 c = segmentLockedChar[sg];
+                for (uint256 k = 0; k < size; k++) {
+                    if (ALPHABET[base + k] != c) continue;
+                    if (takenMask & (1 << k) == 0) { takenMask |= (1 << k); taken++; }
+                    break;
                 }
-                if (!taken) { chosen = cand; break; }
+            }
+            uint256 pick = mix % (size - taken);          // size > taken: <= 5 locked, class >= 10
+            for (uint256 k = 0; k < size; k++) {
+                if (takenMask & (1 << k) != 0) continue;
+                if (pick == 0) { chosen = ALPHABET[base + k]; break; }
+                pick--;
             }
         }
         segmentLockedChar[currentSegment]  = chosen;
