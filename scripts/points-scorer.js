@@ -125,6 +125,11 @@ async function main() {
   ], provider);
   const REGISTRY = new ethers.Contract(addrFromConfig("GameRegistry"), [
     "function getRoundEntrants(uint256 round) view returns (address[])",
+    // A cancelled ticket (cancelEntry before its first round, principal
+    // refunded) stays in every round's entrant list, so the wallet must be
+    // checked against the ticket it actually holds for that round.
+    "function generation() view returns (uint256)",
+    "function ticketAt(uint256 generation, address owner, uint256 round) view returns (uint256)",
     // Public `tickets` mapping getter — the owner of record, read from state.
     // Reconstructing it from TicketMinted does not work: a ticket is minted
     // during round N and activated when round N+1 opens, so the mint almost
@@ -175,6 +180,21 @@ async function main() {
   let roundsAdded = 0;
   let lastRound = s.last_processed_round != null ? Number(s.last_processed_round) : (Number(s.start_round) - 1);
   const entrantsByRound = new Map(); // round -> Set(lowercased entrants), reused by ticket activation below
+  const TICKET_CANCELLED = 4; // GameRegistry.TicketStatus.Cancelled (raw status, not effectiveStatus)
+  let generation = 1;
+  try { generation = Number(await REGISTRY.generation()); } catch (e) { console.warn(`[points] generation() failed, assuming 1: ${e.shortMessage || e.message}`); }
+  const ticketStatusCache = new Map(); // ticketId -> raw status
+  const ticketCancelledFor = async (addr, round) => {
+    let id;
+    try { id = (await REGISTRY.ticketAt(generation, addr, round)).toString(); } catch { return false; }
+    if (id === "0") return false;
+    let st = ticketStatusCache.get(id);
+    if (st === undefined) {
+      try { st = Number((await REGISTRY.tickets(id)).status); } catch { st = -1; }
+      ticketStatusCache.set(id, st);
+    }
+    return st === TICKET_CANCELLED;
+  };
   try {
     const endRound = Math.min(lastFoldableRound, lastRound + MAX_ROUNDS_RUN);
     for (let r = lastRound + 1; r <= endRound; r++) {
@@ -182,7 +202,15 @@ async function main() {
       try { entrants = await REGISTRY.getRoundEntrants(r); } catch (e) {
         console.warn(`[points] getRoundEntrants(${r}) failed: ${e.shortMessage || e.message}`); break;
       }
-      const uniq = [...new Set(entrants.map(a => a.toLowerCase()))];
+      const listed = [...new Set(entrants.map(a => a.toLowerCase()))];
+      // Drop wallets whose ticket for this round was cancelled before it
+      // started: the entrant list is written at mint and never cleaned, but a
+      // cancelled ticket never played and its principal went back.
+      const uniq = [];
+      for (const a of listed) {
+        if (await ticketCancelledFor(a, r)) continue;
+        uniq.push(a);
+      }
       entrantsByRound.set(r, new Set(uniq));
       if (uniq.length) await sbRpc("points_apply_round", { p_season: s.id, p_round: r, p_addresses: uniq });
       lastRound = r; roundsAdded++;
