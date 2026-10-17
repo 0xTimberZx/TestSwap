@@ -89,7 +89,7 @@ cat > README.md <<'MD'
 
 A Uniswap-V2-style DEX and on-chain prize game on Arbitrum.
 
-- **App:** https://timbswap.xyz
+- **App:** https://testnet.timbswap.xyz (testnet) · https://timbswap.xyz (mainnet beta)
 - **Network:** Arbitrum (mainnet)
 - **License:** see [LICENSE](./LICENSE)
 

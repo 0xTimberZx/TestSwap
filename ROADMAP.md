@@ -2,7 +2,7 @@
 
 Stated plainly, and separated into *shipped*, *next*, and *vision* — so it's clear what exists
 today versus where the protocol is headed. Nothing here is a promise of returns; TimbSwap is an
-experimental testnet project (see [Risks](https://timbswap.xyz/docs/#risks)).
+experimental testnet project (see [Risks](https://testnet.timbswap.xyz/docs/#risks)).
 
 ---
 

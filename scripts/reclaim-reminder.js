@@ -28,7 +28,7 @@
 //   TELEGRAM_BOT_USERNAME       for the reclaim deep link (optional; else generic)
 //   REMIND_LEAD_ROUNDS          default 2  (remind when forfeit is ≤ this many rounds out)
 //   SCAN_BACK_ROUNDS            default 8  (how many recent play-round buckets to scan)
-//   COMPETE_URL                 default https://timbswap.xyz/compete
+//   COMPETE_URL                 default https://testnet.timbswap.xyz/compete
 //   REMIND_LINGER_MINUTES       default 55; 0 = a single pass and exit
 //   REMIND_POLL_SECONDS         default 60  (how often the round number is checked)
 //   REMIND_RESCAN_SECONDS       default 900 (full pass even if the round has not moved)
@@ -54,7 +54,7 @@ const TG_OPS    = process.env.TELEGRAM_CHAT_ID;
 const BOT_USER  = process.env.TELEGRAM_BOT_USERNAME || "";
 const LEAD      = Number(process.env.REMIND_LEAD_ROUNDS || 2);
 const SCAN_BACK = Number(process.env.SCAN_BACK_ROUNDS || 8);
-const COMPETE   = process.env.COMPETE_URL || "https://timbswap.xyz/compete";
+const COMPETE   = process.env.COMPETE_URL || "https://testnet.timbswap.xyz/compete";
 
 // Ticket status enum: Pending=0, Active=1, Conceded=2, Ineligible=3, …
 const ST_PENDING = 0n;

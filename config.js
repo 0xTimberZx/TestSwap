@@ -106,7 +106,7 @@ window.TURNSTILE_SITE_KEY = "0x4AAAAAAEyu8wJ7X6AVFLlS";
 // allowed origins must include this site's origin.
 window.PRIVY_APP_ID = _NET.privyAppId !== undefined
   ? _NET.privyAppId
-  : "cmu3ofl2r01h90clecz8wtrhc"; // "TimbSwapArb" live-site app (allowed origin https://timbswap.xyz); see dev-docs/EMAIL_LOGIN.md
+  : "cmu3ofl2r01h90clecz8wtrhc"; // "TimbSwapArb" live-site app (allowed origins https://timbswap.xyz and https://testnet.timbswap.xyz — add the testnet host in the Privy dashboard before the move); see dev-docs/EMAIL_LOGIN.md
 
 // Where this site is served from ("https://host/" or "https://host/sub/"),
 // derived from this script's own URL so lazily-loaded assets (the email login
@@ -171,7 +171,7 @@ const PUBLIC_RPCS = _NET.publicRpcs || [
 ];
 
 // Dedicated read endpoint. Reads route through our OWN SAME-ORIGIN RPC proxy —
-// a Cloudflare Worker on `timbswap.xyz/api/*` (workers/timbswap-api.js) that
+// a Cloudflare Worker on `testnet.timbswap.xyz/api/*` (workers/timbswap-api.js) that
 // relays to a single keyed Alchemy backend.
 // Why same-origin: Brave Shields / adblockers throttle or block third-party
 // requests (g.alchemy.com dashed every read in Brave; functions.supabase.co was
@@ -182,7 +182,7 @@ const PUBLIC_RPCS = _NET.publicRpcs || [
 // Alchemy URL lives only in the Worker's ALCHEMY_RPC_URL secret, and the Worker
 // relays read methods only (see RPC_METHODS in workers/timbswap-api.js).
 // (The Supabase-hosted `rpc` function remains deployed as a manual fallback.)
-const DEDICATED_RPC = "https://timbswap.xyz/api/rpc";
+const DEDICATED_RPC = "https://testnet.timbswap.xyz/api/rpc";
 const _hasDedicated = typeof DEDICATED_RPC === "string" &&
                       DEDICATED_RPC.startsWith("http");
 
