@@ -309,8 +309,12 @@ async function main() {
       swapsAdded = swaps.length;
     } catch (e) { scanOk = false; console.warn("[points] swap/nudge pass:", e.shortMessage || e.message); }
 
-    // Ticket activation: 200 once per ticket, only if that ticket then played the
-    // round it activated for (its owner is among the round's entrants). The owner
+    // Ticket activation: 200 once per ticket CHAIN, only if that ticket then
+    // played the round it activated for (its owner is among the round's
+    // entrants). A replacement (replaceEntry: `supersedes` != 0) carries the
+    // conceded ticket's principal and earns no second award; otherwise
+    // replacing every round with a one-round ticket farmed 200 a round for
+    // nothing (2026-10-18). The owner
     // is read from the registry's `tickets` mapping rather than rebuilt from
     // TicketMinted: activation fires when the round opens, one round after the
     // mint, so the two events are almost never in the same scan window.
@@ -322,7 +326,10 @@ async function main() {
         if (r > lastFoldableRound) continue; // can't happen inside the lagged window; defensive
         let owner = owners.get(id);
         if (owner === undefined) {
-          try { owner = (await REGISTRY.tickets(ev.args.ticketId)).owner.toLowerCase(); }
+          try {
+            const t = await REGISTRY.tickets(ev.args.ticketId);
+            owner = t.supersedes === 0n ? t.owner.toLowerCase() : null; // replacement: no award
+          }
           catch (e) { owner = null; console.warn(`[points] tickets(${id}) failed: ${e.shortMessage || e.message}`); }
           owners.set(id, owner);
         }

@@ -19,7 +19,8 @@
 //                      attributed to tx.from, one per Swap event
 //   plain_swaps        a Swap in a tx with no ScrollNudged
 //   panel_nudges       ScrollNudged events in a tx with no Swap, N per tx
-//   tickets_activated  a TicketActivated whose ticket's owner is among that
+//   tickets_activated  a TicketActivated for a ticket that is not a replacement
+//                      (supersedes == 0) and whose owner is among that
 //                      round's entrants
 //   farm_claims        TimbFarm RewardsClaimed ≥ 25 TIMBS; stake_claims likewise
 //   wins               WinningsClaimed per winner
@@ -497,7 +498,8 @@ async function main() {
           if (r > lastFoldable) continue;
           let owner = owners.get(id);
           if (owner === undefined) {
-            try { owner = String((await registry.tickets(args.ticketId)).owner).toLowerCase(); }
+            // Mirrors the scorer: a replacement ticket (supersedes != 0) earns no award.
+            try { const t = await registry.tickets(args.ticketId); owner = BigInt(t.supersedes) === 0n ? String(t.owner).toLowerCase() : null; }
             catch { owner = null; }
             owners.set(id, owner);
           }
