@@ -135,6 +135,13 @@ no-op. The scorer and the recon also skip a wallet whose ticket for the round wa
 mint and never cleaned, so without the check a cancelled 13-round ticket scored
 13 rounds for nothing. Both changes need a rescore to apply to history.
 
+Ticket activation (2026-10-18): the 200 is awarded once per ticket chain. A
+replacement ticket (`replaceEntry`, `supersedes` != 0) carries the conceded
+ticket's principal and earns no second activation; otherwise replacing every
+round with a one-round ticket earned 450 a round against about 265 for a
+13-round holder, while never being eligible to win. Rounds still count as
+before. Applies to history only after a rescore.
+
 Rescore from scratch (e.g. after a weight change you want applied to history):
 ```sql
 delete from points_wallets where season_id = 1;
