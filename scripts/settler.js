@@ -276,7 +276,7 @@ async function settleOnce(provider, wallet, prize, round, segment) {
       `📜 *Round #${round} has settled!*\n` +
       `The winning string is locked and the pot has been paid out on-chain.\n\n` +
       `🟢 Round #${round + 1n} is live — a fresh pot is building right now.\n` +
-      `Enter or nudge the scroll → timbswap.xyz/compete`
+      `Enter or nudge the scroll → testnet.timbswap.xyz/compete`
     );
 
     // X post (opt-in via X_* secrets; see xposter.js). Fully fenced — a

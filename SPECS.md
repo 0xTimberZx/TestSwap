@@ -3,8 +3,8 @@
 **Protocol:** TimbSwap  
 **Token:** TIMBS  
 **Network:** Arbitrum Sepolia (Chain ID: 421614)  
-**Repo:** github.com/0xTimberZx/TimbSwap · **Source, served from the site:** timbswap.xyz/source  
-**Live:** timbswap.xyz (served from this repo)  
+**Repo:** github.com/0xTimberZx/TimbSwap · **Source, served from the site:** testnet.timbswap.xyz/source  
+**Live:** testnet.timbswap.xyz (served from this repo; the mainnet beta at timbswap.xyz is the TimbSwap repo)  
 **Pragma:** `pragma solidity 0.8.24` — exact, never `^`  
 **Compiler:** viaIR enabled, optimizer 200 runs, EVM cancun  
 **Verification:** Sourcify preferred  

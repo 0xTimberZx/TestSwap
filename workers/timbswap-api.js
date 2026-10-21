@@ -1,4 +1,5 @@
-// TimbSwap first-party API Worker — Cloudflare Worker on route `timbswap.xyz/api/*`.
+// TimbSwap first-party API Worker — Cloudflare Worker on route `testnet.timbswap.xyz/api/*`
+// (the testnet site; the mainnet site at timbswap.xyz runs its own copy with mainnet upstreams).
 //
 // Why this exists: the app's on-chain reads were third-party to timbswap.xyz
 // (Alchemy). Brave Shields / adblockers throttle or block third-party requests,
@@ -35,8 +36,7 @@
 // Route + deploy: see workers/README.md.
 
 const ALLOWED_ORIGINS = new Set([
-  "https://timbswap.xyz",
-  "https://www.timbswap.xyz",
+  "https://testnet.timbswap.xyz",
   "https://0xtimberzx.github.io",
 ]);
 const MAX_BODY_BYTES = 128 * 1024; // RPC batches + signup rows are small; generous cap
@@ -76,7 +76,7 @@ function checkRpc(request, text, origin) {
 function cors(origin) {
   // Same-origin calls send no Origin and need no CORS; echo an allowed Origin for
   // any cross-origin caller (e.g. the GitHub Pages mirror) and default otherwise.
-  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://timbswap.xyz";
+  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://testnet.timbswap.xyz";
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Headers": "content-type",

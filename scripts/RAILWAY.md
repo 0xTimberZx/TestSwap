@@ -30,7 +30,7 @@ re-downloads on restart, so an un-redeployed service keeps the old code.
 3. Settings → Deploy → **Custom Start Command**:
 
    ```
-   sh -c "mkdir -p /app && curl -fsSL https://timbswap.xyz/keepers.tgz | tar xz -C /app && curl -fsSL https://timbswap.xyz/config.js -o /app/config.js && cd /app/scripts && npm install --omit=dev && node keeper-loop.js"
+   sh -c "mkdir -p /app && curl -fsSL https://testnet.timbswap.xyz/keepers.tgz | tar xz -C /app && curl -fsSL https://testnet.timbswap.xyz/config.js -o /app/config.js && cd /app/scripts && npm install --omit=dev && node keeper-loop.js"
    ```
 
 4. Variables → `KEEPER=settler` plus the settler row below → Deploy.
