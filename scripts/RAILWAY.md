@@ -146,5 +146,6 @@ alike:
 |---|---|---|
 | `TELEGRAM_OPS_BOT_TOKEN`, `TELEGRAM_OPS_CHAT_ID` | team console (PSA bot) | every ops message, subject to `TELEGRAM_OPS_MODE`. Unset: falls back to `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` |
 | `TELEGRAM_CRITICAL_BOT_TOKEN`, `TELEGRAM_CRITICAL_CHAT_ID` | one person's phone (Settler/debug bot) | only alerts (a line opening with ❌ ⚠️ 💥 ♻️ 🚨), whatever the ops mode. Unset: no mirror |
+| `TELEGRAM_CRITICAL_MODE` (per workflow) | the same phone | `all` mirrors every ops message, not only alerts. The settler workflow sets it from the repo variable `SETTLER_CRITICAL_MODE` (default `all`, so segment beats reach the phone; set `critical` to stop). Other keepers leave it unset: alerts only |
 
 Public round rollovers still go out on `TELEGRAM_BOT_TOKEN` to `TELEGRAM_CHAT_ID_PUBLIC`, so that bot must be a member of the community group.
