@@ -1,0 +1,71 @@
+name: Admin — Rotate Keys
+
+# Manual-only incident action (Railway disclosure, 22 October 2026): move every
+# Sepolia role held by the leaked deployer / settler / faucet-dispatcher keys
+# to fresh keys (scripts/rotate-owner.js). Ownership goes to the key in
+# NEW_OWNER_PRIVATE_KEY; settler, dispatcher and operator go to the `keeper`
+# address. Always run dry-run first: it lists every transaction, simulates each
+# one from the key that would send it, and sends nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      keeper:
+        description: "New hot key ADDRESS for settler / dispatcher / operator (paste from the wallet)"
+        required: true
+      mode:
+        description: "Run mode"
+        required: false
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - run
+
+concurrency:
+  group: timbswap-admin
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rotate:
+    name: Rotate leaked keys
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Rotate
+        working-directory: scripts
+        env:
+          ARB_SEPOLIA_RPC:               ${{ secrets.ARB_SEPOLIA_RPC }}
+          # The leaked keys. Any may be unset; the script signs with whichever
+          # one owns each contract.
+          DEPLOYER_PRIVATE_KEY:          ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          SETTLER_PRIVATE_KEY:           ${{ secrets.SETTLER_PRIVATE_KEY }}
+          FAUCET_DISPATCHER_PRIVATE_KEY: ${{ secrets.FAUCET_DISPATCHER_PRIVATE_KEY }}
+          # The fresh owner key. Its address is derived from it, so ownership
+          # can only go to a key that is actually held.
+          NEW_OWNER_PRIVATE_KEY:         ${{ secrets.NEW_OWNER_PRIVATE_KEY }}
+          KEEPER:                        ${{ github.event.inputs.keeper }}
+        run: |
+          if [ "${{ github.event.inputs.mode }}" = "run" ]; then
+            node rotate-owner.js
+          else
+            node rotate-owner.js --dry-run
+          fi
