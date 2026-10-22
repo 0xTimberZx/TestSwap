@@ -91,10 +91,14 @@ jobs:
       - name: Dispatch next settler run
         if: success() && github.event.inputs.mode != 'health' && github.event.schedule != '0 12 * * *' && github.ref == 'refs/heads/main'
         env:
-          DISPATCH_TOKEN: ${{ secrets.SETTLER_DISPATCH_TOKEN }}
+          # Falls back to FAUCET_DISPATCH_TOKEN, like every other keeper, so
+          # one live PAT keeps the whole fleet chaining. Delete an expired
+          # SETTLER_DISPATCH_TOKEN rather than leave it: a set-but-dead token
+          # wins the || and breaks the chain (401).
+          DISPATCH_TOKEN: ${{ secrets.SETTLER_DISPATCH_TOKEN || secrets.FAUCET_DISPATCH_TOKEN }}
         run: |
           if [ -z "$DISPATCH_TOKEN" ]; then
-            echo "No SETTLER_DISPATCH_TOKEN secret — relying on cron for the next run."
+            echo "No SETTLER_DISPATCH_TOKEN or FAUCET_DISPATCH_TOKEN secret — relying on cron for the next run."
             exit 0
           fi
           curl -fsS -X POST \
