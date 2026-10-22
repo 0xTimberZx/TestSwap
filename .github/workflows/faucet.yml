@@ -51,6 +51,10 @@ jobs:
           SUPABASE_URL:                  ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY:          ${{ secrets.SUPABASE_SERVICE_KEY }}
           TELEGRAM_BOT_TOKEN:            ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OPS_BOT_TOKEN: ${{ secrets.TELEGRAM_OPS_BOT_TOKEN }}
+          TELEGRAM_OPS_CHAT_ID: ${{ secrets.TELEGRAM_OPS_CHAT_ID }}
+          TELEGRAM_CRITICAL_BOT_TOKEN: ${{ secrets.TELEGRAM_CRITICAL_BOT_TOKEN }}
+          TELEGRAM_CRITICAL_CHAT_ID: ${{ secrets.TELEGRAM_CRITICAL_CHAT_ID }}
           TELEGRAM_CHAT_ID:              ${{ secrets.TELEGRAM_CHAT_ID }}
           FAUCET_LINGER_MINUTES:         ${{ vars.FAUCET_LINGER_MINUTES }}
           FAUCET_POLL_SECONDS:           ${{ vars.FAUCET_POLL_SECONDS }}

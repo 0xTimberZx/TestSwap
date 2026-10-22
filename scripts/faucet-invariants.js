@@ -52,7 +52,7 @@ const path = require("path");
 const { addrFromConfig, rpcFromConfig } = require("./lib/config");
 const { scanEvents, blockTimestamps } = require("./lib/logs");
 const { loadState, saveState } = require("./lib/state");
-const { makeTelegram } = require("./lib/telegram");
+const { opsTelegram } = require("./lib/telegram");
 
 const SELF_TEST = process.argv.includes("--self-test");
 const REPORT    = process.argv.includes("--report");
@@ -68,8 +68,6 @@ const GENESIS_FALLBACK_SPAN = 3_000_000;
 // the deploy. Mainnet has no entry on purpose: set the variable at deploy time.
 const GENESIS_DEFAULT_BY_CHAIN = { 421614: 309_038_324 };
 
-const TG_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
-const TG_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // config.js readers: lib/config.js (addrFromConfig refuses the zero address;
 // rpcFromConfig is the canonical PUBLIC endpoint with the same fallbacks).
@@ -247,7 +245,7 @@ if (SELF_TEST) selfTest();
 
 // Telegram: plain text, previews off, best-effort (lib/telegram.js). No
 // ops-mode switch, as before: this monitor's messages are breaches and pacing.
-const telegram = makeTelegram({ token: TG_TOKEN, chatId: TG_CHAT_ID, tag: "faucet-invariants" });
+const telegram = opsTelegram({ tag: "faucet-invariants" });
 const tg = (text) => telegram.send(text);
 
 // Events in chain order with block timestamps: lib/logs.js, chunked at

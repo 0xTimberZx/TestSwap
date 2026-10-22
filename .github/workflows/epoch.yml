@@ -86,6 +86,10 @@ jobs:
           # old adaptive sizing computed. dev-docs/EMISSIONS_SCHEDULE.md §6.
           EMIT_PERIOD_DAYS:    "90"
           TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OPS_BOT_TOKEN: ${{ secrets.TELEGRAM_OPS_BOT_TOKEN }}
+          TELEGRAM_OPS_CHAT_ID: ${{ secrets.TELEGRAM_OPS_CHAT_ID }}
+          TELEGRAM_CRITICAL_BOT_TOKEN: ${{ secrets.TELEGRAM_CRITICAL_BOT_TOKEN }}
+          TELEGRAM_CRITICAL_CHAT_ID: ${{ secrets.TELEGRAM_CRITICAL_CHAT_ID }}
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ "${{ github.event.inputs.mode }}" = "dry-run" ]; then

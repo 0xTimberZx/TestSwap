@@ -67,7 +67,7 @@ const { ethers } = require("ethers");
 const { addrFromConfig, rpcFromConfig } = require("./lib/config");
 const { scanEvents } = require("./lib/logs");
 const { loadState, saveState } = require("./lib/state");
-const { makeTelegram, shouldRealert } = require("./lib/telegram");
+const { opsTelegram, shouldRealert } = require("./lib/telegram");
 
 const SELF_TEST = process.argv.includes("--self-test");
 const DRY_RUN   = process.argv.includes("--dry-run");
@@ -402,7 +402,7 @@ async function main() {
   };
   const sbAll = async (pathq, page = 1000) => { const out = []; for (let off = 0; ; off += page) { const b = await sbGet(`${pathq}&limit=${page}&offset=${off}`); out.push(...b); if (b.length < page) return out; } };
 
-  const tg = makeTelegram({ token: process.env.TELEGRAM_BOT_TOKEN, chatId: process.env.TELEGRAM_CHAT_ID, mode: process.env.TELEGRAM_OPS_MODE, tag: "points-recon" });
+  const tg = opsTelegram({ mode: process.env.TELEGRAM_OPS_MODE, tag: "points-recon" });
   const out = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`); };
   const head = await provider.getBlock("latest");
   const nowSec = head.timestamp;

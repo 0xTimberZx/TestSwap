@@ -48,7 +48,7 @@ const path = require("path");
 const { ethers } = require("ethers");
 const { addrFromConfig, rpcFromConfig } = require("./lib/config");
 const { loadState, saveState } = require("./lib/state");
-const { makeTelegram, shouldRealert } = require("./lib/telegram");
+const { opsTelegram, shouldRealert } = require("./lib/telegram");
 
 const SELF_TEST = process.argv.includes("--self-test");
 const DRY_RUN   = process.argv.includes("--dry-run");
@@ -307,10 +307,7 @@ async function main() {
   const chainId   = Number((await provider.getNetwork()).chainId);
   const prizeAddr = process.env.TIMBPRIZE_ADDRESS ? ethers.getAddress(process.env.TIMBPRIZE_ADDRESS) : addrFromConfig("TimbPrize");
 
-  const tg = makeTelegram({
-    token: process.env.TELEGRAM_BOT_TOKEN, chatId: process.env.TELEGRAM_CHAT_ID,
-    mode: process.env.TELEGRAM_OPS_MODE, tag: "settler-liveness",
-  });
+  const tg = opsTelegram({ mode: process.env.TELEGRAM_OPS_MODE, tag: "settler-liveness" });
   const out = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`); };
 
   let snap, findings, row;

@@ -40,12 +40,12 @@
 const { ethers } = require("ethers");
 const fs   = require("fs");
 const path = require("path");
+const { opsTelegram } = require("./lib/telegram");
 
 const RPC_URL   = process.env.ARB_RPC || process.env.ARB_SEPOLIA_RPC;
 const SB_URL    = process.env.SUPABASE_URL;
 const SB_KEY    = process.env.SUPABASE_SERVICE_KEY;
 const TG_TOKEN  = process.env.TELEGRAM_BOT_TOKEN;
-const TG_OPS    = process.env.TELEGRAM_CHAT_ID;
 const BOT_USER  = process.env.TELEGRAM_BOT_USERNAME || "";
 const COMPETE   = process.env.COMPETE_URL || "https://timbswap.xyz/compete";
 
@@ -93,7 +93,10 @@ async function tg(chatId, text) {
     return res.ok;
   } catch (_e) { return false; }
 }
-const opsNotify = (msg) => tg(TG_OPS, msg);
+// Ops pings go to the team console (and the critical mirror), not through the
+// subscriber bot: see lib/telegram.js opsTelegram.
+const opsTg = opsTelegram({ tag: "match-notifier" });
+const opsNotify = (msg) => opsTg.send(msg);
 
 async function subscriberChat(wallet) {
   const url = `${SB_URL}/rest/v1/reclaim_subscribers?wallet=eq.${wallet}&active=is.true&select=chat_id&limit=1`;

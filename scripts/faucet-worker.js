@@ -24,6 +24,7 @@ const { ethers }       = require("ethers");
 const { createClient } = require("@supabase/supabase-js");
 const fs   = require("fs");
 const path = require("path");
+const { opsTelegram } = require("./lib/telegram");
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -31,8 +32,6 @@ const RPC_URL     = process.env.ARB_SEPOLIA_RPC;
 const PRIVATE_KEY = process.env.FAUCET_DISPATCHER_PRIVATE_KEY;
 const SB_URL      = process.env.SUPABASE_URL;
 const SB_SERVICE  = process.env.SUPABASE_SERVICE_KEY;
-const TG_TOKEN    = process.env.TELEGRAM_BOT_TOKEN;
-const TG_CHAT_ID  = process.env.TELEGRAM_CHAT_ID;
 
 const LINGER_BUDGET_MS = Number(process.env.FAUCET_LINGER_MINUTES || 55) * 60 * 1000;
 const POLL_MS          = Number(process.env.FAUCET_POLL_SECONDS || 12) * 1000;
@@ -59,23 +58,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─── Telegram ─────────────────────────────────────────────────────────────────
 
-async function sendTelegram(text) {
-  const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
-  const post = (body) => fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  try {
-    let res = await post({ chat_id: TG_CHAT_ID, text, parse_mode: "Markdown" });
-    if (!res.ok) { res = await post({ chat_id: TG_CHAT_ID, text }); }
-  } catch (e) {
-    console.error("[notify] Telegram send failed:", e.message);
-  }
-}
+const opsTg = opsTelegram({ tag: "faucet" });
 async function notify(msg) {
-  if (!TG_TOKEN || !TG_CHAT_ID) { console.log("[notify]", msg); return; }
-  await sendTelegram(`🚰 *TimbSwap Faucet*\n${msg}`);
+  if (!opsTg.enabled) { console.log("[notify]", msg); return; }
+  await opsTg.send(`🚰 *TimbSwap Faucet*\n${msg}`, { markdown: true });
 }
 
 // ─── Supabase (service role, bypasses RLS) ──────────────────────────────────────
