@@ -45,12 +45,12 @@
 const { ethers } = require("ethers");
 const fs   = require("fs");
 const path = require("path");
+const { opsTelegram } = require("./lib/telegram");
 
 const RPC_URL   = process.env.ARB_RPC || process.env.ARB_SEPOLIA_RPC;
 const SB_URL    = process.env.SUPABASE_URL;
 const SB_KEY    = process.env.SUPABASE_SERVICE_KEY;
 const TG_TOKEN  = process.env.TELEGRAM_BOT_TOKEN;
-const TG_OPS    = process.env.TELEGRAM_CHAT_ID;
 const BOT_USER  = process.env.TELEGRAM_BOT_USERNAME || "";
 const LEAD      = Number(process.env.REMIND_LEAD_ROUNDS || 2);
 const SCAN_BACK = Number(process.env.SCAN_BACK_ROUNDS || 8);
@@ -91,7 +91,10 @@ async function tg(chatId, text) {
   } catch (_e) { return false; }
 }
 
-const opsNotify = (msg) => tg(TG_OPS, msg);
+// Ops pings go to the team console (and the critical mirror), not through the
+// subscriber bot: see lib/telegram.js opsTelegram.
+const opsTg = opsTelegram({ tag: "reclaim-reminder" });
+const opsNotify = (msg) => opsTg.send(msg);
 
 // Active subscriber for a wallet → its chat_id, or null.
 async function subscriberChat(wallet) {

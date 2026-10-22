@@ -43,7 +43,7 @@ const fs   = require("fs");
 const path = require("path");
 const { assessOne, fetchRuns } = require("./fleet-heartbeat");
 const { loadState, saveState } = require("./lib/state");
-const { makeTelegram, shouldRealert } = require("./lib/telegram");
+const { opsTelegram, shouldRealert } = require("./lib/telegram");
 
 const SELF_TEST = process.argv.includes("--self-test");
 const DRY_RUN   = process.argv.includes("--dry-run");
@@ -148,7 +148,7 @@ async function main() {
   const repo = process.env.GITHUB_REPOSITORY, token = process.env.GITHUB_TOKEN;
   if (!repo || !token) throw new Error("GITHUB_REPOSITORY and GITHUB_TOKEN are required");
   const pingUrl = process.env.DEADMAN_PING_URL || "", failUrl = process.env.DEADMAN_FAIL_URL || "";
-  const tg = makeTelegram({ token: process.env.TELEGRAM_BOT_TOKEN, chatId: process.env.TELEGRAM_CHAT_ID, mode: process.env.TELEGRAM_OPS_MODE, tag: "dead-man" });
+  const tg = opsTelegram({ mode: process.env.TELEGRAM_OPS_MODE, tag: "dead-man" });
   const out = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`); };
   const nowMs = Date.now(), nowSec = Math.floor(nowMs / 1000);
 

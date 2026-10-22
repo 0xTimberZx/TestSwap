@@ -86,6 +86,10 @@ jobs:
           DEADMAN_RUNAWAY_COUNT: ${{ vars.DEADMAN_RUNAWAY_COUNT }}
           DEADMAN_REALERT_MIN:   ${{ vars.DEADMAN_REALERT_MIN }}
           TELEGRAM_BOT_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OPS_BOT_TOKEN: ${{ secrets.TELEGRAM_OPS_BOT_TOKEN }}
+          TELEGRAM_OPS_CHAT_ID: ${{ secrets.TELEGRAM_OPS_CHAT_ID }}
+          TELEGRAM_CRITICAL_BOT_TOKEN: ${{ secrets.TELEGRAM_CRITICAL_BOT_TOKEN }}
+          TELEGRAM_CRITICAL_CHAT_ID: ${{ secrets.TELEGRAM_CRITICAL_CHAT_ID }}
           TELEGRAM_CHAT_ID:      ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_OPS_MODE:     ${{ vars.TELEGRAM_OPS_MODE }}
         run: |

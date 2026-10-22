@@ -38,14 +38,12 @@ const path = require("path");
 const { addrFromConfig, rpcFromConfig } = require("./lib/config");
 const { sumEvents } = require("./lib/logs");
 const { loadState, saveState } = require("./lib/state");
-const { makeTelegram } = require("./lib/telegram");
+const { opsTelegram } = require("./lib/telegram");
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const TX_RPC_URL  = process.env.ARB_SEPOLIA_RPC; // tx submission (may be a metered provider)
 const PRIVATE_KEY = process.env.EPOCH_PRIVATE_KEY;
-const TG_TOKEN    = process.env.TELEGRAM_BOT_TOKEN;
-const TG_CHAT_ID  = process.env.TELEGRAM_CHAT_ID;
 const DRY_RUN     = process.argv.includes("--dry-run");
 
 const STATE_PATH  = path.join(__dirname, "epoch-state.json");
@@ -175,7 +173,7 @@ const sumChunked = (provider, address, iface, eventName, from, to, pick) =>
 // ─── Telegram (ops-only, best-effort; lib/telegram.js) ───────────────────────
 // Plain text, previews off, no ops-mode switch: the keeper's messages are
 // grants and failures, and it never honoured the switch before either.
-const telegram = makeTelegram({ token: TG_TOKEN, chatId: TG_CHAT_ID, tag: "epoch" });
+const telegram = opsTelegram({ tag: "epoch" });
 const tg = (text) => telegram.send(text);
 
 const fmt = (wei) => ethers.formatEther(wei);

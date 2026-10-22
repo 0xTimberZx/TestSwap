@@ -44,7 +44,7 @@
 const fs   = require("fs");
 const path = require("path");
 const { loadState, saveState } = require("./lib/state");
-const { makeTelegram, shouldRealert } = require("./lib/telegram");
+const { opsTelegram, shouldRealert } = require("./lib/telegram");
 
 const SELF_TEST = process.argv.includes("--self-test");
 const DRY_RUN   = process.argv.includes("--dry-run");
@@ -267,10 +267,7 @@ async function main() {
   const token = process.env.GITHUB_TOKEN;
   if (!repo || !token) throw new Error("GITHUB_REPOSITORY and GITHUB_TOKEN are required");
 
-  const tg = makeTelegram({
-    token: process.env.TELEGRAM_BOT_TOKEN, chatId: process.env.TELEGRAM_CHAT_ID,
-    mode: process.env.TELEGRAM_OPS_MODE, tag: "heartbeat",
-  });
+  const tg = opsTelegram({ mode: process.env.TELEGRAM_OPS_MODE, tag: "heartbeat" });
 
   const runsByFile = {};
   for (const e of FLEET) {

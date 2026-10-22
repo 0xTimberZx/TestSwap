@@ -37,14 +37,13 @@
 const { ethers } = require("ethers");
 const { postRoundToX } = require("./xposter");
 const { addrFromConfig } = require("./lib/config");
-const { makeTelegram, ALERT_GLYPH } = require("./lib/telegram");
+const { makeTelegram, opsTelegram, ALERT_GLYPH } = require("./lib/telegram");
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const RPC_URL       = process.env.ARB_SEPOLIA_RPC;
 const PRIVATE_KEY   = process.env.SETTLER_PRIVATE_KEY;
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
-const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;        // ops: every message, incl. failures
 const TG_CHAT_ID_PUBLIC = process.env.TELEGRAM_CHAT_ID_PUBLIC; // community group: round rollovers only
 // Ops-stream volume (repo VARIABLE, not a secret): "all" (default) sends every
 // arm/lock/settle beat; "errors" sends only ❌ ⚠️ 💥 ♻️ alerts; "off" silences the
@@ -159,9 +158,10 @@ async function alertIfDelayed(prize, round, segment) {
 // The ops-mode switch applies to the message itself, before the header is
 // added: "errors" lets through anything that opens with an alert glyph, and
 // routine beats (🎲 armed, 🔒 locked, ✅ settled) stay in the log.
-const opsTg = makeTelegram({ token: TG_TOKEN, chatId: TG_CHAT_ID, mode: TG_OPS_MODE, tag: "settler" });
+// opsTelegram: the team console, plus the critical-only mirror when configured.
+const opsTg = opsTelegram({ mode: TG_OPS_MODE, tag: "settler" });
 async function notify(msg) {
-  if (!TG_TOKEN || !TG_CHAT_ID) {
+  if (!opsTg.enabled) {
     console.log("[notify] No Telegram config:", msg);
     return;
   }

@@ -67,7 +67,7 @@ const { ethers } = require("ethers");
 const { addrFromConfig, rpcFromConfig } = require("./lib/config");
 const { scanEvents, sumEvents, blockTimestamps } = require("./lib/logs");
 const { loadState, saveState } = require("./lib/state");
-const { makeTelegram, shouldRealert } = require("./lib/telegram");
+const { opsTelegram, shouldRealert } = require("./lib/telegram");
 
 const SELF_TEST = process.argv.includes("--self-test");
 const DRY_RUN   = process.argv.includes("--dry-run");
@@ -375,7 +375,7 @@ async function main() {
   const staking = new ethers.Contract(addr.staking, POOL_ABI, provider);
   const prize = new ethers.Contract(addr.prize, PRIZE_ABI, provider);
 
-  const tg = makeTelegram({ token: process.env.TELEGRAM_BOT_TOKEN, chatId: process.env.TELEGRAM_CHAT_ID, mode: process.env.TELEGRAM_OPS_MODE, tag: "epoch-recon" });
+  const tg = opsTelegram({ mode: process.env.TELEGRAM_OPS_MODE, tag: "epoch-recon" });
   const out = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`); };
 
   const latest = await provider.getBlock("latest");

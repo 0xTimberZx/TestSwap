@@ -22,12 +22,14 @@
 //   ARB_RPC / ARB_SEPOLIA_RPC   RPC URL (prefer a keyed endpoint for wide getLogs)
 //   SUPABASE_URL                https://<project>.supabase.co
 //   SUPABASE_SERVICE_KEY        service_role key (bypasses RLS)
-//   TELEGRAM_BOT_TOKEN          ops alerts (optional)
-//   TELEGRAM_CHAT_ID            ops chat (optional)
+//   TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID   ops alerts (optional); the
+//                               TELEGRAM_OPS_* and TELEGRAM_CRITICAL_* overrides
+//                               are in lib/telegram.js (opsTelegram)
 
 const { ethers } = require("ethers");
 const fs   = require("fs");
 const path = require("path");
+const { opsTelegram } = require("./lib/telegram");
 
 // POINTS_RPC wins when set: getLogs over wide ranges needs an endpoint without a
 // per-call block cap (free-tier keyed RPCs often allow 10 blocks). The workflow
@@ -35,8 +37,6 @@ const path = require("path");
 const RPC_URL  = process.env.POINTS_RPC || process.env.ARB_RPC || process.env.ARB_SEPOLIA_RPC;
 const SB_URL   = process.env.SUPABASE_URL;
 const SB_KEY   = process.env.SUPABASE_SERVICE_KEY;
-const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TG_OPS   = process.env.TELEGRAM_CHAT_ID;
 
 const CHUNK_BLOCKS   = Number(process.env.POINTS_CHUNK_BLOCKS || 5000);   // getLogs window (public RPC-safe)
 const MAX_ROUNDS_RUN = Number(process.env.POINTS_MAX_ROUNDS  || 200);     // rounds folded per run
@@ -53,16 +53,8 @@ function addrFromConfig(key) {
 // isn't present in config.js — so a not-yet-wired module doesn't fail the run.
 function optAddr(key) { try { return addrFromConfig(key); } catch { return null; } }
 
-async function tg(chatId, text) {
-  if (!TG_TOKEN || !chatId) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
-    });
-  } catch (_e) { /* ops ping is best-effort */ }
-}
-const ops = (m) => tg(TG_OPS, m);
+const opsTg = opsTelegram({ tag: "points" });
+const ops = (m) => opsTg.send(m);
 
 async function sbGet(pathq) {
   const res = await fetch(`${SB_URL}/rest/v1/${pathq}`, { headers: sbHeaders });

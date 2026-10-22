@@ -136,3 +136,15 @@ an earlier bot have to opt in again after a change.
 | Alerts | `@TimbSwapTGBot` | player DMs: the Compete "Remind me on Telegram" deep link, the `/start` webhook, first-letter match and pre-forfeit refund reminders | `match-notifier` and `reclaim-reminder` (with `TELEGRAM_BOT_USERNAME=TimbSwapTGBot`); `telegram-webhook` edge function, then re-run `setWebhook` with this token and the existing `TELEGRAM_WEBHOOK_SECRET` |
 
 Ops chat id (`TELEGRAM_CHAT_ID`) for the deployer account: `8832338301`.
+
+On GitHub Actions every keeper shares one `TELEGRAM_BOT_TOKEN` secret, and it
+must be the Alerts bot because the DM keepers use it. Ops alerts are routed
+separately (`scripts/lib/telegram.js`, `opsTelegram`), on Railway and Actions
+alike:
+
+| Secrets | Destination | Gets |
+|---|---|---|
+| `TELEGRAM_OPS_BOT_TOKEN`, `TELEGRAM_OPS_CHAT_ID` | team console (PSA bot) | every ops message, subject to `TELEGRAM_OPS_MODE`. Unset: falls back to `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` |
+| `TELEGRAM_CRITICAL_BOT_TOKEN`, `TELEGRAM_CRITICAL_CHAT_ID` | one person's phone (Settler/debug bot) | only alerts (a line opening with ❌ ⚠️ 💥 ♻️ 🚨), whatever the ops mode. Unset: no mirror |
+
+Public round rollovers still go out on `TELEGRAM_BOT_TOKEN` to `TELEGRAM_CHAT_ID_PUBLIC`, so that bot must be a member of the community group.
