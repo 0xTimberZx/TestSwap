@@ -1,5 +1,9 @@
 {
-  "lastPostedAt": "2026-09-23T23:47:41.330Z",
-  "lastVariant": 0,
-  "posts": 1
+  "lastPostedAt": "2026-10-22T07:47:02.378Z",
+  "lastVariant": 1,
+  "posts": 2,
+  "funding": {
+    "cumulativeBaseUnits": "349995530",
+    "lastScannedBlock": 517162427
+  }
 }
