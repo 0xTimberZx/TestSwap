@@ -84,7 +84,7 @@ jobs:
           node-version: "22"
 
       - name: Install dependencies
-        run: npm install ethers
+        run: npm ci --omit=dev
         working-directory: scripts
 
       - name: Self-test the planning logic
@@ -110,7 +110,7 @@ jobs:
           node-version: "22"
 
       - name: Install dependencies
-        run: npm install ethers
+        run: npm ci --omit=dev
         working-directory: scripts
 
       - name: Fund the pot
