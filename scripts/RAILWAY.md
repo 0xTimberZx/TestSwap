@@ -30,8 +30,15 @@ re-downloads on restart, so an un-redeployed service keeps the old code.
 3. Settings → Deploy → **Custom Start Command**:
 
    ```
-   sh -c "mkdir -p /app && curl -fsSL https://timbswap.xyz/keepers.tgz | tar xz -C /app && curl -fsSL https://timbswap.xyz/config.js -o /app/config.js && cd /app/scripts && npm install --omit=dev && node keeper-loop.js"
+   sh -c "mkdir -p /app && curl -fsSL https://timbswap.xyz/keepers.tgz | tar xz -C /app && curl -fsSL https://timbswap.xyz/config.js -o /app/config.js && cd /app/scripts && npm ci --omit=dev && node keeper-loop.js"
    ```
+
+   `npm ci` installs exactly what `scripts/package-lock.json` pins (shipped
+   inside `keepers.tgz`) and fails if the lockfile and `package.json`
+   disagree. The keepers hold hot keys, so they never take a dependency
+   version nobody chose. To update a dependency: bump `package.json`, run
+   `npm install` in `scripts/`, commit the lockfile, then rebuild and redeploy
+   as above.
 
 4. Variables → `KEEPER=settler` plus the settler row below → Deploy.
 5. Logs should show `[loop] keeper=settler pause=1m` then the familiar
