@@ -1,7 +1,6 @@
 {
   "alerted": {
     "faucet-invariants.yml": 1792661951,
-    "settler-liveness.yml": 1792661951,
     "epoch-recon.yml": 1792661951,
     "dead-man.yml": 1792661951
   }
