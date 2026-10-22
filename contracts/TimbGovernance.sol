@@ -2,10 +2,11 @@
 pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract TimbGovernance is Ownable, ReentrancyGuard {
+contract TimbGovernance is Ownable2Step, ReentrancyGuard {
     enum ProposalStatus {
         Pending,
         Active,
@@ -44,10 +45,44 @@ contract TimbGovernance is Ownable, ReentrancyGuard {
     uint256 public proposalCount;
 
     mapping(uint256 => Proposal) public proposals;
+    /// @notice Cap on proposals whose voting window is still open (TS-021).
+    ///         Keeps withdrawVotingPower's quorum ratchet bounded.
+    uint256 public constant MAX_OPEN_PROPOSALS = 16;
+    /// @dev Ids of proposals created and not yet past votingEndsAt.
+    uint256[] internal _openProposals;
     mapping(address => uint256) public votingPowerDeposited;
     uint256 public totalVotingPower;
+    /// @dev TS-034: per-voter deposit history so a vote is weighed by the power
+    ///      held when the proposal was CREATED, never by a deposit made after
+    ///      it existed. One entry per deposit/withdraw; same-second updates
+    ///      overwrite the last entry.
+    struct Checkpoint { uint64 at; uint192 power; }
+    mapping(address => Checkpoint[]) internal _powerHistory;
+    /// @dev TS-040: the second the latest proposal was created in. Any power
+    ///      change landing in that same second is checkpointed one second
+    ///      later, so a deposit backrun into the creation second cannot read
+    ///      as "held at creation".
+    uint64 internal _lastProposalAt;
     mapping(address => mapping(uint256 => bool)) public hasVoted;
+    /// @notice Append-only history of proposals a voter has voted on. Kept for
+    ///         off-chain history; NO LONGER iterated on-chain (M6).
     mapping(address => uint256[]) public voterParticipation;
+    /// @notice Per-voter lock high-water (M6): the latest executionDeadline among
+    ///         proposals this voter has voted on. withdrawVotingPower checks this
+    ///         one value instead of looping over voterParticipation (which grows
+    ///         unbounded and could OOG-lock a deposit forever). Conservative: a
+    ///         vote on a proposal that later fails still locks until that
+    ///         proposal's executionDeadline (at most EXECUTION_WINDOW longer than
+    ///         the exact per-proposal check), never less.
+    mapping(address => uint256) public votingLockUntil;
+
+    /// @notice TS-050 (round-trip amendment): voting power `voter` withdrew while
+    ///         `proposalId` was open. Withdrawing ratchets the proposal's quorum
+    ///         base down (TS-021) and the base never rises again, so that power
+    ///         has left the proposal for good and must not come back into its
+    ///         votes through a redeposit. Subtracted from the creation snapshot
+    ///         in castVote.
+    mapping(uint256 => mapping(address => uint256)) public withdrawnDuring;
 
     event ProposalCreated(
         uint256 indexed id,
@@ -81,6 +116,7 @@ contract TimbGovernance is Ownable, ReentrancyGuard {
     error AlreadyExecuted();
     error InvalidPeriod();
     error InvalidBps();
+    error TooManyOpenProposals();
 
     constructor(
         address _timbsToken,
@@ -107,6 +143,7 @@ contract TimbGovernance is Ownable, ReentrancyGuard {
         timbsToken.transferFrom(msg.sender, address(this), amount);
         votingPowerDeposited[msg.sender] += amount;
         totalVotingPower += amount;
+        _checkpoint(msg.sender);
         emit VotingPowerDeposited(msg.sender, amount);
     }
 
@@ -115,27 +152,26 @@ contract TimbGovernance is Ownable, ReentrancyGuard {
         address voter = msg.sender;
         if (amount > votingPowerDeposited[voter]) revert InsufficientVotingPower();
 
-        uint256[] storage participated = voterParticipation[voter];
-        for (uint256 i = 0; i < participated.length; i++) {
-            Proposal storage p = proposals[participated[i]];
-            if (_isLocked(p)) revert VotingPowerLocked(p.votingEndsAt);
-        }
+        // M6: O(1) lock check. Previously this looped over voterParticipation
+        // (append-only, one entry per vote), so a voter with many votes could
+        // permanently OOG here and never withdraw. votingLockUntil is the latest
+        // executionDeadline among their votes — the point past which none of
+        // their proposals can still be locked — so one comparison suffices.
+        uint256 lockedUntil = votingLockUntil[voter];
+        if (block.timestamp < lockedUntil) revert VotingPowerLocked(lockedUntil);
 
         votingPowerDeposited[voter] -= amount;
         totalVotingPower -= amount;
+        _checkpoint(voter);
+        _sweepOpenProposals(true); // TS-021: departed power stops propping quorum
+        // TS-050 amendment: remember, per proposal still open, that this power
+        // left its base. The sweep above has just pruned closed proposals, so
+        // the list holds at most MAX_OPEN_PROPOSALS live ones.
+        for (uint256 i = 0; i < _openProposals.length; i++) {
+            withdrawnDuring[_openProposals[i]][voter] += amount;
+        }
         timbsToken.transfer(voter, amount);
         emit VotingPowerWithdrawn(voter, amount);
-    }
-
-    function _isLocked(Proposal storage p) internal view returns (bool) {
-        ProposalStatus s = p.status;
-        if (s == ProposalStatus.Executed || s == ProposalStatus.Failed || s == ProposalStatus.Expired) {
-            return false;
-        }
-        if (block.timestamp <= p.votingEndsAt) return s == ProposalStatus.Active;
-        s = _computeOutcome(p);
-        if (s == ProposalStatus.Passed && block.timestamp > p.executionDeadline) return false;
-        return s == ProposalStatus.Active || s == ProposalStatus.Passed;
     }
 
     function createProposal(
@@ -164,7 +200,72 @@ contract TimbGovernance is Ownable, ReentrancyGuard {
             executed: false
         });
 
+        _sweepOpenProposals(false);
+        if (_openProposals.length >= MAX_OPEN_PROPOSALS) revert TooManyOpenProposals();
+        _openProposals.push(proposalId);
+        _lastProposalAt = uint64(block.timestamp); // TS-040
+
         emit ProposalCreated(proposalId, msg.sender, title, votingStartsAt, votingEndsAt);
+    }
+
+    /// @dev TS-021: a proposal's quorum base is the LOWEST total voting power
+    ///      seen between its creation and the end of its voting window. Power
+    ///      that is withdrawn mid-vote no longer props the bar up (a parked
+    ///      deposit could otherwise inflate quorum, leave, and still veto), and
+    ///      nothing can move the base once voting has ended. Proposals past
+    ///      votingEndsAt are dropped from the open list as it is walked.
+    function _sweepOpenProposals(bool ratchet) internal {
+        uint256 live = totalVotingPower;
+        uint256 i = 0;
+        while (i < _openProposals.length) {
+            Proposal storage p = proposals[_openProposals[i]];
+            if (block.timestamp > p.votingEndsAt) {
+                _openProposals[i] = _openProposals[_openProposals.length - 1];
+                _openProposals.pop();
+                continue;
+            }
+            if (ratchet && live < p.totalVotingPower) p.totalVotingPower = live;
+            i++;
+        }
+    }
+
+    /// @notice Voting power `voter` held at `timestamp` (TS-034). Deposits
+    ///         and withdrawals are checkpointed, so this is a binary search.
+    function votingPowerAt(address voter, uint256 timestamp) public view returns (uint256) {
+        Checkpoint[] storage h = _powerHistory[voter];
+        uint256 n = h.length;
+        if (n == 0 || h[0].at > timestamp) return 0;
+        uint256 lo = 0;
+        uint256 hi = n - 1;
+        while (lo < hi) {
+            uint256 mid = (lo + hi + 1) / 2;
+            if (h[mid].at <= timestamp) lo = mid; else hi = mid - 1;
+        }
+        return h[lo].power;
+    }
+
+    function _checkpoint(address voter) internal {
+        Checkpoint[] storage h = _powerHistory[voter];
+        uint192 power = uint192(votingPowerDeposited[voter]);
+        uint256 n = h.length;
+        uint64 at = uint64(block.timestamp);
+        // TS-040: checkpoints have one-second granularity, so a change mined in
+        // the same second as createProposal (a strictly later tx) would
+        // otherwise overwrite the creation-second entry and be weighed as
+        // held at creation. Seal that second: the change takes effect at the
+        // next one. Changes mined before the proposal in the same second
+        // still land at `at` and still count, as they should.
+        if (at == _lastProposalAt) at += 1;
+        if (n > 0 && h[n - 1].at >= at) {
+            h[n - 1].power = power;
+        } else {
+            h.push(Checkpoint({ at: at, power: power }));
+        }
+    }
+
+    /// @notice Number of proposals currently tracked as open (TS-021).
+    function openProposalCount() external view returns (uint256) {
+        return _openProposals.length;
     }
 
     function castVote(uint256 proposalId, bool support) external nonReentrant {
@@ -174,7 +275,25 @@ contract TimbGovernance is Ownable, ReentrancyGuard {
         if (block.timestamp > p.votingEndsAt) revert VotingEnded(p.votingEndsAt);
         if (hasVoted[msg.sender][proposalId]) revert AlreadyVoted();
 
-        uint256 power = votingPowerDeposited[msg.sender];
+        // TS-034: weigh the vote by the power held at proposal creation. A
+        // deposit made after the proposal existed cannot vote on it (the
+        // mirror of TS-021, which stops withdrawn power propping quorum).
+        // TS-050: and by no more than is still deposited. The creation
+        // snapshot alone let a holder withdraw (which ratchets the quorum base
+        // down, TS-021), move the tokens, and still vote at full weight with
+        // the M6 lock guarding an empty balance. Counting min(snapshot, held)
+        // keeps both parents and makes the lock cover what was counted.
+        // Amendment: a withdraw-and-redeposit round trip left the base
+        // ratcheted while `held` read full again, so the held floor alone
+        // let the same power leave the denominator and re-enter the
+        // numerator at no cost. Power withdrawn while this proposal was open
+        // is gone from it for good (withdrawnDuring), whatever the balance
+        // does afterwards.
+        uint256 power = votingPowerAt(msg.sender, p.createdAt);
+        uint256 gone  = withdrawnDuring[proposalId][msg.sender];
+        power = power > gone ? power - gone : 0;
+        uint256 held  = votingPowerDeposited[msg.sender];
+        if (held < power) power = held;
         if (power == 0) revert InsufficientVotingPower();
 
         if (support) p.forVotes += power;
@@ -182,6 +301,13 @@ contract TimbGovernance is Ownable, ReentrancyGuard {
 
         hasVoted[msg.sender][proposalId] = true;
         voterParticipation[msg.sender].push(proposalId);
+        // M6: raise the voter's lock high-water to this proposal's execution
+        // deadline — the latest time it could still be locked (see _isLocked's
+        // old logic: past executionDeadline nothing is locked). One SSTORE per
+        // vote replaces the unbounded withdraw-time loop.
+        if (p.executionDeadline > votingLockUntil[msg.sender]) {
+            votingLockUntil[msg.sender] = p.executionDeadline;
+        }
 
         if (p.status == ProposalStatus.Pending) {
             p.status = ProposalStatus.Active;
@@ -228,8 +354,13 @@ contract TimbGovernance is Ownable, ReentrancyGuard {
 
     function _computeOutcome(Proposal memory p) internal view returns (ProposalStatus) {
         uint256 totalVotes = p.forVotes + p.againstVotes;
+        // Low: a proposal whose creation-time voting-power snapshot was zero has
+        // no meaningful quorum. The old guard SKIPPED the quorum check in that
+        // case, so such a proposal could pass on a trickle of votes deposited
+        // after creation. Zero snapshot ⇒ quorum can never be met ⇒ fail.
+        if (p.totalVotingPower == 0) return ProposalStatus.Failed;
         uint256 quorumRequired = (p.totalVotingPower * quorumBps) / BPS_DENOMINATOR;
-        if (p.totalVotingPower > 0 && totalVotes < quorumRequired) {
+        if (totalVotes < quorumRequired) {
             return ProposalStatus.Failed;
         }
         return p.forVotes > p.againstVotes ? ProposalStatus.Passed : ProposalStatus.Failed;
