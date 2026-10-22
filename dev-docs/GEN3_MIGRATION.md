@@ -145,12 +145,19 @@ so a wrong-game `.env` fails here at zero cost.
    node scripts/vault-weight.js            # audit
    node scripts/vault-weight.js --drain    # remove stranded ids (restores the pointer)
    ```
-6. **Old tickets (user-reclaim only):** tickets in the OLD registry
+6. **Old pair retired (TS-059):** the script now calls `retire()` on the old
+   TimbPrize and `retireGame()` on the old GameRegistry inside the broadcast,
+   before it repoints the escrow. Check both read `retired() == true`. If the
+   log says either call was skipped (an older compile), run it by hand at once:
+   until the old registry is retired, its permissionless lapse sweep sends
+   100% of each ETH lapse to the sink, because the escrow no longer accepts the
+   old prize's `addToPot`.
+7. **Old tickets (user-reclaim only):** tickets in the OLD registry
    (`0xBAb1CB…`) hold their principal there and are not carried over. Holders
    reclaim from the old registry directly (Withdraw on a Pending ticket =
    `cancelEntry`; or `claimRefund` once expired). Testnet ETH, no monetary value.
 
-7. **Router free-nudge collision (reuse artifact — self-heals):** the *deployed*
+8. **Router free-nudge collision (reuse artifact — self-heals):** the *deployed*
    `TimbSwapRouter` keys `freeNudgesUsed` by `(round, segment, user)` with **no
    generation namespace**. The reused router therefore inherits a wallet's stale
    per-(round,segment) free-nudge count across the migration, so a wallet that
