@@ -47,7 +47,7 @@ const fs   = require("fs");
 const path = require("path");
 
 const DRY_RUN = process.argv.includes("--dry-run");
-const RPC     = process.env.ARB_SEPOLIA_RPC || "https://sepolia-rollup.arbitrum.io/rpc";
+const PUBLIC_RPC = "https://sepolia-rollup.arbitrum.io/rpc";
 const CHAIN   = Number(process.env.CHAIN_ID || 421614); // tests run on a local anvil
 const GAS_RESERVE = ethers.parseEther("0.0005"); // left in each leaked wallet for the sweep tx itself
 
@@ -103,10 +103,20 @@ async function tryRead(c, fn, ...args) {
 async function main() {
   // cacheTimeout -1: ethers otherwise reuses an eth_getTransactionCount answer
   // for 250 ms, so back-to-back sends from one key collide on the same nonce.
-  const provider = new ethers.JsonRpcProvider(RPC, CHAIN, { staticNetwork: true, cacheTimeout: -1 });
   // Every read below treats a failure as "no such function", so a dead RPC would
-  // look like a clean scan. Prove the chain answers first.
-  await provider.getBlockNumber();
+  // look like a clean scan: prove the chain answers first. A keyed RPC that was
+  // revoked in the same incident (401) falls back to the public node.
+  let RPC = process.env.ARB_SEPOLIA_RPC || PUBLIC_RPC;
+  let provider = new ethers.JsonRpcProvider(RPC, CHAIN, { staticNetwork: true, cacheTimeout: -1 });
+  try {
+    await provider.getBlockNumber();
+  } catch (e) {
+    if (RPC === PUBLIC_RPC) throw e;
+    console.log(`ARB_SEPOLIA_RPC failed (${e.shortMessage || e.message}); using the public node`);
+    RPC = PUBLIC_RPC;
+    provider = new ethers.JsonRpcProvider(RPC, CHAIN, { staticNetwork: true, cacheTimeout: -1 });
+    await provider.getBlockNumber();
+  }
 
   // ── Keys ──
   const leakedSigners = new Map(); // lc(address) -> Wallet
@@ -139,7 +149,7 @@ async function main() {
   console.log(`\nnew owner : ${newOwner.address}`);
   console.log(`keeper    : ${keeper}${lc(keeper) === lc(newOwner.address) ? "  (same as the new owner: works, but one leak would cost both)" : ""}`);
   console.log(`leaked    : ${[...leaked].map(short).join(", ")}`);
-  console.log(`rpc       : ${RPC}`);
+  console.log(`rpc       : ${new URL(RPC).host}`); // host only: a keyed path is a secret
   console.log(DRY_RUN ? "mode      : DRY RUN — nothing is sent\n" : "mode      : RUN\n");
 
   // ── Scan ──
