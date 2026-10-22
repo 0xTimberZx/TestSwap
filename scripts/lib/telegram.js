@@ -20,6 +20,9 @@
 //   critical       TELEGRAM_CRITICAL_BOT_TOKEN / TELEGRAM_CRITICAL_CHAT_ID,
 //                  optional. Only messages with an alert glyph at the start of
 //                  any line (failures, delays, recoveries), whatever the mode.
+//                  TELEGRAM_CRITICAL_MODE=all mirrors every ops message there
+//                  instead; a workflow sets it per keeper (the settler does, so
+//                  segment beats reach the phone too).
 
 const ALERT_GLYPH = /^[❌⚠️💥♻️🚨]/u;
 // Same glyphs, at the start of any line: keepers prepend a header line
@@ -92,7 +95,9 @@ function opsTelegram({ mode, tag = "ops", env = process.env } = {}) {
     token: env.TELEGRAM_CRITICAL_BOT_TOKEN, chatId: env.TELEGRAM_CRITICAL_CHAT_ID,
     mode: "all", tag: `${tag}-critical`,
   });
-  const mirror = (text, opts) => (critical.enabled && isCritical(text) ? critical.send(text, opts) : false);
+  const mirrorAll = String(env.TELEGRAM_CRITICAL_MODE || "").toLowerCase() === "all";
+  const mirror = (text, opts) =>
+    (critical.enabled && (mirrorAll || isCritical(text)) ? critical.send(text, opts) : false);
 
   async function send(text, opts) {
     const [sent] = await Promise.all([team.send(text, opts), mirror(text, opts)]);
@@ -145,6 +150,13 @@ if (require.main === module && process.argv.includes("--self-test")) {
     ok("routine: team console only", to() === "psa:team");
     sent.length = 0; await t.send("🔄 hdr\n💥 fatal");
     ok("critical: team console and phone", to() === "debug:me,psa:team");
+
+    t = opsTelegram({ env: { ...env, TELEGRAM_CRITICAL_MODE: "all" }, tag: "t" });
+    sent.length = 0; await t.send("🔄 hdr\n✅ Segment 3/6 settled");
+    ok("critical mode all: routine reaches the phone too", to() === "debug:me,psa:team");
+    t = opsTelegram({ env: { ...env, TELEGRAM_CRITICAL_MODE: "ALL" }, mode: "off", tag: "t" });
+    sent.length = 0; await t.send("🔄 hdr\n✅ Segment 3/6 settled");
+    ok("critical mode all, ops off: phone only", to() === "debug:me");
 
     t = opsTelegram({ env, mode: "errors", tag: "t" });
     sent.length = 0; await t.notify("🎯 Sent 3 DMs");

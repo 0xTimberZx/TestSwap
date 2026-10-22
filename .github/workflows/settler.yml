@@ -60,6 +60,9 @@ jobs:
           TELEGRAM_OPS_CHAT_ID: ${{ secrets.TELEGRAM_OPS_CHAT_ID }}
           TELEGRAM_CRITICAL_BOT_TOKEN: ${{ secrets.TELEGRAM_CRITICAL_BOT_TOKEN }}
           TELEGRAM_CRITICAL_CHAT_ID: ${{ secrets.TELEGRAM_CRITICAL_CHAT_ID }}
+          # Mirror every settler message (segment beats too) to the phone bot;
+          # set the repo variable SETTLER_CRITICAL_MODE to "critical" for alerts only.
+          TELEGRAM_CRITICAL_MODE: ${{ vars.SETTLER_CRITICAL_MODE || 'all' }}
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_CHAT_ID_PUBLIC: ${{ secrets.TELEGRAM_CHAT_ID_PUBLIC }}
           TELEGRAM_OPS_MODE:    ${{ vars.TELEGRAM_OPS_MODE }}
