@@ -99,10 +99,9 @@
       "mt": 45
     }
   },
-  "pendingUnder": {
-    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:tickets_activated": 1792665655
-  },
+  "pendingUnder": {},
   "alerted": {
-    "under": 1792698555
+    "under": 1792698555,
+    "tp": 1792702181
   }
 }
