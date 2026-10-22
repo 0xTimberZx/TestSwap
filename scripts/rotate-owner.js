@@ -10,6 +10,9 @@
 //     - role setters, while the leaked key is still owner:
 //         settler, dispatcher, operator      -> KEEPER (the new hot key)
 //         guardian, seedFunder, protocolSink -> the new owner
+//     - setRewardNotifier(leaked, false) on the reward pools: a notifier can
+//       call notifyRewardAmount(1 wei, 1 s) and release a pool's whole
+//       remaining schedule in one second
 //     - transferOwnership(new owner) on every contract a leaked key owns
 //     - requestSubscriptionOwnerTransfer on every VRF subscription it owns
 //     - sweep the leaked wallets' Sepolia ETH to the new owner (gas for phase 2)
@@ -69,6 +72,7 @@ const ABI = [
   "function coordinator() view returns (address)",
   "function subId() view returns (uint256)",
   "function rewardNotifiers(address) view returns (bool)",
+  "function setRewardNotifier(address, bool)",
   ...ROLES.flatMap(r => [`function ${r.get}() view returns (address)`, `function ${r.set}(address)`]),
 ];
 const COORD_ABI = [
@@ -157,7 +161,6 @@ async function main() {
   const stuck = [];     // roles held by a leaked key whose owner we cannot sign for
   const owned = [];     // contracts a leaked signer owns (for phase 2 and the read-back)
   const subs = new Map(); // `${coord}:${subId}` -> { coord, subId, owner }
-  const notifiers = [];
 
   const addrs = candidateAddresses();
   console.log(`scanning ${addrs.length} addresses from config.js and check-roles.js`);
@@ -181,7 +184,12 @@ async function main() {
     }
 
     for (const l of leaked) {
-      if (await tryRead(c, "rewardNotifiers", l)) notifiers.push(`${addr} rewardNotifiers[${l}] = true`);
+      if (!(await tryRead(c, "rewardNotifiers", l))) continue;
+      if (ownerSigner) {
+        plan.push({ signer: ownerSigner, addr, label: `${short(addr)} setRewardNotifier(${short(l)}, false)`, fn: "setRewardNotifier", args: [l, false] });
+      } else {
+        stuck.push(`${addr} rewardNotifiers[${l}] — owner ${owner} is not a key this run holds`);
+      }
     }
 
     const coord = await tryRead(c, "coordinator");
@@ -215,10 +223,6 @@ async function main() {
   if (stuck.length) {
     console.log("\n── Held by a leaked key, but this run cannot move it:");
     for (const s of stuck) console.log(`  ${s}`);
-  }
-  if (notifiers.length) {
-    console.log("\n── For information (reward notifiers can only fund rewards; left as they are):");
-    for (const n of notifiers) console.log(`  ${n}`);
   }
 
   if (DRY_RUN) {
@@ -317,6 +321,9 @@ async function main() {
       if (!h) continue;
       if (leaked.has(lc(h))) left++;
       roles.push(`${r.get}=${short(h)}${leaked.has(lc(h)) ? " LEAKED" : ""}`);
+    }
+    for (const l of leaked) {
+      if (await tryRead(c, "rewardNotifiers", l)) { left++; roles.push(`rewardNotifier ${short(l)} LEAKED`); }
     }
     console.log(`  ${ok ? "ok  " : "FAIL"}  ${o.addr} owner=${short(owner)} ${roles.join(" ")}`);
   }
