@@ -167,6 +167,7 @@ closed as known. This list covers reports received after it was published.
 | TS-054 | `GasFaucet`, `TimbAirdropDistributor` | The guardian, meant as a fast stop for a leaked hot key, could set the pause either way, so a compromised guardian could undo the owner's pause and let distributions resume; the guardian can now only pause, and lifting a pause is the owner's (the timelock on mainnet) (fix adopted from the reporter; the live Arbitrum One airdrop stays paused until its TIMBS-launch redeploy) |
 | TS-055 | `TimbSwapRouter` | The free-nudge cap on `advanceScroll` was keyed per address, so several wallets multiplied it and steered a segment's letter-or-digit class for gas alone; free nudges are off in the mainnet beta, so only paid swaps through the designated pools steer |
 | TS-056 | `GameRegistry` | `setYieldVault` moved the pointer without retiring the outgoing vault's ticket weight, unlike the vault-side repoint and the generation bump, so the orphaned vault kept accruing on dead weight until the earmark covered its whole reserve (fix adopted from the reporter) |
+| TS-057 | Frontend (token approvals) | The swap, liquidity, farm, lock and game-entry flows computed the exact amount each transaction needed, then approved an unlimited allowance (`MaxUint256`) to the protocol's own contracts, so one small interaction left the user's whole balance of that token approved indefinitely; each flow now approves exactly the amount it needs (fix adopted from the reporter) |
 
 ## Severity & rewards
 
