@@ -44,7 +44,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version: "22.23.4"
 
       # No dependencies and no network — the checker is plain node against
       # the working tree, so it runs identically here and locally.
