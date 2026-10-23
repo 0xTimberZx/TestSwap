@@ -174,6 +174,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     error FreeNudgeCapReached(uint256 round, uint256 segment);
     error InvalidPath();
     error ProtocolFeeTooHigh(uint256 bps, uint256 max);
+    error InvalidTo(address to);
 
     // ─── Modifiers ───────────────────────────────────────────────────────────
 
@@ -374,6 +375,18 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         if (done > 0) emit ScrollNudged(msg.sender, tokenIn);
     }
 
+    // ─── Internal: Recipient ──────────────────────────────────────────────────
+
+    /// @dev Every swap and liquidity entry point checks its `to` here. The
+    ///      router has no token exit, so output, LP tokens or withdrawn
+    ///      liquidity sent to the router itself would be stranded for good
+    ///      (TS-062; TS-048 closed the ETH side). The pair's own check only
+    ///      rejects its tokens and itself, not the router that called it.
+    function _checkRecipient(address to) internal view {
+        if (to == address(0))    revert ZeroAddress();
+        if (to == address(this)) revert InvalidTo(to);
+    }
+
     // ─── Internal: Swap Direction ─────────────────────────────────────────────
 
     function _swapOnPair(address pair, address tokenIn, uint256 amountOut, address to)
@@ -485,7 +498,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         returns (uint256 amountOut)
     {
         if (amountIn == 0)    revert ZeroAmount();
-        if (to == address(0)) revert ZeroAddress();
+        _checkRecipient(to);
 
         (uint256 reserveIn, uint256 reserveOut) = _getReserves(_getPair(tokenIn, tokenOut), tokenIn);
         amountOut = _getAmountOut(amountIn, reserveIn, reserveOut);
@@ -517,7 +530,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         returns (uint256 amountIn)
     {
         if (amountOut == 0)   revert ZeroAmount();
-        if (to == address(0)) revert ZeroAddress();
+        _checkRecipient(to);
 
         (uint256 reserveIn, uint256 reserveOut) = _getReserves(_getPair(tokenIn, tokenOut), tokenIn);
         amountIn = _getAmountIn(amountOut, reserveIn, reserveOut);
@@ -552,7 +565,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         returns (uint256 amountOut)
     {
         if (amountIn == 0)    revert ZeroAmount();
-        if (to == address(0)) revert ZeroAddress();
+        _checkRecipient(to);
 
         uint256[] memory amounts = _getAmountsOut(amountIn, path);
         amountOut = amounts[amounts.length - 1];
@@ -581,7 +594,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         returns (uint256 amountIn)
     {
         if (amountOut == 0)   revert ZeroAmount();
-        if (to == address(0)) revert ZeroAddress();
+        _checkRecipient(to);
 
         uint256[] memory amounts = _getAmountsIn(amountOut, path);
         amountIn = amounts[0];
@@ -616,7 +629,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     {
         if (weth == address(0)) revert WethNotSet();
         if (amountIn == 0)      revert ZeroAmount();
-        if (to == address(0))   revert ZeroAddress();
+        _checkRecipient(to);
 
         // Fee mirrors _collectProtocolFee: charged on top of amountIn, skipped
         // entirely when no treasury is configured.
@@ -669,7 +682,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     {
         if (weth == address(0)) revert WethNotSet();
         if (amountIn == 0)      revert ZeroAmount();
-        if (to == address(0))   revert ZeroAddress();
+        _checkRecipient(to);
 
         address pair = _getPair(tokenIn, weth);
         (uint256 reserveIn, uint256 reserveOut) = _getReserves(pair, tokenIn);
@@ -896,7 +909,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         ensure(deadline)
         returns (uint256 amountA, uint256 amountB, uint256 liquidity)
     {
-        if (to == address(0)) revert ZeroAddress();
+        _checkRecipient(to);
 
         LiquidityParams memory p = LiquidityParams({
             amountADesired: amountADesired,
@@ -954,7 +967,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         returns (uint256 amountToken, uint256 amountETH, uint256 liquidity)
     {
         if (weth == address(0)) revert WethNotSet();
-        if (to == address(0)) revert ZeroAddress();
+        _checkRecipient(to);
         if (msg.value == 0) revert ZeroAmount();
 
         LiquidityState memory s = _prepareAddLiquidityETH(
@@ -1044,7 +1057,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         ensure(deadline)
         returns (uint256 amountA, uint256 amountB)
     {
-        if (to == address(0)) revert ZeroAddress();
+        _checkRecipient(to);
         address pair = _getPair(tokenA, tokenB);
         (amountA, amountB) = _burnAndSort(pair, tokenA, liquidity, to);
         if (amountA < amountAMin) revert InsufficientAAmount(amountA, amountAMin);
@@ -1071,7 +1084,7 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
         returns (uint256 amountToken, uint256 amountETH)
     {
         if (weth == address(0)) revert WethNotSet();
-        if (to == address(0))   revert ZeroAddress();
+        _checkRecipient(to);
         return _doRemoveLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, to);
     }
 
