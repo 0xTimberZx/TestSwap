@@ -1,7 +1,7 @@
 {
   "chainId": 421614,
   "faucet": "0x0A59b7D61A4dB317FaD8697c3E3e1e6Df4c7A04B",
-  "cursorBlock": 322358666,
+  "cursorBlock": 322424673,
   "eraStart": 1789471998,
   "wallets": {
     "0x42536623b503D4926DfAF6173B0357b7DfD19800": {
@@ -35,10 +35,10 @@
       "timbs": "2000000000000000000"
     },
     "0x1aEFB27fa7c78Cfe7AB99794a722981C80B7D46C": {
-      "count": 1,
+      "count": 2,
       "first": 1791999524,
-      "last": 1791999524,
-      "timbs": "1000000000000000000"
+      "last": 1792855554,
+      "timbs": "2000000000000000000"
     }
   }
 }
