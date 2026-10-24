@@ -191,6 +191,23 @@ body { padding-top: 60px; }
   white-space: nowrap;
 }
 @media (max-width: 480px) { .testnet-badge { display: none; } }
+/* Connected nav on phones: the network chip and address chip used to wrap to
+   two lines and push the hamburger off the right edge, leaving no way to change
+   page. The chips stay on one line, the network label (static, same on every
+   page) drops like the testnet badge, and the hamburger never shrinks away. */
+.network-badge, .wallet-addr { white-space: nowrap; }
+/* When space runs out (narrow phones, enlarged text) the wordmark and the
+   address truncate first; the hamburger keeps its size. */
+.nav { gap: 8px; }
+.nav-logo, .nav-actions, .wallet-info, .wallet-menu-btn { min-width: 0; }
+.nav-logo { overflow: hidden; }
+.wallet-addr { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.nav-hamburger { flex-shrink: 0; }
+@media (max-width: 480px) {
+  .nav { padding: 0 16px; }
+  .nav-actions { gap: 8px; }
+  .network-badge { display: none; }
+}
 
 .btn-connect {
   background: var(--green);
