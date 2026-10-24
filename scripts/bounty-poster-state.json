@@ -1,9 +1,8 @@
 {
-  "lastPostedAt": "2026-10-22T07:47:02.378Z",
+  "lastPostedAt": "2026-10-24T12:48:35.149Z",
   "lastVariant": 1,
-  "posts": 2,
-  "funding": {
-    "cumulativeBaseUnits": "349995530",
-    "lastScannedBlock": 517162427
+  "posts": 3,
+  "closing": {
+    "soon": "2026-10-24T12:48:35.149Z"
   }
 }
