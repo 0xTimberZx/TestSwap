@@ -143,20 +143,7 @@
       "mt": 30
     }
   },
-  "pendingUnder": {
-    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:rounds_played": 1792955483,
-    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:faucet_claims": 1792955483,
-    "0xb64408da327c7ed420b19b80d2a6b06fad975048:rounds_played": 1792955483,
-    "0xb64408da327c7ed420b19b80d2a6b06fad975048:faucet_claims": 1792955483,
-    "0xaacc688526169a21746d28ad9263eaea8625bc22:rounds_played": 1792955483,
-    "0xaacc688526169a21746d28ad9263eaea8625bc22:faucet_claims": 1792955483,
-    "0x1aefb27fa7c78cfe7ab99794a722981c80b7d46c:rounds_played": 1792955483,
-    "0xd6629a2d988d5bbd3fc257e7cd7b782884bfd075:rounds_played": 1792955483,
-    "0xd6629a2d988d5bbd3fc257e7cd7b782884bfd075:faucet_claims": 1792955483,
-    "0x910b365352dee80d8759245ecc92a982982c0fe3:rounds_played": 1792955483,
-    "0x98cd2cde1d3aab50609bf851e2967b8257f78219:nudge_swaps": 1792955483,
-    "0x98cd2cde1d3aab50609bf851e2967b8257f78219:meter_tp": 1792955483
-  },
+  "pendingUnder": {},
   "alerted": {
     "under": 1792698555,
     "tp": 1792702181
