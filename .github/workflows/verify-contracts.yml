@@ -148,6 +148,13 @@ jobs:
           # FOUNDRY_SOLC builds but leaves verify-contract unable to resolve
           # the target file.
           [ -n "$SOLC" ]   && sed -i -E "s/^solc_version\s*=.*/solc_version   = \"$SOLC\"/" foundry.toml
+          # Refs before the July layout name src = "src", a folder that does
+          # not exist; verify-contract only resolves targets inside src.
+          src=$(sed -n -E 's/^src\s*=\s*"([^"]+)".*/\1/p' foundry.toml | head -1)
+          if [ -n "$src" ] && [ ! -d "$src" ] && [ -d contracts ]; then
+            sed -i -E 's/^src\s*=.*/src            = "contracts"/' foundry.toml
+            echo "src \"$src\" missing at this ref; using contracts/"
+          fi
           [ -n "$EVM" ]    && echo "FOUNDRY_EVM_VERSION=$EVM"   >> "$GITHUB_ENV"
           [ -n "$VIA_IR" ] && echo "FOUNDRY_VIA_IR=$VIA_IR"     >> "$GITHUB_ENV"
           true
