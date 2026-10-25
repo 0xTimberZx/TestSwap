@@ -132,14 +132,7 @@
       "mt": 30
     }
   },
-  "pendingUnder": {
-    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:rounds_played": 1792912046,
-    "0xb64408da327c7ed420b19b80d2a6b06fad975048:rounds_played": 1792912046,
-    "0xaacc688526169a21746d28ad9263eaea8625bc22:rounds_played": 1792912046,
-    "0x910b365352dee80d8759245ecc92a982982c0fe3:rounds_played": 1792912046,
-    "0x494132bd5c224b3ef910d660d3bf047693acfd5f:rounds_played": 1792912046,
-    "0x494132bd5c224b3ef910d660d3bf047693acfd5f:tickets_activated": 1792912046
-  },
+  "pendingUnder": {},
   "alerted": {
     "under": 1792698555,
     "tp": 1792702181
