@@ -143,7 +143,11 @@ jobs:
           EVM: ${{ inputs.evm }}
           VIA_IR: ${{ inputs.via_ir }}
         run: |
-          [ -n "$SOLC" ]   && echo "FOUNDRY_SOLC=$SOLC"        >> "$GITHUB_ENV"
+          # solc goes into the ref's foundry.toml itself: FOUNDRY_SOLC_VERSION
+          # breaks config extraction at refs with an [etherscan] table, and
+          # FOUNDRY_SOLC builds but leaves verify-contract unable to resolve
+          # the target file.
+          [ -n "$SOLC" ]   && sed -i -E "s/^solc_version\s*=.*/solc_version   = \"$SOLC\"/" foundry.toml
           [ -n "$EVM" ]    && echo "FOUNDRY_EVM_VERSION=$EVM"   >> "$GITHUB_ENV"
           [ -n "$VIA_IR" ] && echo "FOUNDRY_VIA_IR=$VIA_IR"     >> "$GITHUB_ENV"
           true
