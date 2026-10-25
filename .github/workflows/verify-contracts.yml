@@ -19,8 +19,15 @@ name: Verify Contracts
 # itself. Arbiscan needs them passed; --guess-constructor-args recovers them
 # from the creation transaction through the same key.
 #
-# The status job always runs first: it lists the Sourcify state of every
-# address in config.js, so any other unverified contract shows up here too.
+# The status job always runs first: it lists the Sourcify and Arbiscan state
+# of every address in config.js, so any other unverified contract shows up
+# here too, with the compiler settings each verified contract was built with
+# (a pair's settings are its factory's, for one).
+#
+# Early deploys (June-July) were not always built with the foundry.toml of
+# their commit (some name solc 0.8.20 while the sources pin 0.8.24). The solc,
+# evm and via_ir inputs override the ref's foundry.toml for the build and the
+# verification alike; leave them empty to use the ref's own settings.
 
 on:
   workflow_dispatch:
@@ -50,6 +57,18 @@ on:
         options:
           - status
           - verify
+      solc:
+        description: "Override solc version (e.g. 0.8.24); empty = ref's foundry.toml"
+        required: false
+        default: ""
+      evm:
+        description: "Override evm_version (paris / shanghai / cancun); empty = ref's"
+        required: false
+        default: ""
+      via_ir:
+        description: "Override via_ir (true / false); empty = ref's"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -60,30 +79,46 @@ env:
 
 jobs:
   status:
-    name: Sourcify status of config.js
+    name: Verification status of config.js
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
       - name: List verification state
+        env:
+          ARBISCAN_API_KEY: ${{ secrets.ARBISCAN_API_KEY }}
         run: |
           {
-            echo "### Sourcify status, chain $CHAIN_ID"
+            echo "### Verification status, chain $CHAIN_ID"
             echo
-            echo "| Contract | Address | Sourcify |"
-            echo "|---|---|---|"
+            echo "| Contract | Address | Sourcify | Arbiscan | Built with |"
+            echo "|---|---|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
           awk '/^const _SEPOLIA_ADDRESSES = \{/{f=1} f{print} f&&/^\};/{exit}' config.js \
             | grep -oE '^\s*[A-Za-z0-9_]+:\s*"0x[0-9a-fA-F]{40}"' \
             | sed -E 's/^\s*([A-Za-z0-9_]+):\s*"(0x[0-9a-fA-F]{40})"/\1 \2/' \
             | while read -r name addr; do
-                m=$(curl -sS -m 20 "$SOURCIFY/v2/contract/$CHAIN_ID/$addr" | jq -r '.match // "none"' 2>/dev/null || echo "error")
-                [ -z "$m" ] && m=none
-                printf '%-28s %s %s\n' "$name" "$addr" "$m"
-                echo "| $name | \`$addr\` | $m |" >> "$GITHUB_STEP_SUMMARY"
+                sj=$(curl -sS -m 20 "$SOURCIFY/v2/contract/$CHAIN_ID/$addr?fields=compilation" || true)
+                m=$(echo "$sj" | jq -r '.match // "none"' 2>/dev/null || echo error)
+                built=$(echo "$sj" | jq -r 'if .compilation then "\(.compilation.compilerVersion) runs=\(.compilation.compilerSettings.optimizer.runs // "-") opt=\(.compilation.compilerSettings.optimizer.enabled | tostring) viaIR=\(.compilation.compilerSettings.viaIR // false) evm=\(.compilation.compilerSettings.evmVersion // "default") \(.compilation.fullyQualifiedName // "")" else "" end' 2>/dev/null || true)
+                a="no key"
+                if [ -n "$ARBISCAN_API_KEY" ]; then
+                  aj=$(curl -sS -m 20 "https://api.etherscan.io/v2/api?chainid=$CHAIN_ID&module=contract&action=getsourcecode&address=$addr&apikey=$ARBISCAN_API_KEY" || true)
+                  if echo "$aj" | jq -e '.status == "1" and (.result[0].SourceCode // "") != ""' >/dev/null 2>&1; then
+                    a=verified
+                    [ -z "$built" ] && built=$(echo "$aj" | jq -r '.result[0] | "\(.CompilerVersion) runs=\(.Runs) opt=\(.OptimizationUsed) evm=\(.EVMVersion) \(.ContractName)"')
+                  elif echo "$aj" | jq -e '.status == "1"' >/dev/null 2>&1; then
+                    a=none
+                  else
+                    a="error: $(echo "$aj" | jq -r '.result // .message' 2>/dev/null | head -c 80)"
+                  fi
+                  sleep 0.5
+                fi
+                printf '%-24s %s sourcify=%-12s arbiscan=%-10s %s\n' "$name" "$addr" "${m:-none}" "$a" "$built"
+                echo "| $name | \`$addr\` | ${m:-none} | $a | $built |" >> "$GITHUB_STEP_SUMMARY"
               done
           echo
-          echo "match / exact_match = verified; none = not on Sourcify (check Arbiscan before acting)."
+          echo "match / exact_match / verified = verified; none = not verified there."
 
   verify:
     name: Verify targets at ${{ inputs.ref }}
@@ -102,8 +137,21 @@ jobs:
         with:
           version: stable
 
+      - name: Apply compiler overrides
+        env:
+          SOLC: ${{ inputs.solc }}
+          EVM: ${{ inputs.evm }}
+          VIA_IR: ${{ inputs.via_ir }}
+        run: |
+          [ -n "$SOLC" ]   && echo "FOUNDRY_SOLC_VERSION=$SOLC" >> "$GITHUB_ENV"
+          [ -n "$EVM" ]    && echo "FOUNDRY_EVM_VERSION=$EVM"   >> "$GITHUB_ENV"
+          [ -n "$VIA_IR" ] && echo "FOUNDRY_VIA_IR=$VIA_IR"     >> "$GITHUB_ENV"
+          true
+
       - name: Show the build settings in use
-        run: grep -E '^(solc_version|optimizer|optimizer_runs|via_ir|evm_version)\s*=' foundry.toml
+        run: |
+          grep -E '^(solc_version|optimizer|optimizer_runs|via_ir|evm_version)\s*=' foundry.toml || true
+          env | grep '^FOUNDRY_' || echo "no overrides"
 
       - name: forge build
         run: forge build --skip './tests/**' './scripts/**'
