@@ -143,7 +143,7 @@ jobs:
           EVM: ${{ inputs.evm }}
           VIA_IR: ${{ inputs.via_ir }}
         run: |
-          [ -n "$SOLC" ]   && echo "FOUNDRY_SOLC_VERSION=$SOLC" >> "$GITHUB_ENV"
+          [ -n "$SOLC" ]   && echo "FOUNDRY_SOLC=$SOLC"        >> "$GITHUB_ENV"
           [ -n "$EVM" ]    && echo "FOUNDRY_EVM_VERSION=$EVM"   >> "$GITHUB_ENV"
           [ -n "$VIA_IR" ] && echo "FOUNDRY_VIA_IR=$VIA_IR"     >> "$GITHUB_ENV"
           true
@@ -153,8 +153,16 @@ jobs:
           grep -E '^(solc_version|optimizer|optimizer_runs|via_ir|evm_version)\s*=' foundry.toml || true
           env | grep '^FOUNDRY_' || echo "no overrides"
 
-      - name: forge build
-        run: forge build --skip './tests/**' './scripts/**'
+      # Only the targets' source files (and their imports): an override such as
+      # via_ir=false can leave other contracts at the ref uncompilable (stack
+      # too deep) without touching the ones being verified.
+      - name: forge build (targets only)
+        env:
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          paths=$(echo "$TARGETS" | tr ',' '\n' | xargs -n1 | cut -d: -f2 | sort -u | tr '\n' ' ')
+          echo "building: $paths"
+          forge build $paths
 
       - name: Verify
         env:
