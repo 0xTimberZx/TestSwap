@@ -382,6 +382,8 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     ///      liquidity sent to the router itself would be stranded for good
     ///      (TS-062; TS-048 closed the ETH side). The pair's own check only
     ///      rejects its tokens and itself, not the router that called it.
+    ///      A pair on the swap's own route is rejected where the route is
+    ///      known, in _swapOnPair and _executeSwapPath (TS-072).
     function _checkRecipient(address to) internal view {
         if (to == address(0))    revert ZeroAddress();
         if (to == address(this)) revert InvalidTo(to);
@@ -396,6 +398,11 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
     function _swapOnPair(address pair, address tokenIn, uint256 amountOut, address to)
         internal
     {
+        // TS-072: output paid back into the pair counts as input there, so
+        // the swap clears K and the caller's input becomes a donation to the
+        // pool. Deployed pairs predate the pair's own check, so the router
+        // refuses it for them.
+        if (to == pair) revert InvalidTo(to);
         bool isToken0 = IPair(pair).token0() == tokenIn;
         (uint256 a0, uint256 a1) = isToken0
             ? (uint256(0), amountOut)
@@ -440,6 +447,9 @@ contract TimbSwapRouter is Ownable, ReentrancyGuard {
 
         for (uint256 i = 0; i < n - 1; i++) {
             address pair = i == 0 ? firstPair : _getPair(path[i], path[i + 1]);
+            // TS-072: `to` must not be any pair on the route; one earlier on
+            // it would absorb the last hop's output the same way.
+            if (to == pair) revert InvalidTo(to);
             address next = i < n - 2 ? _getPair(path[i + 1], path[i + 2]) : to;
             _swapOnPair(pair, path[i], amounts[i + 1], next);
         }
