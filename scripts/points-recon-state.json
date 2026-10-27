@@ -7,8 +7,8 @@
   "staking": "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   "seasonId": 1,
   "startBlock": 310224200,
-  "cursorBlock": 322942096,
-  "lastRound": 204,
+  "cursorBlock": 323022928,
+  "lastRound": 205,
   "ledger": {
     "0x42536623b503d4926dfaf6173b0357b7dfd19800": {
       "rp": 67,
@@ -22,8 +22,8 @@
       "mt": 90
     },
     "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf": {
-      "rp": 86,
-      "ta": 6,
+      "rp": 87,
+      "ta": 7,
       "ns": 0,
       "ps": 0,
       "pn": 0,
@@ -44,7 +44,7 @@
       "mt": 0
     },
     "0xb64408da327c7ed420b19b80d2a6b06fad975048": {
-      "rp": 99,
+      "rp": 100,
       "ta": 7,
       "ns": 0,
       "ps": 0,
@@ -66,7 +66,7 @@
       "mt": 0
     },
     "0x1aefb27fa7c78cfe7ab99794a722981c80b7d46c": {
-      "rp": 85,
+      "rp": 86,
       "ta": 6,
       "ns": 0,
       "ps": 0,
@@ -77,7 +77,7 @@
       "mt": 60
     },
     "0xd6629a2d988d5bbd3fc257e7cd7b782884bfd075": {
-      "rp": 98,
+      "rp": 99,
       "ta": 7,
       "ns": 0,
       "ps": 0,
@@ -99,7 +99,7 @@
       "mt": 45
     },
     "0x910b365352dee80d8759245ecc92a982982c0fe3": {
-      "rp": 11,
+      "rp": 12,
       "ta": 1,
       "ns": 0,
       "ps": 1,
@@ -143,7 +143,14 @@
       "mt": 60
     }
   },
-  "pendingUnder": {},
+  "pendingUnder": {
+    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:rounds_played": 1793085803,
+    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:tickets_activated": 1793085803,
+    "0xb64408da327c7ed420b19b80d2a6b06fad975048:rounds_played": 1793085803,
+    "0x1aefb27fa7c78cfe7ab99794a722981c80b7d46c:rounds_played": 1793085803,
+    "0xd6629a2d988d5bbd3fc257e7cd7b782884bfd075:rounds_played": 1793085803,
+    "0x910b365352dee80d8759245ecc92a982982c0fe3:rounds_played": 1793085803
+  },
   "alerted": {
     "under": 1792698555,
     "tp": 1792702181
