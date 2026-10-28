@@ -7,8 +7,8 @@
   "staking": "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
   "seasonId": 1,
   "startBlock": 310224200,
-  "cursorBlock": 323433631,
-  "lastRound": 210,
+  "cursorBlock": 323512746,
+  "lastRound": 211,
   "ledger": {
     "0x42536623b503d4926dfaf6173b0357b7dfd19800": {
       "rp": 67,
@@ -22,7 +22,7 @@
       "mt": 90
     },
     "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf": {
-      "rp": 92,
+      "rp": 93,
       "ta": 7,
       "ns": 0,
       "ps": 0,
@@ -143,7 +143,9 @@
       "mt": 60
     }
   },
-  "pendingUnder": {},
+  "pendingUnder": {
+    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:rounds_played": 1793216087
+  },
   "alerted": {
     "under": 1792698555,
     "tp": 1792702181
