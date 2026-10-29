@@ -1,11 +1,15 @@
 # Security Policy & Bug Bounty (testnet phase)
 
 TimbSwap is live on **Arbitrum Sepolia** as a capped, unaudited testnet. Every
-token is a test asset with no monetary value, and the bug bounty runs **now**,
-before the independent audit and any mainnet launch, so vulnerabilities are
-found and fixed while nothing real is at stake. **The testnet program closes on
-26 October 2026 at 23:59 UTC.** Rewards are real: **USDT on Arbitrum One**,
-paid from a public bounty wallet.
+token is a test asset with no monetary value. The bug bounty ran before the
+independent audit and any mainnet launch, so vulnerabilities were found and
+fixed while nothing real was at stake. Rewards are paid in **USDT on Arbitrum
+One** from a public bounty wallet.
+
+> **The testnet program closed on 26 October 2026 at 23:59 UTC.** Reports
+> received after that are not eligible. The mainnet bounty opens when the capped
+> beta launches on Arbitrum One; its terms will be published then. Security
+> reports are still welcome on the channel below.
 
 > **Report privately — do not open a public issue.**
 > Primary channel: **devhub@timbswap.xyz** (security-only inbox; put the
