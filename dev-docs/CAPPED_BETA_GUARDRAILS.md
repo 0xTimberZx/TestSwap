@@ -155,6 +155,14 @@ The 48h timelock is right for **non-emergency** changes but **too slow to stop a
 live exploit** — and the mainnet contracts have **no fast guardian role** (pause
 is `onlyOwner`). Decide this before opening:
 
+**Decided 2026-10-30:** no timelock handoff before the TIMBS launch. Through the
+capped beta a fresh deployer wallet owns the new contracts (not the key leaked
+in the 22 October Railway incident, never on a keeper host, never a keeper
+key), so a pause is immediate; the
+solvency watchdog (`scripts/solvency-watch.js`) alerts the owner when the game
+holds less ETH than it owes.
+
+
 - [ ] **Recommended:** during the capped beta, keep **pause-critical contracts
       owned by the multisig directly** (immediate multisig pause), and route
       **non-emergency** privileged ops through the timelock. At graduation, move
