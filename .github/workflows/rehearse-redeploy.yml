@@ -1,0 +1,75 @@
+name: rehearse-redeploy
+
+# Deploy-day rehearsal for the testnet redeploy (scripts/rehearse-redeploy.sh).
+# anvil forks Arbitrum Sepolia, then the real tools run end to end against the
+# fork: Deploy.s.sol, seed-pools-testnet.js, startGame, settler.js arming and
+# locking a segment through the live VRF coordinator, and solvency-watch.js.
+# Every key is an anvil dev key and nothing is broadcast to the real chain.
+#
+# Runs on demand, and on PRs that change the deploy script or a tool it drives.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/Deploy.s.sol"
+      - "scripts/rehearse-redeploy.sh"
+      - "scripts/seed-pools-testnet.js"
+      - "scripts/seed-pools.js"
+      - "scripts/settler.js"
+      - "scripts/solvency-watch.js"
+      - ".github/workflows/rehearse-redeploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rehearse-redeploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rehearse:
+    name: fork rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      # The repo secret when set (a keyed RPC copes better with a fork's reads),
+      # else the public endpoint. Secrets are not passed to PRs from forks, which
+      # then use the public endpoint too.
+      - name: Rehearse on an Arbitrum Sepolia fork
+        env:
+          MODE: fork
+          FORK_URL: ${{ secrets.ARB_SEPOLIA_RPC || 'https://sepolia-rollup.arbitrum.io/rpc' }}
+          WORK_DIR: ${{ runner.temp }}/rehearsal
+        run: bash scripts/rehearse-redeploy.sh
+
+      # anvil.log is left out: it echoes the fork URL, which may carry a key.
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rehearsal-logs
+          path: |
+            ${{ runner.temp }}/rehearsal/*.log
+            !${{ runner.temp }}/rehearsal/anvil.log
+          retention-days: 7
+          if-no-files-found: ignore
