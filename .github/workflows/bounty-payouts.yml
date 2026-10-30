@@ -1,0 +1,66 @@
+name: Bounty Payouts
+
+# Lists the bounty wallet's payouts with their transaction hashes
+# (scripts/bounty-payouts.js): every USDT transfer FROM the bounty wallet on
+# Arbitrum One in the window, with time, recipient, amount and the Arbiscan
+# link. The bounty page promises every payout is published with its hash; the
+# payouts go out from a plain wallet whose history shows no hashes, so this
+# reads them back from the chain. Read-only, no key. The table is in the job
+# summary; the CSV is a run artifact.
+
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Window start, ISO UTC"
+        required: true
+        default: "2026-10-30T00:00:00Z"
+      until:
+        description: "Window end, ISO UTC (empty = now)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    name: List payouts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Self-test
+        run: node bounty-payouts.js --self-test
+        working-directory: scripts
+
+      # PAYOUT_RPC (a secret, optional) is an Arbitrum One endpoint; without it
+      # the public node is used. The script checks the chain id and scrubs the
+      # URL from any error.
+      - name: Read the payouts from the chain
+        working-directory: scripts
+        env:
+          PAYOUT_RPC:    ${{ secrets.PAYOUT_RPC }}
+          PAYOUT_SINCE:  ${{ github.event.inputs.since }}
+          PAYOUT_UNTIL:  ${{ github.event.inputs.until }}
+          PAYOUT_OUT:    ${{ runner.temp }}/bounty-payouts.csv
+        run: node bounty-payouts.js
+
+      - name: Upload the CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: bounty-payouts
+          path: ${{ runner.temp }}/bounty-payouts.csv
+          retention-days: 30
