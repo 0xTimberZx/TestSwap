@@ -98,3 +98,6 @@ dev-docs/*
 # ─── Node (dev-only tooling for vendored bundles; see scripts/build-vendor.mjs) ─
 node_modules/
 dist/
+
+# Solvency watchdog alert stamps (container-local on Railway; nothing commits it)
+scripts/solvency-watch-state.json
