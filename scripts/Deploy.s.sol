@@ -420,7 +420,7 @@ contract Deploy is Script {
         }
         console.log("NEXT (dev-docs/TESTNET_REDEPLOY_PLAN.md section 3):");
         console.log("1. Verify on Sourcify and Arbiscan (verify-contracts.yml)");
-        console.log("2. Seed the four pairs (seed-pools.yml)");
+        console.log("2. Seed the four pairs: node scripts/seed-pools-testnet.js (dry run, then --execute --wrap)");
         console.log("3. Fund rewards (admin-fund-rewards.yml), the yield vault, the treasury and the faucet's TIMBS");
         console.log("4. Add PrizeVRFEntropy as a consumer on the VRF subscription; then TimbPrize.startGame()");
         console.log("5. node scripts/check-roles.js <new owner>; then the config.js address PR");
