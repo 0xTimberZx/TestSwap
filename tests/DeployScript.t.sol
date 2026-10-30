@@ -39,6 +39,7 @@ contract DeployScriptTest is Test {
     address constant GUARDIAN   = address(0x6A4D);
     address constant WALLET     = address(0x5AFE);
     address constant LEAKED     = 0x42536623b503D4926DfAF6173B0357b7DfD19800;
+    address constant LEAKED_DISPATCHER = 0x490Ae1eC3452c32dA2643715bd310F1eBC87c652;
 
     DeployERC20 weth; DeployERC20 usdc; DeployERC20 usdt; DeployERC20 link; DeployERC20 dapp;
     address coord;
@@ -118,6 +119,22 @@ contract DeployScriptTest is Test {
         Deploy.Cfg memory c = _cfg();
         c.settler = LEAKED;
         TestDeploy d = new TestDeploy();
+        d.setCase(KEY, c);
+        vm.expectRevert(bytes("PRE-FLIGHT: a role is the leaked deployer key"));
+        d.run();
+    }
+
+    function test_PreflightRefusesTheLeakedDispatcherInAnyRole() public {
+        Deploy.Cfg memory c = _cfg();
+        c.dispatcher = LEAKED_DISPATCHER;
+        TestDeploy d = new TestDeploy();
+        d.setCase(KEY, c);
+        vm.expectRevert(bytes("PRE-FLIGHT: a role is the leaked faucet dispatcher key"));
+        d.run();
+
+        c = _cfg();
+        c.sink = LEAKED;
+        d = new TestDeploy();
         d.setCase(KEY, c);
         vm.expectRevert(bytes("PRE-FLIGHT: a role is the leaked deployer key"));
         d.run();

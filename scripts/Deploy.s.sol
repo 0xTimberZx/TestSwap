@@ -199,9 +199,11 @@ contract Deploy is Script {
         // Keys leaked in the 22 October Railway incident must never hold a role
         // on the new contracts (plan D3).
         address leakedDeployer   = 0x42536623b503D4926DfAF6173B0357b7DfD19800;
-        address[5] memory roles = [c.deployer, c.settler, c.dispatcher, c.guardian, c.treasuryWallet];
+        address leakedDispatcher = 0x490Ae1eC3452c32dA2643715bd310F1eBC87c652;
+        address[6] memory roles = [c.deployer, c.settler, c.dispatcher, c.guardian, c.treasuryWallet, c.sink];
         for (uint256 i; i < roles.length; i++) {
             require(roles[i] != leakedDeployer, "PRE-FLIGHT: a role is the leaked deployer key");
+            require(roles[i] != leakedDispatcher, "PRE-FLIGHT: a role is the leaked faucet dispatcher key");
         }
         address[5] memory tokens = [c.weth, c.usdc, c.usdt, c.link, c.dapp];
         for (uint256 i; i < tokens.length; i++) {
