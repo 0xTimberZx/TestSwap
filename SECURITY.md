@@ -74,8 +74,8 @@ closed as known. This list covers reports received after it was published.
   checks in both sources (TS-011, TS-037, TS-044); the deployed testnet farm
   and staking predate them until the next testnet redeploy.
 - **Ownership and privileged roles.** Testnet contracts are owned by a single
-  key. On mainnet, ownership sits behind a timelock + multisig, so owner-power
-  and centralisation findings against the testnet key are out.
+  key. On mainnet, ownership moves to a timelock + multisig at the TIMBS launch,
+  so owner-power and centralisation findings against the testnet key are out.
 - **Governance.** No governance module is live on testnet and on-chain voting
   is switched off. Findings against a testnet governance address or the
   `/gov/` voting flow are out.
