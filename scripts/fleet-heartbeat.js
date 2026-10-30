@@ -69,6 +69,7 @@ const FLEET = [
   { file: "faucet-recon.yml",      cadenceMin: 60,  label: "faucet reconciliation" },
   { file: "points-recon.yml",      cadenceMin: 60,  label: "points reconciliation" },
   { file: "dead-man.yml",          cadenceMin: 30,  label: "dead-man switch" },
+  { file: "solvency-watch.yml",    cadenceMin: 15,  label: "solvency watchdog" },
 ];
 
 const OPTS = {
