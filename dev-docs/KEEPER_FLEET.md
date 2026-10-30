@@ -32,6 +32,7 @@ depending on another to succeed.
 | Faucet reconciliation | `faucet-recon.yml` | lingers 1 h, self-chains; `:37` hourly cron backstop | witness | none | `faucet-recon-state.json` |
 | Points reconciliation | `points-recon.yml` | lingers 1 h, self-chains; `:52` hourly cron backstop | witness | none | `points-recon-state.json` |
 | Dead-man switch | `dead-man.yml` | lingers 30 min, self-chains; `:19`/`:49` cron backstop | witness | none | `dead-man-state.json` |
+| Solvency watchdog | `solvency-watch.yml` | lingers 15 min, self-chains; `:11`/`:41` cron backstop | witness | none | `solvency-watch-state.json` |
 
 Three kinds:
 
