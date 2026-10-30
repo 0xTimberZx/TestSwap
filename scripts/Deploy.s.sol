@@ -182,6 +182,9 @@ contract Deploy is Script {
             address(router)
         );
         console.log("TimbPrize:          ", address(timbPrize));
+        // Protocol cut per settlement: 0.5% (decided 2026-10-30; the contract
+        // default is 2%, at most 10%). PROTOCOL_CUT_BPS overrides.
+        timbPrize.setProtocolCutBps(vm.envOr("PROTOCOL_CUT_BPS", uint256(50)));
 
         // ── 7b. Prize VRF entropy (H1) ───────────────────────────────────────
         // Dedicated VRFEntropy for the prize game, mirroring the board's path.

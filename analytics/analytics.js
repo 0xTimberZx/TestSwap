@@ -197,7 +197,7 @@ async function loadLiveMetrics() {
       .toLocaleString("en-US", { maximumFractionDigits: 5 }) + " ETH");
     const potUsd = usd(parseFloat(ethers.utils.formatUnits(pot, 18)));
     // Sub-line: USD value + the live vault yield accruing into the pot. The
-    // 2% protocol cut taken at each settlement is documented (Docs → Compete)
+    // protocol cut taken at each settlement is documented (Docs → Compete)
     // rather than shown here: it is not winnable, so it only distracts players.
     const accruedStr = accrued ? fmt(accrued, 18, 6) + " ETH" : "—";
     const cutStr = "";
@@ -256,7 +256,7 @@ async function loadLiveMetrics() {
       } catch { scanNote = " · withdrawals unscanned"; }
       const total = accruedCut.add(withdrawn);
       set("m-cut", fmt(total, 18, 5) + " ETH");
-      set("m-cut-sub", `${fmt(accruedCut, 18, 5)} ETH unwithdrawn · ${fmt(withdrawn, 18, 5)} ETH withdrawn · 2% of each settled pot${scanNote}`);
+      set("m-cut-sub", `${fmt(accruedCut, 18, 5)} ETH unwithdrawn · ${fmt(withdrawn, 18, 5)} ETH withdrawn · ${cutBps !== null ? Number(cutBps) / 100 + "%" : "a share"} of each settled pot${scanNote}`);
     } catch { set("m-cut-sub", "—"); }
 
     set("m-scroll",       counter.toString());
