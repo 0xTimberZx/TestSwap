@@ -8,6 +8,7 @@ on:
     paths:
       - "contracts/**"
       - "tests/**"
+      - "scripts/**.sol"
       - "foundry.toml"
       - ".github/workflows/contracts.yml"
   # Also gate main itself. PR-only meant a regression could land on main and sit
@@ -19,6 +20,7 @@ on:
     paths:
       - "contracts/**"
       - "tests/**"
+      - "scripts/**.sol"
       - "foundry.toml"
       - ".github/workflows/contracts.yml"
   workflow_dispatch:
