@@ -156,7 +156,9 @@ live exploit** — and the mainnet contracts have **no fast guardian role** (pau
 is `onlyOwner`). Decide this before opening:
 
 **Decided 2026-10-30:** no timelock handoff before the TIMBS launch. Through the
-capped beta the team keeps the owner keys, so a pause is immediate; the
+capped beta a fresh deployer wallet owns the new contracts (not the key leaked
+in the 22 October Railway incident, never on a keeper host, never a keeper
+key), so a pause is immediate; the
 solvency watchdog (`scripts/solvency-watch.js`) alerts the owner when the game
 holds less ETH than it owes.
 
