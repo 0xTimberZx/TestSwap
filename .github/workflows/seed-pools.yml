@@ -16,11 +16,13 @@ on:
   pull_request:
     paths:
       - "scripts/seed-pools.js"
+      - "scripts/seed-pools-testnet.js"
       - ".github/workflows/seed-pools.yml"
   push:
     branches: [main]
     paths:
       - "scripts/seed-pools.js"
+      - "scripts/seed-pools-testnet.js"
       - ".github/workflows/seed-pools.yml"
   workflow_dispatch:
 
@@ -50,4 +52,10 @@ jobs:
 
       - name: Self-test the seeding math
         run: node seed-pools.js --self-test
+        working-directory: scripts
+
+      # The testnet seeder reuses that math with a fixed price table instead of
+      # Chainlink feeds (testnet tokens have none).
+      - name: Self-test the testnet seeder
+        run: node seed-pools-testnet.js --self-test
         working-directory: scripts

@@ -220,7 +220,7 @@ function selfTest() {
   process.exit(fail ? 1 : 0);
 }
 
-if (SELF_TEST) selfTest();
+if (SELF_TEST && require.main === module) selfTest();
 
 // ─── Live ───────────────────────────────────────────────────────────────────
 
