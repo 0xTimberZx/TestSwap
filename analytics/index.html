@@ -201,15 +201,14 @@
               <th>Round</th>
               <th>Winning String</th>
               <th title="The pot at settlement, after the protocol cut">Pot</th>
-              <th>Yield → Pot</th>
-              <th title="Added to this round's pot before it settled: lapsed tickets' pot share, the faucet's pot share, top-ups">Added → Pot</th>
+              <th title="Vault yield plus what else joined this round's pot before it settled: a lapsed ticket's pot share, the faucet's pot share, top-ups. Hover a cell for the split.">Yield → Pot</th>
               <th>Winners</th>
               <th title="Carried into the next round: the pot less any winner payouts">Remainder</th>
               <th>Entries</th>
             </tr>
           </thead>
           <tbody id="rounds-tbody">
-            <tr><td colspan="8" class="table-empty">Loading…</td></tr>
+            <tr><td colspan="7" class="table-empty">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -362,7 +361,7 @@
   </footer>
 
   <script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
-  <script src="analytics.js?v=20261031a"></script>
+  <script src="analytics.js?v=20261031b"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");

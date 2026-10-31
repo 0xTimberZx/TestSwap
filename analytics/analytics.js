@@ -241,21 +241,6 @@ async function loadLiveMetrics() {
           set("m-pot-sub", `${base} · carried ${carried} ETH from #${rnd}${noWin ? " (no winner)" : ""}${cutStr}`);
         }
       } catch { /* leave base pot sub */ }
-
-      // Additions to the live round's pot since the last settlement: a lapsed
-      // ticket's pot share, the faucet's pot leg, top-ups. They are in the pot
-      // figure above already; this says where that part came from.
-      try {
-        const [rs, pf] = await Promise.all([
-          queryFilterWindow(prize, prize.filters.RoundSettled(), currentBlock, windowBlocks),
-          queryFilterWindow(prize, prize.filters.PotFunded(),    currentBlock, windowBlocks)
-        ]);
-        const { current } = potAdditions(rs, pf, potSourceKind);
-        if (current && current.total) {
-          const el = document.getElementById("m-pot-sub");
-          if (el) el.textContent += ` · +${fmt(current.total, 18, 5)} ETH added this round (${[...current.kinds].join(", ")})`;
-        }
-      } catch { /* leave the pot sub as is */ }
     } catch { set("m-escrow-sub", "last funded —"); }
 
     // Protocol cut, to date — operator revenue from the prize game. The on-chain
@@ -327,6 +312,7 @@ let _allRounds = [];        // settled rounds, newest first: [{ r, res }]
 let _roundPage = 0;
 
 // What fed each round's pot besides vault yield: PotFunded events, by source.
+// Folded into the Yield → Pot column of Settled Rounds.
 // An addition joins the pot of the first round settled after it, ordered by
 // (block, log index): a ticket that lapses during round R's settlement is swept
 // after R's RoundSettled, so its pot share is part of round R+1's pot.
@@ -371,7 +357,7 @@ async function loadRoundHistory() {
     const currentRound = (await prize.currentRound()).toNumber();
     if (currentRound <= 1) {
       _allRounds = [];
-      tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No completed rounds yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="table-empty">No completed rounds yet</td></tr>';
       statusEl.textContent = "No rounds settled";
       renderRoundsPager();
       return;
@@ -415,7 +401,7 @@ async function loadRoundHistory() {
     // keep the last good page rather than blanking the table.
     if (settled.length === 0) {
       if (_allRounds.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No completed rounds yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="table-empty">No completed rounds yet</td></tr>';
         statusEl.textContent = "No rounds settled";
       }
       return;
@@ -426,7 +412,7 @@ async function loadRoundHistory() {
     DebugHub.logCheckpoint("Analytics:Rounds Loaded", "pass");
   } catch (e) {
     if (_allRounds.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Could not load round history</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Could not load round history</td></tr>';
       statusEl.textContent = "Error";
     }
     DebugHub.logError("loadRoundHistory", e);
@@ -441,18 +427,27 @@ function renderRoundsPage() {
   _roundPage     = Math.min(Math.max(0, _roundPage), pages - 1);
 
   const rows = _allRounds.slice(_roundPage * ROUNDS_PER_PAGE, (_roundPage + 1) * ROUNDS_PER_PAGE);
-  const addedCell = (a) => {
-    if (!a) return "<td>—</td>";
-    if (!a.total) return "<td>+0 ETH</td>";
-    return `<td class="td-in">+${fmt(a.total, 18, 5)} ETH<div class="td-age">${[...a.kinds].join(" · ")}</div></td>`;
+  // Yield → Pot: vault yield plus whatever else joined the round's pot before
+  // it settled (lapsed tickets' pot share, the faucet's pot leg, top-ups), as
+  // one figure; the split is in the cell's tooltip.
+  const flowCell = (y, a) => {
+    if (y == null && !a) return "<td>—</td>";
+    const parts = [];
+    let total = y != null ? y : null;
+    if (y != null) parts.push(`yield ${fmt(y, 18, 6)}`);
+    if (a && a.total) {
+      total = total ? total.add(a.total) : a.total;
+      parts.push(`${[...a.kinds].join(" + ")} ${fmt(a.total, 18, 6)}`);
+    }
+    if (!total) return "<td>—</td>";
+    return `<td class="${total.isZero() ? "" : "td-in"}" title="${parts.join(" · ")} ETH">+${fmt(total, 18, 6)} ETH</td>`;
   };
   tbody.innerHTML = rows.map(({ r, res, entries, yieldAmt, added }) => `
     <tr>
       <td>#${r}</td>
       <td class="td-string${res.winners.length > 0 ? " gold" : ""}">${bytes6ToStr(res.winningString)}</td>
       <td>${fmt(res.potAmount, 18, 5)} ETH</td>
-      <td class="${yieldAmt != null && !yieldAmt.isZero() ? "td-in" : ""}">${yieldAmt != null ? "+" + fmt(yieldAmt, 18, 6) + " ETH" : "—"}</td>
-      ${addedCell(added)}
+      ${flowCell(yieldAmt, added)}
       <td>${res.winners.length}</td>
       <td>${fmt(res.remainder, 18, 5)} ETH</td>
       <td>${entries ?? "—"}</td>
