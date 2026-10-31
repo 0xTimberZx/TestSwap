@@ -23,6 +23,9 @@ const PRIZE_ABI = [
   "event WinningsClaimed(address indexed winner, uint256 indexed round, uint256 amount)",
   // Per-round yield swept from the vault into that round's pot at settlement.
   "event YieldHarvested(uint256 indexed round, uint256 amount)",
+  // Every addition to the live pot outside settlement: a lapsed ticket's pot
+  // share (from GameRegistry), the faucet's pot leg (GasFaucet), owner fundPot.
+  "event PotFunded(uint256 amount, address indexed from)",
   // Accounting-only carry: how much of a round's pot snowballed to the next
   // round (numWinners==0 ⇒ whole pot carried; >0 ⇒ leftover dust). No ETH moves.
   "event PotCarried(uint256 indexed round, uint256 carriedAmount, uint256 numWinners)"
@@ -238,6 +241,21 @@ async function loadLiveMetrics() {
           set("m-pot-sub", `${base} · carried ${carried} ETH from #${rnd}${noWin ? " (no winner)" : ""}${cutStr}`);
         }
       } catch { /* leave base pot sub */ }
+
+      // Additions to the live round's pot since the last settlement: a lapsed
+      // ticket's pot share, the faucet's pot leg, top-ups. They are in the pot
+      // figure above already; this says where that part came from.
+      try {
+        const [rs, pf] = await Promise.all([
+          queryFilterWindow(prize, prize.filters.RoundSettled(), currentBlock, windowBlocks),
+          queryFilterWindow(prize, prize.filters.PotFunded(),    currentBlock, windowBlocks)
+        ]);
+        const { current } = potAdditions(rs, pf, potSourceKind);
+        if (current && current.total) {
+          const el = document.getElementById("m-pot-sub");
+          if (el) el.textContent += ` · +${fmt(current.total, 18, 5)} ETH added this round (${[...current.kinds].join(", ")})`;
+        }
+      } catch { /* leave the pot sub as is */ }
     } catch { set("m-escrow-sub", "last funded —"); }
 
     // Protocol cut, to date — operator revenue from the prize game. The on-chain
@@ -308,6 +326,42 @@ const ROUNDS_LOOKBACK = 60; // how far back to pull (5 pages) — bounds RPC loa
 let _allRounds = [];        // settled rounds, newest first: [{ r, res }]
 let _roundPage = 0;
 
+// What fed each round's pot besides vault yield: PotFunded events, by source.
+// An addition joins the pot of the first round settled after it, ordered by
+// (block, log index): a ticket that lapses during round R's settlement is swept
+// after R's RoundSettled, so its pot share is part of round R+1's pot.
+// Returns { byRound: Map(round -> { total, kinds }), current } where `current`
+// is everything added since the latest settlement (the live round). A round
+// whose previous settlement is outside the scan window is left out (renders
+// "—"), and `current` is null when no settlement is in the window.
+function potSourceKind(from) {
+  const a = String(from).toLowerCase();
+  if (ADDRESSES.GameRegistry && a === ADDRESSES.GameRegistry.toLowerCase()) return "lapse";
+  if (ADDRESSES.GasFaucet && a === ADDRESSES.GasFaucet.toLowerCase()) return "faucet";
+  return "top-up";
+}
+function potAdditions(settledEvs, fundedEvs, kindOf) {
+  const pos = (ev) => ev.blockNumber * 1e6 + (ev.logIndex ?? 0);
+  const settles = settledEvs
+    .map(ev => ({ round: Number(ev.args.round.toString()), at: pos(ev) }))
+    .sort((a, b) => a.at - b.at);
+  const empty = () => ({ total: null, kinds: new Set() });
+  const add = (bucket, ev) => {
+    bucket.total = bucket.total ? bucket.total.add(ev.args.amount) : ev.args.amount;
+    bucket.kinds.add(kindOf(ev.args.from));
+  };
+  const byRound = new Map();
+  for (let i = 1; i < settles.length; i++) byRound.set(settles[i].round, empty());
+  const current = settles.length ? empty() : null;
+  for (const ev of fundedEvs) {
+    const at = pos(ev);
+    if (!settles.length || at < settles[0].at) continue;       // before the window's first settlement
+    const next = settles.find(s => s.at > at);
+    if (next) add(byRound.get(next.round), ev); else add(current, ev);
+  }
+  return { byRound, current };
+}
+
 async function loadRoundHistory() {
   const tbody    = document.getElementById("rounds-tbody");
   const statusEl = document.getElementById("rounds-status");
@@ -317,7 +371,7 @@ async function loadRoundHistory() {
     const currentRound = (await prize.currentRound()).toNumber();
     if (currentRound <= 1) {
       _allRounds = [];
-      tbody.innerHTML = '<tr><td colspan="7" class="table-empty">No completed rounds yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No completed rounds yet</td></tr>';
       statusEl.textContent = "No rounds settled";
       renderRoundsPager();
       return;
@@ -348,13 +402,20 @@ async function loadRoundHistory() {
       const yieldByRound = new Map();
       yh.forEach(ev => yieldByRound.set(ev.args.round.toNumber(), ev.args.amount));
       settled.forEach(x => { x.yieldAmt = yieldByRound.has(x.r) ? yieldByRound.get(x.r) : null; });
-    } catch { /* leave yieldAmt undefined → renders as — */ }
+      // Lapses, the faucet's pot share and top-ups that joined each round's pot.
+      const [rs, pf] = await Promise.all([
+        queryFilterWindow(prize, prize.filters.RoundSettled(), currentBlock, windowBlocks),
+        queryFilterWindow(prize, prize.filters.PotFunded(),    currentBlock, windowBlocks)
+      ]);
+      const { byRound } = potAdditions(rs, pf, potSourceKind);
+      settled.forEach(x => { x.added = byRound.get(x.r) || null; });
+    } catch { /* leave yieldAmt / added undefined → renders as — */ }
 
     // Non-destructive: if a refresh came back empty but we already have rows,
     // keep the last good page rather than blanking the table.
     if (settled.length === 0) {
       if (_allRounds.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="table-empty">No completed rounds yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No completed rounds yet</td></tr>';
         statusEl.textContent = "No rounds settled";
       }
       return;
@@ -365,7 +426,7 @@ async function loadRoundHistory() {
     DebugHub.logCheckpoint("Analytics:Rounds Loaded", "pass");
   } catch (e) {
     if (_allRounds.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Could not load round history</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Could not load round history</td></tr>';
       statusEl.textContent = "Error";
     }
     DebugHub.logError("loadRoundHistory", e);
@@ -380,12 +441,18 @@ function renderRoundsPage() {
   _roundPage     = Math.min(Math.max(0, _roundPage), pages - 1);
 
   const rows = _allRounds.slice(_roundPage * ROUNDS_PER_PAGE, (_roundPage + 1) * ROUNDS_PER_PAGE);
-  tbody.innerHTML = rows.map(({ r, res, entries, yieldAmt }) => `
+  const addedCell = (a) => {
+    if (!a) return "<td>—</td>";
+    if (!a.total) return "<td>+0 ETH</td>";
+    return `<td class="td-in">+${fmt(a.total, 18, 5)} ETH<div class="td-age">${[...a.kinds].join(" · ")}</div></td>`;
+  };
+  tbody.innerHTML = rows.map(({ r, res, entries, yieldAmt, added }) => `
     <tr>
       <td>#${r}</td>
       <td class="td-string${res.winners.length > 0 ? " gold" : ""}">${bytes6ToStr(res.winningString)}</td>
       <td>${fmt(res.potAmount, 18, 5)} ETH</td>
       <td class="${yieldAmt != null && !yieldAmt.isZero() ? "td-in" : ""}">${yieldAmt != null ? "+" + fmt(yieldAmt, 18, 6) + " ETH" : "—"}</td>
+      ${addedCell(added)}
       <td>${res.winners.length}</td>
       <td>${fmt(res.remainder, 18, 5)} ETH</td>
       <td>${entries ?? "—"}</td>
