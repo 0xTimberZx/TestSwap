@@ -114,8 +114,11 @@ step "4. keepers' config: a scratch copy pointed at the new contracts"
 W=$WORK/keepers; rm -rf "$W"; mkdir -p "$W"
 cp "$REPO/config.js" "$W/config.js"; cp -r "$REPO/scripts" "$W/scripts"
 rm -rf "$W/scripts/node_modules"; ln -s "$REPO/scripts/node_modules" "$W/scripts/node_modules"
-for kv in TIMBSToken=$TIMBS WETH=$WETH USDC=$USDC USDT=$USDT LINK=$LINK TimbSwapRouter=$ROUTER \
-          TimbSwapFactory=$FACTORY TimbPrize=$PRIZE GameRegistry=$REG PrizeVRFEntropy=$ENTROPY; do
+for kv in TIMBSToken=$TIMBS WETH=$WETH USDC=$USDC USDT=$USDT LINK=$LINK DAPP=$DAPP TimbSwapRouter=$ROUTER \
+          TimbSwapFactory=$FACTORY TimbPrize=$PRIZE GameRegistry=$REG PrizeVRFEntropy=$ENTROPY \
+          PrizeEscrow=$(get PrizeEscrow) TimbYieldVault=$(get TimbYieldVault) GasFaucet=$(get GasFaucet) \
+          TimbStaking=$(get TimbStaking) TimbFarm=$(get TimbFarm) TimbBoostFarm=$(get TimbBoostFarm) \
+          TimbLockVault=$(get TimbLockVault) TimbTreasury=$(get TimbTreasury); do
   k=${kv%%=*}; v=${kv#*=}; sed -i -E "0,/^(  $k: +\")0x[0-9a-fA-F]{40}/s//\1$v/" "$W/config.js"
 done
 
@@ -160,4 +163,18 @@ step "8. solvency-watch.js on the new game"
 WATCH_RPC=$R WATCH_PRIZE=$PRIZE node solvency-watch.js --dry-run > "$WORK/watch.log" 2>&1 || { cat "$WORK/watch.log"; fail "solvency watch"; }
 grep -E "registry|escrow|solvency OK" "$WORK/watch.log"
 
-echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK"
+step "9. wind-down-inventory.js reads the new game"
+# Give the LP split something to find: 30% of the owner's TIMBS/WETH LP staked
+# in the farm (team staked), 10% sent to a stranger (everyone else).
+FARM=$(get TimbFarm); PAIR=$(cast call "$FACTORY" "getPair(address,address)(address)" "$TIMBS" "$WETH" --rpc-url $R)
+LP=$(cast call "$PAIR" "balanceOf(address)(uint256)" "$OWNER" --rpc-url $R | num)
+STAKE=$(python3 -c "print($LP * 3 // 10)"); GIFT=$(python3 -c "print($LP // 10)")
+send "$PAIR" "approve(address,uint256)" "$FARM" "$STAKE"; send "$FARM" "stake(uint256)" "$STAKE"
+send "$PAIR" "transfer(address,uint256)" 0x000000000000000000000000000000000000bEEF "$GIFT"
+INVENTORY_RPC=$R INVENTORY_OWNER=$OWNER node wind-down-inventory.js > "$WORK/inventory.log" 2>&1 || { cat "$WORK/inventory.log"; fail "inventory"; }
+grep -q "TimbPrize | $(echo "$OWNER" | cut -c1-6)" "$WORK/inventory.log" || { cat "$WORK/inventory.log"; fail "inventory did not find the owner on the prize"; }
+grep -qE "^\| (TIMBS \(old\)/WETH|WETH/TIMBS \(old\)) \|[^|]*\| (59\.99|60\.00)% \| (29\.99|30\.00)% \|[^|]*\| (9\.99|10\.00)% \|" "$WORK/inventory.log" \
+  || { cat "$WORK/inventory.log"; fail "inventory did not split the seeded pool's LP 60 direct / 30 staked / 10 others"; }
+sed -n '/## 4/,$p' "$WORK/inventory.log"
+
+echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK, inventory OK"
