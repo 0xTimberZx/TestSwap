@@ -154,10 +154,7 @@
       "mt": 0
     }
   },
-  "pendingUnder": {
-    "0x42536623b503d4926dfaf6173b0357b7dfd19800:rounds_played": 1793559610,
-    "0x42536623b503d4926dfaf6173b0357b7dfd19800:tickets_activated": 1793559610
-  },
+  "pendingUnder": {},
   "alerted": {
     "under": 1792698555,
     "tp": 1792702181
