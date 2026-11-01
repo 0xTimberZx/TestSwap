@@ -177,4 +177,20 @@ grep -qE "^\| (TIMBS \(old\)/WETH|WETH/TIMBS \(old\)) \|[^|]*\| (59\.99|60\.00)%
   || { cat "$WORK/inventory.log"; fail "inventory did not split the seeded pool's LP 60 direct / 30 staked / 10 others"; }
 sed -n '/## 4/,$p' "$WORK/inventory.log"
 
-echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK, inventory OK"
+step "10. wind-down-owner.js: dry run sends nothing, run sweeps to the recipient"
+# Something for every step: ETH and LP in the treasury, ETH in the vault.
+TREASURY=$(get TimbTreasury); VAULT=$(get TimbYieldVault); SINK=0x000000000000000000000000000000000000c0DE
+send "$TREASURY" --value 0.05ether; send "$VAULT" --value 0.02ether
+send "$PAIR" "transfer(address,uint256)" "$TREASURY" "$GIFT"
+export WIND_DOWN_RPC=$R WIND_DOWN_PRIVATE_KEY=$OWNER_KEY WIND_DOWN_TO=$SINK WIND_DOWN_FORCE_RETIRE=1
+node wind-down-owner.js > "$WORK/winddown-dry.log" 2>&1 || { cat "$WORK/winddown-dry.log"; fail "wind-down dry run"; }
+[ "$(cast balance "$SINK" --rpc-url $R)" = 0 ] || fail "the dry run moved ETH"
+node wind-down-owner.js --execute > "$WORK/winddown.log" 2>&1 || { cat "$WORK/winddown.log"; fail "wind-down run"; }
+grep -E "^- (sent|SKIP|FAIL|note)" "$WORK/winddown.log"
+[ "$(cast balance "$SINK" --rpc-url $R)" = 70000000000000000 ] || fail "recipient did not get the treasury's 0.05 + the vault's 0.02 ETH"
+[ "$(cast call "$PAIR" "balanceOf(address)(uint256)" "$SINK" --rpc-url $R | num)" = "$GIFT" ] || fail "recipient did not get the treasury's LP"
+[ "$(cast call "$PRIZE" "entriesPaused()(bool)" --rpc-url $R)" = true ] || fail "entries not paused"
+[ "$(cast call "$PRIZE" "retired()(bool)" --rpc-url $R)" = true ] || fail "prize not retired"
+unset WIND_DOWN_RPC WIND_DOWN_PRIVATE_KEY WIND_DOWN_TO WIND_DOWN_FORCE_RETIRE
+
+echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK, inventory OK, wind-down OK"
