@@ -43,8 +43,9 @@ const TOKEN_KEYS = [
   ["WETH", "WETH", true], ["USDC", "USDC", true], ["USDT", "USDT", true], ["LINK", "LINK", true],
   ["DAPP", "DAPP", true], ["TIMBSToken", "TIMBS (old)", false],
 ];
-// What seeding the new pools needs (TESTNET_REDEPLOY_PLAN §3.4). ETH covers WETH.
-const SEED_NEED = { ETH: 2.333333, USDC: 2500, USDT: 2500, LINK: 83.333333 };
+// What seeding the new pools needs (TESTNET_REDEPLOY_PLAN §3.4): stables at $1,000 a
+// side (revised 1 Nov), TIMBS and LINK at $1,000 a side. ETH covers WETH.
+const SEED_NEED = { ETH: 1.333333, USDC: 1000, USDT: 1000, LINK: 83.333333 };
 
 const ERC20 = ["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)", "function symbol() view returns (string)"];
 const PAIR = [...ERC20, "function token0() view returns (address)", "function token1() view returns (address)",
