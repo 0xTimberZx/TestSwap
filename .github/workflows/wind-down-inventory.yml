@@ -1,0 +1,65 @@
+name: Wind-down Inventory
+
+# Read-only: what the old testnet holds and who can take it out
+# (scripts/wind-down-inventory.js), before the redeploy. Lists who owns and
+# guards every contract, every contract's and team wallet's ETH and token
+# balances, the game's books (pot, protocol cut, vault reserve, ticket
+# principal), every pool's reserves and who holds its LP (team wallets
+# directly or staked in the farms, the treasury, everyone else), and what the
+# team can recover per token against what seeding the new pools needs.
+#
+# No key, sends nothing. The report is the job summary. Wallet addresses are
+# shortened there because the run log is public. Team wallets: the owner
+# input, the extra wallets input, and points_team_wallets from Supabase.
+#
+# Not gated on KEEPERS_HOST: it is a one-off you start by hand, not a keeper.
+
+on:
+  workflow_dispatch:
+    inputs:
+      owner:
+        description: "Wallet that owns the old contracts"
+        required: true
+        default: "0x42536623b503D4926DfAF6173B0357b7DfD19800"
+      wallets:
+        description: "Extra team wallets, comma-separated (optional)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    name: Inventory the old testnet
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Self-test
+        run: node wind-down-inventory.js --self-test
+        working-directory: scripts
+
+      - name: Read the chain
+        working-directory: scripts
+        env:
+          # Public RPC from config.js by default (only eth_calls, no log scans);
+          # the Alchemy key behind ARB_SEPOLIA_RPC was revoked in the 22 Oct incident.
+          INVENTORY_RPC:        ${{ vars.INVENTORY_RPC }}
+          INVENTORY_OWNER:      ${{ github.event.inputs.owner }}
+          INVENTORY_WALLETS:    ${{ github.event.inputs.wallets }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node wind-down-inventory.js

@@ -17,6 +17,7 @@ on:
       - "scripts/seed-pools.js"
       - "scripts/settler.js"
       - "scripts/solvency-watch.js"
+      - "scripts/wind-down-inventory.js"
       - ".github/workflows/rehearse-redeploy.yml"
 
 permissions:
