@@ -259,6 +259,7 @@ async function main() {
   const treasuryAddr = contracts.find((c) => c.key === "TimbTreasury")?.address;
 
   const recover = {}; // label -> bigint, team-recoverable underlying
+  const byWallet = []; // team LP per wallet, per pool, per place it sits
   const addRec = (t, v) => { if (t && v > 0n) recover[t.label] = (recover[t.label] || 0n) + v; };
   say(`| Pool | Reserves | LP: team direct | team staked | treasury | everyone else | Team + treasury share |`);
   say(`|---|---|---|---|---|---|---|`);
@@ -272,13 +273,26 @@ async function main() {
     const [s0, s1, d0, d1] = await Promise.all([sym(t0, k0), sym(t1, k1), dec(t0, k0), dec(t1, k1)]);
 
     const holdings = [];
+    const mine = []; // this pool's per-wallet rows: { w, where, how, lp }
     for (const w of team) {
-      holdings.push({ group: "team", lp: await p.balanceOf(w) });
-      if (farm && farmLp === pa.toLowerCase()) holdings.push({ group: "team (staked)", lp: (await tryCall(farm, "stakedBalance", w)) ?? 0n });
+      const direct = await p.balanceOf(w);
+      holdings.push({ group: "team", lp: direct });
+      mine.push({ w, where: "in wallet", how: "removeLiquidity", lp: direct });
+      if (farm && farmLp === pa.toLowerCase()) {
+        const st = (await tryCall(farm, "stakedBalance", w)) ?? 0n;
+        holdings.push({ group: "team (staked)", lp: st });
+        mine.push({ w, where: "TimbFarm", how: "TimbFarm.exit() (or emergencyWithdraw()), then removeLiquidity", lp: st });
+      }
       for (const bp of boostPools.filter((x) => x.lp === pa.toLowerCase())) {
         const u = await tryCall(boost, "userInfo", bp.pid, w);
-        holdings.push({ group: "team (staked)", lp: u ? u.amount : 0n });
+        const st = u ? u.amount : 0n;
+        holdings.push({ group: "team (staked)", lp: st });
+        mine.push({ w, where: `TimbBoostFarm pid ${bp.pid}`, how: `TimbBoostFarm.exit(${bp.pid}) (or emergencyWithdraw(${bp.pid})), then removeLiquidity`, lp: st });
       }
+    }
+    for (const m of mine.filter((x) => x.lp > 0n)) {
+      const [a0, a1] = lpUnderlying(m.lp, ts, res[0], res[1]);
+      byWallet.push({ ...m, pool: `${s0}/${s1}`, under: `${num(a0, d0)} ${s0} · ${num(a1, d1)} ${s1}` });
     }
     if (treasuryAddr) holdings.push({ group: "treasury", lp: await p.balanceOf(treasuryAddr) });
     const { groups } = lpSplit(ts, holdings);
@@ -290,6 +304,17 @@ async function main() {
   }
   say();
   say(`Team staked = LP the team wallets have in TimbFarm / TimbBoostFarm (withdraw first). Treasury LP comes out with withdrawToken, then removeLiquidity. 1,000 LP per pool is locked for good.`);
+  say();
+
+  // 4b. Who signs each unstake: the wallet that staked it.
+  say(`### Team LP by wallet`);
+  if (!byWallet.length) say(`No team wallet holds LP in any pool.`);
+  else {
+    say(`| Wallet | Pool | Where | LP | Worth | To take it out (signed by that wallet) |`);
+    say(`|---|---|---|---|---|---|`);
+    byWallet.sort((a, b) => a.w.localeCompare(b.w) || a.pool.localeCompare(b.pool));
+    for (const r of byWallet) say(`| ${short(r.w)} | ${r.pool} | ${r.where} | ${num(r.lp, 18)} | ${r.under} | ${r.how} |`);
+  }
   say();
 
   // 5. Recoverable vs needed.
