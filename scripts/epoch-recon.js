@@ -29,9 +29,11 @@
 //   orphan     a staking grant with no farm grant in the same run (manual
 //              funding, or a keeper that granted out of order)
 //   overdue    an epoch boundary passed more than RECON_OVERDUE_MIN ago, the
-//              treasury has taken in waterfall budget since the last settlement,
-//              and no settlement has landed. A zero-budget epoch leaves no
-//              marker, so it is not counted as overdue
+//              treasury took in waterfall budget after the last settlement and
+//              before that boundary, and no settlement has landed. A zero-budget
+//              epoch leaves no marker, so it is not counted as overdue; nor is
+//              budget that arrived after the current epoch began, which is due
+//              at the next boundary
 //   dead-zone  a pool's periodFinish is in the past: emissions have stopped
 //   period     a pool's periodFinish is not what its last seen grant set
 //   unknown    the chain could not be read
@@ -168,6 +170,7 @@ function reconcile(s, inputs, opts = OPTS, k = WATERFALL) {
  * Standing checks against live contract state.
  * live = { nowSec, round, segment, segmentStart, segmentSec, roundSec,
  *          farmPeriodFinish, stakePeriodFinish, zSince,
+ *          budget: [{ ts, waterfall }] (buybacks since the last settlement's run start),
  *          lastSettlement: { round, ts } | null, lastGrant: { farm, stake } (each { ts, duration } | null),
  *          sinceSec }   (sinceSec: when the record began, for the never-settled case)
  */
@@ -182,19 +185,23 @@ function assessLive(live, opts = OPTS) {
     }
   }
 
-  // An epoch boundary with budget behind it and no settlement after it.
+  // An epoch boundary with budget behind it and no settlement after it. Only
+  // budget that arrived before the current epoch's boundary was due there:
+  // what came in after it waits for the next boundary. (A zero-budget epoch
+  // leaves no marker, so the last settlement seen can be many epochs back.)
   const curEpoch = epochOf(live.round);
   const roundStart = live.segmentStart - (live.segment - 1) * live.segmentSec;
   const boundaryRound = curEpoch * ROUNDS_PER_EPOCH + 1;
   const boundaryTs = roundStart - (live.round - boundaryRound) * live.roundSec;
-  if (live.zSince > 0n) {
-    if (live.lastSettlement && live.lastSettlement.round != null) {
-      if (live.round < live.lastSettlement.round) {
-        // rounds went backwards: a game reset the keeper settles on sight
-      } else if (curEpoch > epochOf(live.lastSettlement.round) && live.nowSec - boundaryTs > opts.overdueMin * 60) {
-        findings.push({ kind: "overdue", detail: `epoch ${curEpoch} began at round ${boundaryRound}, ${fmtMin(live.nowSec - boundaryTs)} ago; last settlement was round ${live.lastSettlement.round} and ${fmt(live.zSince)} of budget has accrued since` });
-      }
-    } else if (!live.lastSettlement && live.nowSec - live.sinceSec > ROUNDS_PER_EPOCH * live.roundSec + opts.overdueMin * 60) {
+  if (live.lastSettlement && live.lastSettlement.round != null) {
+    const zDue = (live.budget || []).filter((b) => b.ts <= boundaryTs).reduce((a, b) => a + b.waterfall, 0n);
+    if (zDue === 0n || live.round < live.lastSettlement.round) {
+      // nothing was due at the boundary, or rounds went backwards (a game reset the keeper settles on sight)
+    } else if (curEpoch > epochOf(live.lastSettlement.round) && live.nowSec - boundaryTs > opts.overdueMin * 60) {
+      findings.push({ kind: "overdue", detail: `epoch ${curEpoch} began at round ${boundaryRound}, ${fmtMin(live.nowSec - boundaryTs)} ago; last settlement was round ${live.lastSettlement.round} and ${fmt(zDue)} of budget had accrued by then` });
+    }
+  } else if (live.zSince > 0n) {
+    if (!live.lastSettlement && live.nowSec - live.sinceSec > ROUNDS_PER_EPOCH * live.roundSec + opts.overdueMin * 60) {
       findings.push({ kind: "overdue", detail: `no settlement seen in ${fmtMin(live.nowSec - live.sinceSec)} of record with ${fmt(live.zSince)} of budget accrued` });
     }
   }
@@ -301,7 +308,7 @@ function selfTest() {
   const T = 2_000_000_000;
   const live = (over = {}) => ({
     nowSec: T, round: 55, segment: 2, segmentStart: T - 600, segmentSec: 3600, roundSec: 21_600,
-    farmPeriodFinish: T + 80 * 86_400, stakePeriodFinish: T + 80 * 86_400, zSince: E(50),
+    farmPeriodFinish: T + 80 * 86_400, stakePeriodFinish: T + 80 * 86_400, zSince: E(50), budget: [{ ts: T - 86_400, waterfall: E(50) }],
     lastSettlement: { round: 55, ts: T - 4000 }, lastGrant: { farm: null, stake: null }, sinceSec: T - 30 * 86_400,
     ...over,
   });
@@ -314,7 +321,10 @@ function selfTest() {
   eq("same epoch as last settlement is ok", kinds(assessLive(live({ lastSettlement: { round: 55 } }), opts)), []);
   eq("new epoch, boundary just passed, ok",  kinds(assessLive(live({ lastSettlement: { round: 49 }, segment: 1, segmentStart: T - 600 }), opts)), []);
   eq("new epoch, boundary 5 h ago, overdue", kinds(assessLive(live({ lastSettlement: { round: 49 }, segment: 1, segmentStart: T - 5 * 3600 }), opts)), ["overdue"]);
-  eq("overdue needs budget since",           kinds(assessLive(live({ lastSettlement: { round: 49 }, segment: 1, segmentStart: T - 5 * 3600, zSince: 0n }), opts)), []);
+  eq("overdue needs budget since",           kinds(assessLive(live({ lastSettlement: { round: 49 }, segment: 1, segmentStart: T - 5 * 3600, zSince: 0n, budget: [] }), opts)), []);
+  eq("budget after the boundary is not due", kinds(assessLive(live({ lastSettlement: { round: 49 }, segment: 1, segmentStart: T - 5 * 3600, budget: [{ ts: T - 3 * 3600, waterfall: E(350) }] }), opts)), []);
+  eq("budget before the boundary is due",    kinds(assessLive(live({ lastSettlement: { round: 49 }, segment: 1, segmentStart: T - 5 * 3600, budget: [{ ts: T - 6 * 3600, waterfall: E(1) }, { ts: T - 3 * 3600, waterfall: E(350) }] }), opts)), ["overdue"]);
+  eq("budget at the boundary instant is due", kinds(assessLive(live({ lastSettlement: { round: 49 }, segment: 1, segmentStart: T - 5 * 3600, budget: [{ ts: T - 5 * 3600, waterfall: E(1) }] }), opts)), ["overdue"]);
   eq("boundary time counts back rounds",     kinds(assessLive(live({ round: 57, lastSettlement: { round: 49 }, segment: 1, segmentStart: T - 600 }), opts)), ["overdue"]);
   eq("rounds went backwards is not overdue", kinds(assessLive(live({ round: 3, lastSettlement: { round: 49 } }), opts)), []);
   eq("never settled, young record, ok",      kinds(assessLive(live({ lastSettlement: null, sinceSec: T - 86_400 }), opts)), []);
@@ -468,6 +478,7 @@ async function main() {
     const live = {
       nowSec, round: Number(round), segment: Number(segment), segmentStart: Number(segmentStart), segmentSec: Number(segmentSec), roundSec: Number(roundSec),
       farmPeriodFinish: Number(fpf), stakePeriodFinish: Number(spf), zSince,
+      budget: state.lastSettlement ? buybacks.filter((b) => b.block >= state.lastSettlement.runStartBlock).map((b) => ({ ts: b.ts, waterfall: b.waterfall })) : [],
       lastSettlement: state.lastSettlement, lastGrant: state.lastGrant, sinceSec: state.sinceSec,
     };
     findings.push(...assessLive(live));
