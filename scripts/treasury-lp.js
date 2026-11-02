@@ -56,7 +56,7 @@ async function main() {
   const provider = new ethers.JsonRpcProvider(RPC);
   const wallet = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, provider) : null;
 
-  const TREASURY = ethers.getAddress(process.env.TREASURY || "0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c");
+  const TREASURY = ethers.getAddress(process.env.TREASURY || "0xd1Fb6E177c0888fB77f977B4299034020d4f2D75");
   const TIMBS    = cfg(src, "TIMBSToken");
   const PAIR     = cfg(src, "TimbsEthPair");
 

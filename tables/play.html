@@ -569,7 +569,7 @@ const ADDR = {
   board:  "0xB2D10cA505909b909835f4b5684B205b157b5Bf2",
   jackpot: "0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9", // DDJackpot (M2) — cross-generation, deploy-once
   ledger: "0xE7dE0Fc722369Bd96b98453676E331EB24d9161b",
-  timbs:  "0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa",
+  timbs:  "0x1D9016aaAD4Abc30cafA52EEaAfFDbE6f474749D",
   crank:  "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless batcher, generation-agnostic
 };
 const CRANK_ABI = [
@@ -582,7 +582,7 @@ const CRANK_ABI = [
 // before this module) so the tables can never drift from the rest of the site
 // again; the literal is the gen-3 registry as a fallback. Prev (gen-2, retired):
 // 0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530.
-const GAME = (typeof ADDRESSES !== "undefined" && ADDRESSES.GameRegistry) || "0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65";
+const GAME = (typeof ADDRESSES !== "undefined" && ADDRESSES.GameRegistry) || "0x6E4640a77db52F732f2023229Aab294Ae4A61A1c";
 const GAME_ABI = [
   "function activeTicketOf(address owner) view returns (uint256)",
   "function getTicketsOf(address owner) view returns (tuple(uint256 id,address owner,bytes6 string6,uint256 playRound,uint256 lastEligibleRound,uint256 escrowAmount,address escrowToken,uint8 status,uint256 supersedes,uint256 supersededBy,uint256 createdAt,uint256 forfeitRound,uint256 generation)[] list, uint8[] displayStatuses)",

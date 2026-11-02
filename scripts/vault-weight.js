@@ -38,7 +38,7 @@ const { ethers } = require("ethers");
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const RPC  = process.env.RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc";
-const VAULT = process.env.VAULT_ADDR    || "0x43D833e828e2AF951527C2b573Eb70c358FfEB0B";
+const VAULT = process.env.VAULT_ADDR    || "0x90B3CF236e0010b81A8F8ceb0F419cfD30443396";
 const REGISTRY = process.env.REGISTRY_ADDR || "0xBAb1CBaF0dE094322A49B379d0AC4510D1F78530";
 const KEY  = process.env.LP_PRIVATE_KEY || process.env.PRIVATE_KEY || "";
 

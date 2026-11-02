@@ -65,23 +65,23 @@ machine — read them as gears, not a product menu.
 
 | Contract | Address |
 |----------|---------|
-| TIMBSToken | `0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa` |
-| TimbSwapFactory | `0xCCd6d3f0A86042d2B7056eDd381d367126628AF5` |
-| TimbSwapRouter v8 | `0x40C7Caf90817C9891D278Ec1400B9deb180911f1` |
-| EligibleTokenRegistry | `0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04` |
-| GameRegistry (gen-3, keeper-driven activation) | `0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65` |
-| TimbPrize (gen-3) | `0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF` |
-| Prize VRFEntropy (Chainlink VRF v2.5) | `0xa2AC62BF0FdD1D1ED148ea1c0555eEcD8829A393` |
-| GasFaucet (TIMBS-only on testnet) | `0x0a59b7d61a4db317fad8697c3e3e1e6df4c7a04b` |
-| TimbYieldVault | `0x43D833e828e2AF951527C2b573Eb70c358FfEB0B` |
-| PrizeEscrow | `0x865C50d933e63BbE388EEAFa017AE634B0A6fB6D` |
-| TimbStaking | `0xe776c7b700B190ED8248741F9b518B08d8733C8F` |
-| TimbFarm | `0xE319E2206F71A5cD8dd2c411C6F29712935f9011` |
-| TimbBoostFarm | `0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35` |
-| TimbLockVault | `0x0157086E7670D1eFb15DC6b5158eE78279927a41` |
-| TimbTreasury v4 | `0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c` |
+| TIMBSToken | `0x1D9016aaAD4Abc30cafA52EEaAfFDbE6f474749D` |
+| TimbSwapFactory | `0xf981c18E6c39137f51D90eD6cdCd73C6F6d46c98` |
+| TimbSwapRouter v8 | `0xD3a7843Da4E0DE2711447CEF779D5F45AeeDb7c4` |
+| EligibleTokenRegistry | `0x70422FE0951C7B88ac0cb1B4c0Db9C90BcE5e383` |
+| GameRegistry (gen-3, keeper-driven activation) | `0x6E4640a77db52F732f2023229Aab294Ae4A61A1c` |
+| TimbPrize (gen-3) | `0xDB36B3BC7e68B193D06009aFaFe54678b088088B` |
+| Prize VRFEntropy (Chainlink VRF v2.5) | `0x923f01c620BB630E980E942c5F8F8BFD588E86a8` |
+| GasFaucet (TIMBS-only on testnet) | `0x571709F463DEe0b02Ea9ef4753f8d097F5C3334C` |
+| TimbYieldVault | `0x90B3CF236e0010b81A8F8ceb0F419cfD30443396` |
+| PrizeEscrow | `0x4442BeD7e3228fB67f4547eC748A2C4814724562` |
+| TimbStaking | `0x790741385345D78536A696F7E58e64DDAfa07df6` |
+| TimbFarm | `0x093Be67377a6603C77d1BaCb12422E0D53481341` |
+| TimbBoostFarm | `0xbC66c1C1f3CCB47fF676fAb280c7cBD9Daa21ef0` |
+| TimbLockVault | `0xA721a0D4971F87FD7705829C2FA74EC0d2997a7c` |
+| TimbTreasury v4 | `0xd1Fb6E177c0888fB77f977B4299034020d4f2D75` |
 | TimbGovernance | not deployed on testnet (governance is off) |
-| TIMBS/ETH Pair | `0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95` |
+| TIMBS/ETH Pair | `0x001e2F898909f239B42Ee5913eAA6e7b85a589C2` |
 | WETH (Arb Sepolia) | `0x980B62Da83eFf3D4576C647993b0c1D7faf17c73` |
 | USDC (Circle canonical, 6 dec) | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` |
 | LINK (Chainlink canonical) | `0xb1D4538B4571d411F07960EF2838Ce337FE1E80E` |

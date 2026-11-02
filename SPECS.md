@@ -16,22 +16,22 @@
 
 | Contract | Address | Verified |
 |----------|---------|---------|
-| PrizeEscrow | 0x865C50d933e63BbE388EEAFa017AE634B0A6fB6D | Sourcify ✅ |
-| TIMBSToken (TIMBS) | 0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa | Sourcify ✅ |
-| TimbSwapFactory | 0xCCd6d3f0A86042d2B7056eDd381d367126628AF5 | Sourcify ✅ |
-| TimbSwapRouter v8 | 0x40C7Caf90817C9891D278Ec1400B9deb180911f1 | Sourcify ✅ |
-| EligibleTokenRegistry | 0xbFF59a3408B2574AcE948F130f0fA2f2CB149F04 | Sourcify ✅ |
-| GameRegistry (gen-3) | 0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65 | **The live registry** (`TimbPrize.gameRegistry()` → `0x11C24…`). Permissionless `activateRoundEntries` so the keeper activates rounds 2+; dynamic per-round entry pricing; vault calls try/catch-fenced |
-| TimbPrize (gen-3) | 0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF | Keeper-driven activation, bound to the gen-3 registry; `startGame` bumped the registry generation |
-| Prize VRFEntropy | 0xa2AC62BF0FdD1D1ED148ea1c0555eEcD8829A393 | Chainlink VRF v2.5 consumer for the prize draws (sub `50316…6967`) |
-| GasFaucet | 0x0a59b7d61a4db317fad8697c3e3e1e6df4c7a04b | Active-ticket faucet; TIMBS-only on testnet (the Sepolia treasury predates the operator role its ETH legs need). Dispatcher = keeper EOA |
-| TimbYieldVault | 0x43D833e828e2AF951527C2b573Eb70c358FfEB0B | Sourcify ✅ — `gameRegistry` = gen-3 registry (rebound 2026-09-15, see CHANGELOG) |
-| TimbStaking | 0xe776c7b700B190ED8248741F9b518B08d8733C8F | Sourcify ✅ |
-| TimbFarm | 0xE319E2206F71A5cD8dd2c411C6F29712935f9011 | Sourcify ✅ |
-| TimbLockVault | 0x0157086E7670D1eFb15DC6b5158eE78279927a41 | Sourcify ✅ |
-| TimbTreasury v4 | 0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c | Sourcify ✅ — three-way buyback split (burn/reserve/waterfall) + protocol-owned liquidity; live per config.js and confirmed by on-chain drains |
+| PrizeEscrow | 0x4442BeD7e3228fB67f4547eC748A2C4814724562 | Sourcify ✅ |
+| TIMBSToken (TIMBS) | 0x1D9016aaAD4Abc30cafA52EEaAfFDbE6f474749D | Sourcify ✅ |
+| TimbSwapFactory | 0xf981c18E6c39137f51D90eD6cdCd73C6F6d46c98 | Sourcify ✅ |
+| TimbSwapRouter v8 | 0xD3a7843Da4E0DE2711447CEF779D5F45AeeDb7c4 | Sourcify ✅ |
+| EligibleTokenRegistry | 0x70422FE0951C7B88ac0cb1B4c0Db9C90BcE5e383 | Sourcify ✅ |
+| GameRegistry (gen-3) | 0x6E4640a77db52F732f2023229Aab294Ae4A61A1c | **The live registry** (`TimbPrize.gameRegistry()` → `0x11C24…`). Permissionless `activateRoundEntries` so the keeper activates rounds 2+; dynamic per-round entry pricing; vault calls try/catch-fenced |
+| TimbPrize (gen-3) | 0xDB36B3BC7e68B193D06009aFaFe54678b088088B | Keeper-driven activation, bound to the gen-3 registry; `startGame` bumped the registry generation |
+| Prize VRFEntropy | 0x923f01c620BB630E980E942c5F8F8BFD588E86a8 | Chainlink VRF v2.5 consumer for the prize draws (sub `50316…6967`) |
+| GasFaucet | 0x571709F463DEe0b02Ea9ef4753f8d097F5C3334C | Active-ticket faucet; TIMBS-only on testnet (the Sepolia treasury predates the operator role its ETH legs need). Dispatcher = keeper EOA |
+| TimbYieldVault | 0x90B3CF236e0010b81A8F8ceb0F419cfD30443396 | Sourcify ✅ — `gameRegistry` = gen-3 registry (rebound 2026-09-15, see CHANGELOG) |
+| TimbStaking | 0x790741385345D78536A696F7E58e64DDAfa07df6 | Sourcify ✅ |
+| TimbFarm | 0x093Be67377a6603C77d1BaCb12422E0D53481341 | Sourcify ✅ |
+| TimbLockVault | 0xA721a0D4971F87FD7705829C2FA74EC0d2997a7c | Sourcify ✅ |
+| TimbTreasury v4 | 0xd1Fb6E177c0888fB77f977B4299034020d4f2D75 | Sourcify ✅ — three-way buyback split (burn/reserve/waterfall) + protocol-owned liquidity; live per config.js and confirmed by on-chain drains |
 | TimbGovernance | — | Not deployed on testnet; governance is off (TS-001). The address previously listed here is a retired TimbSwapRouter |
-| TIMBS/ETH Pair | 0x5a911CBfD2808Ad5214E842a0E8ae34d8199BB95 | via Factory ✅ |
+| TIMBS/ETH Pair | 0x001e2F898909f239B42Ee5913eAA6e7b85a589C2 | via Factory ✅ |
 | WETH (Arb Sepolia) | 0x980B62Da83eFf3D4576C647993b0c1D7faf17c73 | — |
 | USDC (Circle canonical, 6 dec) | 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d | — |
 | LINK (Chainlink canonical) | 0xb1D4538B4571d411F07960EF2838Ce337FE1E80E | — |
@@ -116,7 +116,7 @@ guardian can halt strikes instantly. Reasoning and numbers in `dev-docs/AUDIT_SE
 | v5 | 0xbD183E52806D6fddA680cFe3e7929E869Abf6F67 | Retired |
 | v6 | 0x6E53dc53Ea7B2fd8be171D74A381f009dA5F94bD | Retired |
 | v7 | 0xF554063223ECE3acC4f9664227Ba1E7a88c54e09 | swap-weighted nudges (swapNudgeWeight) + per-address free-nudge cap (freeNudgeCapPerSeg) |
-| v8 | 0x40C7Caf90817C9891D278Ec1400B9deb180911f1 | **Current** — multi-hop path routing (swapExactTokensForTokensPath, X→WETH→Y) |
+| v8 | 0xD3a7843Da4E0DE2711447CEF779D5F45AeeDb7c4 | **Current** — multi-hop path routing (swapExactTokensForTokensPath, X→WETH→Y) |
 
 ### Deprecated / Dead Addresses
 
