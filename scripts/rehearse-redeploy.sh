@@ -219,4 +219,18 @@ grep -E "^- (sent|SKIP|FAIL|note)" "$WORK/lpexit.log"
 [ "$(cast call "$TIMBS" "balanceOf(address)(uint256)" "$SINK2" --rpc-url $R | num)" != 0 ] || fail "recipient got no TIMBS"
 unset WIND_DOWN_RPC WIND_DOWN_LP_PRIVATE_KEY WIND_DOWN_TO WIND_DOWN_LP_EXPECT
 
+if [ "$MODE" = fork ]; then
+  step "12. deploy-testnet.sh simulates against the forked chain (live VRF, rates and tokens)"
+  # Drop everything step 3 exported, so the script reads the live chain itself.
+  unset WETH_ADDRESS USDC_ADDRESS USDT_ADDRESS LINK_ADDRESS DAPP_ADDRESS VRF_COORDINATOR VRF_KEY_HASH VRF_SUB_ID \
+        VRF_EXTRA_ARGS VRF_CONFIRMATIONS VRF_CALLBACK_GAS REWARD_RATE_PER_SEC FARM_REWARD_RATE YIELD_APR_BPS \
+        TREASURY_ADDRESS PROTOCOL_SINK_ADDRESS SETTLER_ADDRESS FAUCET_DISPATCHER FAUCET_GUARDIAN
+  ( cd "$REPO" && MODE=simulate DEPLOY_RPC=$R OUT_DIR="$WORK/deploy-sim" DEPLOYER_PRIVATE_KEY=$FUNDER_KEY \
+      EXPECT_DEPLOYER=$(addr "$FUNDER_KEY") SETTLER_ADDRESS=$SETTLER FAUCET_DISPATCHER=$(addr "${KEYS[3]}") \
+      FAUCET_GUARDIAN=$(addr "${KEYS[4]}") bash scripts/deploy-testnet.sh > "$WORK/deploy-sim.log" 2>&1 ) \
+    || { cat "$WORK/deploy-sim.log"; fail "deploy-testnet.sh simulate"; }
+  grep -E "^\| (VRF|Rates|Tokens) " "$WORK/deploy-sim.log"
+  grep -q "DEPLOY OK (simulate)" "$WORK/deploy-sim.log" || fail "deploy-testnet.sh did not finish"
+fi
+
 echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK, inventory OK, wind-down OK, LP exit OK"

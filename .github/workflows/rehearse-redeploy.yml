@@ -20,6 +20,7 @@ on:
       - "scripts/wind-down-inventory.js"
       - "scripts/wind-down-owner.js"
       - "scripts/wind-down-lp.js"
+      - "scripts/deploy-testnet.sh"
       - ".github/workflows/rehearse-redeploy.yml"
 
 permissions:

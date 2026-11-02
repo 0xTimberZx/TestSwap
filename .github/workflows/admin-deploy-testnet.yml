@@ -1,0 +1,92 @@
+name: Admin — Deploy Testnet
+
+# Manual-only: the testnet redeploy (scripts/deploy-testnet.sh → scripts/Deploy.s.sol)
+# with the inputs decided 30 Oct – 1 Nov (dev-docs TESTNET_REDEPLOY_PLAN §3):
+# 10M TIMBS, entry floor 100 + 10 per entry, faucet 100 TIMBS and 0.00002 ETH a
+# claim, caps 1M TIMBS / 0.16 ETH, protocol cut 0.5%. Tokens are the same as
+# before (config.js); VRF uses the live coordinator and subscription; staking,
+# farm and yield rates are read from the live contracts.
+#
+#   simulate   runs the whole deploy and its read-back on a local copy of the
+#              chain and prints every input and address. Sends nothing.
+#   broadcast  sends it, one transaction at a time, then fails unless every
+#              wire reads back as configured. addresses.json is a run artifact.
+#
+# Signs with the TESTNET_DEPLOYER_PRIVATE_KEY secret (TSDeployer). Add it for
+# deploy day and delete it afterwards. The run stops unless the key belongs to
+# `deployer`. Settler, dispatcher and guardian must be three distinct fresh
+# wallets: never the deployer, a leaked key, or the old owner wallet.
+#
+# TESTNET ONLY. Not gated on KEEPERS_HOST: a one-off you start by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "simulate sends nothing; broadcast deploys"
+        required: true
+        default: "simulate"
+        type: choice
+        options:
+          - simulate
+          - broadcast
+      deployer:
+        description: "Deployer / owner; the key must belong to it"
+        required: true
+        default: "0xAA6820D22cF59C9d143fe1a943F19FE6EcdAd3a5"
+      settler:
+        description: "Settler address (keeper hot key)"
+        required: true
+      dispatcher:
+        description: "Faucet dispatcher address (keeper hot key)"
+        required: true
+      guardian:
+        description: "Faucet guardian address (pause-only)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-deploy-testnet
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy the testnet (${{ github.event.inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Deploy
+        env:
+          MODE:                 ${{ github.event.inputs.mode }}
+          DEPLOY_RPC:           ${{ vars.DEPLOY_RPC || 'https://sepolia-rollup.arbitrum.io/rpc' }}
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.TESTNET_DEPLOYER_PRIVATE_KEY }}
+          EXPECT_DEPLOYER:      ${{ github.event.inputs.deployer }}
+          SETTLER_ADDRESS:      ${{ github.event.inputs.settler }}
+          FAUCET_DISPATCHER:    ${{ github.event.inputs.dispatcher }}
+          FAUCET_GUARDIAN:      ${{ github.event.inputs.guardian }}
+          OUT_DIR:              ${{ runner.temp }}/deploy
+        run: bash scripts/deploy-testnet.sh
+
+      - name: Upload the report and addresses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testnet-deploy-${{ github.event.inputs.mode }}
+          path: |
+            ${{ runner.temp }}/deploy/addresses.json
+            ${{ runner.temp }}/deploy/deploy.log
+          if-no-files-found: ignore
+          retention-days: 30
