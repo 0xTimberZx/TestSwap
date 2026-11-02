@@ -175,6 +175,10 @@ INVENTORY_RPC=$R INVENTORY_OWNER=$OWNER node wind-down-inventory.js > "$WORK/inv
 grep -q "TimbPrize | $(echo "$OWNER" | cut -c1-6)" "$WORK/inventory.log" || { cat "$WORK/inventory.log"; fail "inventory did not find the owner on the prize"; }
 grep -qE "^\| (TIMBS \(old\)/WETH|WETH/TIMBS \(old\)) \|[^|]*\| (59\.99|60\.00)% \| (29\.99|30\.00)% \|[^|]*\| (9\.99|10\.00)% \|" "$WORK/inventory.log" \
   || { cat "$WORK/inventory.log"; fail "inventory did not split the seeded pool's LP 60 direct / 30 staked / 10 others"; }
+grep -qE "^\| $(echo "$OWNER" | cut -c1-6)…[0-9a-fA-F]{4} \| (TIMBS \(old\)/WETH|WETH/TIMBS \(old\)) \| TimbFarm \|" "$WORK/inventory.log" \
+  || { cat "$WORK/inventory.log"; fail "inventory did not list the owner's farm-staked LP by wallet"; }
+grep -qE "^\| $(echo "$OWNER" | cut -c1-6)…[0-9a-fA-F]{4} \| (TIMBS \(old\)/WETH|WETH/TIMBS \(old\)) \| in wallet \|" "$WORK/inventory.log" \
+  || { cat "$WORK/inventory.log"; fail "inventory did not list the owner's wallet LP by wallet"; }
 sed -n '/## 4/,$p' "$WORK/inventory.log"
 
 step "10. wind-down-owner.js: dry run sends nothing, run sweeps to the recipient"
