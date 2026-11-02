@@ -1,11 +1,6 @@
 {
   "alerted": {
-    "faucet.yml": 1793605120,
-    "match-notifier.yml": 1793605120,
-    "points-scorer.yml": 1793605120,
-    "settler-liveness.yml": 1793605120,
-    "faucet-recon.yml": 1793605120,
-    "dead-man.yml": 1793605120,
-    "solvency-watch.yml": 1793605120
+    "solvency-watch.yml": 1793605120,
+    "points-recon.yml": 1793609825
   }
 }
