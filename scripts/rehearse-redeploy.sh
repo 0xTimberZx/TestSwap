@@ -48,7 +48,7 @@ fi
 ANVIL=$!; trap 'kill $ANVIL 2>/dev/null || true' EXIT
 for _ in $(seq 1 60); do cast chain-id --rpc-url $R >/dev/null 2>&1 && break; sleep 1; done
 [ "$(cast chain-id --rpc-url $R)" = 421614 ] || fail "chain id is not 421614"
-mapfile -t KEYS < <(grep -oE '0x[0-9a-f]{64}' "$WORK/anvil.log" | head -5)
+mapfile -t KEYS < <(grep -oE '0x[0-9a-f]{64}' "$WORK/anvil.log" | head -6)
 addr() { cast wallet address --private-key "$1"; }
 FUNDER_KEY=${KEYS[0]}; OWNER_KEY=${KEYS[1]}; SETTLER_KEY=${KEYS[2]}
 OWNER=$(addr "$OWNER_KEY"); SETTLER=$(addr "$SETTLER_KEY")
@@ -219,8 +219,30 @@ grep -E "^- (sent|SKIP|FAIL|note)" "$WORK/lpexit.log"
 [ "$(cast call "$TIMBS" "balanceOf(address)(uint256)" "$SINK2" --rpc-url $R | num)" != 0 ] || fail "recipient got no TIMBS"
 unset WIND_DOWN_RPC WIND_DOWN_LP_PRIVATE_KEY WIND_DOWN_TO WIND_DOWN_LP_EXPECT
 
+step "12. handoff-roles.js: the epoch keeper gets TimbTreasury and the three notifier grants"
+EPOCH_KEY=${KEYS[5]}; EPOCH=$(addr "$EPOCH_KEY"); TREASURY=$(get TimbTreasury)
+export HANDOFF_RPC=$R HANDOFF_EPOCH=$EPOCH
+# A wallet that already holds a keeper role must be refused.
+if HANDOFF_STEP=grant HANDOFF_KEY=$OWNER_KEY HANDOFF_EPOCH=$(addr "${KEYS[3]}") node handoff-roles.js > "$WORK/handoff-dup.log" 2>&1; then cat "$WORK/handoff-dup.log"; fail "handoff accepted the faucet dispatcher as the epoch keeper"; fi
+grep -q "already holds the faucet dispatcher role" "$WORK/handoff-dup.log" || { cat "$WORK/handoff-dup.log"; fail "handoff duplicate-role message missing"; }
+HANDOFF_STEP=grant HANDOFF_KEY=$OWNER_KEY HANDOFF_EXPECT=$OWNER node handoff-roles.js > "$WORK/handoff-dry.log" 2>&1 || { cat "$WORK/handoff-dry.log"; fail "handoff grant dry run"; }
+[ "$(cast call "$TREASURY" "pendingOwner()(address)" --rpc-url $R)" = 0x0000000000000000000000000000000000000000 ] || fail "the handoff dry run proposed a transfer"
+HANDOFF_STEP=grant HANDOFF_KEY=$OWNER_KEY HANDOFF_EXPECT=$OWNER node handoff-roles.js --execute > "$WORK/handoff-grant.log" 2>&1 || { cat "$WORK/handoff-grant.log"; fail "handoff grant"; }
+grep -E "^  sent " "$WORK/handoff-grant.log"
+# accept with the owner's key (not the epoch keeper's) must stop.
+if HANDOFF_STEP=accept HANDOFF_KEY=$OWNER_KEY node handoff-roles.js --execute > "$WORK/handoff-wrong.log" 2>&1; then cat "$WORK/handoff-wrong.log"; fail "accept ran with the wrong key"; fi
+HANDOFF_STEP=accept HANDOFF_KEY=$EPOCH_KEY HANDOFF_EXPECT=$EPOCH node handoff-roles.js --execute > "$WORK/handoff-accept.log" 2>&1 || { cat "$WORK/handoff-accept.log"; fail "handoff accept"; }
+[ "$(cast call "$TREASURY" "owner()(address)" --rpc-url $R)" = "$EPOCH" ] || fail "TimbTreasury is not owned by the epoch keeper"
+for pool in TimbFarm TimbStaking TimbBoostFarm; do
+  [ "$(cast call "$(get $pool)" "rewardNotifiers(address)(bool)" "$EPOCH" --rpc-url $R)" = true ] || fail "$pool: epoch keeper is not a rewardNotifier"
+done
+# A rerun has nothing left to do.
+HANDOFF_STEP=grant HANDOFF_KEY=$OWNER_KEY HANDOFF_EXPECT=$OWNER node handoff-roles.js > "$WORK/handoff-rerun.log" 2>&1 || { cat "$WORK/handoff-rerun.log"; fail "handoff rerun"; }
+grep -q "0 call(s) would be sent" "$WORK/handoff-rerun.log" || { cat "$WORK/handoff-rerun.log"; fail "handoff rerun still had calls to send"; }
+unset HANDOFF_RPC HANDOFF_EPOCH
+
 if [ "$MODE" = fork ]; then
-  step "12. deploy-testnet.sh simulates against the forked chain (live VRF, rates and tokens)"
+  step "13. deploy-testnet.sh simulates against the forked chain (live VRF, rates and tokens)"
   # Drop everything step 3 exported, so the script reads the live chain itself.
   unset WETH_ADDRESS USDC_ADDRESS USDT_ADDRESS LINK_ADDRESS DAPP_ADDRESS VRF_COORDINATOR VRF_KEY_HASH VRF_SUB_ID \
         VRF_EXTRA_ARGS VRF_CONFIRMATIONS VRF_CALLBACK_GAS REWARD_RATE_PER_SEC FARM_REWARD_RATE YIELD_APR_BPS \
@@ -233,4 +255,4 @@ if [ "$MODE" = fork ]; then
   grep -q "DEPLOY OK (simulate)" "$WORK/deploy-sim.log" || fail "deploy-testnet.sh did not finish"
 fi
 
-echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK, inventory OK, wind-down OK, LP exit OK"
+echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK, inventory OK, wind-down OK, LP exit OK, role hand-off OK"

@@ -1,0 +1,89 @@
+name: Admin — Hand Off Roles
+
+# Manual-only: give the epoch keeper its roles on the testnet v2 set
+# (scripts/handoff-roles.js). The epoch keeper must own TimbTreasury (buyback,
+# distribute and withdrawToken are onlyOwner) and be a rewardNotifier on
+# TimbFarm, TimbStaking and TimbBoostFarm.
+#
+#   grant   signed by TSDeployer (TESTNET_DEPLOYER_PRIVATE_KEY): proposes the
+#           TimbTreasury transfer and adds the three notifier grants.
+#   accept  signed by the epoch keeper (EPOCH_PRIVATE_KEY, which must already
+#           hold the NEW wallet's key): accepts the TimbTreasury transfer.
+#
+# Each run stops unless its key belongs to the expected wallet. Every call is
+# simulated before sending and skipped when already done, so reruns are safe.
+# Always dry-run first.
+#
+# TESTNET ONLY. Not gated on KEEPERS_HOST: a one-off you start by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "grant (TSDeployer signs) then accept (epoch keeper signs)"
+        required: true
+        default: "grant"
+        type: choice
+        options:
+          - grant
+          - accept
+      mode:
+        description: "dry-run simulates; run sends"
+        required: true
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - run
+      epoch:
+        description: "The new epoch keeper wallet address"
+        required: true
+      deployer:
+        description: "Owner that signs grant; the key must belong to it"
+        required: true
+        default: "0xAA6820D22cF59C9d143fe1a943F19FE6EcdAd3a5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-handoff-roles
+  cancel-in-progress: false
+
+jobs:
+  handoff:
+    name: Hand off roles (${{ github.event.inputs.step }}, ${{ github.event.inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Self-test
+        run: node handoff-roles.js --self-test
+        working-directory: scripts
+
+      - name: Hand off
+        working-directory: scripts
+        env:
+          HANDOFF_RPC:    ${{ vars.DEPLOY_RPC || 'https://sepolia-rollup.arbitrum.io/rpc' }}
+          HANDOFF_STEP:   ${{ github.event.inputs.step }}
+          HANDOFF_EPOCH:  ${{ github.event.inputs.epoch }}
+          HANDOFF_KEY:    ${{ github.event.inputs.step == 'accept' && secrets.EPOCH_PRIVATE_KEY || secrets.TESTNET_DEPLOYER_PRIVATE_KEY }}
+          HANDOFF_EXPECT: ${{ github.event.inputs.step == 'accept' && github.event.inputs.epoch || github.event.inputs.deployer }}
+        run: |
+          if [ "${{ github.event.inputs.mode }}" = "run" ]; then
+            node handoff-roles.js --execute
+          else
+            node handoff-roles.js
+          fi
