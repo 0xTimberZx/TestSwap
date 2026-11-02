@@ -14,6 +14,7 @@ routes = [
 WAITLIST_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/waitlist"
 QUESTS_UPSTREAM   = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/quests"
 FAUCET_UPSTREAM   = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/faucet-claim"
+PRESENCE_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/presence"
 
 # Secrets are NOT set here — add them with `wrangler secret put`:
 #   ALCHEMY_RPC_URL        (for POST /api/rpc)
@@ -21,3 +22,5 @@ FAUCET_UPSTREAM   = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/fauce
 #                           waitlist edge function's WAITLIST_PROXY_SECRET)
 #   FAUCET_PROXY_SECRET    (optional; for POST /api/faucet-claim — must match the
 #                           faucet-claim edge function's FAUCET_PROXY_SECRET)
+#   PRESENCE_PROXY_SECRET  (optional; for POST /api/presence — must match the
+#                           presence edge function's PRESENCE_PROXY_SECRET)

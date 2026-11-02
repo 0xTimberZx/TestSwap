@@ -36,7 +36,7 @@
     }
   </script>
   <link rel="stylesheet" href="../style.css?v=20261024a" />
-  <link rel="stylesheet" href="compete.css?v=20260724a" />
+  <link rel="stylesheet" href="compete.css?v=20261102a" />
 </head>
 <body>
 
@@ -169,6 +169,8 @@
       <span id="sub-pot">Pot: —</span>
       <span class="dot-sep" id="sub-sep">|</span>
       <span id="sub-entries">— entries</span>
+      <span class="dot-sep" id="watch-sep" hidden>|</span>
+      <span id="sub-watch" class="sub-watch" hidden title="People watching right now (anyone with this page open in the last 30 seconds)"><svg class="watch-eye" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg><b id="sub-watch-n" aria-label="people watching">—</b></span>
     </div>
 
     <!-- ─── Advance Panel (wallet-gated user nudge / batch nudge) ───────────── -->
@@ -412,6 +414,7 @@
 
   <script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
   <script src="compete.js?v=20261025a"></script>
+  <script src="presence.js?v=20261102b"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");
