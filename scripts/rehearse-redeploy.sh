@@ -203,7 +203,7 @@ unset WIND_DOWN_RPC WIND_DOWN_PRIVATE_KEY WIND_DOWN_TO WIND_DOWN_FORCE_RETIRE
 step "11. wind-down-lp.js: the owner's wallet and farm-staked LP come out to the recipient"
 SINK2=0x000000000000000000000000000000000000c0DF
 LP_BEFORE=$(cast call "$PAIR" "balanceOf(address)(uint256)" "$OWNER" --rpc-url $R | num)
-export WIND_DOWN_RPC=$R WIND_DOWN_LP_PRIVATE_KEY=$OWNER_KEY WIND_DOWN_TO=$SINK2
+export WIND_DOWN_RPC=$R WIND_DOWN_LP_PRIVATE_KEY=$OWNER_KEY WIND_DOWN_TO=$SINK2 WIND_DOWN_LP_SET=config
 # A key for the wrong wallet must stop the run before anything is sent.
 if WIND_DOWN_LP_EXPECT=$SETTLER node wind-down-lp.js > "$WORK/lpexit-wrong.log" 2>&1; then cat "$WORK/lpexit-wrong.log"; fail "LP exit ran with a key for the wrong wallet"; fi
 grep -q "not the expected" "$WORK/lpexit-wrong.log" || { cat "$WORK/lpexit-wrong.log"; fail "LP exit wrong-key message missing"; }
@@ -220,7 +220,7 @@ grep -E "^- (sent|SKIP|FAIL|note)" "$WORK/lpexit.log"
 [ "$(cast call "$PAIR" "balanceOf(address)(uint256)" "$OWNER" --rpc-url $R | num)" = 0 ] || fail "LP still in the owner's wallet"
 [ "$(cast call "$WETH" "balanceOf(address)(uint256)" "$SINK2" --rpc-url $R | num)" != 0 ] || fail "recipient got no WETH"
 [ "$(cast call "$TIMBS" "balanceOf(address)(uint256)" "$SINK2" --rpc-url $R | num)" != 0 ] || fail "recipient got no TIMBS"
-unset WIND_DOWN_RPC WIND_DOWN_LP_PRIVATE_KEY WIND_DOWN_TO WIND_DOWN_LP_EXPECT
+unset WIND_DOWN_RPC WIND_DOWN_LP_PRIVATE_KEY WIND_DOWN_TO WIND_DOWN_LP_EXPECT WIND_DOWN_LP_SET
 
 step "12. handoff-roles.js: the epoch keeper gets TimbTreasury and the three notifier grants"
 EPOCH_KEY=${KEYS[5]}; EPOCH=$(addr "$EPOCH_KEY"); TREASURY=$(get TimbTreasury)
