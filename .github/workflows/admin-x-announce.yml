@@ -1,0 +1,96 @@
+name: Admin — X Announcement
+
+# Manual-only: one announcement post to X (@TimbSwap) with a card in the round
+# card's style (scripts/x-announce.js). The hexagons spell `word`.
+#
+#   dry-run  renders the card (uploaded as the "announce-card" artifact) and
+#            prints the post with its X length. Posts nothing.
+#   post     posts it once.
+#
+# Write `\n` in the text for a line break. Uses the same X_* secrets as the
+# settler's round posts. Not gated on KEEPERS_HOST: a one-off you start by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run renders and prints; post sends"
+        required: true
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - post
+      text:
+        description: "Post text (\\n = new line, max 280 as X counts it)"
+        required: true
+        default: "🚀 The new TimbSwap prize game is live on Arbitrum Sepolia!\\n\\n✅ Fresh contracts, verified\\n💧 Pools refilled\\n🏆 Season 1 scoring is on\\n⛽ Free test gas at the faucet\\n\\nGrab gas, swap, enter the next round → timbswap.xyz/faucet\\n\\n#TimbSwap #Arbitrum #DeFi #Testnet"
+      word:
+        description: "Six letters for the hexagons"
+        required: true
+        default: "FAUCET"
+      title:
+        description: "Card title"
+        required: true
+        default: "New prize game live"
+      sub:
+        description: "Card line under the hexagons"
+        required: true
+        default: "Fresh contracts · pools refilled · Season 1 scoring on"
+      url:
+        description: "Card footer link"
+        required: true
+        default: "timbswap.xyz/faucet"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-x-announce
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    name: X announcement (${{ github.event.inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Self-test
+        run: node x-announce.js --self-test
+        working-directory: scripts
+
+      - name: Announce
+        working-directory: scripts
+        env:
+          X_API_KEY:             ${{ secrets.X_API_KEY }}
+          X_API_SECRET:          ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN:        ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          ANNOUNCE_TEXT:         ${{ github.event.inputs.text }}
+          ANNOUNCE_WORD:         ${{ github.event.inputs.word }}
+          ANNOUNCE_TITLE:        ${{ github.event.inputs.title }}
+          ANNOUNCE_SUB:          ${{ github.event.inputs.sub }}
+          ANNOUNCE_URL:          ${{ github.event.inputs.url }}
+          ANNOUNCE_DRY_RUN:      ${{ github.event.inputs.mode == 'dry-run' && '1' || '' }}
+        run: node x-announce.js
+
+      - name: Upload the card
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: announce-card
+          path: scripts/announce-card.png
+          if-no-files-found: ignore
