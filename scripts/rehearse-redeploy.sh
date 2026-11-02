@@ -197,4 +197,22 @@ grep -E "^- (sent|SKIP|FAIL|note)" "$WORK/winddown.log"
 [ "$(cast call "$PRIZE" "retired()(bool)" --rpc-url $R)" = true ] || fail "prize not retired"
 unset WIND_DOWN_RPC WIND_DOWN_PRIVATE_KEY WIND_DOWN_TO WIND_DOWN_FORCE_RETIRE
 
-echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK, inventory OK, wind-down OK"
+step "11. wind-down-lp.js: the owner's wallet and farm-staked LP come out to the recipient"
+SINK2=0x000000000000000000000000000000000000c0DF
+LP_BEFORE=$(cast call "$PAIR" "balanceOf(address)(uint256)" "$OWNER" --rpc-url $R | num)
+export WIND_DOWN_RPC=$R WIND_DOWN_LP_PRIVATE_KEY=$OWNER_KEY WIND_DOWN_TO=$SINK2
+node wind-down-lp.js > "$WORK/lpexit-dry.log" 2>&1 || { cat "$WORK/lpexit-dry.log"; fail "LP exit dry run"; }
+[ "$(cast call "$PAIR" "balanceOf(address)(uint256)" "$OWNER" --rpc-url $R | num)" = "$LP_BEFORE" ] || fail "the LP dry run moved LP"
+grep -q "TimbFarm.emergencyWithdraw()" "$WORK/lpexit-dry.log" || { cat "$WORK/lpexit-dry.log"; fail "LP dry run did not plan the farm exit"; }
+# Like the leaked wallet: almost no ETH, so the run must top up its gas first.
+cast rpc anvil_setBalance "$OWNER" 0x5AF3107A4000 --rpc-url $R >/dev/null   # 0.0001 ETH
+WIND_DOWN_LP_GAS_KEY=$FUNDER_KEY node wind-down-lp.js --execute > "$WORK/lpexit.log" 2>&1 || { cat "$WORK/lpexit.log"; fail "LP exit run"; }
+grep -q "^- sent gas " "$WORK/lpexit.log" || { cat "$WORK/lpexit.log"; fail "LP exit did not top up the signer's gas"; }
+grep -E "^- (sent|SKIP|FAIL|note)" "$WORK/lpexit.log"
+[ "$(cast call "$FARM" "stakedBalance(address)(uint256)" "$OWNER" --rpc-url $R | num)" = 0 ] || fail "LP still staked in the farm"
+[ "$(cast call "$PAIR" "balanceOf(address)(uint256)" "$OWNER" --rpc-url $R | num)" = 0 ] || fail "LP still in the owner's wallet"
+[ "$(cast call "$WETH" "balanceOf(address)(uint256)" "$SINK2" --rpc-url $R | num)" != 0 ] || fail "recipient got no WETH"
+[ "$(cast call "$TIMBS" "balanceOf(address)(uint256)" "$SINK2" --rpc-url $R | num)" != 0 ] || fail "recipient got no TIMBS"
+unset WIND_DOWN_RPC WIND_DOWN_LP_PRIVATE_KEY WIND_DOWN_TO
+
+echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK, inventory OK, wind-down OK, LP exit OK"

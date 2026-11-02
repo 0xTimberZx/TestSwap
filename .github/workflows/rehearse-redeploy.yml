@@ -19,6 +19,7 @@ on:
       - "scripts/solvency-watch.js"
       - "scripts/wind-down-inventory.js"
       - "scripts/wind-down-owner.js"
+      - "scripts/wind-down-lp.js"
       - ".github/workflows/rehearse-redeploy.yml"
 
 permissions:
