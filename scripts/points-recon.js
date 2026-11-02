@@ -421,7 +421,7 @@ async function main() {
   const nowSec = head.timestamp;
 
   let findings = [], summary = "", state = null;
-  try {
+  try { recon: {
     // Season configuration only: never the scorer's cursors.
     const seasons = await sbGet("seasons?status=eq.active&select=id,slug,start_block,start_round,end_block,lag_rounds,min_rounds,weights&order=id.desc&limit=1");
     if (!seasons.length || seasons[0].start_block == null || seasons[0].start_round == null) {
@@ -439,6 +439,15 @@ async function main() {
     // The lag block, the scorer's way: where round (current − lag + 1) started.
     const currentRound = Number(await prize.currentRound());
     const lastFoldable = currentRound - LAG;
+    // A new season on a fresh game: until round startRound + LAG opens the
+    // scorer folds nothing, and lastFoldable + 1 can be zero or negative,
+    // which toBeHex cannot encode. Nothing to compare yet.
+    // Falls through with no findings, so an earlier alert still gets its recovery.
+    if (lastFoldable < startRound) {
+      summary = `season ${s.slug} · round ${currentRound}: nothing has cleared the ${LAG}-round lag yet ` +
+        `(round ${startRound} folds once round ${startRound + LAG} starts) — nothing to compare`;
+      break recon;
+    }
     let lagBlock = head.number;
     if (LAG > 0) {
       lagBlock = startBlock - 1;
@@ -556,7 +565,7 @@ async function main() {
     const c = compare(state.ledger, faucetOf, rows, s.weights, Number(s.min_rounds ?? 0), state.pendingUnder, nowSec);
     findings = c.findings;
     summary = `${c.compared} wallets compared, ${c.matched} match · +${roundsAdded} rounds, ${swapsSeen} swaps this run · ${Object.keys(state.pendingUnder).length} under-count(s) inside grace`;
-  } catch (e) {
+  } } catch (e) {
     const inner = e?.error?.message || e?.info?.error?.message;
     findings = [{ kind: "unknown", detail: `read failed: ${e.shortMessage || e.message}${inner ? ` (${inner})` : ""}` }];
   }
