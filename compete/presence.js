@@ -8,7 +8,7 @@
 //
 // Nothing about the visitor is sent except that random id. If the endpoint is
 // missing or failing, the badge stays hidden and nothing else on the page is
-// affected.
+// affected. The eye only shows when 2 or more people are watching.
 
 (function () {
   "use strict";
@@ -64,8 +64,9 @@
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       failures = 0;
-      // You are always watching, even if the cap skipped your row.
-      show(Math.max(1, Number(data.watching) || 0));
+      // Only worth showing when someone else is here too: alone, the eye hides.
+      const n = Number(data.watching) || 0;
+      if (n >= 2) show(n); else hide();
     } catch (e) {
       // Give up quietly after a few misses; try again when the tab is next shown.
       if (++failures >= 3) { hide(); stop(); }
