@@ -30,6 +30,10 @@
 //   WIND_DOWN_LP_GAS_KEY      optional: a wallet that pays the signer's gas
 //   WIND_DOWN_TO              recipient (default TSDeployer 0xAA68…d3a5)
 //   WIND_DOWN_RPC             RPC (default: the public RPC in config.js)
+//   WIND_DOWN_LP_SET          old (default): the pre-2 Nov testnet farm, boost farm,
+//                             router and factory, fixed below, since config.js
+//                             now names the v2 set. config: read them from
+//                             config.js (the rehearsal points it at its deploy).
 //   GITHUB_STEP_SUMMARY       set by Actions; the report is appended there too
 // Args: --execute (send), --self-test
 
@@ -40,6 +44,13 @@ const { checkRecipient, short } = require("./wind-down-owner");
 
 const CHAIN_ID = 421614;
 const DEFAULT_TO = "0xAA6820D22cF59C9d143fe1a943F19FE6EcdAd3a5";
+// The pre-2 Nov testnet set (config.js keeps each as a "Prev:" comment).
+const OLD_SET = {
+  TimbFarm:        "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
+  TimbBoostFarm:   "0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35",
+  TimbSwapRouter:  "0x40C7Caf90817C9891D278Ec1400B9deb180911f1",
+  TimbSwapFactory: "0xCCd6d3f0A86042d2B7056eDd381d367126628AF5",
+};
 const GAS_MIN = ethers.parseEther("0.002");    // top up below this
 const GAS_TARGET = ethers.parseEther("0.004"); // to this
 const GAS_MAX = ethers.parseEther("0.005");    // never send more than this in one top-up
@@ -70,6 +81,8 @@ function selfTest() {
   eq("top-up to target", gasTopUp(ethers.parseEther("0.0001")), ethers.parseEther("0.0039"));
   eq("top-up from empty", gasTopUp(0n), GAS_TARGET);
   eq("top-up never above cap", gasTopUp(0n) <= GAS_MAX, true);
+  eq("old set addresses are checksummed", Object.values(OLD_SET).every((a) => ethers.getAddress(a) === a), true);
+  eq("old set is not the config set", Object.keys(OLD_SET).every((k) => OLD_SET[k] !== addrFromConfig(k)), true);
   console.log(`self-test: ${pass} passed, ${fail} failed`);
   return fail === 0;
 }
@@ -92,13 +105,15 @@ async function main() {
   }
   const to = checkRecipient(process.env.WIND_DOWN_TO || DEFAULT_TO, signer.address);
   const gasKey = (process.env.WIND_DOWN_LP_GAS_KEY || "").trim();
+  const set = (process.env.WIND_DOWN_LP_SET || "old").trim();
+  if (!["old", "config"].includes(set)) throw new Error(`WIND_DOWN_LP_SET must be old or config, not "${set}"`);
   const src = configSrc();
-  const addr = (k) => addrFromConfig(k, { src });
+  const addr = (k) => (set === "old" ? OLD_SET[k] : addrFromConfig(k, { src }));
 
   const out = [];
   const say = (l = "") => { out.push(l); console.log(l); };
   say(`# Old testnet LP exit (${execute ? "RUN" : "dry run"})`);
-  say(`Signer ${short(signer.address)} → recipient ${short(to)} · block ${await provider.getBlockNumber()}`);
+  say(`Signer ${short(signer.address)} → recipient ${short(to)} · block ${await provider.getBlockNumber()} · contracts: ${set === "old" ? "pre-2 Nov testnet set" : "config.js"}`);
   say();
 
   const farm = new ethers.Contract(addr("TimbFarm"), FARM, signer);
