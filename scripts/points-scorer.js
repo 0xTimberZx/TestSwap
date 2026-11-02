@@ -156,6 +156,15 @@ async function main() {
   const LAG = Math.max(0, Number(s.lag_rounds ?? 4));
   const currentRound = Number(await PRIZE.currentRound());
   const lastFoldableRound = currentRound - LAG;
+  // A new season on a fresh game: until round start_round + LAG opens, no
+  // round has cleared the lag, and lastFoldableRound + 1 can be zero or
+  // negative (round 1, lag 4 → -2), which RoundStarted's uint filter cannot
+  // encode. Nothing is foldable yet, so stop cleanly with the cursors untouched.
+  if (lastFoldableRound < Number(s.start_round)) {
+    console.log(`[points] season ${s.slug}: live round ${currentRound}, nothing has cleared the ${LAG}-round lag yet ` +
+      `(round ${Number(s.start_round)} folds once round ${Number(s.start_round) + LAG} starts) — nothing to do.`);
+    return;
+  }
   const chainHead = await provider.getBlockNumber();
   let lagBlock = chainHead;
   if (LAG > 0) {
