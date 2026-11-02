@@ -10,6 +10,7 @@ everything else through to the origin (GitHub Pages):
 | `POST /api/rpc` | Alchemy JSON-RPC (`ALCHEMY_RPC_URL`) | all on-chain reads (single + batch) |
 | `POST /api/waitlist` | Supabase `waitlist` edge fn (`WAITLIST_UPSTREAM`) | mainnet signup capture |
 | `POST /api/quests` | Supabase `quests` edge fn (`QUESTS_UPSTREAM`) | Timber Points leaderboard read |
+| `POST /api/presence` | Supabase `presence` edge fn (`PRESENCE_UPSTREAM`) | live 👁️ watcher count on /compete (adds `X-Real-IP`; optional `PRESENCE_PROXY_SECRET`) |
 | `POST /api/faucet-claim` | Supabase `faucet-claim` edge fn (`FAUCET_UPSTREAM`) | testnet faucet claim gatekeeper (Turnstile-gated; adds `X-Real-IP`; optional `FAUCET_PROXY_SECRET`) |
 
 Because `/api/*` is **same-origin** with the site, the browser skips CORS and

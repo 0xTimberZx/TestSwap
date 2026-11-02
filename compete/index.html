@@ -169,6 +169,8 @@
       <span id="sub-pot">Pot: —</span>
       <span class="dot-sep" id="sub-sep">|</span>
       <span id="sub-entries">— entries</span>
+      <span class="dot-sep" id="watch-sep" hidden>|</span>
+      <span id="sub-watch" class="sub-watch" hidden title="People on this page right now (anyone with it open in the last 30 seconds)">👁️&nbsp;<b id="sub-watch-n">—</b>&nbsp;watching</span>
     </div>
 
     <!-- ─── Advance Panel (wallet-gated user nudge / batch nudge) ───────────── -->
@@ -412,6 +414,7 @@
 
   <script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
   <script src="compete.js?v=20261025a"></script>
+  <script src="presence.js?v=20261102a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");

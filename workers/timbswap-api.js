@@ -16,6 +16,10 @@
 //   /api/faucet-claim     → Supabase `faucet-claim` edge fn. Var: FAUCET_UPSTREAM;
 //                           optional secret: FAUCET_PROXY_SECRET. Adds the caller's
 //                           real IP as X-Real-IP (for Turnstile remoteip).
+//   /api/presence         → Supabase `presence` edge fn (live 👁️ watcher count on
+//                           /compete). Var: PRESENCE_UPSTREAM; optional secret:
+//                           PRESENCE_PROXY_SECRET. Adds the caller's real IP as
+//                           X-Real-IP (hashed upstream, to cap tabs per IP).
 // Anything else falls through to the origin (GitHub Pages).
 //
 // The /api/debughub_events telemetry sink was REMOVED for the capped beta: the
@@ -31,6 +35,8 @@
 //   QUESTS_UPSTREAM             (var) Supabase quests function URL
 //   FAUCET_UPSTREAM             (var) Supabase faucet-claim function URL
 //   FAUCET_PROXY_SECRET         (secret, optional) shared with the faucet-claim fn
+//   PRESENCE_UPSTREAM           (var) Supabase presence function URL
+//   PRESENCE_PROXY_SECRET       (secret, optional) shared with the presence fn
 //
 // Route + deploy: see workers/README.md.
 
@@ -173,6 +179,23 @@ export default {
       const headers = { "X-Real-IP": request.headers.get("CF-Connecting-IP") || "" };
       if (env.FAUCET_PROXY_SECRET) headers["X-Proxy-Secret"] = env.FAUCET_PROXY_SECRET;
       return relay(env.FAUCET_UPSTREAM, text, origin, headers);
+    }
+
+    // ── /api/presence → relay to the Supabase `presence` edge function (the live
+    // 👁️ watcher count). Same-origin so Brave lets the heartbeat through; we add
+    // the caller's real IP so the function can cap tabs per IP. Without the var
+    // the route answers 503 and the page simply hides the badge. ──
+    if (path === "/api/presence") {
+      if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
+      if (request.method !== "POST")    return json({ error: "POST only" }, 405, origin);
+      if (!env.PRESENCE_UPSTREAM)       return json({ error: "presence unavailable" }, 503, origin);
+
+      const { text, err } = await readBody(request, origin);
+      if (err) return err;
+
+      const headers = { "X-Real-IP": request.headers.get("CF-Connecting-IP") || "" };
+      if (env.PRESENCE_PROXY_SECRET) headers["X-Proxy-Secret"] = env.PRESENCE_PROXY_SECRET;
+      return relay(env.PRESENCE_UPSTREAM, text, origin, headers);
     }
 
     // Only /api/rpc remains; everything else (incl. the removed /api/debughub_events)
