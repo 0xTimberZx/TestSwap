@@ -1,0 +1,125 @@
+name: Admin — Seed Testnet Pools
+
+# Manual-only: seed the testnet pools with scripts/seed-pools-testnet.js.
+# The first add to a new pool sets its price, so the prices here are the
+# testnet's prices: ETH at config.js ETH_USD_PRICE, stables at $1, TIMBS and
+# LINK from the inputs. Decided for the 2 Nov redeploy: $1,000 a side,
+# TIMBS $0.005, LINK $12 (dev-docs TESTNET_REDEPLOY_PLAN).
+#
+#   dry-run  checks chain, router/factory, token identities and the signer's
+#            balances for the whole plan, prints every amount. Sends nothing.
+#   run      sends it. An existing pool more than 2% off the price table is
+#            refused, so a later top-up at the same prices is safe to rerun.
+#
+# Signs with the TESTNET_DEPLOYER_PRIVATE_KEY secret (TSDeployer, which holds
+# the tokens and the 10M TIMBS). The run stops unless the key belongs to
+# `signer`. Delete the secret once deploy day is done.
+#
+# TESTNET ONLY. Not gated on KEEPERS_HOST: a one-off you start by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run prints the plan; run sends it"
+        required: true
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - run
+      signer:
+        description: "LP wallet; the key must belong to it"
+        required: true
+        default: "0xAA6820D22cF59C9d143fe1a943F19FE6EcdAd3a5"
+      usd_per_side:
+        description: "USD of EACH token per pool"
+        required: true
+        default: "1000"
+      price_timbs:
+        description: "TIMBS price in USD (sets the testnet price)"
+        required: true
+        default: "0.005"
+      price_link:
+        description: "LINK price in USD"
+        required: true
+        default: "12"
+      pairs:
+        description: "Pools to seed"
+        required: true
+        default: "TIMBS/WETH,USDC/WETH,USDT/WETH,LINK/WETH"
+      wrap:
+        description: "Wrap any WETH shortfall from the signer's ETH first"
+        required: true
+        default: "no"
+        type: choice
+        options:
+          - "no"
+          - "yes"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-seed-testnet
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    name: Seed the testnet pools (${{ github.event.inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Self-test
+        run: node seed-pools-testnet.js --self-test
+        working-directory: scripts
+
+      - name: Check the signer
+        working-directory: scripts
+        env:
+          KEY:    ${{ secrets.TESTNET_DEPLOYER_PRIVATE_KEY }}
+          EXPECT: ${{ github.event.inputs.signer }}
+        run: |
+          if [ -z "$KEY" ]; then echo "::error::TESTNET_DEPLOYER_PRIVATE_KEY is not set"; exit 1; fi
+          node -e '
+            const { ethers } = require("ethers");
+            const got = new ethers.Wallet(process.env.KEY).address;
+            const want = ethers.getAddress(process.env.EXPECT.trim());
+            if (got !== want) { console.error(`::error::the key belongs to ${got}, not ${want}`); process.exit(1); }
+            console.log(`signer ${got}`);
+          '
+
+      - name: Seed
+        working-directory: scripts
+        env:
+          SEED_RPC:          ${{ vars.DEPLOY_RPC || 'https://sepolia-rollup.arbitrum.io/rpc' }}
+          SEED_USD_PER_SIDE: ${{ github.event.inputs.usd_per_side }}
+          SEED_PRICE_TIMBS:  ${{ github.event.inputs.price_timbs }}
+          SEED_PRICE_LINK:   ${{ github.event.inputs.price_link }}
+          SEED_PAIRS:        ${{ github.event.inputs.pairs }}
+          SIGNER:            ${{ github.event.inputs.signer }}
+          KEY:               ${{ secrets.TESTNET_DEPLOYER_PRIVATE_KEY }}
+          MODE:              ${{ github.event.inputs.mode }}
+          WRAP:              ${{ github.event.inputs.wrap }}
+        run: |
+          args=""
+          [ "$WRAP" = "yes" ] && args="--wrap"
+          if [ "$MODE" = "run" ]; then
+            SEED_PRIVATE_KEY="$KEY" node seed-pools-testnet.js --execute $args
+          else
+            # The dry run never sees the key: balances are read for the signer address.
+            SEED_FROM="$SIGNER" node seed-pools-testnet.js $args
+          fi
