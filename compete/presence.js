@@ -1,4 +1,4 @@
-// presence.js — the live "👁️ N watching" badge on /compete.
+// presence.js — the live watcher count (flat eye icon + number) on /compete.
 //
 // Counts every open tab, connected or not: each tab makes a random id, and
 // while the page is visible it heartbeats POST /api/presence every 15 s. The

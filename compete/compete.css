@@ -213,6 +213,10 @@
    segment glues its number to its unit with NBSP, so wraps only between stats. */
 #sub-pot { white-space: normal; overflow-wrap: anywhere; text-align: center; }
 .dot-sep { color: var(--text-3); }
+/* Live watcher count: a flat eye glyph and the number, no label. */
+.sub-watch { display: inline-flex; align-items: center; gap: 5px; }
+.sub-watch[hidden] { display: none; }
+.watch-eye { flex: none; opacity: 0.85; }
 /* Once the stats wrap onto multiple lines the · separators dangle at line
    edges — drop them and let each stat stand centered on its own. */
 @media (max-width: 700px) {
