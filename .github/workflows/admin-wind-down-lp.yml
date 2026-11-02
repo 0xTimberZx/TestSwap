@@ -1,0 +1,83 @@
+name: Admin — Wind Down Leaked Wallet LP
+
+# Manual-only (scripts/wind-down-lp.js). Takes the leaked deployer wallet's
+# liquidity out of the old testnet: TimbFarm and every TimbBoostFarm pool it
+# is staked in (emergencyWithdraw: the forfeited rewards are old TIMBS), then
+# removeLiquidity on every old pool it holds LP in, with the recipient as
+# `to`, so the tokens never sit in the leaked wallet.
+#
+# Signs with DEPLOYER_PRIVATE_KEY, the key leaked on 22 Oct (it still holds
+# the LP). The wallet was swept, so with fund_gas=yes the old owner wallet
+# (NEW_OWNER_PRIVATE_KEY) first sends it a small amount of gas (at most
+# 0.005 ETH). The recipient defaults to the new deployer and may never be a
+# leaked key or the signer. Always dry-run first.
+#
+# TESTNET ONLY. Not gated on KEEPERS_HOST: a one-off you start by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run prints the plan; run sends it"
+        required: true
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - run
+      to:
+        description: "Recipient (default: the new deployer, TSDeployer)"
+        required: true
+        default: "0xAA6820D22cF59C9d143fe1a943F19FE6EcdAd3a5"
+      fund_gas:
+        description: "Top up the leaked wallet's gas from the old owner wallet"
+        required: true
+        default: "yes"
+        type: choice
+        options:
+          - "yes"
+          - "no"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-wind-down
+  cancel-in-progress: false
+
+jobs:
+  lp-exit:
+    name: Take the leaked wallet's LP out
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Self-test
+        run: node wind-down-lp.js --self-test
+        working-directory: scripts
+
+      - name: LP exit
+        working-directory: scripts
+        env:
+          WIND_DOWN_RPC:            ${{ vars.WIND_DOWN_RPC }}
+          WIND_DOWN_LP_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          WIND_DOWN_LP_GAS_KEY:     ${{ github.event.inputs.fund_gas == 'yes' && secrets.NEW_OWNER_PRIVATE_KEY || '' }}
+          WIND_DOWN_TO:             ${{ github.event.inputs.to }}
+        run: |
+          if [ "${{ github.event.inputs.mode }}" = "run" ]; then
+            node wind-down-lp.js --execute
+          else
+            node wind-down-lp.js
+          fi
