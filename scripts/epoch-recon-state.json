@@ -1,30 +1,30 @@
 {
   "chainId": 421614,
-  "farm": "0xE319E2206F71A5cD8dd2c411C6F29712935f9011",
-  "staking": "0xe776c7b700B190ED8248741F9b518B08d8733C8F",
-  "treasury": "0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c",
-  "prize": "0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF",
-  "cursorBlock": 325168395,
-  "sinceSec": 1789773707,
+  "farm": "0x093Be67377a6603C77d1BaCb12422E0D53481341",
+  "staking": "0x790741385345D78536A696F7E58e64DDAfa07df6",
+  "treasury": "0xd1Fb6E177c0888fB77f977B4299034020d4f2D75",
+  "prize": "0xDB36B3BC7e68B193D06009aFaFe54678b088088B",
+  "cursorBlock": 325323357,
+  "sinceSec": 1793609833,
   "lastSettlement": {
-    "block": 324918038,
-    "runStartBlock": 324918038,
-    "ts": 1793517563,
-    "round": 229,
-    "farm": "105003435552490880519",
-    "stake": "70002290368327253679"
+    "block": 325191943,
+    "runStartBlock": 325191943,
+    "ts": 1793590573,
+    "round": null,
+    "farm": "10000000000000000000000",
+    "stake": "18750000000000000000000"
   },
   "lastGrant": {
     "farm": {
-      "ts": 1793517563,
+      "ts": 1793590573,
       "duration": 7776000
     },
     "stake": {
-      "ts": 1793517565,
+      "ts": 1793590574,
       "duration": 7776000
     }
   },
   "zAccrued": "0",
-  "alerted": {},
-  "backfill": false
+  "backfill": false,
+  "alerted": {}
 }
