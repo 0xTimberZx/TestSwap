@@ -136,6 +136,9 @@ send "$PRIZE" "fundPot()" --value 0.1ether
 send "$PRIZE" "startGame()"
 [ "$(cast call "$PRIZE" 'gameStarted()(bool)' --rpc-url $R)" = true ] || fail "game did not start"
 echo "round $(cast call "$PRIZE" 'currentRound()(uint256)' --rpc-url $R | num), segment $(cast call "$PRIZE" 'currentSegment()(uint256)' --rpc-url $R | num)"
+STATUS_RPC=$R STATUS_WALLETS="owner=$OWNER,settler=$SETTLER" node testnet-status.js > "$WORK/status.log" 2>&1 || { cat "$WORK/status.log"; fail "testnet-status.js"; }
+grep -q "started: \*\*true\*\*" "$WORK/status.log" || { cat "$WORK/status.log"; fail "testnet-status.js does not show the game started"; }
+grep -q "matches config.js PrizeVRFEntropy" "$WORK/status.log" || { cat "$WORK/status.log"; fail "testnet-status.js entropy mismatch"; }
 
 step "7. settler.js arms and locks segment 1"
 LEFT=$(cast call "$PRIZE" 'timeRemainingInSegment()(uint256)' --rpc-url $R | num)
