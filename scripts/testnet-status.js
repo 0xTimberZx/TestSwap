@@ -3,7 +3,7 @@
 // Reads the contracts named in config.js and prints: the game (started, round,
 // segment, pot, settler, VRF wiring and whether PrizeVRFEntropy is a consumer
 // on its subscription), the faucet (roles, pauses, balances), the treasury,
-// the farm and staking reward windows, and the ETH / TIMBS of the keeper and
+// the farm and staking reward windows, the yield vault reserve, and the ETH / TIMBS of the keeper and
 // team wallets passed in STATUS_WALLETS. Signs nothing.
 //
 // Env:
@@ -30,6 +30,9 @@ const OWNABLE = ["function owner() view returns (address)"];
 const POOL = ["function owner() view returns (address)", "function periodFinish() view returns (uint256)",
   "function rewardRatePerSecond() view returns (uint256)", "function totalStaked() view returns (uint256)"];
 const ERC20 = ["function balanceOf(address) view returns (uint256)"];
+const VAULT = ["function owner() view returns (address)", "function reserve() view returns (uint256)",
+  "function accruedForPot() view returns (uint256)", "function totalWeight() view returns (uint256)",
+  "function ratePerSecond1e18() view returns (uint256)", "function previewAccrued() view returns (uint256)"];
 
 const fmt = (v, d = 18, p = 4) => Number(ethers.formatUnits(v, d)).toLocaleString("en-US", { maximumFractionDigits: p });
 const iso = (s) => (Number(s) ? new Date(Number(s) * 1000).toISOString().replace(".000Z", "Z") : "-");
@@ -84,6 +87,17 @@ async function main() {
     const [o, fin, rate, staked] = await Promise.all([p.owner(), p.periodFinish(), p.rewardRatePerSecond(), p.totalStaked()]);
     say(`- ${k} ${p.target}: owner ${o}, ${fmt(rate * 86400n, 18, 2)} TIMBS/day until ${iso(fin)}, staked ${fmt(staked)}, holds ${fmt(await timbs.balanceOf(p.target))} TIMBS`);
   }
+
+  // The yield vault holds its own ETH reserve (separate from the faucet) and
+  // pays accrual into the pot only; a reserve of 0 pauses accrual.
+  const vault = c("TimbYieldVault", VAULT);
+  const [vOwner, vRes, vAcc, vW, vRate, vPrev] = await Promise.all([vault.owner(), vault.reserve(),
+    vault.accruedForPot(), vault.totalWeight(), vault.ratePerSecond1e18(), vault.previewAccrued()]);
+  const perSec = (vW * vRate) / 10n ** 18n;
+  const runway = perSec > 0n ? `${(Number(vRes / perSec) / 86400).toFixed(1)} days at the current weight` : "no weight staked, so nothing accrues yet";
+  say("\n### Yield vault: TimbYieldVault " + vault.target);
+  say(`- owner ${vOwner}, holds ${fmt(await ethOf(vault.target))} ETH: reserve **${fmt(vRes, 18, 6)} ETH**, accrued for the pot ${fmt(vAcc, 18, 6)} ETH (preview ${fmt(vPrev, 18, 6)})`);
+  say(`- total weight ${fmt(vW)}, rate ${vRate} per weight-second (1e18), ${fmt(perSec * 86400n, 18, 6)} ETH/day; runway ${runway}`);
 
   const wallets = (process.env.STATUS_WALLETS || "").split(",").map((s) => s.trim()).filter(Boolean);
   if (wallets.length) {
