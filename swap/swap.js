@@ -71,6 +71,12 @@ const ERC20_ABI     = [
   "function name() external view returns (string)"
 ];
 const ELIGIBLE_ABI  = ["function isEligible(address token) external view returns (bool)"];
+// The router's own nudge rules (TS-009 floor, TS-052 pair allowlist), read so
+// the influence toggle only appears for a swap that will actually nudge.
+const NUDGE_RULES_ABI = [
+  "function minNudgeAmountIn(address token) external view returns (uint256)",
+  "function nudgePairs(address pair) external view returns (bool)"
+];
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +85,9 @@ let tokenOut  = null;
 let pickerTarget = null;
 let slippagePct  = 1;
 let isEligiblePair = false;
+// Minimum input (wei of tokenIn) for this pair's swap to earn nudges; null
+// when the pair can't nudge at all.
+let nudgeFloorWei = null;
 let lastEditedSide = "in"; // "in" | "out" — tracks which field user typed in
 let mode          = "swap"; // "swap" | "liquidity"
 let removePct     = 0;      // selected % for remove-liquidity
@@ -456,9 +465,28 @@ async function checkEligibility() {
       if (window.renderPrizeIndicators) window.renderPrizeIndicators(false);
       return;
     }
-    const registry = new ethers.Contract(ADDRESSES.EligibleTokenRegistry, ELIGIBLE_ABI, readProviderForEligibility());
-    const eligible = await registry.isEligible(effAddr(tokenIn));
+    const read     = readProviderForEligibility();
+    const registry = new ethers.Contract(ADDRESSES.EligibleTokenRegistry, ELIGIBLE_ABI, read);
+    const rules    = new ethers.Contract(ADDRESSES.TimbSwapRouter, NUDGE_RULES_ABI, read);
+    const factory  = new ethers.Contract(ADDRESSES.TimbSwapFactory, FACTORY_ABI, read);
+    const effIn = effAddr(tokenIn), effOut = effAddr(tokenOut);
+    // The router nudges only when ALL hold: the input token is eligible, the
+    // FIRST hop's pair is a designated nudge pair, and the input token has a
+    // floor (a token with no floor never nudges). The amount check against
+    // the floor happens as the user types (updateNudgeHint).
+    let firstPair = await factory.getPairAddress(effIn, effOut);
+    if (!firstPair || firstPair === ethers.constants.AddressZero) {
+      firstPair = effIn === ADDRESSES.WETH ? null : await factory.getPairAddress(effIn, ADDRESSES.WETH);
+    }
+    const [eligibleToken, floor, pairOk] = await Promise.all([
+      registry.isEligible(effIn),
+      rules.minNudgeAmountIn(effIn),
+      firstPair && firstPair !== ethers.constants.AddressZero ? rules.nudgePairs(firstPair) : false
+    ]);
+    const eligible = eligibleToken && pairOk && floor.gt(0);
+    nudgeFloorWei = eligible ? floor : null;
     isEligiblePair = eligible;
+    updateNudgeHint();
     // Game UI (influence toggle + live prize indicators) is wallet-gated —
     // don't reveal any game state until the user is connected.
     const showGame = eligible && !!userAddress;
@@ -467,9 +495,29 @@ async function checkEligibility() {
     if (window.renderPrizeIndicators) window.renderPrizeIndicators(showGame);
   } catch (e) {
     console.warn("checkEligibility:", e.message);
+    isEligiblePair = false;
+    nudgeFloorWei = null;
     row.classList.add("hidden");
     panel.style.display = "none";
   }
+}
+
+// Tell the user when the amount is under the router's nudge floor: the swap
+// still goes through, it just won't move the scroll.
+function updateNudgeHint() {
+  const sub = document.querySelector("#influence-row .influence-sub");
+  if (!sub) return;
+  const base = "This pair is eligible. Toggle to nudge the scroll on swap.";
+  if (!nudgeFloorWei || !tokenIn) { sub.textContent = base; return; }
+  let amt = null;
+  try {
+    const v = document.getElementById("amount-in").value;
+    if (v && parseFloat(v) > 0) amt = ethers.utils.parseUnits(v, tokenIn.decimals);
+  } catch { amt = null; }
+  const min = trimAmount(ethers.utils.formatUnits(nudgeFloorWei, tokenIn.decimals));
+  sub.textContent = amt && amt.lt(nudgeFloorWei)
+    ? `Below the nudge minimum: swap at least ${min} ${tokenIn.symbol} to move the scroll.`
+    : `Nudges the scroll on swaps of ${min} ${tokenIn.symbol} or more.`;
 }
 
 // Read-only queries go through the shared read provider (config.js): the
@@ -540,11 +588,13 @@ async function onAmountInChange() {
   lastEditedSide = "in";
   await recalcQuote();
   updateSwapUsd();
+  updateNudgeHint();
 }
 async function onAmountOutChange() {
   lastEditedSide = "out";
   await recalcQuote();
   updateSwapUsd();
+  updateNudgeHint();
 }
 
 // The pay/receive "≈ $" estimates are GONE, deliberately.
@@ -1042,7 +1092,9 @@ async function handleSwap() {
         trimAmount(ethers.utils.formatUnits(freshOut, tokenOut.decimals));
     }
     const deadline = Math.floor(Date.now() / 1000) + 1200; // 20 min
-    const influencePrize = isEligiblePair && document.getElementById("influence-toggle").checked;
+    // Below the floor the router skips the nudge anyway; don't ask for it.
+    const influencePrize = isEligiblePair && document.getElementById("influence-toggle").checked &&
+      !(nudgeFloorWei && amountInWei && amountInWei.lt(nudgeFloorWei));
 
     const gas = await getGasParams();
     const nonce = await getPendingNonce();
