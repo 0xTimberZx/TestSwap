@@ -29,6 +29,14 @@ on:
         options:
           - treasury
           - wallet
+      signer:
+        description: "Which key signs: epoch (EPOCH_PRIVATE_KEY) or deployer (TESTNET_DEPLOYER_PRIVATE_KEY, must be TSDeployer)"
+        required: false
+        default: "epoch"
+        type: choice
+        options:
+          - epoch
+          - deployer
       mode:
         description: "Run mode"
         required: false
@@ -73,12 +81,22 @@ jobs:
           # The epoch keeper's key: rewardNotifier / owner on both pools and
           # the Treasury owner (withdrawToken is onlyOwner). The script
           # verifies all three on-chain before sending.
-          EPOCH_PRIVATE_KEY: ${{ secrets.EPOCH_PRIVATE_KEY }}
+          # signer=deployer: the 2 Nov testnet v2 set is owned by TSDeployer
+          # until the keeper roles are handed out, so deploy day funds from it.
+          EPOCH_PRIVATE_KEY: ${{ github.event.inputs.signer == 'deployer' && secrets.TESTNET_DEPLOYER_PRIVATE_KEY || secrets.EPOCH_PRIVATE_KEY }}
+          EXPECT_SIGNER:     ${{ github.event.inputs.signer == 'deployer' && '0xAA6820D22cF59C9d143fe1a943F19FE6EcdAd3a5' || '' }}
           FARM_TIMBS:        ${{ github.event.inputs.farmTimbs }}
           STAKE_TIMBS:       ${{ github.event.inputs.stakeTimbs }}
           DAYS:              ${{ github.event.inputs.days }}
           SOURCE:            ${{ github.event.inputs.source }}
         run: |
+          if [ -n "$EXPECT_SIGNER" ]; then
+            node -e '
+              const { ethers } = require("ethers");
+              const got = new ethers.Wallet(process.env.EPOCH_PRIVATE_KEY).address;
+              if (got !== ethers.getAddress(process.env.EXPECT_SIGNER)) { console.error(`::error::the deployer key belongs to ${got}, not ${process.env.EXPECT_SIGNER}`); process.exit(1); }
+            '
+          fi
           if [ "${{ github.event.inputs.mode }}" = "run" ]; then
             node fund-rewards.js
           else
