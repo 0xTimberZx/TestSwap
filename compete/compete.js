@@ -565,12 +565,13 @@ async function buildTokenDropdown() {
 
     eligibleTokens = [{ address: "native", symbol: "ETH", isNative: true }];
 
-    // Read every eligible token's symbol in parallel instead of blocking on
-    // each round-trip; preserve registry order and drop any that fail.
-    const wanted = addrs.filter(a => {
-      const lc = a.toLowerCase();
-      return lc !== ADDRESSES.WETH.toLowerCase() && lc !== ADDRESSES.DAPP.toLowerCase();
-    });
+    // A ticket's principal can only be ETH or TIMBS: GameRegistry.submitEntry
+    // takes a single useETH flag, and anything not ETH is charged in TIMBS.
+    // The EligibleTokenRegistry lists the tokens whose SWAPS nudge the meter
+    // (USDC, USDT, LINK, ...), which is a different thing, so only TIMBS is
+    // taken from it here. Listing the others offered "USDC" while charging
+    // TIMBS.
+    const wanted = addrs.filter(a => a.toLowerCase() === ADDRESSES.TIMBSToken.toLowerCase());
     const resolved = await Promise.all(wanted.map(async addr => {
       try {
         const symbol = await new ethers.Contract(addr, ERC20_SYMBOL_ABI, readProv()).symbol();
