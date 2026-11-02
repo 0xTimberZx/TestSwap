@@ -201,6 +201,10 @@ step "11. wind-down-lp.js: the owner's wallet and farm-staked LP come out to the
 SINK2=0x000000000000000000000000000000000000c0DF
 LP_BEFORE=$(cast call "$PAIR" "balanceOf(address)(uint256)" "$OWNER" --rpc-url $R | num)
 export WIND_DOWN_RPC=$R WIND_DOWN_LP_PRIVATE_KEY=$OWNER_KEY WIND_DOWN_TO=$SINK2
+# A key for the wrong wallet must stop the run before anything is sent.
+if WIND_DOWN_LP_EXPECT=$SETTLER node wind-down-lp.js > "$WORK/lpexit-wrong.log" 2>&1; then cat "$WORK/lpexit-wrong.log"; fail "LP exit ran with a key for the wrong wallet"; fi
+grep -q "not the expected" "$WORK/lpexit-wrong.log" || { cat "$WORK/lpexit-wrong.log"; fail "LP exit wrong-key message missing"; }
+export WIND_DOWN_LP_EXPECT=$OWNER
 node wind-down-lp.js > "$WORK/lpexit-dry.log" 2>&1 || { cat "$WORK/lpexit-dry.log"; fail "LP exit dry run"; }
 [ "$(cast call "$PAIR" "balanceOf(address)(uint256)" "$OWNER" --rpc-url $R | num)" = "$LP_BEFORE" ] || fail "the LP dry run moved LP"
 grep -q "TimbFarm.emergencyWithdraw()" "$WORK/lpexit-dry.log" || { cat "$WORK/lpexit-dry.log"; fail "LP dry run did not plan the farm exit"; }
@@ -213,6 +217,6 @@ grep -E "^- (sent|SKIP|FAIL|note)" "$WORK/lpexit.log"
 [ "$(cast call "$PAIR" "balanceOf(address)(uint256)" "$OWNER" --rpc-url $R | num)" = 0 ] || fail "LP still in the owner's wallet"
 [ "$(cast call "$WETH" "balanceOf(address)(uint256)" "$SINK2" --rpc-url $R | num)" != 0 ] || fail "recipient got no WETH"
 [ "$(cast call "$TIMBS" "balanceOf(address)(uint256)" "$SINK2" --rpc-url $R | num)" != 0 ] || fail "recipient got no TIMBS"
-unset WIND_DOWN_RPC WIND_DOWN_LP_PRIVATE_KEY WIND_DOWN_TO
+unset WIND_DOWN_RPC WIND_DOWN_LP_PRIVATE_KEY WIND_DOWN_TO WIND_DOWN_LP_EXPECT
 
 echo; echo "REHEARSAL PASSED ($MODE): deploy, seed, startGame, settle one segment, solvency OK, inventory OK, wind-down OK, LP exit OK"
