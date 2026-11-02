@@ -1,0 +1,42 @@
+name: Testnet Status
+
+# Manual-only, read-only snapshot of the live testnet set (scripts/testnet-status.js):
+# game state, VRF wiring and consumer, faucet roles and balances, treasury,
+# reward windows, and keeper / team wallet balances. Signs nothing; no secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      wallets:
+        description: "label=address pairs, comma-separated"
+        required: false
+        default: "TSDeployer=0xAA6820D22cF59C9d143fe1a943F19FE6EcdAd3a5,settler=0x498ECe3f20AF71496E0FE29667fb4435137639dF,dispatcher=0x47Ed6834424c63d67d6255C0014A0CdaaAb1E4B7,guardian=0x045667De9b40B1800Fb34228E82b20A0DaE9cC28,epoch=0x09d124bDCd3808A197F63a7Ef7E0b9643bd4B37b"
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    name: Read the testnet
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Status
+        working-directory: scripts
+        env:
+          STATUS_RPC:     ${{ vars.DEPLOY_RPC || 'https://sepolia-rollup.arbitrum.io/rpc' }}
+          STATUS_WALLETS: ${{ github.event.inputs.wallets }}
+        run: node testnet-status.js

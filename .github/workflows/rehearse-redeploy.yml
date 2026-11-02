@@ -22,6 +22,7 @@ on:
       - "scripts/wind-down-lp.js"
       - "scripts/deploy-testnet.sh"
       - "scripts/handoff-roles.js"
+      - "scripts/testnet-status.js"
       - ".github/workflows/rehearse-redeploy.yml"
 
 permissions:
