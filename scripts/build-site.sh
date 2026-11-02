@@ -61,7 +61,7 @@ if [ "$net" = mainnet ]; then
     -e '/<meta\|<title/ s/a testnet TIMBS drip/an ETH drip/g' \
     -e '/<meta\|<title/ s/free testnet entry/free entry/g' \
     -e '/<meta\|<title/ s/get free testnet gas and tokens, then play. Free on Arbitrum One./get a little ETH, pick a ticket, then play. Capped beta on Arbitrum One./g' \
-    -e 's#https://sepolia.arbiscan.io/address/0xCCd6d3f0A86042d2B7056eDd381d367126628AF5#https://arbiscan.io/address/0x60d4f18fe205c0ed38507a8fbf89aaa1bd2ce183#g' \
+    -e 's#https://sepolia.arbiscan.io/address/0xf981c18E6c39137f51D90eD6cdCd73C6F6d46c98#https://arbiscan.io/address/0x60d4f18fe205c0ed38507a8fbf89aaa1bd2ce183#g' \
     -e 's#https://sepolia.arbiscan.io#https://arbiscan.io#g' \
     -e 's#https://repo.sourcify.dev/421614/#https://repo.sourcify.dev/42161/#g'
 fi
