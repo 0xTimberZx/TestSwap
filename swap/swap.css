@@ -166,6 +166,12 @@
 .swap-arrow-btn:hover { border-color: var(--green); color: var(--green); transform: rotate(180deg); }
 
 /* ─── Influence Row ──────────────────────────────────────────────────────── */
+/* Under the router's nudge minimum: the swap won't nudge, so fade the block
+   and show the toggle as off-looking. The toggle keeps the user's choice for
+   when the amount clears the floor. */
+.influence-row.below-floor { opacity: 0.5; filter: grayscale(1); transition: opacity .15s, filter .15s; }
+.influence-row.below-floor .toggle-switch { pointer-events: none; }
+
 .influence-row {
   display: flex;
   align-items: center;

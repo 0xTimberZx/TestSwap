@@ -18,6 +18,8 @@ const TICKET_TUPLE =
   "uint256 forfeitRound, uint256 generation)";
 
 const GAME_REGISTRY_ABI = [
+  "function TIMBS_ENTRY_FLOOR() view returns (uint256)",
+  "function ETH_ENTRY_FLOOR() view returns (uint256)",
   "function currentRound() external view returns (uint256)",
   "function generation() external view returns (uint256)",
   "function reclaimFromPastGame(uint256 ticketId) external",
@@ -64,6 +66,9 @@ let eligibleTokens     = [];
 let extraRounds        = 0;
 let entryCostETH_wei   = null;
 let entryCostTIMBS_wei = null;
+// Entry-cost floors, read from the registry (TIMBS_ENTRY_FLOOR is set at
+// deploy, so it differs per network); null until read.
+let timbsFloorWei = null, ethFloorWei = null;
 // Cached wallet balances + extra-round cost (wei) so the entry button can flag
 // over-balance presets synchronously. null = unknown, never blocks.
 let entryBalWei  = null;   // balance of the currently-selected entry token
@@ -501,6 +506,9 @@ async function loadEntryCosts() {
     // The cap is owner-set on-chain (6 in the capped beta). Older registries
     // without the getter keep the constant.
     try { maxExtraRounds = (await registry.maxExtraRounds()).toNumber(); } catch {}
+    try {
+      [timbsFloorWei, ethFloorWei] = await Promise.all([registry.TIMBS_ENTRY_FLOOR(), registry.ETH_ENTRY_FLOOR()]);
+    } catch { /* older registry: hint drops the floor figure */ }
     if (extraRounds > maxExtraRounds) adjustExtraRounds(0);
     updateCostDisplay();
   } catch (e) { console.warn("loadEntryCosts:", e.message); }
@@ -521,9 +529,11 @@ async function updateCostDisplay() {
   // live entry count (2 floor). What's shown is locked for the round you enter.
   const hintEl = document.getElementById("entry-cost-hint");
   if (hintEl) {
+    // Floors come from the contract: TIMBS_ENTRY_FLOOR is a deploy-time
+    // value (100 on testnet v2), so a hard-coded figure drifts.
     hintEl.textContent = selectedToken.isNative
-      ? "Floats with the pot · 0.001 ETH floor"
-      : "Scales with entries · 2 TIMBS floor";
+      ? "Floats with the pot" + (ethFloorWei ? ` · ${fmt(ethFloorWei, 18, 3)} ETH floor` : "")
+      : "Scales with entries" + (timbsFloorWei ? ` · ${fmtTIMBS(timbsFloorWei, 0)} floor` : "");
   }
 
   const noteEl = document.getElementById("extra-cost-note");

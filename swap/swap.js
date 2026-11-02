@@ -507,17 +507,26 @@ async function checkEligibility() {
 function updateNudgeHint() {
   const sub = document.querySelector("#influence-row .influence-sub");
   if (!sub) return;
+  const row  = document.getElementById("influence-row");
   const base = "This pair is eligible. Toggle to nudge the scroll on swap.";
-  if (!nudgeFloorWei || !tokenIn) { sub.textContent = base; return; }
+  if (!nudgeFloorWei || !tokenIn) {
+    sub.textContent = base;
+    if (row) row.classList.remove("below-floor");
+    return;
+  }
   let amt = null;
   try {
     const v = document.getElementById("amount-in").value;
     if (v && parseFloat(v) > 0) amt = ethers.utils.parseUnits(v, tokenIn.decimals);
   } catch { amt = null; }
   const min = trimAmount(ethers.utils.formatUnits(nudgeFloorWei, tokenIn.decimals));
-  sub.textContent = amt && amt.lt(nudgeFloorWei)
+  const below = !!(amt && amt.lt(nudgeFloorWei));
+  sub.textContent = below
     ? `Below the nudge minimum: swap at least ${min} ${tokenIn.symbol} to move the scroll.`
     : `Nudges the scroll on swaps of ${min} ${tokenIn.symbol} or more.`;
+  // Grey the whole block out while under the floor: this swap won't nudge
+  // (and won't ask to), whatever the toggle says.
+  if (row) row.classList.toggle("below-floor", below);
 }
 
 // Read-only queries go through the shared read provider (config.js): the
