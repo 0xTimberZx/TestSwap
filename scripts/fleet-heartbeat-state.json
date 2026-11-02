@@ -1,6 +1,7 @@
 {
   "alerted": {
-    "solvency-watch.yml": 1793605120,
-    "points-recon.yml": 1793609825
+    "points-recon.yml": 1793609825,
+    "settler.yml": 1793611664,
+    "reclaim-reminder.yml": 1793611664
   }
 }
