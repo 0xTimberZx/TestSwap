@@ -3,8 +3,9 @@
 //
 // Opt-in and fail-safe by design:
 //   - Silently no-ops unless all four X_* secrets are configured.
-//   - X_POST_MODE: "all" (default) posts every rollover, "winners" posts only
-//     rounds that paid out, "off" disables without removing secrets.
+//   - X_POST_MODE: "all" (default) posts every rollover, "winners" (or
+//     "winner") posts only rounds that paid out, "off" disables without
+//     removing secrets. Any other value warns and posts every round.
 //   - X_HASHTAGS / X_HASHTAGS_WINNER: optional trailing hashtag line. Tags are
 //     space/comma separated ("#" added if missing); several "|"-separated
 //     groups rotate by round number so posts aren't byte-identical. Winner
@@ -26,7 +27,17 @@ const X_API_KEY             = process.env.X_API_KEY;
 const X_API_SECRET          = process.env.X_API_SECRET;
 const X_ACCESS_TOKEN        = process.env.X_ACCESS_TOKEN;
 const X_ACCESS_TOKEN_SECRET = process.env.X_ACCESS_TOKEN_SECRET;
-const X_POST_MODE           = (process.env.X_POST_MODE || "all").toLowerCase();
+// "winner" is accepted for "winners": the variable was once set that way and
+// silently fell through to posting every round.
+const X_POST_MODE = (() => {
+  const raw = (process.env.X_POST_MODE || "all").trim().toLowerCase();
+  const mode = raw === "winner" ? "winners" : raw;
+  if (!["all", "winners", "off"].includes(mode)) {
+    console.warn(`[xposter] X_POST_MODE="${raw}" is not all | winners | off — posting every round.`);
+    return "all";
+  }
+  return mode;
+})();
 const X_HASHTAGS            = process.env.X_HASHTAGS        || "";
 const X_HASHTAGS_WINNER     = process.env.X_HASHTAGS_WINNER || "";
 
@@ -140,6 +151,42 @@ function hexPath(ctx, cx, cy, r) {
   ctx.closePath();
 }
 
+/** Six glowing hexagon tiles holding `chars`, centred on the canvas width. */
+function drawHexRow(ctx, chars, rowY, tile, font, W) {
+  const R = 62, gap = 158;
+  const startX = W / 2 - (gap * 5) / 2;
+  for (let i = 0; i < 6; i++) {
+    const cx = startX + i * gap;
+    ctx.save();
+    ctx.shadowColor = tile;
+    ctx.shadowBlur  = 22;
+    hexPath(ctx, cx, rowY, R);
+    ctx.lineWidth   = 7;
+    ctx.strokeStyle = tile;
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = tile;
+    ctx.font = `62px ${font}`;
+    ctx.textBaseline = "middle";
+    ctx.fillText(chars[i], cx, rowY + 4);
+    // Dot a digit zero (center dot punched out of the glyph) so it can't read
+    // as the letter O — both are valid characters in the alphabet.
+    if (chars[i] === "0") {
+      ctx.save();
+      ctx.fillStyle = C.bg; // knock a hole so the dot reads even over the stroke
+      ctx.beginPath();
+      ctx.arc(cx, rowY + 4, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = tile;
+      ctx.beginPath();
+      ctx.arc(cx, rowY + 4, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+}
+
 /**
  * 1200×675 result card: round header, the six winning characters as hexagon
  * tiles (gold when the round paid out, green otherwise), stats, site URL.
@@ -180,41 +227,9 @@ function renderRoundCard({ round, string6, entries, potEth, winners }) {
     ctx.fillText(`—  ${winners} WINNER${winners === 1 ? "" : "S"} PAID OUT  —`, W / 2, 226);
   }
 
-  // Six hexagon tiles, centered
   const chars = (string6 || "??????").slice(0, 6).padEnd(6, "?").split("");
-  const R = 62, gap = 158;
   const rowY = won ? 372 : 356;
-  const startX = W / 2 - (gap * 5) / 2;
-  for (let i = 0; i < 6; i++) {
-    const cx = startX + i * gap;
-    ctx.save();
-    ctx.shadowColor = tile;
-    ctx.shadowBlur  = 22;
-    hexPath(ctx, cx, rowY, R);
-    ctx.lineWidth   = 7;
-    ctx.strokeStyle = tile;
-    ctx.stroke();
-    ctx.restore();
-    ctx.fillStyle = tile;
-    ctx.font = `62px ${font}`;
-    ctx.textBaseline = "middle";
-    ctx.fillText(chars[i], cx, rowY + 4);
-    // Dot a digit zero (center dot punched out of the glyph) so it can't read
-    // as the letter O — both are valid characters in the alphabet.
-    if (chars[i] === "0") {
-      ctx.save();
-      ctx.fillStyle = C.bg; // knock a hole so the dot reads even over the stroke
-      ctx.beginPath();
-      ctx.arc(cx, rowY + 4, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = tile;
-      ctx.beginPath();
-      ctx.arc(cx, rowY + 4, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-    ctx.textBaseline = "alphabetic";
-  }
+  drawHexRow(ctx, chars, rowY, tile, font, W);
 
   ctx.fillStyle = C.dim;
   ctx.font = `32px ${font}`;
@@ -226,6 +241,51 @@ function renderRoundCard({ round, string6, entries, potEth, winners }) {
   ctx.fillStyle = C.green;
   ctx.font = `30px ${font}`;
   ctx.fillText("timbswap.xyz/compete", W / 2, H - 62);
+
+  return canvas.toBuffer("image/png");
+}
+
+/**
+ * 1200×675 announcement card in the same style as the round card: a kicker,
+ * a title, a six-letter word in hexagon tiles (green), a subtitle and a URL.
+ * Used by x-announce.js for one-off posts. Returns a PNG Buffer.
+ */
+function renderAnnounceCard({ kicker, title, word, sub, url }) {
+  const { createCanvas, GlobalFonts } = require("@napi-rs/canvas");
+  let font = "sans-serif";
+  try {
+    GlobalFonts.registerFromPath(path.join(__dirname, "assets", "SpaceGrotesk-Bold.ttf"), "SpaceGrotesk");
+    font = "SpaceGrotesk";
+  } catch { /* system font fallback */ }
+
+  const W = 1200, H = 675;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext("2d");
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, C.bg); bg.addColorStop(0.55, C.bg2); bg.addColorStop(1, C.bg);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = C.faint;
+  ctx.font = `28px ${font}`;
+  // Letter-spaced like the round card: "A B   ·   C D".
+  ctx.fillText(kicker.toUpperCase().split("").join(" "), W / 2, 92);
+
+  ctx.fillStyle = C.text;
+  ctx.font = `64px ${font}`;
+  ctx.fillText(title.toUpperCase(), W / 2, 172);
+
+  const chars = word.toUpperCase().slice(0, 6).padEnd(6, " ").split("");
+  drawHexRow(ctx, chars, 356, C.green, font, W);
+
+  ctx.fillStyle = C.dim;
+  ctx.font = `32px ${font}`;
+  ctx.fillText(sub, W / 2, 504);
+
+  ctx.fillStyle = C.green;
+  ctx.font = `30px ${font}`;
+  ctx.fillText(url, W / 2, H - 62);
 
   return canvas.toBuffer("image/png");
 }
@@ -302,4 +362,4 @@ async function postRoundToX(result) {
 
 // `tweet` and `uploadMedia` are exported so other posters (bounty-poster.js)
 // reuse this module's OAuth signing rather than re-implementing it.
-module.exports = { postRoundToX, renderRoundCard, tweet, uploadMedia, xConfigured };
+module.exports = { postRoundToX, renderRoundCard, renderAnnounceCard, tweet, uploadMedia, xConfigured, X_POST_MODE };
