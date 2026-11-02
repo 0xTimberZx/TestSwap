@@ -6,8 +6,11 @@ name: Admin — Wind Down Leaked Wallet LP
 # removeLiquidity on every old pool it holds LP in, with the recipient as
 # `to`, so the tokens never sit in the leaked wallet.
 #
-# Signs with DEPLOYER_PRIVATE_KEY, the key leaked on 22 Oct (it still holds
-# the LP). The wallet was swept, so with fund_gas=yes the old owner wallet
+# Signs with the LEAKED_DEPLOYER_PRIVATE_KEY secret: the key of the wallet
+# leaked on 22 Oct (0x4253…9800), which still holds the LP. Add it as a repo
+# secret for this one run and delete it afterwards (DEPLOYER_PRIVATE_KEY no
+# longer holds it). The run stops unless the key belongs to `signer`. The
+# wallet was swept, so with fund_gas=yes the old owner wallet
 # (NEW_OWNER_PRIVATE_KEY) first sends it a small amount of gas (at most
 # 0.005 ETH). The recipient defaults to the new deployer and may never be a
 # leaked key or the signer. Always dry-run first.
@@ -25,6 +28,10 @@ on:
         options:
           - dry-run
           - run
+      signer:
+        description: "Wallet whose LP comes out; the key must belong to it"
+        required: true
+        default: "0x42536623b503D4926DfAF6173B0357b7DfD19800"
       to:
         description: "Recipient (default: the new deployer, TSDeployer)"
         required: true
@@ -72,7 +79,8 @@ jobs:
         working-directory: scripts
         env:
           WIND_DOWN_RPC:            ${{ vars.WIND_DOWN_RPC }}
-          WIND_DOWN_LP_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          WIND_DOWN_LP_PRIVATE_KEY: ${{ secrets.LEAKED_DEPLOYER_PRIVATE_KEY }}
+          WIND_DOWN_LP_EXPECT:      ${{ github.event.inputs.signer }}
           WIND_DOWN_LP_GAS_KEY:     ${{ github.event.inputs.fund_gas == 'yes' && secrets.NEW_OWNER_PRIVATE_KEY || '' }}
           WIND_DOWN_TO:             ${{ github.event.inputs.to }}
         run: |

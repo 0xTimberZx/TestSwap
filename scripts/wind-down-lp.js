@@ -25,6 +25,8 @@
 //
 // Env:
 //   WIND_DOWN_LP_PRIVATE_KEY  the wallet whose LP comes out
+//   WIND_DOWN_LP_EXPECT       the address that key must belong to; the run
+//                             stops before anything else if it does not
 //   WIND_DOWN_LP_GAS_KEY      optional: a wallet that pays the signer's gas
 //   WIND_DOWN_TO              recipient (default TSDeployer 0xAA68…d3a5)
 //   WIND_DOWN_RPC             RPC (default: the public RPC in config.js)
@@ -80,6 +82,14 @@ async function main() {
   const key = (process.env.WIND_DOWN_LP_PRIVATE_KEY || "").trim();
   if (!key) throw new Error("WIND_DOWN_LP_PRIVATE_KEY is not set");
   const signer = new ethers.Wallet(key, provider);
+  // The key must be the wallet we mean to empty. A secret that was re-pointed
+  // at another wallet would otherwise "succeed" with nothing to do (or act on
+  // the wrong wallet's LP).
+  const expect = (process.env.WIND_DOWN_LP_EXPECT || "").trim();
+  if (!expect) throw new Error("WIND_DOWN_LP_EXPECT is not set: name the wallet whose LP should come out");
+  if (ethers.getAddress(expect.toLowerCase()) !== signer.address) {
+    throw new Error(`the key belongs to ${short(signer.address)}, not the expected ${short(ethers.getAddress(expect.toLowerCase()))}; nothing sent`);
+  }
   const to = checkRecipient(process.env.WIND_DOWN_TO || DEFAULT_TO, signer.address);
   const gasKey = (process.env.WIND_DOWN_LP_GAS_KEY || "").trim();
   const src = configSrc();
