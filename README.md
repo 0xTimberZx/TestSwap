@@ -72,7 +72,7 @@ machine — read them as gears, not a product menu.
 | GameRegistry (gen-3, keeper-driven activation) | `0x6E4640a77db52F732f2023229Aab294Ae4A61A1c` |
 | TimbPrize (gen-3) | `0xDB36B3BC7e68B193D06009aFaFe54678b088088B` |
 | Prize VRFEntropy (Chainlink VRF v2.5) | `0x923f01c620BB630E980E942c5F8F8BFD588E86a8` |
-| GasFaucet (TIMBS-only on testnet) | `0x571709F463DEe0b02Ea9ef4753f8d097F5C3334C` |
+| GasFaucet (self-funded: pays ETH + TIMBS from its own reserve) | `0x509BcB932D8725D465a59b279234BD4B4C58AdA9` |
 | TimbYieldVault | `0x90B3CF236e0010b81A8F8ceb0F419cfD30443396` |
 | PrizeEscrow | `0x4442BeD7e3228fB67f4547eC748A2C4814724562` |
 | TimbStaking | `0x790741385345D78536A696F7E58e64DDAfa07df6` |

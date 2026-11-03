@@ -301,7 +301,7 @@ const _SEPOLIA_ADDRESSES = {
   GameRegistry:         "0x6E4640a77db52F732f2023229Aab294Ae4A61A1c", // testnet v2 (2 Nov 2026 redeploy). Prev: 0x11C240577Cc522BE3e0f4b1ac61f916e35cfDD65
   TimbPrize:            "0xDB36B3BC7e68B193D06009aFaFe54678b088088B", // testnet v2 (2 Nov 2026 redeploy). Prev: 0x6027a196b553cC016b2CA8fC4477B681a2Ca86AF
   PrizeVRFEntropy:      "0x923f01c620BB630E980E942c5F8F8BFD588E86a8", // testnet v2 (2 Nov 2026 redeploy). Prev: 0xa2AC62BF0FdD1D1ED148ea1c0555eEcD8829A393
-  GasFaucet:            "0x571709F463DEe0b02Ea9ef4753f8d097F5C3334C", // testnet v2 (2 Nov 2026 redeploy). Prev: 0x0a59b7d61a4db317fad8697c3e3e1e6df4c7a04b
+  GasFaucet:            "0x509BcB932D8725D465a59b279234BD4B4C58AdA9", // self-funded faucet (3 Nov 2026, #718/#719: pays claims from its own ETH reserve). Prev: 0x571709F463DEe0b02Ea9ef4753f8d097F5C3334C
   TimbStaking:          "0x790741385345D78536A696F7E58e64DDAfa07df6", // testnet v2 (2 Nov 2026 redeploy). Prev: 0xe776c7b700B190ED8248741F9b518B08d8733C8F
   TimbFarm:             "0x093Be67377a6603C77d1BaCb12422E0D53481341", // testnet v2 (2 Nov 2026 redeploy). Prev: 0xE319E2206F71A5cD8dd2c411C6F29712935f9011
   TimbBoostFarm:        "0xbC66c1C1f3CCB47fF676fAb280c7cBD9Daa21ef0", // testnet v2 (2 Nov 2026 redeploy). Prev: 0x551D919D517aBa40D2b3A57a91973ad5Ad3CBd35
