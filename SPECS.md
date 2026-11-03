@@ -24,7 +24,7 @@
 | GameRegistry (gen-3) | 0x6E4640a77db52F732f2023229Aab294Ae4A61A1c | **The live registry** (`TimbPrize.gameRegistry()` → `0x11C24…`). Permissionless `activateRoundEntries` so the keeper activates rounds 2+; dynamic per-round entry pricing; vault calls try/catch-fenced |
 | TimbPrize (gen-3) | 0xDB36B3BC7e68B193D06009aFaFe54678b088088B | Keeper-driven activation, bound to the gen-3 registry; `startGame` bumped the registry generation |
 | Prize VRFEntropy | 0x923f01c620BB630E980E942c5F8F8BFD588E86a8 | Chainlink VRF v2.5 consumer for the prize draws (sub `50316…6967`) |
-| GasFaucet | 0x571709F463DEe0b02Ea9ef4753f8d097F5C3334C | Active-ticket faucet; TIMBS-only on testnet (the Sepolia treasury predates the operator role its ETH legs need). Dispatcher = keeper EOA |
+| GasFaucet | 0x509BcB932D8725D465a59b279234BD4B4C58AdA9 | Active-ticket faucet; self-funded (3 Nov 2026): pays the gas drip, pot share and TIMBS from its own reserve, never the treasury. Fund it with a plain ETH transfer. Dispatcher = keeper EOA |
 | TimbYieldVault | 0x90B3CF236e0010b81A8F8ceb0F419cfD30443396 | Sourcify ✅ — `gameRegistry` = gen-3 registry (rebound 2026-09-15, see CHANGELOG) |
 | TimbStaking | 0x790741385345D78536A696F7E58e64DDAfa07df6 | Sourcify ✅ |
 | TimbFarm | 0x093Be67377a6603C77d1BaCb12422E0D53481341 | Sourcify ✅ |
