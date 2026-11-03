@@ -67,7 +67,6 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
  *   FAUCET_GUARDIAN                 pause-only key (TS-054)
  *   VRF_CONFIRMATIONS (3), VRF_CALLBACK_GAS (200000)
  *   PROTOCOL_CUT_BPS (50)           0.5% of each settled pot (decided 2026-10-30)
- *   OPERATOR_ETH_CAP (0.1 ETH), OPERATOR_PERIOD (1 day)   faucet's pull on the treasury
  *   BOOST_EMISSION_WINDOW (302400 s = 3.5 days), BOOST_POOL_WEIGHT (100)
  *   DEPLOY_GOVERNANCE (false), then GOV_MULTISIG, PROPOSAL_THRESHOLD, QUORUM_BPS,
  *     VOTING_PERIOD, VOTING_DELAY, TIMELOCK_MIN_DELAY (48 h)
@@ -83,7 +82,7 @@ contract Deploy is Script {
         uint256 entryCostTimbs; uint256 initialSupply; uint256 timbsEntryFloor; uint256 timbsStep;
         uint256 stakingRate; uint256 farmRate; uint256 yieldAprBps; uint256 cutBps;
         uint256 dripEth; uint256 potEth; uint256 timbsPerClaim; uint256 cooldown;
-        uint256 faucetEthCap; uint256 faucetTimbsCap; uint256 operatorCap; uint256 operatorPeriod;
+        uint256 faucetEthCap; uint256 faucetTimbsCap;
         uint256 boostWindow; uint256 boostWeight;
         bool governance; address govMultisig; uint256 propThreshold; uint256 quorumBps;
         uint256 votingPeriod; uint256 votingDelay; uint256 timelockDelay;
@@ -176,8 +175,6 @@ contract Deploy is Script {
         c.cooldown       = vm.envUint("FAUCET_COOLDOWN");
         c.faucetEthCap   = vm.envUint("FAUCET_ETH_CAP");
         c.faucetTimbsCap = vm.envUint("FAUCET_TIMBS_CAP");
-        c.operatorCap    = vm.envOr("OPERATOR_ETH_CAP", uint256(1e17));
-        c.operatorPeriod = vm.envOr("OPERATOR_PERIOD", uint256(1 days));
         c.boostWindow    = vm.envOr("BOOST_EMISSION_WINDOW", uint256(302_400));
         c.boostWeight    = vm.envOr("BOOST_POOL_WEIGHT", uint256(100));
         c.governance     = vm.envOr("DEPLOY_GOVERNANCE", false);
@@ -321,18 +318,17 @@ contract Deploy is Script {
         timbs.setTransferWhitelist(address(treasury), true);
     }
 
-    /// @dev The faucet draws ETH from the treasury as its rate-limited operator.
+    /// @dev The faucet pays claims from its OWN ETH reserve (fund it with a
+    ///      plain transfer); it has no role on the treasury.
     function _deployFaucet(Cfg memory c) internal {
         faucet = new GasFaucet(
-            address(treasury), address(timbs), address(gameRegistry), address(timbPrize),
+            address(timbs), address(gameRegistry), address(timbPrize),
             c.dripEth, c.potEth, c.timbsPerClaim, c.cooldown
         );
         faucet.setDispatcher(c.dispatcher);
         if (c.guardian != address(0)) faucet.setGuardian(c.guardian);
         faucet.setEthCap(c.faucetEthCap);
         faucet.setTimbsCap(c.faucetTimbsCap);
-        treasury.setOperator(address(faucet));
-        treasury.setOperatorEthCap(c.operatorCap, c.operatorPeriod);
     }
 
     /// @dev Optional (DEPLOY_GOVERNANCE=true). Signalling governance and a
@@ -389,7 +385,7 @@ contract Deploy is Script {
         // Faucet and keeper roles
         require(faucet.dispatcher() == c.dispatcher && faucet.guardian() == c.guardian, "faucet: dispatcher and guardian");
         require(faucet.ethCap() == c.faucetEthCap && faucet.timbsCap() == c.faucetTimbsCap, "faucet: caps");
-        require(treasury.operator() == address(faucet) && treasury.operatorEthCap() == c.operatorCap, "treasury: faucet is the capped operator");
+        require(treasury.operator() == address(0), "treasury: no operator (the faucet is self-funded)");
         if (c.governance) {
             require(governance.owner() == c.deployer, "owner: governance");
             require(timelock.hasRole(timelock.PROPOSER_ROLE(), c.govMultisig) && timelock.getMinDelay() == c.timelockDelay, "timelock: multisig proposes, delay as configured");

@@ -64,7 +64,6 @@ contract DeployScriptTest is Test {
         c.stakingRate = 1e15; c.farmRate = 1e15; c.yieldAprBps = 10_000; c.cutBps = 50;
         c.dripEth = 1e13; c.potEth = 1e13; c.timbsPerClaim = 100e18; c.cooldown = 1 days;
         c.faucetEthCap = 1.5 ether; c.faucetTimbsCap = 1_000_000e18;
-        c.operatorCap = 0.1 ether; c.operatorPeriod = 1 days;
         c.boostWindow = 302_400; c.boostWeight = 100;
     }
 
@@ -85,7 +84,7 @@ contract DeployScriptTest is Test {
         assertEq(d.faucet().guardian(), GUARDIAN);
         assertEq(d.timbPrize().protocolCutBps(), 50, "0.5% cut (decided 2026-10-30)");
         assertFalse(d.timbPrize().gameStarted(), "the deploy never starts the game");
-        assertEq(d.treasury().operator(), address(d.faucet()));
+        assertEq(d.treasury().operator(), address(0), "faucet is self-funded: no treasury operator");
         assertEq(d.timbs().balanceOf(WALLET), 1_000_000e18, "genesis supply to the treasury wallet");
         assertEq(address(d.governance()), address(0), "governance off by default");
 
