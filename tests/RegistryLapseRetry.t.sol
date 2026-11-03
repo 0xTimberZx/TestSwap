@@ -67,7 +67,7 @@ contract RegistryLapseRetryTest is Test {
         timbs.mint(who, 100e18);
         vm.startPrank(who);
         timbs.approve(address(reg), type(uint256).max);
-        reg.submitEntry(S1, false, 0); // plays round 1, LER 1, forfeit at 5
+        reg.submitEntry(S1, false, 0); // plays round 1, LER 1, forfeit at 1 + REFUND_WINDOW_ROUNDS
         vm.stopPrank();
         id = reg.activeTicketOf(who);
         (GameRegistry.Ticket memory t,) = reg.getTicket(id);
@@ -77,8 +77,8 @@ contract RegistryLapseRetryTest is Test {
     function _sweepRound5(address who) internal {
         reg.setCurrentRound(1);
         reg.activateRoundEntries(1, _one(who));
-        reg.setCurrentRound(6);
-        reg.onRoundSettled(5, 0);
+        reg.setCurrentRound(2 + reg.REFUND_WINDOW_ROUNDS());
+        reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 0);
     }
 
     function _escrowOf(uint256 id) internal view returns (uint256) {
@@ -147,8 +147,8 @@ contract RegistryLapseRetryTest is Test {
         sink.setRefuse(true);
         r2.setCurrentRound(1);
         r2.activateRoundEntries(1, _one(PLAYER));
-        r2.setCurrentRound(6);
-        r2.onRoundSettled(5, 0);
+        r2.setCurrentRound(2 + r2.REFUND_WINDOW_ROUNDS());
+        r2.onRoundSettled(1 + r2.REFUND_WINDOW_ROUNDS(), 0);
 
         uint256 sinkShare = stake - (stake * r2.lapsePotBps()) / 10_000;
         assertTrue(r2.lapsePending(id));
@@ -224,8 +224,8 @@ contract RegistryLapseRetryTest is Test {
 
         reg.setCurrentRound(1);
         reg.activateRoundEntries(1, _one(PLAYER3));
-        reg.setCurrentRound(6);
-        reg.onRoundSettled(5, 0); // PLAYER3 forfeits
+        reg.setCurrentRound(2 + reg.REFUND_WINDOW_ROUNDS());
+        reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 0); // PLAYER3 forfeits
         assertEq(reg.timbsEscrowHeld(), timbs.balanceOf(address(reg)), "after forfeit");
 
         a; b; c;

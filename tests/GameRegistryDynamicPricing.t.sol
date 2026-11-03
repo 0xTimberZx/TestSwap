@@ -241,7 +241,7 @@ contract GameRegistryDynamicPricingTest is Test {
     function test_Seat_RefundDecrements_ExpiryDoesNot() public {
         _fundTimbs(address(0xA1));
         vm.prank(address(0xA1));
-        reg.submitEntry(S1, false, 0); // ticket id 1, LER 1, forfeit at 5
+        reg.submitEntry(S1, false, 0); // ticket id 1, LER 1, forfeit at 1 + REFUND_WINDOW_ROUNDS
 
         reg.setCurrentRound(1);
         reg.activateRoundEntries(1, _one(address(0xA1)));
@@ -259,13 +259,13 @@ contract GameRegistryDynamicPricingTest is Test {
     function test_Seat_ForfeitDecrements() public {
         _fundTimbs(address(0xA1));
         vm.prank(address(0xA1));
-        reg.submitEntry(S1, false, 0); // LER 1, forfeit at 5
+        reg.submitEntry(S1, false, 0); // LER 1, forfeit at 1 + REFUND_WINDOW_ROUNDS
 
         reg.setCurrentRound(1);
         reg.activateRoundEntries(1, _one(address(0xA1)));
 
-        reg.setCurrentRound(6); // H2: round 5 is "settled" once currentRound > 5
-        reg.onRoundSettled(5, 0); // forfeitRound == 5 → Ineligible, escrow to sink
+        reg.setCurrentRound(2 + reg.REFUND_WINDOW_ROUNDS()); // H2: the forfeit round is "settled" once currentRound is past it
+        reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 0); // forfeitRound == 1 + REFUND_WINDOW_ROUNDS → Ineligible, escrow to sink
         assertEq(reg.activeTimbEntries(), 0, "forfeit releases the seat");
         assertEq(timbs.balanceOf(SINK), TIMBS_FLOOR, "escrow absorbed to sink");
     }
@@ -279,10 +279,10 @@ contract GameRegistryDynamicPricingTest is Test {
         uint256 id = reg.activeTicketOf(address(0xA1));
         reg.setCurrentRound(1);
         reg.activateRoundEntries(1, _one(address(0xA1)));
-        reg.setCurrentRound(6);
+        reg.setCurrentRound(2 + reg.REFUND_WINDOW_ROUNDS());
 
         timbs.setPaused(true);
-        assertTrue(reg.onRoundSettled(5, 0), "sweep completes despite the failing leg");
+        assertTrue(reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 0), "sweep completes despite the failing leg");
         assertEq(timbs.balanceOf(SINK), 0, "nothing moved");
         (GameRegistry.Ticket memory t,) = reg.getTicket(id);
         assertEq(uint8(t.status), uint8(GameRegistry.TicketStatus.Ineligible));
@@ -296,30 +296,30 @@ contract GameRegistryDynamicPricingTest is Test {
     // bounded chunks instead of one settle-time loop that could OOG-freeze the game.
     function test_Paginated_ForfeitureResumesAcrossChunks() public {
         address[3] memory who = [address(0xA1), address(0xA2), address(0xA3)];
-        for (uint256 i; i < 3; i++) _timbsEntry(who[i], S1); // each LER 1, forfeit at 5
+        for (uint256 i; i < 3; i++) _timbsEntry(who[i], S1); // each LER 1, forfeit at 1 + REFUND_WINDOW_ROUNDS
 
         reg.setCurrentRound(1);
         for (uint256 i; i < 3; i++) reg.activateRoundEntries(1, _one(who[i]));
         assertEq(reg.activeTimbEntries(), 3, "3 seats");
 
-        reg.setCurrentRound(6); // round 5 settled
+        reg.setCurrentRound(2 + reg.REFUND_WINDOW_ROUNDS()); // forfeit round settled
 
         uint256 gen = reg.generation();
 
-        assertFalse(reg.onRoundSettled(5, 1), "chunk 1 not done");
-        assertFalse(reg.settleDone(gen, 5), "not marked done mid-scan");
+        assertFalse(reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 1), "chunk 1 not done");
+        assertFalse(reg.settleDone(gen, 1 + reg.REFUND_WINDOW_ROUNDS()), "not marked done mid-scan");
         assertEq(reg.activeTimbEntries(), 2, "one forfeited");
 
-        assertFalse(reg.onRoundSettled(5, 1), "chunk 2 not done");
+        assertFalse(reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 1), "chunk 2 not done");
         assertEq(reg.activeTimbEntries(), 1, "two forfeited");
 
-        assertTrue(reg.onRoundSettled(5, 1), "final chunk completes");
-        assertTrue(reg.settleDone(gen, 5), "marked done");
+        assertTrue(reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 1), "final chunk completes");
+        assertTrue(reg.settleDone(gen, 1 + reg.REFUND_WINDOW_ROUNDS()), "marked done");
         assertEq(reg.activeTimbEntries(), 0, "all forfeited");
         assertGe(timbs.balanceOf(SINK), 3 * TIMBS_FLOOR, "all escrow to sink");
 
         // Idempotent once done — no double-processing.
-        assertTrue(reg.onRoundSettled(5, 1), "done stays done");
+        assertTrue(reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 1), "done stays done");
         assertEq(reg.activeTimbEntries(), 0, "no double-processing");
     }
 

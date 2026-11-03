@@ -296,7 +296,7 @@ contract PrizeWindowsTest is Test {
         vm.stopPrank();
     }
 
-    // ─── §14 Principal refund: 4 rounds ─────────────────────────────────────
+    // ─── §14 Principal refund: REFUND_WINDOW_ROUNDS ─────────────────────────────────────
 
     function test_RefundSucceedsAtWindowEdge() public {
         runUntilRound(2);
@@ -306,7 +306,8 @@ contract PrizeWindowsTest is Test {
         id = registry.activeTicketOf(player);
         vm.stopPrank();
         uint256 ler = 3;
-        runUntilRound(ler + 4);                     // currentRound == LER+4: still refundable
+        uint256 W = registry.REFUND_WINDOW_ROUNDS();
+        runUntilRound(ler + W);                     // currentRound == LER+W: still refundable
         uint256 balBefore = player.balance;
         vm.startPrank(player);
         registry.claimRefund(id);
@@ -323,7 +324,7 @@ contract PrizeWindowsTest is Test {
         vm.stopPrank();
         uint256 ler = 3;
         uint256 sinkBefore = sink.balance;
-        runUntilRound(ler + 5);                     // settling LER+4 sweeps the lapse
+        runUntilRound(ler + registry.REFUND_WINDOW_ROUNDS() + 1); // settling LER+W sweeps the lapse
         // Community-tilted lapse split (abandoned-ticket revenue): lapsePotBps of
         // the ETH principal recycles into the live prize pot (players); the
         // remainder — (BPS - lapsePotBps) — goes to the protocol sink.
@@ -361,7 +362,7 @@ contract PrizeWindowsTest is Test {
 
         // …but the principal window is still open. This ticket won its last
         // eligible round (T == LER), so §14 pushes its forfeiture to LER+6.
-        runUntilRound(T + 4);
+        runUntilRound(T + registry.REFUND_WINDOW_ROUNDS());
         uint256 id = registry.activeTicketOf(player) != 0
             ? registry.activeTicketOf(player)
             : registry.ticketAt(registry.generation(), player, T);
@@ -382,14 +383,14 @@ contract PrizeWindowsTest is Test {
     function test_WinnerLastRound_ForfeitRoundIsLERPlus6() public {
         uint256 T = makeWinner();                    // ticket plays & wins round T; LER == T
         (GameRegistry.Ticket memory t,) = registry.getTicket(_ticketId(T));
-        assertEq(t.forfeitRound, T + 6, "last-round winner should forfeit at LER+6");
+        assertEq(t.forfeitRound, T + 2 + registry.REFUND_WINDOW_ROUNDS(), "last-round winner should forfeit at LER+2+W");
     }
 
     function test_WinnerLastRound_RefundableInExtendedWindow() public {
         uint256 T = makeWinner();
-        // T+5 is PAST the old flat LER+4 window — under v5 it must still refund
+        // LER+W+1 is PAST the flat LER+W window — under v5 it must still refund
         // because the claim right (T+1..T+2) delayed the forfeiture countdown.
-        runUntilRound(T + 5);
+        runUntilRound(T + registry.REFUND_WINDOW_ROUNDS() + 1);
         // Resolve the id BEFORE the prank — _ticketId makes an external ticketAt
         // staticcall, which would otherwise consume the prank and leave claimRefund
         // running as the test contract (NotTicketOwner).
@@ -405,7 +406,7 @@ contract PrizeWindowsTest is Test {
         uint256 T = makeWinner();
         uint256 id = _ticketId(T);
         uint256 sinkBefore = sink.balance;
-        runUntilRound(T + 7);                        // settling T+6 sweeps the lapse
+        runUntilRound(T + 3 + registry.REFUND_WINDOW_ROUNDS()); // settling LER+2+W sweeps the lapse
         // Same community-tilted lapse split as above: sink receives only the
         // (BPS - lapsePotBps) remainder; lapsePotBps recycles into the pot.
         uint256 toSink = ENTRY_ETH * (registry.BPS() - registry.lapsePotBps()) / registry.BPS();
