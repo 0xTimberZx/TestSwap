@@ -104,9 +104,9 @@ contract GameRegistry is Ownable2Step, ReentrancyGuard {
     ///         countdown begins at the LATER of (a) the round the ticket's
     ///         eligibility ends and (b) the round its prize-claim right ends —
     ///         so a ticket that wins its last eligible round gets its full
-    ///         refund window AFTER the 2-round claim closes (forfeit at LER+6),
-    ///         while non-winners forfeit at LER+4. §14.
-    uint256 public constant REFUND_WINDOW_ROUNDS = 4;
+    ///         refund window AFTER the 2-round claim closes (forfeit at LER+14),
+    ///         while non-winners forfeit at LER+12. §14.
+    uint256 public constant REFUND_WINDOW_ROUNDS = 12;
 
     /// @notice Prize-claim window mirrored from TimbPrize — a winner's claim
     ///         right runs this many rounds past the round it matched. Used to
