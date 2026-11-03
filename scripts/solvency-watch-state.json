@@ -1,5 +1,7 @@
 {
   "chainId": 421614,
   "prize": "0xDB36B3BC7e68B193D06009aFaFe54678b088088B",
-  "alerted": {}
+  "alerted": {
+    "READ_FAILED": 1793744647
+  }
 }
