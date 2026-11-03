@@ -1,0 +1,84 @@
+name: Admin — Redeploy Faucet (self-funded)
+
+# Manual-only: move the testnet faucet to the self-funded GasFaucet (#718)
+# with scripts/redeploy-faucet.js. Signed by the faucet owner (TSDeployer):
+# deploys the new GasFaucet with the old one's settings, sets its dispatcher,
+# guardian and caps, pauses the old faucet, and moves the old faucet's TIMBS
+# budget and ETH into the new one. Prints the new address for config.js.
+#
+#   dry-run  reads the old faucet, builds the new contract, prints the plan and
+#            simulates the old-faucet calls. Uses no key.
+#   run      sends it.
+#
+# The run step uses the TESTNET_DEPLOYER_PRIVATE_KEY secret and stops unless the
+# key belongs to `signer`. Add the secret for the run and delete it afterwards.
+#
+# TESTNET ONLY. Not gated on KEEPERS_HOST: a one-off you start by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run prints the plan; run sends it"
+        required: true
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - run
+      signer:
+        description: "Faucet owner; the key must belong to it"
+        required: true
+        default: "0xAA6820D22cF59C9d143fe1a943F19FE6EcdAd3a5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-redeploy-faucet
+  cancel-in-progress: false
+
+jobs:
+  redeploy:
+    name: Redeploy the faucet (${{ github.event.inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Build the contracts
+        run: forge build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Redeploy
+        working-directory: scripts
+        env:
+          FAUCET_RPC:    ${{ vars.DEPLOY_RPC || 'https://sepolia-rollup.arbitrum.io/rpc' }}
+          FAUCET_FROM:   ${{ github.event.inputs.signer }}
+          FAUCET_EXPECT: ${{ github.event.inputs.signer }}
+          MODE:          ${{ github.event.inputs.mode }}
+          KEY:           ${{ github.event.inputs.mode == 'run' && secrets.TESTNET_DEPLOYER_PRIVATE_KEY || '' }}
+        run: |
+          if [ "$MODE" = "run" ]; then
+            if [ -z "$KEY" ]; then echo "::error::TESTNET_DEPLOYER_PRIVATE_KEY is not set"; exit 1; fi
+            FAUCET_KEY="$KEY" node redeploy-faucet.js --execute
+          else
+            node redeploy-faucet.js
+          fi
