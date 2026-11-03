@@ -60,7 +60,7 @@ contract MigrationLapseWindowTest is Test {
         tid = reg.activeTicketOf(HOLDER);
         reg.setCurrentRound(1);
         reg.activateRoundEntries(1, _one(HOLDER));
-        reg.setCurrentRound(6); // round 5 settled
+        reg.setCurrentRound(2 + reg.REFUND_WINDOW_ROUNDS()); // forfeit round settled
     }
 
     /// The window as it was: escrow repointed, old registry still live. The
@@ -69,7 +69,7 @@ contract MigrationLapseWindowTest is Test {
         _ticketDueToLapse();
         escrowRepointed = true;
         vm.prank(address(0xCA11)); // anyone
-        reg.onRoundSettled(5, 0);
+        reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 0);
         assertEq(potReceived, 0, "pot share lost to the try/catch");
         assertEq(SINK.balance, ENTRY, "100% to the sink, not 70/30");
     }
@@ -82,7 +82,7 @@ contract MigrationLapseWindowTest is Test {
         escrowRepointed = true;
 
         vm.prank(address(0xCA11));
-        reg.onRoundSettled(5, 0);
+        reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 0);
         assertEq(potReceived, 0, "nothing swept to the old pot");
         assertEq(SINK.balance, 0, "nothing swept to the sink");
 

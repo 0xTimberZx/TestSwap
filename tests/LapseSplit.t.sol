@@ -43,7 +43,7 @@ contract LapseSplitTest is Test {
         arr[0] = a;
     }
 
-    // Drive one ETH ticket (entered at round 0 → plays round 1, forfeit at 5)
+    // Drive one ETH ticket (entered at round 0 → plays round 1, forfeit at 1 + REFUND_WINDOW_ROUNDS)
     // all the way to its §14 forfeiture sweep.
     function _forfeitEthTicket(address who) internal {
         vm.deal(who, 1 ether);
@@ -52,8 +52,8 @@ contract LapseSplitTest is Test {
 
         reg.setCurrentRound(1);
         reg.activateRoundEntries(1, _one(who));
-        reg.setCurrentRound(6);      // round 5 is "settled" once currentRound > 5
-        reg.onRoundSettled(5, 0);    // forfeitRound == 5 → split sweep
+        reg.setCurrentRound(2 + reg.REFUND_WINDOW_ROUNDS());      // the forfeit round is "settled" once currentRound is past it
+        reg.onRoundSettled(1 + reg.REFUND_WINDOW_ROUNDS(), 0);    // forfeitRound == 1 + REFUND_WINDOW_ROUNDS → split sweep
     }
 
     // Default 70/30: pot gets 70%, sink gets 30%.
