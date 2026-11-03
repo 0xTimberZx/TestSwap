@@ -27,6 +27,9 @@
 //   GAME_REGISTRY_ADDR         GameRegistry on Sepolia (eligibility oracle)
 //   TIMB_YIELD_VAULT_ADDR      TimbYieldVault on Sepolia (weightOf soft-check)
 //   TURNSTILE_SECRET           Cloudflare Turnstile secret key
+//   TURNSTILE_HOSTNAMES        optional; comma-separated hostnames a token may
+//                              have been solved on (default: the site's own:
+//                              timbswap.xyz, www.timbswap.xyz, 0xtimberzx.github.io)
 //   FAUCET_PROXY_SECRET        optional; if set, only requests carrying the
 //                              matching X-Proxy-Secret header are accepted
 //   AIRDROP_ENABLED            "true" to enqueue the mainnet-TIMB leg (Phase 2)
@@ -45,6 +48,12 @@ const CHAIN_ID      = Number(Deno.env.get("FAUCET_CHAIN_ID") ?? "421614");
 const REGISTRY_ADDR = Deno.env.get("GAME_REGISTRY_ADDR") ?? "";
 const YIELD_ADDR    = Deno.env.get("TIMB_YIELD_VAULT_ADDR") ?? "";
 const TS_SECRET     = Deno.env.get("TURNSTILE_SECRET") ?? "";
+// A Turnstile token only counts if it was solved on one of our own pages, so a
+// token farmed from another site using the same widget can't be replayed here.
+const TS_HOSTNAMES  = new Set(
+  (Deno.env.get("TURNSTILE_HOSTNAMES") ?? "timbswap.xyz,www.timbswap.xyz,0xtimberzx.github.io")
+    .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean),
+);
 const PROXY_SECRET  = Deno.env.get("FAUCET_PROXY_SECRET") ?? "";
 const AIRDROP_ON    = (Deno.env.get("AIRDROP_ENABLED") ?? "").toLowerCase() === "true";
 const AIRDROP_ROUND = Number(Deno.env.get("AIRDROP_ROUND") ?? "1");
@@ -161,7 +170,14 @@ async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
       body: form.toString(),
     });
     const out = await r.json();
-    return out?.success === true;
+    if (out?.success !== true) return false;
+    // siteverify reports where the challenge was solved; refuse other hosts.
+    const host = String(out?.hostname ?? "").toLowerCase();
+    if (!TS_HOSTNAMES.has(host)) {
+      console.warn(`turnstile: token solved on unexpected hostname "${host}"`);
+      return false;
+    }
+    return true;
   } catch (_e) {
     return false; // verification unreachable → fail closed
   }
