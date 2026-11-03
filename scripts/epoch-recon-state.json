@@ -4,23 +4,23 @@
   "staking": "0x790741385345D78536A696F7E58e64DDAfa07df6",
   "treasury": "0xd1Fb6E177c0888fB77f977B4299034020d4f2D75",
   "prize": "0xDB36B3BC7e68B193D06009aFaFe54678b088088B",
-  "cursorBlock": 325680126,
+  "cursorBlock": 325707560,
   "sinceSec": 1793609833,
   "lastSettlement": {
-    "block": 325191943,
-    "runStartBlock": 325191943,
-    "ts": 1793590573,
-    "round": null,
-    "farm": "10000000000000000000000",
-    "stake": "18750000000000000000000"
+    "block": 325706615,
+    "runStartBlock": 325706615,
+    "ts": 1793725295,
+    "round": 7,
+    "farm": "667980178217379545119",
+    "stake": "445320118811586363413"
   },
   "lastGrant": {
     "farm": {
-      "ts": 1793590573,
+      "ts": 1793725295,
       "duration": 7776000
     },
     "stake": {
-      "ts": 1793590574,
+      "ts": 1793725300,
       "duration": 7776000
     }
   },
