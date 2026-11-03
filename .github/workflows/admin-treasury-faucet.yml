@@ -1,0 +1,76 @@
+name: Admin — Treasury Faucet Handoff
+
+# Manual-only: finish separating the faucet from TimbTreasury
+# (scripts/treasury-faucet-handoff.js). Signed by the treasury owner, the epoch
+# keeper wallet (EPOCH_PRIVATE_KEY): moves treasury ETH to the self-funded
+# faucet in config.js, clears the treasury operator (the old faucet) and sets
+# the operator cap to 0, which also drops the epoch buyback's reserve to 0.
+#
+#   dry-run  reads the treasury and faucet, prints the plan, simulates. No key.
+#   run      sends it.
+#
+# The run stops unless the key belongs to `signer`. Each step is skipped when
+# already done, so a rerun is safe. TESTNET ONLY.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run prints the plan; run sends it"
+        required: true
+        default: "dry-run"
+        type: choice
+        options:
+          - dry-run
+          - run
+      amount:
+        description: "ETH to move to the faucet: all, a number like 0.105, or 0 to skip"
+        required: true
+        default: "all"
+      signer:
+        description: "Treasury owner (the epoch keeper wallet); the key must belong to it"
+        required: true
+        default: "0x09d124bDCd3808A197F63a7Ef7E0b9643bd4B37b"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-treasury-faucet
+  cancel-in-progress: false
+
+jobs:
+  handoff:
+    name: Treasury faucet handoff (${{ github.event.inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Hand off
+        working-directory: scripts
+        env:
+          TREASURY_RPC:        ${{ vars.DEPLOY_RPC || 'https://sepolia-rollup.arbitrum.io/rpc' }}
+          TREASURY_FROM:       ${{ github.event.inputs.signer }}
+          TREASURY_EXPECT:     ${{ github.event.inputs.signer }}
+          TREASURY_FAUCET_ETH: ${{ github.event.inputs.amount }}
+          MODE:                ${{ github.event.inputs.mode }}
+          KEY:                 ${{ github.event.inputs.mode == 'run' && secrets.EPOCH_PRIVATE_KEY || '' }}
+        run: |
+          if [ "$MODE" = "run" ]; then
+            if [ -z "$KEY" ]; then echo "::error::EPOCH_PRIVATE_KEY is not set"; exit 1; fi
+            TREASURY_KEY="$KEY" node treasury-faucet-handoff.js --execute
+          else
+            node treasury-faucet-handoff.js
+          fi
