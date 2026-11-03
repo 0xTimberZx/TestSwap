@@ -8,8 +8,8 @@
   "router": "0xD3a7843Da4E0DE2711447CEF779D5F45AeeDb7c4",
   "seasonId": 2,
   "startBlock": 325195917,
-  "cursorBlock": 325281754,
-  "lastRound": 1,
+  "cursorBlock": 325445131,
+  "lastRound": 3,
   "ledger": {},
   "pendingUnder": {
     "0x42536623b503d4926dfaf6173b0357b7dfd19800:faucet_claims": 1793678547,
@@ -20,5 +20,7 @@
     "0xaacc688526169a21746d28ad9263eaea8625bc22:faucet_claims": 1793678547,
     "0xb64408da327c7ed420b19b80d2a6b06fad975048:faucet_claims": 1793678547
   },
-  "alerted": {}
+  "alerted": {
+    "under": 1793711082
+  }
 }
