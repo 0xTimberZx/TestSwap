@@ -8,8 +8,8 @@
   "router": "0xD3a7843Da4E0DE2711447CEF779D5F45AeeDb7c4",
   "seasonId": 2,
   "startBlock": 325195917,
-  "cursorBlock": 325610303,
-  "lastRound": 5,
+  "cursorBlock": 325693591,
+  "lastRound": 6,
   "ledger": {
     "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf": {
       "rp": 1,
