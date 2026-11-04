@@ -1,7 +1,14 @@
 {
   "chainId": 421614,
   "faucet": "0x509BcB932D8725D465a59b279234BD4B4C58AdA9",
-  "cursorBlock": 325740979,
-  "eraStart": null,
-  "wallets": {}
+  "cursorBlock": 325890502,
+  "eraStart": 1793765053,
+  "wallets": {
+    "0x910b365352DEe80D8759245eCc92A982982C0fE3": {
+      "count": 1,
+      "first": 1793765053,
+      "last": 1793765053,
+      "timbs": "100000000000000000000"
+    }
+  }
 }
