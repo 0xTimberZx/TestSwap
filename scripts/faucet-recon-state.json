@@ -1,10 +1,10 @@
 {
   "chainId": 421614,
   "faucet": "0x509BcB932D8725D465a59b279234BD4B4C58AdA9",
-  "cursorBlock": 325850851,
+  "cursorBlock": 325864774,
   "genesisBlock": 309038324,
   "sinceIso": "2026-09-15T04:56:39.000Z",
-  "cursorRowId": 30,
+  "cursorRowId": 31,
   "pending": {
     "rows": {},
     "events": {},
