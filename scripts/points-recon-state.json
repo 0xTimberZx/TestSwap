@@ -8,12 +8,12 @@
   "router": "0xD3a7843Da4E0DE2711447CEF779D5F45AeeDb7c4",
   "seasonId": 2,
   "startBlock": 325195917,
-  "cursorBlock": 325937825,
-  "lastRound": 9,
+  "cursorBlock": 326019626,
+  "lastRound": 10,
   "ledger": {
     "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf": {
-      "rp": 2,
-      "ta": 2,
+      "rp": 3,
+      "ta": 3,
       "ns": 0,
       "ps": 1,
       "pn": 0,
@@ -44,6 +44,6 @@
     "0xb64408da327c7ed420b19b80d2a6b06fad975048:faucet_claims": 1793678547
   },
   "alerted": {
-    "under": 1793853663
+    "under": 1793875353
   }
 }
