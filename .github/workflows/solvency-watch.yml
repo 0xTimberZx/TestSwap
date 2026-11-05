@@ -140,7 +140,7 @@ jobs:
             echo "No dispatch token secret — relying on cron for the next run."
             exit 0
           fi
-          curl -fsS -X POST \
+          curl -fsS --retry 4 --retry-delay 15 --retry-connrefused -X POST \
             -H "Authorization: Bearer $DISPATCH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/solvency-watch.yml/dispatches" \
