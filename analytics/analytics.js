@@ -36,7 +36,10 @@ const STAKING_ABI = ["function totalStaked() external view returns (uint256)"];
 const FARM_ABI    = ["function totalStaked() external view returns (uint256)"];
 const REGISTRY_ABI = [
   "function getRoundEntrants(uint256 round) external view returns (address[])",
-  "function verifyEntryValid(address player, uint256 round) external view returns (bool valid, bytes6 string6)"
+  "function verifyEntryValid(address player, uint256 round) external view returns (bool valid, bytes6 string6)",
+  // A ticket cancelled before it ever played (a pending replacement) never
+  // touches the vault, so the weight table reads this to show it.
+  "event TicketCancelled(uint256 indexed ticketId, uint256 refundAmount, address escrowToken)"
 ];
 const FACTORY_MIN_ABI = ["function getPairAddress(address tokenA, address tokenB) external view returns (address)"];
 
@@ -202,9 +205,25 @@ async function loadLiveMetrics() {
     // Sub-line: USD value + the live vault yield accruing into the pot. The
     // protocol cut taken at each settlement is documented (Docs → Compete)
     // rather than shown here: it is not winnable, so it only distracts players.
-    const accruedStr = accrued ? fmt(accrued, 18, 6) + " ETH" : "—";
+    // "round": what this round adds on top of the carried pot. Faucet pot
+    // shares, treasury fee top-ups and lapses land in the pot as they happen
+    // (PotFunded since the last RoundSettled); vault yield accrues in the vault
+    // and joins at settlement (previewAccrued). The split is in the tooltip.
     const cutStr = "";
-    set("m-pot-sub",  (potUsd ? `≈ $${potUsd} · ` : "") + `yield ${accruedStr}` + cutStr);
+    const roundAdd = { yield: accrued || ethers.constants.Zero, faucet: null, fees: null, lapse: null, "top-up": null };
+    const roundLine = () => {
+      let total = ethers.constants.Zero;
+      const parts = [];
+      for (const [k, v] of Object.entries(roundAdd)) {
+        if (v == null || (k !== "yield" && v.isZero())) continue;
+        total = total.add(v);
+        parts.push(`${k}${k === "yield" ? " (pending)" : ""} ${fmt(v, 18, 8)}`);
+      }
+      const el = document.getElementById("m-pot-sub");
+      if (el) el.title = `This round so far: ${parts.join(" · ")} ETH`;
+      return `round +${fmt(total, 18, 6)} ETH`;
+    };
+    set("m-pot-sub",  (potUsd ? `≈ $${potUsd} · ` : "") + roundLine() + cutStr);
 
     // Contract Balance (Escrow) card (formerly "Total Pot") — ALL physical ETH held by PrizeEscrow (the winnable
     // "Prize Pot" plus the reserve carried behind it), with when it was last
@@ -219,7 +238,17 @@ async function loadLiveMetrics() {
       const escrow = new ethers.Contract(ADDRESSES.PrizeEscrow, ESCROW_ABI, prov);
       const { currentBlock, windowBlocks } = await scanRange(prov);
       const bps = await blocksPerSecond(prov);
-      const deps = await queryFilterWindow(escrow, escrow.filters.Deposited(), currentBlock, windowBlocks);
+      const [deps, settles, funded] = await Promise.all([
+        queryFilterWindow(escrow, escrow.filters.Deposited(), currentBlock, windowBlocks),
+        queryFilterWindow(prize, prize.filters.RoundSettled(), currentBlock, windowBlocks).catch(() => null),
+        queryFilterWindow(prize, prize.filters.PotFunded(),    currentBlock, windowBlocks).catch(() => null)
+      ]);
+      // Additions since the latest settlement = this round's, by source.
+      if (settles && funded) {
+        const { current } = potAdditions(settles, funded, potSourceKind);
+        if (current) for (const [k, v] of current.byKind) roundAdd[k] = v;
+        set("m-pot-sub", (potUsd ? `≈ $${potUsd} · ` : "") + roundLine() + cutStr);
+      }
       if (deps.length) {
         const last = deps.reduce((a, b) => (b.blockNumber > a.blockNumber ? b : a));
         set("m-escrow-sub", `not the winnable pot · last funded ${blockAge(last.blockNumber, currentBlock, bps)} · +${fmt(last.args.amount, 18, 5)} ETH`);
@@ -237,7 +266,7 @@ async function loadLiveMetrics() {
           const carried = fmt(lastC.args.carriedAmount, 18, 5);
           const noWin   = lastC.args.numWinners.toString() === "0";
           const rnd     = lastC.args.round.toString();
-          const base    = (potUsd ? `≈ $${potUsd} · ` : "") + `yield ${accruedStr}`;
+          const base    = (potUsd ? `≈ $${potUsd} · ` : "") + roundLine();
           set("m-pot-sub", `${base} · carried ${carried} ETH from #${rnd}${noWin ? " (no winner)" : ""}${cutStr}`);
         }
       } catch { /* leave base pot sub */ }
@@ -324,6 +353,8 @@ function potSourceKind(from) {
   const a = String(from).toLowerCase();
   if (ADDRESSES.GameRegistry && a === ADDRESSES.GameRegistry.toLowerCase()) return "lapse";
   if (ADDRESSES.GasFaucet && a === ADDRESSES.GasFaucet.toLowerCase()) return "faucet";
+  // TimbTreasury.distributeToPot: swap-fee ETH the treasury sends to the pot.
+  if (ADDRESSES.TimbTreasury && a === ADDRESSES.TimbTreasury.toLowerCase()) return "fees";
   return "top-up";
 }
 function potAdditions(settledEvs, fundedEvs, kindOf) {
@@ -331,10 +362,12 @@ function potAdditions(settledEvs, fundedEvs, kindOf) {
   const settles = settledEvs
     .map(ev => ({ round: Number(ev.args.round.toString()), at: pos(ev) }))
     .sort((a, b) => a.at - b.at);
-  const empty = () => ({ total: null, kinds: new Set() });
+  const empty = () => ({ total: null, kinds: new Set(), byKind: new Map() });
   const add = (bucket, ev) => {
+    const k = kindOf(ev.args.from);
     bucket.total = bucket.total ? bucket.total.add(ev.args.amount) : ev.args.amount;
-    bucket.kinds.add(kindOf(ev.args.from));
+    bucket.kinds.add(k);
+    bucket.byKind.set(k, (bucket.byKind.get(k) || ethers.constants.Zero).add(ev.args.amount));
   };
   const byRound = new Map();
   for (let i = 1; i < settles.length; i++) byRound.set(settles[i].round, empty());
@@ -601,7 +634,7 @@ async function loadVault() {
       vault.previewAccrued(),
       vault.reserve()
     ]);
-    set("m-yield", fmt(accrued, 18, 6) + " ETH");
+    set("m-yield", fmt(accrued, 18, 8) + " ETH");
     // Reserve attached, to 5 decimals max (trimmed) for an accurate read.
     const reserveStr = Number(ethers.utils.formatUnits(reserve, 18))
       .toLocaleString("en-US", { maximumFractionDigits: 5 });
@@ -673,12 +706,14 @@ async function loadVault() {
   try {
     const { currentBlock, windowBlocks } = await scanRange(prov);
     const bps = await blocksPerSecond(prov);
-    const [weight, rate, lastTs, regs, rems] = await Promise.all([
+    const registry = new ethers.Contract(ADDRESSES.GameRegistry, REGISTRY_ABI, prov);
+    const [weight, rate, lastTs, regs, rems, cancels] = await Promise.all([
       vault.totalWeight(),
       vault.ratePerSecond1e18(),
       vault.lastAccrual(),
       queryFilterWindow(vault, vault.filters.WeightRegistered(), currentBlock, windowBlocks),
-      queryFilterWindow(vault, vault.filters.WeightRemoved(),    currentBlock, windowBlocks)
+      queryFilterWindow(vault, vault.filters.WeightRemoved(),    currentBlock, windowBlocks),
+      queryFilterWindow(registry, registry.filters.TicketCancelled(), currentBlock, windowBlocks).catch(() => [])
     ]);
 
     // Daily yield at the current weight: totalWeight × rate/sec × 86400
@@ -712,7 +747,14 @@ async function loadVault() {
       ...regs.map(ev => ({ block: ev.blockNumber, dir: "+ Registered", cls: "td-in",
                            id: ev.args.ticketId, w: ev.args.weight, total: ev.args.totalWeight })),
       ...rems.map(ev => ({ block: ev.blockNumber, dir: "− Removed", cls: "td-out",
-                           id: ev.args.ticketId, w: ev.args.weight, total: ev.args.totalWeight }))
+                           id: ev.args.ticketId, w: ev.args.weight, total: ev.args.totalWeight })),
+      // A ticket cancelled while it was earning already shows as "Removed"
+      // (same transaction). One that never played (e.g. a pending replacement
+      // cancelled and withdrawn) has no vault row at all: show it as cancelled.
+      ...cancels
+        .filter(ev => !rems.some(r => r.transactionHash === ev.transactionHash && r.args.ticketId.eq(ev.args.ticketId)))
+        .map(ev => ({ block: ev.blockNumber, dir: "× Cancelled", cls: "td-muted", note: "never played",
+                      id: ev.args.ticketId, w: null, total: null }))
     ].sort((a, b) => b.block - a.block);
     const wRows = wAll.slice(0, TABLE_CAPS.weights);
 
@@ -726,8 +768,8 @@ async function loadVault() {
         tr.innerHTML = `
           <td>#${r.id}</td>
           <td class="${r.cls}">${r.dir}</td>
-          <td>${fmt(r.w, 18, 6)}</td>
-          <td>${fmt(r.total, 18, 6)}</td>
+          <td>${r.w == null ? `<span class="td-muted">${r.note}</span>` : fmt(r.w, 18, 6)}</td>
+          <td>${r.total == null ? "—" : fmt(r.total, 18, 6)}</td>
           <td>${r.block}<div class="td-age">${blockAge(r.block, currentBlock, bps)}</div></td>
         `;
         wTbody.appendChild(tr);

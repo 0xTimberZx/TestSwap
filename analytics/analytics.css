@@ -139,6 +139,7 @@
 
 .td-in  { color: var(--green); }
 .td-out { color: #ef4444; }
+.td-muted { opacity: .6; }  /* cancelled before it ever played */
 
 /* ─── Table pager (round history, 12/page) ─────────────────────────────────── */
 .table-pager {
