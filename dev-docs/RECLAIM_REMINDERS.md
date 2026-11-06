@@ -13,7 +13,7 @@ No funds, no PII beyond a Telegram chat id and a public wallet address.
 | Component | File | Role |
 |---|---|---|
 | Registry + dedupe tables | `supabase/migrations/20260901120000_reclaim_reminders.sql` | `reclaim_subscribers` (wallet↔chat_id) and `reclaim_reminders_sent` (one DM per ticket-expiry). RLS on, no anon policy. |
-| Bot webhook | `supabase/functions/telegram-webhook/index.ts` | Handles `/start <wallet>` (subscribe) and `/stop`. Secret-token gated. |
+| Bot webhook | `supabase/functions/telegram-webhook/index.ts` | Handles `/start <wallet>` (subscribe) and `/stop`, plus the read-only group commands (see "Group commands" below). Secret-token gated. |
 | Reminder worker | `scripts/reclaim-reminder.js` | Read-only chain scan → DMs opted-in holders whose forfeitRound is within `REMIND_LEAD_ROUNDS`. |
 | Schedule | `.github/workflows/reclaim-reminder.yml` | Hourly; idempotent + deduped. |
 
@@ -57,6 +57,31 @@ curl -sS "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 ```
 (Every delivery then carries `X-Telegram-Bot-Api-Secret-Token`; the function
 rejects anything without the match.)
+
+### 3b. Group commands (read-only)
+The same webhook answers `/pot`, `/round`, `/faucet`, `/stake`, `/links` and
+`/help` anywhere, and `/rank <wallet>` in a private chat. In a group it answers
+only these, stays silent on other messages, and points `/start`, `/stop` and
+`/rank` to a DM so nobody posts a wallet in the group. Answers are cached 30 s
+per command; a chat gets one reply per command per 10 s.
+
+Extra secrets (optional):
+- `TELEGRAM_BOT_USERNAME` — e.g. `TimbSwapTGBot`; commands addressed to another bot (`/pot@OtherBot`) are then ignored.
+- `BOT_RPC_URL` — Arbitrum Sepolia RPC for the reads. Falls back to `ALCHEMY_RPC_URL` (already set for the `rpc` function), then the public endpoint.
+
+Contract addresses live in `commands.ts` (`ADDR`); `commands.test.ts` fails when
+they differ from `config.js`, so an address switch updates both. Run the tests with
+`node --experimental-strip-types --test supabase/functions/telegram-webhook/commands.test.ts`.
+
+Setup:
+1. BotFather → `/setprivacy` → Enabled (the default), so in groups the bot only receives commands.
+2. Add the bot to the group (no admin rights needed).
+3. Register the command menu once:
+```
+curl -sS "https://api.telegram.org/bot<BOT_TOKEN>/setMyCommands" \
+  -H "content-type: application/json" \
+  -d '{"commands":[{"command":"pot","description":"Prize pot and this round"},{"command":"round","description":"Round, segment and time left"},{"command":"faucet","description":"Gas faucet status"},{"command":"stake","description":"Staking and LP farm emissions"},{"command":"rank","description":"Your Season 1 points (in a DM)"},{"command":"links","description":"Site, docs and bug bounty"},{"command":"help","description":"All commands"}]}'
+```
 
 ### 4. Worker schedule
 Repo secrets: `ARB_RPC`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
