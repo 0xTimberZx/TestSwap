@@ -8,12 +8,12 @@
   "router": "0xD3a7843Da4E0DE2711447CEF779D5F45AeeDb7c4",
   "seasonId": 2,
   "startBlock": 325195917,
-  "cursorBlock": 327292402,
-  "lastRound": 26,
+  "cursorBlock": 327366394,
+  "lastRound": 27,
   "ledger": {
     "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf": {
-      "rp": 7,
-      "ta": 5,
+      "rp": 8,
+      "ta": 6,
       "ns": 0,
       "ps": 1,
       "pn": 0,
@@ -52,7 +52,9 @@
     "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:faucet_claims": 1793678547,
     "0xd6629a2d988d5bbd3fc257e7cd7b782884bfd075:faucet_claims": 1793678547,
     "0xaacc688526169a21746d28ad9263eaea8625bc22:faucet_claims": 1793678547,
-    "0xb64408da327c7ed420b19b80d2a6b06fad975048:faucet_claims": 1793678547
+    "0xb64408da327c7ed420b19b80d2a6b06fad975048:faucet_claims": 1793678547,
+    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:rounds_played": 1794240501,
+    "0x66a3ef371861bfc1d9c869e2f7cbe7153148b6bf:tickets_activated": 1794240501
   },
   "alerted": {
     "under": 1794222428
