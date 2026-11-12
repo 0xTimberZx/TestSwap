@@ -2,7 +2,7 @@
 
 TimbSwap is live on **Arbitrum Sepolia** as a capped, unaudited testnet. Every
 token is a test asset with no monetary value. The bug bounty ran before the
-independent audit and any mainnet launch, so vulnerabilities were found and
+independent audit and before the mainnet beta, so vulnerabilities were found and
 fixed while nothing real was at stake. Rewards are paid in **USDT on Arbitrum
 One** from a public bounty wallet.
 
@@ -243,4 +243,4 @@ or data that are not yours. If in doubt, ask first via the private channel.
 
 *The mainnet program, with larger bands and real value at risk, is described in
 the [TimbSwap repository's SECURITY.md](https://github.com/0xTimberZx/TimbSwap/blob/main/SECURITY.md)
-and takes over after the independent audit.*
+and takes over when the mainnet beta opens.*

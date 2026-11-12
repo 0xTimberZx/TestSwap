@@ -21,7 +21,7 @@ and payouts need no privileged operator, and you always hold your own keys.
 **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
 
 > **Status (Sept 2026):** live on Arbitrum **Sepolia testnet** — all tokens are test assets with no
-> monetary value. Unaudited; an independent audit is a gating condition for any mainnet launch.
+> monetary value. Unaudited. A capped mainnet beta runs before the independent audit; the audit is a gating condition for the TIMBS launch and for lifting the beta caps.
 > The prize game runs on its **gen-3** contracts; the **faucet** is live (TIMBS-only on testnet);
 > **email sign-in** (an embedded wallet with optional authenticator / passkey MFA and key export) is
 > live next to extension wallets; the mainnet-TIMB **airdrop** leg is deployed on Arbitrum One but
