@@ -10,6 +10,12 @@ name: TimbSwap Settler Liveness
 # the lock state against the segment counter and the previous round's result.
 # No private key; it never calls the contract. Reads go through the public RPC.
 #
+# One action, the exception to "witnesses never dispatch": if no settler run is
+# active, the last step starts one (scripts/settler-revive.js, KEEPER_FLEET.md
+# §4). The settler's own self-chain only continues after a run that succeeded,
+# so a settler that dies mid-run stays dead until a cron tick lands, which took
+# five hours on 10 Nov 2026. Kill switch: repo variable SETTLER_REVIVE=off.
+#
 # Pacing: GitHub delivers this repo's cron at roughly one tick in four to six
 # (measured 2026-09-18), so like the rest of the fleet this job self-chains:
 # check, commit state, sleep SETTLER_LIVENESS_LINGER_MINUTES, dispatch the next
@@ -36,6 +42,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read     # list the settler's runs (settler-revive.js)
   contents: write   # commits scripts/settler-liveness-state.json back
 
 jobs:
@@ -119,6 +126,33 @@ jobs:
           # npm install dirties scripts/; --autostash keeps the rebase clean.
           git pull --rebase --autostash origin main
           git push origin main
+
+      # ── Restart a dead settler ─────────────────────────────────────────────
+      # Dispatches settler.yml when NO settler run is in progress, queued or
+      # pending and the latest one ended a few minutes ago. It declines, and
+      # logs why, when the kill switch is on, when the latest run was cancelled
+      # (a deliberate stop) or when three runs failed within the hour (a crash
+      # loop). Its self-test runs first, so broken logic never acts.
+      # continue-on-error and always(): this step can neither stop nor be
+      # skipped by the commit, the linger and the dispatch around it.
+      - name: Revive the settler if its chain has died
+        if: always()
+        continue-on-error: true
+        working-directory: scripts
+        env:
+          GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH_TOKEN:      ${{ secrets.LIVENESS_DISPATCH_TOKEN || secrets.FAUCET_DISPATCH_TOKEN || secrets.SETTLER_DISPATCH_TOKEN }}
+          SETTLER_REVIVE:      ${{ vars.SETTLER_REVIVE }}
+          TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OPS_BOT_TOKEN: ${{ secrets.TELEGRAM_OPS_BOT_TOKEN }}
+          TELEGRAM_OPS_CHAT_ID: ${{ secrets.TELEGRAM_OPS_CHAT_ID }}
+          TELEGRAM_CRITICAL_BOT_TOKEN: ${{ secrets.TELEGRAM_CRITICAL_BOT_TOKEN }}
+          TELEGRAM_CRITICAL_CHAT_ID: ${{ secrets.TELEGRAM_CRITICAL_CHAT_ID }}
+          TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_OPS_MODE:   ${{ vars.TELEGRAM_OPS_MODE }}
+        run: |
+          node settler-revive.js --self-test
+          node settler-revive.js
 
       # ── Linger, then self-chain ────────────────────────────────────────────
       # The sleep is what paces the chain: the next run starts one linger after
