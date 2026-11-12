@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Force HTTPS: wallets (window.ethereum) only inject on a secure origin -->
+  <script>if(location.protocol==="http:"&&!/^(localhost|127\.0\.0\.1)$/.test(location.hostname))location.replace(location.href.replace(/^http:/,"https:"));</script>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("timbswap_theme")==="light"?"light":"dark"}catch(e){}</script>
+  <!-- Network-aware copy (data-net twins, TIMBS gate) lives in config.js; load it early so the twins never flash. -->
+  <script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Explain the Draw: Testnet Campaign — TimbSwap</title>
+  <meta name="description" content="Make something that explains how the TimbSwap prize game works. Five weekly judging rounds, 20 Nov to 20 Dec 2026, paid in USDC. Official rules." />
+  <link rel="canonical" href="https://timbswap.xyz/campaign/" />
+  <meta name="theme-color" content="#0b0f14" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="TimbSwap" />
+  <meta property="og:title" content="Explain the Draw: Testnet Campaign — TimbSwap" />
+  <meta property="og:description" content="Weekly USDC prizes for the best explainers of the TimbSwap prize game. 20 Nov to 20 Dec 2026. Judged on quality." />
+  <meta property="og:url" content="https://timbswap.xyz/campaign/" />
+  <meta property="og:image" content="https://timbswap.xyz/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Explain the Draw: Testnet Campaign — TimbSwap" />
+  <meta name="twitter:description" content="Weekly USDC prizes for the best explainers of the TimbSwap prize game. 20 Nov to 20 Dec 2026." />
+  <meta name="twitter:image" content="https://timbswap.xyz/og.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../style.css?v=20261024a" />
+  <link rel="stylesheet" href="../campaigns/campaigns.css?v=20260752a" />
+  <style>
+    .camp-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0 4px; }
+    .camp-table th, .camp-table td { text-align: left; padding: 9px 10px; border-bottom: var(--bw, 1px) solid var(--border); vertical-align: top; }
+    .camp-table th { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--text-3); font-weight: 400; }
+    .camp-table td.n { font-family: var(--mono); white-space: nowrap; }
+    .camp-cta { display: inline-block; margin-top: 14px; padding: 11px 22px; border-radius: 10px; background: var(--green); color: #062015; font-weight: 700; text-decoration: none; }
+    .camp-cta[aria-disabled="true"] { background: transparent; color: var(--text-2); border: var(--bw, 1px) solid var(--border); cursor: default; }
+    @media (max-width: 640px) { .camp-table { font-size: 13px; } .camp-table td.n { white-space: normal; } }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-mark">⬡</span>
+      <span class="nav-logo-text">Timb<svg class="nav-logo-s" viewBox="31 30 38 42" preserveAspectRatio="xMidYMid meet"><path d="M66 33 L41 33 L34 40 L34 44 L41 51 L59 51 L66 58 L66 62 L59 69 L34 69" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter" stroke-miterlimit="8" stroke-linecap="butt"/></svg>wap</span>
+    </a>
+    <div class="nav-links">
+      <div class="nav-group">
+        <button class="nav-group-btn">Dashboard <span class="nav-caret">▾</span></button>
+        <div class="nav-dropdown">
+          <a href="../start/">Start Here</a>
+          <a href="../swap/">Swap</a>
+          <a href="../analytics/">Analytics</a>
+          <a href="../gov/">Protocol</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <button class="nav-group-btn">Earn TIMBS <span class="nav-caret">▾</span></button>
+        <div class="nav-dropdown">
+          <a href="../farm/">Farm</a>
+          <a href="../compete/">Compete</a>
+          <a href="../faucet/">Faucet</a>
+          <a href="../quests/">Airdrop <span class="badge-soon">Soon</span></a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <button class="nav-group-btn">Tools <span class="nav-caret">▾</span></button>
+        <div class="nav-dropdown">
+          <a class="nav-off">Lock Vault</a>
+          <a href="../explore/">V2 Pools</a>
+          <a href="../docs/">Docs</a>
+        </div>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <a href="../compete/" class="btn-connect">Enter the Game</a>
+      <button class="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="nav-mobile-overlay" id="mobile-nav">
+    <button class="nav-mobile-close" type="button" aria-label="Close menu" onclick="document.getElementById('mobile-nav').classList.remove('open')">CLOSE &#10005;</button>
+    <div class="nav-mobile-section">DASHBOARD</div>
+    <a href="../start/">Start Here</a>
+    <a href="../swap/">Swap</a>
+    <a href="../analytics/">Analytics</a>
+    <a href="../gov/">Protocol</a>
+    <div class="nav-mobile-section">EARN TIMBS</div>
+    <a href="../farm/">Farm</a>
+    <a href="../compete/">Compete</a>
+    <a href="../faucet/">Faucet</a>
+    <a href="../quests/">Airdrop <span class="badge-soon">Soon</span></a>
+    <div class="nav-mobile-section">TOOLS</div>
+    <a class="nav-off">Lock Vault</a>
+    <a href="../explore/">V2 Pools</a>
+    <a href="../docs/">Docs</a>
+  </div>
+
+  <div class="comp-page">
+
+    <div class="comp-hero">
+      <div class="comp-eyebrow">TIMBSWAP · TESTNET CAMPAIGN</div>
+      <h1 class="comp-h1">Explain the <span class="comp-gold">Draw</span></h1>
+      <p class="comp-sub">Friday 20 November to Sunday 20 December 2026 (UTC). Make something that shows how the
+        TimbSwap prize game works, and win USDC. Five weekly judging rounds, decided on quality.
+        This page, on <strong>timbswap.xyz</strong>, is the only authoritative source of the rules.</p>
+      <div class="comp-status" id="camp-status">Starts Fri 20 Nov 2026</div>
+      <div><a class="camp-cta" id="camp-submit" href="#" aria-disabled="true">Entry form opens when the campaign starts</a></div>
+    </div>
+
+    <div class="section-label">WHAT IT IS</div>
+    <div class="comp-card">
+      <p class="comp-text">A testnet campaign with two parts: <strong>playing Season 1</strong> and a
+        <strong>content bounty</strong> paid in USDC from a fixed pool of $200 in total. The two are separate.
+        Prizes are paid in USDC and do not depend on Season 1 points.</p>
+    </div>
+
+    <div class="section-label">PART 1 · PLAY (SEASON 1)</div>
+    <div class="comp-card">
+      <ul class="comp-list">
+        <li>Season 1 records on-chain activity: tickets, rounds played, swaps, liquidity, staking, farm and staking claims, and faucet claims. Start at <a href="../faucet/">timbswap.xyz/faucet</a>, then <a href="../compete/">timbswap.xyz/compete</a>.</li>
+        <li><strong>How points are weighted, and what they are worth, is not final.</strong> Points are off-chain and non-transferable, have no cash value, are recomputed whenever scoring changes, and can move down as well as up. No amount, rate or token is promised. See <a href="../quests/">timbswap.xyz/quests</a>.</li>
+      </ul>
+    </div>
+
+    <div class="section-label">PART 2 · THE CONTENT BOUNTY</div>
+    <div class="comp-card">
+      <p class="comp-text"><strong>What counts:</strong> original content that explains how the TimbSwap prize game works. An X thread, a short video (TikTok, Reels, Shorts or YouTube), a written guide, a meme, an infographic, or a translation of the docs or a guide.</p>
+    </div>
+
+    <div class="section-label">ROUNDS</div>
+    <div class="comp-card">
+      <table class="camp-table">
+        <thead><tr><th>ROUND</th><th>ENTRIES OPEN</th><th>ENTRIES CLOSE (UTC)</th><th>WINNERS POSTED</th></tr></thead>
+        <tbody>
+          <tr><td class="n">1 (launch weekend)</td><td class="n">Fri 20 Nov 00:00</td><td class="n">Sun 22 Nov 12:00</td><td class="n">Sun 22 Nov</td></tr>
+          <tr><td class="n">2</td><td class="n">Sun 22 Nov 12:00</td><td class="n">Sun 29 Nov 12:00</td><td class="n">Sun 29 Nov</td></tr>
+          <tr><td class="n">3</td><td class="n">Sun 29 Nov 12:00</td><td class="n">Sun 6 Dec 12:00</td><td class="n">Sun 6 Dec</td></tr>
+          <tr><td class="n">4</td><td class="n">Sun 6 Dec 12:00</td><td class="n">Sun 13 Dec 12:00</td><td class="n">Sun 13 Dec</td></tr>
+          <tr><td class="n">5 (final)</td><td class="n">Sun 13 Dec 12:00</td><td class="n">Sun 20 Dec 12:00</td><td class="n">Sun 20 Dec</td></tr>
+        </tbody>
+      </table>
+      <p class="comp-note">Winners are posted by 23:59 UTC on the Sunday.</p>
+    </div>
+
+    <div class="section-label">PRIZES EACH ROUND</div>
+    <div class="comp-card">
+      <p class="comp-text">Up to $40 a round. The total over all five rounds never exceeds $200.</p>
+      <table class="camp-table">
+        <thead><tr><th>TIER</th><th>PRIZE</th><th>HOW IT PAYS</th></tr></thead>
+        <tbody>
+          <tr><td>Featured</td><td class="n">$20</td><td>One entry, chosen as the best of the round, takes the whole prize. If no entry reaches the Featured bar, the $20 rolls into the next round's Featured prize.</td></tr>
+          <tr><td>Good</td><td class="n">$12 shared pool</td><td>Split equally among all entries judged Good, up to $6 per entry.</td></tr>
+          <tr><td>Accepted</td><td class="n">$8 shared pool</td><td>Split equally among all entries judged Accepted, up to $3 per entry.</td></tr>
+        </tbody>
+      </table>
+      <p class="comp-note">Because the pools are shared, what each entry gets depends on how many qualify. Three Good entries share $12, so $4 each. One Good entry gets $6 (the cap), and the other $6 rolls into the next round's Good pool. Money not paid out in a round (empty or capped pools) rolls into the same pool the next round. Money left after the final round is not paid out.</p>
+    </div>
+
+    <div class="section-label">ELIGIBILITY</div>
+    <div class="comp-card">
+      <ul class="comp-list">
+        <li>One wallet per person. That wallet must hold an <strong>active ticket on the testnet</strong> when you submit.</li>
+        <li>One entry per person per round (up to five in total).</li>
+        <li>The TimbSwap team and their close family cannot enter.</li>
+      </ul>
+    </div>
+
+    <div class="section-label">CONTENT RULES</div>
+    <div class="comp-card">
+      <p class="comp-text">An entry that breaks any of these is rejected.</p>
+      <ul class="comp-list">
+        <li><strong>Say it is a paid campaign.</strong> Use <code>#ad</code>, <code>#sponsored</code> or "sponsored by TimbSwap", visible in the post.</li>
+        <li><strong>Link</strong> timbswap.xyz/compete or the waitlist.</li>
+        <li><strong>Be accurate.</strong> Say "prize draws" and "no principal at risk" (deposits are refundable within the refund window). Do not describe it with betting or casino language, do not promise results, and do not claim returns, odds or token prices.</li>
+        <li><strong>Make it clear it is on testnet.</strong></li>
+        <li><strong>Your own work.</strong> No reposts, no plagiarism, no AI spam, no impersonating the team or other projects.</li>
+        <li><strong>No bought likes, follows or views,</strong> and no engagement pods.</li>
+      </ul>
+    </div>
+
+    <div class="section-label">HOW TO SUBMIT</div>
+    <div class="comp-card">
+      <p class="comp-text">Use the entry form: your handle, the content link, your wallet, and the round. The form opens when the campaign starts.</p>
+      <div><a class="camp-cta" id="camp-submit2" href="#" aria-disabled="true">Entry form opens when the campaign starts</a></div>
+    </div>
+
+    <div class="section-label">JUDGING</div>
+    <div class="comp-card">
+      <ul class="comp-list">
+        <li>The team judges each round's entries on <strong>accuracy, clarity, originality</strong> and how well it would help a newcomer start playing. Reach helps but does not decide.</li>
+        <li><strong>Featured</strong> is the single best entry. <strong>Good</strong> is a clear, accurate explainer that would help a newcomer. <strong>Accepted</strong> meets every rule and explains the game correctly.</li>
+        <li>Winners are chosen by judging on quality, never by chance. Decisions are final.</li>
+      </ul>
+    </div>
+
+    <div class="section-label">PAYMENT</div>
+    <div class="comp-card">
+      <ul class="comp-list">
+        <li>USDC on Arbitrum One, to the wallet you submitted, within 7 days of the winners post. The final round is paid by Sunday 27 December.</li>
+      </ul>
+      <p class="comp-warning">⚠ We never ask for private keys, seed phrases, signatures or upfront payments. Anyone who does is not us.</p>
+    </div>
+
+    <div class="section-label">OTHER</div>
+    <div class="comp-card">
+      <ul class="comp-list">
+        <li>We can reject any entry that breaks these rules, and can change or end the campaign early by announcing it in the Telegram group. Rewards already announced are still paid.</li>
+        <li>You keep ownership of your content. By submitting you let TimbSwap share it with credit.</li>
+        <li>Follow the rules that apply where you live, including those on paid promotion.</li>
+        <li>Questions: the <a href="https://t.me/timbswapann" target="_blank" rel="noopener">Telegram group</a>.</li>
+      </ul>
+    </div>
+
+    <div class="section-label">OFFICIAL CHANNELS: TRUST NOTHING ELSE</div>
+    <div class="comp-card comp-official">
+      <ul class="comp-list">
+        <li>Website: <strong>timbswap.xyz</strong> (only this domain)</li>
+        <li>X: <a href="https://x.com/timbswap" target="_blank" rel="noopener"><strong>@timbswap</strong></a></li>
+        <li>Telegram channel: <a href="https://t.me/timbswapann" target="_blank" rel="noopener"><strong>t.me/timbswapann</strong></a></li>
+      </ul>
+      <p class="comp-warning">⚠ We will never DM you first and never ask for your seed phrase. Anyone who does is an impersonator. Report and block them.</p>
+    </div>
+
+  </div>
+
+  <footer class="footer">
+    <div class="footer-left">
+      <span class="nav-logo-mark">⬡</span> TimbSwap — Arbitrum Sepolia Testnet
+    </div>
+    <div class="footer-links">
+      <a href="/docs/">Docs</a>
+      <a href="/litepaper/">Litepaper</a>
+      <a href="/gov/#bounty">Bug Bounty</a>
+      <a href="/quests/">Quests</a>
+      <a href="https://sepolia.arbiscan.io/address/0xf981c18E6c39137f51D90eD6cdCd73C6F6d46c98" target="_blank">Factory ↗︎</a>
+      <a href="/source/">Source</a>
+      <a href="https://t.me/timbswapann" target="_blank">Telegram ↗︎</a>
+      <a href="https://x.com/timbswap" target="_blank">X ↗︎</a>
+    </div>
+  </footer>
+
+  <script>
+    // Set this to the entry form URL when it exists; until then the buttons stay inactive.
+    var CAMPAIGN_FORM_URL = "";
+    (function () {
+      var start = Date.UTC(2026, 10, 20, 0, 0, 0), end = Date.UTC(2026, 11, 20, 12, 0, 0), now = Date.now();
+      var st = document.getElementById("camp-status");
+      if (st) st.textContent = now < start ? "Starts Fri 20 Nov 2026" : (now <= end ? "Open now · ends Sun 20 Dec 12:00 UTC" : "Campaign closed");
+      ["camp-submit", "camp-submit2"].forEach(function (id) {
+        var a = document.getElementById(id);
+        if (!a || !CAMPAIGN_FORM_URL) return;
+        a.href = CAMPAIGN_FORM_URL; a.target = "_blank"; a.rel = "noopener"; a.removeAttribute("aria-disabled");
+        a.textContent = now > end ? "Entries closed" : "Submit an entry";
+        if (now > end) { a.removeAttribute("href"); a.setAttribute("aria-disabled", "true"); }
+      });
+    })();
+  </script>
+  <script>
+    function toggleMobileNav() {
+      document.getElementById("mobile-nav").classList.toggle("open");
+    }
+    document.addEventListener("click", function(e) {
+      const nav = document.getElementById("mobile-nav");
+      const btn = document.querySelector(".nav-hamburger");
+      if (nav && btn && !nav.contains(e.target) && !btn.contains(e.target)) {
+        nav.classList.remove("open");
+      }
+    });
+  </script>
+</body>
+</html>
