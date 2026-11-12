@@ -51,7 +51,9 @@ Three kinds:
    as far as doing its work; that is the self-chain, and it exists because
    this repo's cron delivers roughly one tick in four to six (measured
    2026-09-18 across every cron-only job). Cron is the backstop, never the
-   clock.
+   clock. **One exception (2026-11-12):** the settler liveness witness starts
+   the settler when no settler run exists (§4). It acts only on a chain that is
+   already dead, touches no state, and nothing depends on it.
 2. **Every job owns exactly one state file, and nobody else reads it.** The
    epoch keeper's cursor is the epoch keeper's. A witness that wants to check
    the epoch recomputes from chain events; it does not read
@@ -159,6 +161,38 @@ It self-chains at fifteen minutes with the `:04`/`:34` cron as backstop, on
 the same `assessed`/`findings` outputs as the heartbeat. The heartbeat watches
 it in turn. It cannot block the settler, and a match-notifier bug cannot hide
 a stuck settler, because it shares code with neither.
+
+### Restarting a dead settler
+
+The settler dispatches its own next run only after a run that succeeded. A run
+that dies mid-step (runner lost, cancelled by GitHub) queues no successor, and
+the `*/10` cron that should restart it is delivered about one tick in four to
+six. On 10 Nov 2026 the 13:03 run died at 18:06 and the game had no settler
+until someone noticed. So the last step of each liveness run,
+`scripts/settler-revive.js`, reads the settler's runs from the Actions API and,
+when **no run is in progress, queued, pending or waiting** and the latest one
+ended more than `SETTLER_REVIVE_GRACE_MIN` (default 3) minutes ago, dispatches
+`settler.yml` once and posts `♻️ Settler revived` (the glyph routes it to the
+critical bot as well). It declines, and logs why, when:
+
+| Declined | Why |
+|---|---|
+| `disabled` | repo variable `SETTLER_REVIVE=off`: the switch for planned maintenance |
+| `active` | a settler run exists; that is the chain |
+| `just-ended` | the latest run ended under the grace: its own dispatch may still be landing |
+| `cancelled` | the latest run was cancelled: a person stopping the settler is a deliberate stop |
+| `crash-loop` | `SETTLER_REVIVE_MAX_FAILURES` (default 3) runs failed within the hour |
+| `no-history` | the API shows no settler runs at all |
+
+It cannot start a second settler: it dispatches only when none is active, and
+the settler's concurrency group queues rather than overlaps. It holds no key,
+calls no contract and keeps no state; the liveness `stuck` finding and the
+heartbeat still report a stalled game, and a failed dispatch is its own
+`⚠️ Settler revive FAILED` alert. The step is `continue-on-error` and runs
+its self-test first, so it can never stop the liveness chain or act on broken
+logic. Only while `KEEPERS_HOST=actions`: on Railway the job does not run.
+To stop the settler on purpose, set `SETTLER_REVIVE=off` first (or cancel the
+run, which it treats as deliberate).
 
 ## 5. The epoch reconciliation witness
 
