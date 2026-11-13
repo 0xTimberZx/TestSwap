@@ -2,7 +2,7 @@
 // away (they want a mainnet balance) post their address; anyone can send them
 // 0.003 test ETH on Arbitrum Sepolia and paste the transaction hash, which the
 // `gas-board` edge function checks on chain. The team fills anything still open
-// after 6 hours. No points for filling: it is a thank-you, not a score.
+// after 6 hours (not advertised on the page). No points for filling: it is a thank-you, not a score.
 (function () {
   "use strict";
   var ENDPOINT = "/api/gas-board";
@@ -82,7 +82,7 @@
     post({ action: "list" }).then(function (res) {
       if (!res.ok) { listEl.innerHTML = ""; var e = document.createElement("div"); e.className = "gb-empty"; e.textContent = res.error || "The board is unavailable right now."; listEl.appendChild(e); return; }
       listEl.innerHTML = "";
-      if (!res.open.length) { var none = document.createElement("div"); none.className = "gb-empty"; none.textContent = "No open requests right now."; listEl.appendChild(none); }
+      if (!res.open.length) { var none = document.createElement("div"); none.className = "gb-empty"; none.textContent = "The board is currently empty."; listEl.appendChild(none); }
       res.open.forEach(function (r) { listEl.appendChild(row(r)); });
       statsEl.textContent = res.filledThisWeek ? "· filled this week: " + res.filledThisWeek + (res.filledByCommunity ? " (" + res.filledByCommunity + " by the community)" : "") : "";
     });
@@ -97,7 +97,7 @@
     post({ action: "request", address: a, cfTurnstileToken: tsToken() }).then(function (res) {
       submitEl.disabled = false; tsReset();
       if (res.ok && res.status === "already_open") say("You already have an open request. It stays on the board until it's filled.", "ok");
-      else if (res.ok) { say("Posted. Someone in the community can send it now; if not, the team sends it within about 6 hours.", "ok"); addrEl.value = ""; }
+      else if (res.ok) { say("Posted. Your address is on the board for the community to see.", "ok"); addrEl.value = ""; }
       else say(res.error || "Couldn't post that just now.", "err");
       load();
     });
