@@ -49,9 +49,9 @@ import {
 
 const SB_URL       = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const PROXY_SECRET = Deno.env.get("GAS_BOARD_PROXY_SECRET") ?? "";
+const PROXY_SECRET = (Deno.env.get("GAS_BOARD_PROXY_SECRET") ?? "").trim();
 const IP_SALT      = Deno.env.get("GAS_BOARD_IP_SALT") ?? "timbswap-gas-board";
-const KEEPER_SECRET = Deno.env.get("GAS_BOARD_KEEPER_SECRET") ?? "";
+const KEEPER_SECRET = (Deno.env.get("GAS_BOARD_KEEPER_SECRET") ?? "").trim();
 const TS_SECRET    = (Deno.env.get("TURNSTILE_SECRET") ?? "").trim();
 const TEAM = new Set((Deno.env.get("GAS_TEAM_RESOLVERS") ?? "")
   .split(",").map((a) => a.trim().toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a)));
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
   const origin = req.headers.get("Origin") || "";
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
   if (req.method !== "POST") return json({ ok: false, error: "POST only" }, 405, origin);
-  if (PROXY_SECRET && req.headers.get("X-Proxy-Secret") !== PROXY_SECRET) return json({ ok: false, error: "forbidden" }, 401, origin);
+  if (PROXY_SECRET && (req.headers.get("X-Proxy-Secret") ?? "").trim() !== PROXY_SECRET) return json({ ok: false, error: "forbidden" }, 401, origin);
 
   let body: any;
   try { body = await req.json(); } catch { return json({ ok: false, error: "bad request" }, 400, origin); }
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
 
   if (action === "queue") {
     // Team queue for the fallback keeper: open requests past the public window.
-    if (!KEEPER_SECRET || req.headers.get("X-Keeper-Secret") !== KEEPER_SECRET) return json({ ok: false, error: "forbidden" }, 401, origin);
+    if (!KEEPER_SECRET || (req.headers.get("X-Keeper-Secret") ?? "").trim() !== KEEPER_SECRET) return json({ ok: false, error: "forbidden" }, 401, origin);
     const { data: queue } = await sb.from("gas_requests")
       .select("id,address,created_at").eq("status", "open").lte("created_at", publicSince)
       .order("created_at", { ascending: true }).limit(50);

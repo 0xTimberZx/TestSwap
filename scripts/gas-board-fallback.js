@@ -80,10 +80,11 @@ async function main() {
   const { opsTelegram } = require("./lib/telegram");
   const tg = opsTelegram({ tag: "gas-board" });
   const url = process.env.GAS_BOARD_URL;
-  const secret = process.env.GAS_BOARD_PROXY_SECRET || "";
-  const key = process.env.GAS_FALLBACK_PRIVATE_KEY;
-  const rpcUrl = process.env.ARB_SEPOLIA_RPC;
-  const keeperSecret = process.env.GAS_BOARD_KEEPER_SECRET || "";
+  // Secrets pasted from a phone often carry trailing spaces or a newline; trim them.
+  const secret = (process.env.GAS_BOARD_PROXY_SECRET || "").trim();
+  const key = (process.env.GAS_FALLBACK_PRIVATE_KEY || "").trim();
+  const rpcUrl = (process.env.ARB_SEPOLIA_RPC || "").trim();
+  const keeperSecret = (process.env.GAS_BOARD_KEEPER_SECRET || "").trim();
   const maxPerRun = Number(process.env.GAS_FALLBACK_MAX_PER_RUN || 5);
   const maxPerDay = Number(process.env.GAS_FALLBACK_MAX_PER_DAY || 20);
   if (!url || !key || !rpcUrl || !keeperSecret) { console.log("gas-board-fallback: GAS_BOARD_URL, GAS_BOARD_KEEPER_SECRET, GAS_FALLBACK_PRIVATE_KEY or ARB_SEPOLIA_RPC not set; nothing to do."); return; }
