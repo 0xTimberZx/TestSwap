@@ -54,7 +54,11 @@
       + ".ref-label{font-family:var(--mono,monospace);font-size:11px;letter-spacing:1px;color:var(--text-3,#7d8f86);text-transform:uppercase}"
       + ".ref-code{font-family:var(--mono,monospace);font-size:26px;letter-spacing:3px;font-weight:700}"
       + ".ref-qr{width:112px;height:112px;flex:0 0 112px;background:#fff;border-radius:8px;overflow:hidden}.ref-qr svg{width:100%;height:100%;display:block}"
-      + ".ref-hint{margin:12px 0 0;font-size:12.5px;color:var(--text-3,#7d8f86)}";
+      + ".ref-box{position:relative}"
+      + ".ref-help{width:22px;height:22px;margin-left:6px;padding:0;border-radius:50%;border:var(--bw,1px) solid var(--border,#24322b);background:transparent;color:var(--text-2,#9fb2a8);font:700 12px/1 var(--sans,sans-serif);cursor:pointer;vertical-align:middle}"
+      + ".ref-help[aria-expanded=true]{border-color:var(--green,#14f195);color:var(--green,#14f195)}"
+      + ".ref-pop{position:absolute;left:12px;right:12px;z-index:5;margin-top:6px;padding:12px 14px;border-radius:var(--radius,10px);border:var(--bw,1px) solid var(--border,#24322b);background:var(--bg3,#0e1512);box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:13px;line-height:1.5;color:var(--text-2,#9fb2a8)}"
+      + ".ref-pop ul{margin:0;padding-left:18px}.ref-pop li{margin:2px 0}";
     var s = document.createElement("style"); s.textContent = css; document.head.appendChild(s);
   })();
 
@@ -139,11 +143,18 @@
     cardEl.hidden = false;
     cardEl.innerHTML = '<div class="ref-box">'
       + '<div class="ref-head"><span class="ref-title">Your season card</span><span class="ref-tier">' + esc(tierTxt) + '</span></div>'
-      + '<div class="ref-sub">' + esc(c.season.name) + (c.rank ? ' · rank #' + esc(c.rank) : '') + ' · ' + num(c.display_tp) + ' TP</div>'
+      + '<div class="ref-sub">' + esc(c.season.name) + (c.rank ? ' · rank #' + esc(c.rank) : '') + ' · ' + num(c.display_tp) + ' TP'
+      + '<button type="button" class="ref-help" id="ref-help" aria-expanded="false" aria-controls="ref-help-pop" aria-label="How referrals count">?</button></div>'
+      + '<div class="ref-pop" id="ref-help-pop" role="note" hidden><ul>'
+      + '<li>A referral counts when a new player confirms your code after their first ticket and plays 5 rounds.</li>'
+      + '<li>Up to 3 per network.</li>'
+      + '<li>Credit pauses while your ticket isn\'t active; waiting referrals are credited once it is.</li>'
+      + '<li>Tiers by qualified referrals: U 0 · D 1 · C 3 · B 9 · A 36 · S 180.</li>'
+      + '<li>The code is yours for this season.</li></ul></div>'
       + '<div class="ref-bar"><i style="width:' + Math.max(0, Math.min(100, pct)) + '%"></i></div>'
       + '<div class="ref-sub">' + esc(r.qualified || 0) + ' qualified referral' + (r.qualified === 1 ? '' : 's') + ' · ' + esc(nxt) + '</div>'
       + (waiting.length ? '<div class="ref-sub">' + esc(waiting.join(" · ")) + '</div>' : '')
-      + (c.paused ? '<div class="ref-paused">Credit is paused while your ticket isn\'t active. Referrals keep playing and are credited once it\'s active again.</div>' : '')
+      + (c.paused ? '<div class="ref-paused">Credit paused: your ticket isn\'t active.</div>' : '')
       + '<div class="ref-code-row"><div><div class="ref-label">Your code</div><div class="ref-code">' + esc(c.code) + '</div></div>'
       + '<div class="ref-qr" id="ref-qr" aria-label="QR code for your referral link"></div></div>'
       + '<div class="ref-row">'
@@ -152,10 +163,10 @@
       + '<a class="ref-btn" id="ref-x" target="_blank" rel="noopener">Post on X</a>'
       + '<a class="ref-btn" id="ref-tg" target="_blank" rel="noopener">Post on Telegram</a></div>'
       + '<div class="ref-msg" id="ref-card-msg" role="status" aria-live="polite"></div>'
-      + '<p class="ref-hint">A referral counts when a new player confirms your code after their first ticket and plays 5 rounds. '
-      + 'Up to 3 per network. Tiers by qualified referrals: U 0 · D 1 · C 3 · B 9 · A 36 · S 180. The code is yours for this season.</p></div>';
+      + '</div>';
     var msg = document.getElementById("ref-card-msg");
     function say(t, k) { msg.textContent = t; msg.className = "ref-msg" + (k ? " " + k : ""); }
+    helpPopup(document.getElementById("ref-help"), document.getElementById("ref-help-pop"));
     var text = postText(c);
     document.getElementById("ref-x").href = "https://x.com/intent/post?text=" + encodeURIComponent(text) + "&url=" + encodeURIComponent(c.link);
     document.getElementById("ref-tg").href = "https://t.me/share/url?url=" + encodeURIComponent(c.link) + "&text=" + encodeURIComponent(text);
@@ -165,6 +176,21 @@
     document.getElementById("ref-share").addEventListener("click", function () { shareImage(c, text, say); });
     qr(c.link).then(function (q) { var box = document.getElementById("ref-qr"); if (box && q) box.innerHTML = q.svg; });
   }
+  // "?" popup: tap to open, tap again, tap outside or press Escape to close.
+  var helpClose = null;
+  function helpPopup(btn, pop) {
+    if (!btn || !pop) return;
+    if (helpClose) { document.removeEventListener("click", helpClose, true); document.removeEventListener("keydown", helpClose, true); }
+    function set(open) { pop.hidden = !open; btn.setAttribute("aria-expanded", open ? "true" : "false"); }
+    btn.addEventListener("click", function () { set(pop.hidden); });
+    helpClose = function (e) {
+      if (pop.hidden) return;
+      if (e.type === "keydown" ? e.key === "Escape" : !pop.contains(e.target) && e.target !== btn) set(false);
+    };
+    document.addEventListener("click", helpClose, true);
+    document.addEventListener("keydown", helpClose, true);
+  }
+
   function postText(c) {
     var lead = c.season.name + (c.rank ? " · rank #" + c.rank : "") + " on the TimbSwap board.";
     return lead + (MAINNET
