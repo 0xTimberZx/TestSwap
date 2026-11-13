@@ -22,7 +22,23 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SB_URL     = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = (Deno.env.get("SB_SECRET_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"))!;
 const SALT       = Deno.env.get("PRESENCE_SALT") || "timbswap-presence";
-const PROXY      = Deno.env.get("PRESENCE_PROXY_SECRET") || "";
+// proxy-gate:start — identical in every function (supabase/tests/proxy_gate.test.mjs checks)
+// Secrets pasted from a phone can carry spaces, a newline or wrapping quotes
+// (straight or curly). Both sides are cleaned the same way before comparing, and
+// the Worker cleans before sending. A secret that is set but holds characters a
+// header can't carry fails closed: every call is refused until it is re-saved.
+function cleanSecretValue(v: string | null | undefined): string {
+  return String(v ?? "").trim().replace(/^["'\u2018\u2019\u201c\u201d]+|["'\u2018\u2019\u201c\u201d]+$/g, "").trim();
+}
+function proxyGate(name: string): (got: string | null) => "ok" | "forbidden" | "misconfigured" {
+  const raw = (Deno.env.get(name) ?? "").trim();
+  const want = cleanSecretValue(raw);
+  if (!raw) return () => "ok";                                         // not set: gate off
+  if (!want || !/^[\x21-\x7e]+$/.test(want)) return () => "misconfigured";
+  return (got) => (cleanSecretValue(got) === want ? "ok" : "forbidden");
+}
+// proxy-gate:end
+const PROXY_GATE = proxyGate("PRESENCE_PROXY_SECRET");
 
 const WINDOW_S   = 30;
 const PRUNE_S    = 120;
@@ -59,7 +75,9 @@ Deno.serve(async (req) => {
   const origin = req.headers.get("Origin") || "";
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
   if (req.method !== "POST")    return json({ error: "POST only" }, 405, origin);
-  if (PROXY && req.headers.get("X-Proxy-Secret") !== PROXY) return json({ error: "forbidden" }, 403, origin);
+  const gate = PROXY_GATE(req.headers.get("X-Proxy-Secret"));
+  if (gate === "misconfigured") return json({ error: "unavailable" }, 503, origin);
+  if (gate === "forbidden") return json({ error: "forbidden" }, 403, origin);
 
   let body: any = {};
   try { body = await req.json(); } catch { /* fall through to validation */ }

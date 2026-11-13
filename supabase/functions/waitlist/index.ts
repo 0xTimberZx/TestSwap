@@ -40,7 +40,23 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SB_URL       = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const IP_SALT      = Deno.env.get("WAITLIST_IP_SALT") ?? "timbswap-waitlist";
-const PROXY_SECRET = Deno.env.get("WAITLIST_PROXY_SECRET") ?? "";
+// proxy-gate:start — identical in every function (supabase/tests/proxy_gate.test.mjs checks)
+// Secrets pasted from a phone can carry spaces, a newline or wrapping quotes
+// (straight or curly). Both sides are cleaned the same way before comparing, and
+// the Worker cleans before sending. A secret that is set but holds characters a
+// header can't carry fails closed: every call is refused until it is re-saved.
+function cleanSecretValue(v: string | null | undefined): string {
+  return String(v ?? "").trim().replace(/^["'\u2018\u2019\u201c\u201d]+|["'\u2018\u2019\u201c\u201d]+$/g, "").trim();
+}
+function proxyGate(name: string): (got: string | null) => "ok" | "forbidden" | "misconfigured" {
+  const raw = (Deno.env.get(name) ?? "").trim();
+  const want = cleanSecretValue(raw);
+  if (!raw) return () => "ok";                                         // not set: gate off
+  if (!want || !/^[\x21-\x7e]+$/.test(want)) return () => "misconfigured";
+  return (got) => (cleanSecretValue(got) === want ? "ok" : "forbidden");
+}
+// proxy-gate:end
+const PROXY_GATE   = proxyGate("WAITLIST_PROXY_SECRET");
 const TG_TOKEN     = Deno.env.get("WAITLIST_TG_BOT_TOKEN") ?? Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const TG_CHAT      = Deno.env.get("WAITLIST_TG_CHAT_ID") ?? "";
 // Secrets pasted from a phone often arrive wrapped in smart quotes or with stray
@@ -125,7 +141,11 @@ function json(body: unknown, status: number, origin: string) {
   });
 }
 
-const EMAIL_RE  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Printable, no spaces or control characters, and none of the characters that
+// only appear in quoted or bracketed address forms (or markup): < > ( ) [ ] \ , ; : "
+const EMAIL_RE  = /^[^\s@<>()[\]\\,;:"\x00-\x1f\x7f]+@[^\s@<>()[\]\\,;:"'\x00-\x1f\x7f]+\.[^\s@<>()[\]\\,;:"'\x00-\x1f\x7f]+$/;
+// Telegram usernames: 5–32 of A–Z, 0–9, underscore. Anything else is dropped.
+const TG_RE     = /^[A-Za-z0-9_]{5,32}$/;
 const WALLET_RE = /^0x[a-fA-F0-9]{40}$/;
 
 async function sha256Hex(s: string): Promise<string> {
@@ -251,9 +271,9 @@ Deno.serve(async (req) => {
   if (req.method !== "POST")    return json({ ok: false, error: "POST only" }, 405, origin);
 
   // If a proxy secret is configured, only the Worker (which carries it) is trusted.
-  if (PROXY_SECRET && req.headers.get("X-Proxy-Secret") !== PROXY_SECRET) {
-    return json({ ok: false, error: "forbidden" }, 401, origin);
-  }
+  const gate = PROXY_GATE(req.headers.get("X-Proxy-Secret"));
+  if (gate === "misconfigured") return json({ ok: false, error: "unavailable" }, 503, origin);
+  if (gate === "forbidden") return json({ ok: false, error: "forbidden" }, 401, origin);
 
   let body: any;
   try { body = await req.json(); } catch { return json({ ok: false, error: "bad request" }, 400, origin); }
@@ -273,7 +293,7 @@ Deno.serve(async (req) => {
 
   let telegram: string | null = null;
   const traw = String(body?.telegram ?? "").trim().replace(/^@+/, "");
-  if (traw) telegram = traw.slice(0, 40);
+  if (traw && TG_RE.test(traw)) telegram = traw;
 
   const source  = String(body?.source ?? "landing").slice(0, 40);
   const ref     = String(body?.ref ?? "").slice(0, 300);

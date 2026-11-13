@@ -122,6 +122,18 @@ async function readBody(request, origin) {
   return { text };
 }
 
+// Proxy secrets travel as a header, which carries printable ASCII only. Clean
+// them the way the functions do (trim, strip wrapping quotes, straight or curly).
+// A secret with other characters (an emoji, a curly quote mid-string) makes
+// fetch throw; report it instead so it can be re-saved.
+function proxySecret(name, value) {
+  const s = String(value ?? "").trim().replace(/^["'\u2018\u2019\u201c\u201d]+|["'\u2018\u2019\u201c\u201d]+$/g, "").trim();
+  if (!s) return { ok: true, value: "" };
+  if (/^[\x21-\x7e]+$/.test(s)) return { ok: true, value: s };
+  console.error(`${name} holds characters a header can't carry; re-save it`);
+  return { ok: false, value: "" };
+}
+
 // Relay a POST body to a Supabase edge function, echoing its JSON response.
 // Optional extraHeaders are merged into the upstream request.
 async function relay(upstream, text, origin, extraHeaders) {
@@ -163,7 +175,9 @@ export default {
         "X-TS-Client-IP": request.headers.get("CF-Connecting-IP") || "",
         "X-Client-Country": (request.cf && request.cf.country) || "",
       };
-      if (env.WAITLIST_PROXY_SECRET) headers["X-Proxy-Secret"] = env.WAITLIST_PROXY_SECRET;
+      const ps = proxySecret("WAITLIST_PROXY_SECRET", env.WAITLIST_PROXY_SECRET);
+      if (!ps.ok) return json({ error: "service misconfigured" }, 500, origin);
+      if (ps.value) headers["X-Proxy-Secret"] = ps.value;
       return relay(env.WAITLIST_UPSTREAM, text, origin, headers);
     }
 
@@ -193,7 +207,9 @@ export default {
 
       const ip = request.headers.get("CF-Connecting-IP") || "";
       const headers = { "X-Real-IP": ip, "X-TS-Client-IP": ip };
-      if (env.FAUCET_PROXY_SECRET) headers["X-Proxy-Secret"] = env.FAUCET_PROXY_SECRET;
+      const ps = proxySecret("FAUCET_PROXY_SECRET", env.FAUCET_PROXY_SECRET);
+      if (!ps.ok) return json({ error: "service misconfigured" }, 500, origin);
+      if (ps.value) headers["X-Proxy-Secret"] = ps.value;
       return relay(env.FAUCET_UPSTREAM, text, origin, headers);
     }
 
@@ -211,7 +227,9 @@ export default {
 
       const ip = request.headers.get("CF-Connecting-IP") || "";
       const headers = { "X-Real-IP": ip, "X-TS-Client-IP": ip };
-      if (env.PRESENCE_PROXY_SECRET) headers["X-Proxy-Secret"] = env.PRESENCE_PROXY_SECRET;
+      const ps = proxySecret("PRESENCE_PROXY_SECRET", env.PRESENCE_PROXY_SECRET);
+      if (!ps.ok) return json({ error: "service misconfigured" }, 500, origin);
+      if (ps.value) headers["X-Proxy-Secret"] = ps.value;
       return relay(env.PRESENCE_UPSTREAM, text, origin, headers);
     }
 
@@ -228,7 +246,9 @@ export default {
 
       const ip = request.headers.get("CF-Connecting-IP") || "";
       const headers = { "X-Real-IP": ip, "X-TS-Client-IP": ip };
-      if (env.GAS_BOARD_PROXY_SECRET) headers["X-Proxy-Secret"] = env.GAS_BOARD_PROXY_SECRET;
+      const ps = proxySecret("GAS_BOARD_PROXY_SECRET", env.GAS_BOARD_PROXY_SECRET);
+      if (!ps.ok) return json({ error: "service misconfigured" }, 500, origin);
+      if (ps.value) headers["X-Proxy-Secret"] = ps.value;
       return relay(env.GAS_BOARD_UPSTREAM, text, origin, headers);
     }
 
@@ -244,7 +264,9 @@ export default {
 
       const ip = request.headers.get("CF-Connecting-IP") || "";
       const headers = { "X-Real-IP": ip, "X-TS-Client-IP": ip };
-      if (env.REFERRALS_PROXY_SECRET) headers["X-Proxy-Secret"] = env.REFERRALS_PROXY_SECRET;
+      const ps = proxySecret("REFERRALS_PROXY_SECRET", env.REFERRALS_PROXY_SECRET);
+      if (!ps.ok) return json({ error: "service misconfigured" }, 500, origin);
+      if (ps.value) headers["X-Proxy-Secret"] = ps.value;
       return relay(env.REFERRALS_UPSTREAM, text, origin, headers);
     }
 

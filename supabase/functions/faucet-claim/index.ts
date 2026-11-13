@@ -54,7 +54,23 @@ const TS_HOSTNAMES  = new Set(
   (Deno.env.get("TURNSTILE_HOSTNAMES") ?? "timbswap.xyz,www.timbswap.xyz,0xtimberzx.github.io")
     .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean),
 );
-const PROXY_SECRET  = Deno.env.get("FAUCET_PROXY_SECRET") ?? "";
+// proxy-gate:start — identical in every function (supabase/tests/proxy_gate.test.mjs checks)
+// Secrets pasted from a phone can carry spaces, a newline or wrapping quotes
+// (straight or curly). Both sides are cleaned the same way before comparing, and
+// the Worker cleans before sending. A secret that is set but holds characters a
+// header can't carry fails closed: every call is refused until it is re-saved.
+function cleanSecretValue(v: string | null | undefined): string {
+  return String(v ?? "").trim().replace(/^["'\u2018\u2019\u201c\u201d]+|["'\u2018\u2019\u201c\u201d]+$/g, "").trim();
+}
+function proxyGate(name: string): (got: string | null) => "ok" | "forbidden" | "misconfigured" {
+  const raw = (Deno.env.get(name) ?? "").trim();
+  const want = cleanSecretValue(raw);
+  if (!raw) return () => "ok";                                         // not set: gate off
+  if (!want || !/^[\x21-\x7e]+$/.test(want)) return () => "misconfigured";
+  return (got) => (cleanSecretValue(got) === want ? "ok" : "forbidden");
+}
+// proxy-gate:end
+const PROXY_GATE    = proxyGate("FAUCET_PROXY_SECRET");
 const AIRDROP_ON    = (Deno.env.get("AIRDROP_ENABLED") ?? "").toLowerCase() === "true";
 const AIRDROP_ROUND = Number(Deno.env.get("AIRDROP_ROUND") ?? "1");
 
@@ -189,9 +205,9 @@ Deno.serve(async (req) => {
   if (req.method !== "POST")    return json({ ok: false, error: "POST only" }, 405, origin);
 
   // If a proxy secret is configured, only the Worker (which carries it) is trusted.
-  if (PROXY_SECRET && req.headers.get("X-Proxy-Secret") !== PROXY_SECRET) {
-    return json({ ok: false, error: "forbidden" }, 401, origin);
-  }
+  const gate = PROXY_GATE(req.headers.get("X-Proxy-Secret"));
+  if (gate === "misconfigured") return json({ ok: false, error: "unavailable" }, 503, origin);
+  if (gate === "forbidden") return json({ ok: false, error: "forbidden" }, 401, origin);
   if (!REGISTRY_ADDR) {
     return json({ ok: false, error: "Faucet is not configured yet." }, 503, origin);
   }

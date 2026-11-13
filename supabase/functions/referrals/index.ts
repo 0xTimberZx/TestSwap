@@ -37,7 +37,23 @@ const SB_URL       = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CODE_SECRET  = (Deno.env.get("REFERRAL_CODE_SECRET") ?? "").trim() || SB_SERVICE;
 const IP_SALT      = (Deno.env.get("REFERRAL_IP_SALT") ?? "").trim() || "timbswap-referrals";
-const PROXY_SECRET = (Deno.env.get("REFERRALS_PROXY_SECRET") ?? "").trim();
+// proxy-gate:start — identical in every function (supabase/tests/proxy_gate.test.mjs checks)
+// Secrets pasted from a phone can carry spaces, a newline or wrapping quotes
+// (straight or curly). Both sides are cleaned the same way before comparing, and
+// the Worker cleans before sending. A secret that is set but holds characters a
+// header can't carry fails closed: every call is refused until it is re-saved.
+function cleanSecretValue(v: string | null | undefined): string {
+  return String(v ?? "").trim().replace(/^["'\u2018\u2019\u201c\u201d]+|["'\u2018\u2019\u201c\u201d]+$/g, "").trim();
+}
+function proxyGate(name: string): (got: string | null) => "ok" | "forbidden" | "misconfigured" {
+  const raw = (Deno.env.get(name) ?? "").trim();
+  const want = cleanSecretValue(raw);
+  if (!raw) return () => "ok";                                         // not set: gate off
+  if (!want || !/^[\x21-\x7e]+$/.test(want)) return () => "misconfigured";
+  return (got) => (cleanSecretValue(got) === want ? "ok" : "forbidden");
+}
+// proxy-gate:end
+const PROXY_GATE   = proxyGate("REFERRALS_PROXY_SECRET");
 const REGISTRY     = (Deno.env.get("GAME_REGISTRY_ADDR") ?? "").trim();
 const CHAIN_ID     = Number(Deno.env.get("FAUCET_CHAIN_ID") ?? "421614");
 const SITE         = "https://timbswap.xyz";
@@ -95,7 +111,9 @@ Deno.serve(async (req) => {
   const origin = req.headers.get("Origin") || "";
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
   if (req.method !== "POST") return json({ ok: false, error: "POST only" }, 405, origin);
-  if (PROXY_SECRET && (req.headers.get("X-Proxy-Secret") ?? "").trim() !== PROXY_SECRET) return json({ ok: false, error: "forbidden" }, 401, origin);
+  const gate = PROXY_GATE(req.headers.get("X-Proxy-Secret"));
+  if (gate === "misconfigured") return json({ ok: false, error: "unavailable" }, 503, origin);
+  if (gate === "forbidden") return json({ ok: false, error: "forbidden" }, 401, origin);
 
   let body: any;
   try { body = await req.json(); } catch { return json({ ok: false, error: "bad request" }, 400, origin); }
@@ -169,7 +187,10 @@ Deno.serve(async (req) => {
     try { st = await ticketStatus(address); } catch { return json({ ok: false, error: "Couldn't reach the chain just now — please try again." }, 502, origin); }
     if (st !== PENDING && st !== ACTIVE) return json({ ok: false, error: "Make your first ticket, then confirm the referral." }, 409, origin);
     const ip = req.headers.get("X-TS-Client-IP") || req.headers.get("X-Real-IP") || "";
-    const ipHash = ip ? await sha256Hex(IP_SALT + "|" + ip) : "";
+    // No network means the call didn't come through the site's Worker, and the
+    // 3-per-network cap can't apply: refuse rather than bind uncapped.
+    if (!ip) return json({ ok: false, error: "Open timbswap.xyz to confirm your referral." }, 403, origin);
+    const ipHash = await sha256Hex(IP_SALT + "|" + ip);
     const { data, error } = await sb.rpc("referral_bind", { p_season: season.id, p_code: code, p_referee: address, p_ip_hash: ipHash });
     if (error) return json({ ok: false, error: "Couldn't save that just now — please try again." }, 500, origin);
     const result = String(data);
