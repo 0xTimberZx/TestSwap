@@ -2,7 +2,7 @@
 // away (they want a mainnet balance) post their address; anyone can send them
 // 0.003 test ETH on Arbitrum Sepolia and paste the transaction hash, which the
 // `gas-board` edge function checks on chain. The team fills anything still open
-// after 6 hours. No points for filling: it is a thank-you, not a score.
+// after 6 hours (not advertised on the page). No points for filling: it is a thank-you, not a score.
 (function () {
   "use strict";
   var ENDPOINT = "/api/gas-board";
@@ -17,6 +17,7 @@
   var msgEl = document.getElementById("gb-msg");
   var listEl = document.getElementById("gb-list");
   var statsEl = document.getElementById("gb-stats");
+  var countEl = document.getElementById("gb-count");
   var ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
   var HASH_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -42,7 +43,11 @@
   }
   function tsToken() { try { return tsWidget !== null ? window.turnstile.getResponse(tsWidget) || "" : ""; } catch (e) { return ""; } }
   function tsReset() { try { if (tsWidget !== null) window.turnstile.reset(tsWidget); } catch (e) {} }
-  (function waitTs(n) { if (window.turnstile) renderTurnstile(); else if (n > 0) setTimeout(function () { waitTs(n - 1); }, 300); })(40);
+  function startTs() { (function waitTs(n) { if (window.turnstile) renderTurnstile(); else if (n > 0) setTimeout(function () { waitTs(n - 1); }, 300); })(40); }
+  // Minimized by default: a closed <details> leaves the widget no layout, so
+  // Turnstile renders the first time the board is opened.
+  board.addEventListener("toggle", function () { if (board.open) startTs(); });
+  if (board.open) startTs();
 
   function row(r) {
     var div = document.createElement("div");
@@ -82,8 +87,9 @@
     post({ action: "list" }).then(function (res) {
       if (!res.ok) { listEl.innerHTML = ""; var e = document.createElement("div"); e.className = "gb-empty"; e.textContent = res.error || "The board is unavailable right now."; listEl.appendChild(e); return; }
       listEl.innerHTML = "";
-      if (!res.open.length) { var none = document.createElement("div"); none.className = "gb-empty"; none.textContent = "No open requests right now."; listEl.appendChild(none); }
+      if (!res.open.length) { var none = document.createElement("div"); none.className = "gb-empty"; none.textContent = "The board is currently empty."; listEl.appendChild(none); }
       res.open.forEach(function (r) { listEl.appendChild(row(r)); });
+      countEl.textContent = res.open.length ? res.open.length + " waiting" : "";
       statsEl.textContent = res.filledThisWeek ? "· filled this week: " + res.filledThisWeek + (res.filledByCommunity ? " (" + res.filledByCommunity + " by the community)" : "") : "";
     });
   }
@@ -97,7 +103,7 @@
     post({ action: "request", address: a, cfTurnstileToken: tsToken() }).then(function (res) {
       submitEl.disabled = false; tsReset();
       if (res.ok && res.status === "already_open") say("You already have an open request. It stays on the board until it's filled.", "ok");
-      else if (res.ok) { say("Posted. Someone in the community can send it now; if not, the team sends it within about 6 hours.", "ok"); addrEl.value = ""; }
+      else if (res.ok) { say("Posted. Your address is on the board for the community to see.", "ok"); addrEl.value = ""; }
       else say(res.error || "Couldn't post that just now.", "err");
       load();
     });
