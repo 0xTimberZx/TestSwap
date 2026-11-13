@@ -127,7 +127,7 @@
   }
   function renderCard(c) {
     var r = c.referrals || {};
-    var tierTxt = c.tier ? "Tier " + c.tier : "No tier yet";
+    var tierTxt = "Tier " + (c.tier || "U");   // U: no qualified referral yet
     var nxt = c.next ? (c.next.need + " more to " + c.next.tier) : "Top tier reached";
     var base = c.tier ? ({ D: 1, C: 3, B: 9, A: 36, S: 180 })[c.tier] : 0;
     var top = c.next ? base + c.next.need : base;
@@ -153,7 +153,7 @@
       + '<a class="ref-btn" id="ref-tg" target="_blank" rel="noopener">Post on Telegram</a></div>'
       + '<div class="ref-msg" id="ref-card-msg" role="status" aria-live="polite"></div>'
       + '<p class="ref-hint">A referral counts when a new player confirms your code after their first ticket and plays 5 rounds. '
-      + 'Up to 3 per network. Tiers: D 1 · C 3 · B 9 · A 36 · S 180. The code is yours for this season.</p></div>';
+      + 'Up to 3 per network. Tiers by qualified referrals: U 0 · D 1 · C 3 · B 9 · A 36 · S 180. The code is yours for this season.</p></div>';
     var msg = document.getElementById("ref-card-msg");
     function say(t, k) { msg.textContent = t; msg.className = "ref-msg" + (k ? " " + k : ""); }
     var text = postText(c);
@@ -237,10 +237,10 @@
       x.fillStyle = "#e8f0ec"; x.font = "700 64px " + SANS; x.fillText(s[0], sx, 500);
       x.fillStyle = "#7d8f86"; x.font = "400 24px " + MONO; x.fillText(s[1], sx, 544);
     });
-    if (c.tier) {
+    {
       x.strokeStyle = "rgba(20,241,149,.6)"; x.lineWidth = 3;
       x.beginPath(); if (x.roundRect) x.roundRect(80, 590, 300, 64, 32); else x.rect(80, 590, 300, 64); x.stroke();
-      x.fillStyle = "#14f195"; x.font = "700 30px " + MONO; x.fillText("REFERRALS · " + c.tier, 112, 633);
+      x.fillStyle = "#14f195"; x.font = "700 30px " + MONO; x.fillText("REFERRALS · " + (c.tier || "U"), 112, 633);
     }
     // QR
     var qs = 300, qx = W - 80 - qs, qy = W - 80 - qs;
