@@ -20,12 +20,12 @@ and payouts need no privileged operator, and you always hold your own keys.
 **Litepaper:** [timbswap.xyz/litepaper](https://timbswap.xyz/litepaper/)  
 **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
 
-> **Status (Sept 2026):** live on Arbitrum **Sepolia testnet** — all tokens are test assets with no
-> monetary value. Unaudited. A capped mainnet beta runs before the independent audit; the audit is a gating condition for the TIMBS launch and for lifting the beta caps.
-> The prize game runs on its **gen-3** contracts; the **faucet** is live (TIMBS-only on testnet);
-> **email sign-in** (an embedded wallet with optional authenticator / passkey MFA and key export) is
-> live next to extension wallets; the mainnet-TIMB **airdrop** leg is deployed on Arbitrum One but
-> **paused until the public announcement**. See [Roadmap](./ROADMAP.md) and the
+> **Status (Nov 2026):** live on Arbitrum **Sepolia testnet**. All tokens are test assets with no
+> monetary value, and the contracts are unaudited. **Season 1** is recording testnet activity for
+> Timber Points (how points are weighted is not final). The **faucet** is live for wallets holding an
+> Active ticket, and **email sign-in** (an embedded wallet with optional authenticator / passkey MFA
+> and key export) works next to extension wallets. A capped mainnet beta is planned; the independent
+> audit gates the TIMBS launch and the lifting of the beta caps. See [Roadmap](./ROADMAP.md) and the
 > [Risks](https://timbswap.xyz/docs/#risks) section.
 
 ---
@@ -343,7 +343,7 @@ forge script scripts/Deploy.s.sol \
 ## Ecosystem
 
 Part of the 0xTimberZx ecosystem alongside BlockpotDAO, MessageBoard, and 0xFaucet.  
-Frontend diagnostics are **local-only** during the capped beta (no telemetry leaves the browser); see the note in `config.js`.
+Frontend diagnostics are **local-only** (no telemetry leaves the browser); see the note in `config.js`.
 
 ---
 
