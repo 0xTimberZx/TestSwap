@@ -147,9 +147,11 @@
     .gb-list-head { margin: 14px 0 6px; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--text-3); text-transform: uppercase; }
     .gb-stats { text-transform: none; letter-spacing: 0; }
     .gb-row { padding: 10px 0; border-top: var(--bw) solid var(--border); }
-    .gb-row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .gb-addr { font-family: var(--mono); font-size: 13px; word-break: break-all; flex: 1 1 200px; }
-    .gb-age { font-size: 12px; color: var(--text-3); }
+    .gb-row-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .gb-actions { display: flex; gap: 8px; margin-top: 6px; }
+    .gb-addr { font-family: var(--mono); font-size: 13px; word-break: break-all; flex: 1 1 auto; text-align: left; background: none; border: 0; padding: 6px 0; color: var(--text); cursor: pointer; }
+    .gb-addr.full { flex-basis: 100%; cursor: text; }
+    .gb-age { font-size: 12px; color: var(--text-3); margin-left: auto; white-space: nowrap; }
     .gb-small { min-height: 34px; padding: 0 12px; border-radius: var(--radius); border: var(--bw) solid var(--border); background: transparent; color: var(--text-2); font-size: 12px; cursor: pointer; }
     .gb-fill { display: flex; gap: 6px; margin-top: 8px; }
     .gb-fill .gb-input { min-height: 36px; font-size: 12px; }
@@ -177,7 +179,7 @@
     </section>
 
     <div class="start-progress" id="start-progress" aria-live="polite">
-      <span id="start-progress-text">Let's get you started · 0 of 4 done</span>
+      <span id="start-progress-text">Getting started · 0 of 4 done</span>
       <div class="start-progress-bar"><div class="start-progress-fill" id="start-progress-fill"></div></div>
       <div class="step-hint">Tick each step as you finish it. You can skip and come back any time.</div>
     </div>
@@ -240,7 +242,7 @@
             <div class="gb-msg" id="gb-msg" role="status" aria-live="polite"></div>
             <div class="gb-list-head">Open requests <span class="gb-stats" id="gb-stats"></span></div>
             <div class="gb-list" id="gb-list"><div class="gb-empty">Loading…</div></div>
-            <p class="step-hint">Have spare test ETH? Send 0.003 to an address above on Arbitrum Sepolia, then paste the transaction hash. We check it on chain. No points, just thanks.</p>
+            <p class="step-hint">Have spare test ETH? Send some to an address above on Arbitrum Sepolia (0.003 asked, 0.001 minimum), then tap Resolved? and paste the transaction hash. Every fill is verified on chain. No points, just thanks.</p>
             </div>
           </details>
         </div>
@@ -324,7 +326,7 @@
     <div class="start-safe">
       <strong>Stay safe:</strong> <span data-net="sepolia">everything here is free and on a testnet.</span><span data-net="mainnet">this is a capped beta with real ETH at small stakes — never put in more than a ticket and gas.</span> TimbSwap will never DM you
       first or ask for your seed phrase or private keys. The only official sources are
-      <strong>timbswap.xyz</strong>, our Telegram, and our X account — anyone else is an impersonator.
+      <strong>timbswap.xyz</strong> and the TimbSwap Telegram and X accounts — anyone else is an impersonator.
     </div>
 
     <div class="start-foot">
@@ -361,7 +363,7 @@
           });
           var total = vis.length || 4;
           var t = document.getElementById("start-progress-text");
-          if (t) t.textContent = n >= total ? "All set \u00b7 " + n + " of " + total + " done" : "Let's get you started \u00b7 " + n + " of " + total + " done";
+          if (t) t.textContent = n >= total ? "All set \u00b7 " + n + " of " + total + " done" : "Getting started \u00b7 " + n + " of " + total + " done";
           var f = document.getElementById("start-progress-fill");
           if (f) f.style.width = Math.round(100 * n / total) + "%";
         }
@@ -378,6 +380,6 @@
       if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
     })();
   </script>
-  <script src="gas-board.js?v=20261114c"></script>
+  <script src="gas-board.js?v=20261114d"></script>
 </body>
 </html>

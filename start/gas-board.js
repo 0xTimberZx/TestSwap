@@ -1,8 +1,10 @@
 // Gas request board on /start (testnet only). Newcomers the public faucets turn
 // away (they want a mainnet balance) post their address; anyone can send them
-// 0.003 test ETH on Arbitrum Sepolia and paste the transaction hash, which the
-// `gas-board` edge function checks on chain. The team fills anything still open
-// after 6 hours (not advertised on the page). No points for filling: it is a thank-you, not a score.
+// test ETH on Arbitrum Sepolia (0.003 asked; 0.001 or more resolves it) and
+// paste the transaction hash, which the `gas-board` edge function checks on
+// chain. The board shows the oldest 5 open requests; after 6 hours a request
+// leaves the board for the team queue (not advertised on the page). Addresses
+// show shortened until someone interacts with the row. No points for filling.
 (function () {
   "use strict";
   var ENDPOINT = "/api/gas-board";
@@ -53,16 +55,24 @@
     var div = document.createElement("div");
     div.className = "gb-row";
     var top = document.createElement("div"); top.className = "gb-row-top";
-    var a = document.createElement("span"); a.className = "gb-addr"; a.textContent = r.address;
+    // Shortened until the row is interacted with (tap the address, Copy or Resolved?).
+    var a = document.createElement("button"); a.type = "button"; a.className = "gb-addr";
+    a.textContent = r.address.slice(0, 6) + "…" + r.address.slice(-4);
+    a.title = "Show the full address"; a.setAttribute("aria-label", "Show the full address");
+    function reveal() { a.textContent = r.address; a.classList.add("full"); }
+    a.addEventListener("click", reveal);
     var age = document.createElement("span"); age.className = "gb-age"; age.textContent = "waiting " + ago(r.created_at);
     var copy = document.createElement("button"); copy.type = "button"; copy.className = "gb-small tap"; copy.textContent = "Copy";
     copy.addEventListener("click", function () {
+      reveal();
       try { navigator.clipboard.writeText(r.address); copy.textContent = "Copied"; setTimeout(function () { copy.textContent = "Copy"; }, 1500); } catch (e) {}
     });
-    var sent = document.createElement("button"); sent.type = "button"; sent.className = "gb-small tap"; sent.textContent = "I sent it";
-    top.appendChild(a); top.appendChild(age); top.appendChild(copy); top.appendChild(sent);
-    div.appendChild(top);
+    var sent = document.createElement("button"); sent.type = "button"; sent.className = "gb-small tap"; sent.textContent = "Resolved?";
+    var actions = document.createElement("div"); actions.className = "gb-actions";
+    top.appendChild(a); top.appendChild(age); actions.appendChild(copy); actions.appendChild(sent);
+    div.appendChild(top); div.appendChild(actions);
     sent.addEventListener("click", function () {
+      reveal();
       if (div.querySelector(".gb-fill")) return;
       var f = document.createElement("div"); f.className = "gb-fill";
       var inp = document.createElement("input"); inp.className = "gb-input"; inp.placeholder = "Paste the transaction hash (0x…)";
@@ -75,7 +85,7 @@
         ok.disabled = true; say("Checking the transaction on chain…");
         post({ action: "fill", id: r.id, txHash: h }).then(function (res) {
           ok.disabled = false;
-          if (res.ok) { say("Thanks — that request is filled.", "ok"); load(); }
+          if (res.ok) { say("Thanks — that request is resolved.", "ok"); load(); }
           else say(res.error || "Couldn't confirm that transaction.", "err");
         });
       });
@@ -89,7 +99,9 @@
       listEl.innerHTML = "";
       if (!res.open.length) { var none = document.createElement("div"); none.className = "gb-empty"; none.textContent = "The board is currently empty."; listEl.appendChild(none); }
       res.open.forEach(function (r) { listEl.appendChild(row(r)); });
-      countEl.textContent = res.open.length ? res.open.length + " waiting" : "";
+      var total = typeof res.openCount === "number" ? res.openCount : res.open.length;
+      if (total > res.open.length) { var more = document.createElement("div"); more.className = "gb-empty"; more.textContent = "+" + (total - res.open.length) + " more waiting. They move up as these are resolved."; listEl.appendChild(more); }
+      countEl.textContent = total ? total + " waiting" : "";
       statsEl.textContent = res.filledThisWeek ? "· filled this week: " + res.filledThisWeek + (res.filledByCommunity ? " (" + res.filledByCommunity + " by the community)" : "") : "";
     });
   }
@@ -102,7 +114,7 @@
     submitEl.disabled = true; say("Posting your request…");
     post({ action: "request", address: a, cfTurnstileToken: tsToken() }).then(function (res) {
       submitEl.disabled = false; tsReset();
-      if (res.ok && res.status === "already_open") say("You already have an open request. It stays on the board until it's filled.", "ok");
+      if (res.ok && res.status === "already_open") say("This address already has an open request waiting to be resolved.", "ok");
       else if (res.ok) { say("Posted. Your address is on the board for the community to see.", "ok"); addrEl.value = ""; }
       else say(res.error || "Couldn't post that just now.", "err");
       load();

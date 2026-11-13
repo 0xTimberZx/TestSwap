@@ -51,6 +51,7 @@ jobs:
         env:
           GAS_BOARD_URL:            ${{ vars.GAS_BOARD_URL }}
           GAS_BOARD_PROXY_SECRET:   ${{ secrets.GAS_BOARD_PROXY_SECRET }}
+          GAS_BOARD_KEEPER_SECRET:  ${{ secrets.GAS_BOARD_KEEPER_SECRET }}
           GAS_FALLBACK_PRIVATE_KEY: ${{ secrets.GAS_FALLBACK_PRIVATE_KEY }}
           ARB_SEPOLIA_RPC:          ${{ secrets.ARB_SEPOLIA_RPC }}
           GAS_FALLBACK_MAX_PER_RUN: ${{ vars.GAS_FALLBACK_MAX_PER_RUN }}

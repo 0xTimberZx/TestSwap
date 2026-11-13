@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
   if (body?.leave === true) {
     await sb.from("presence").delete().eq("sid", sid);
   } else {
-    const ip = req.headers.get("X-Real-IP") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip = req.headers.get("X-TS-Client-IP") || req.headers.get("X-Real-IP") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
     const ipHash = await sha256(`${SALT}:${ip}`);
     // Cap live tabs per IP; an existing tab of this IP may always refresh.
     const { count: ipLive } = await sb.from("presence").select("sid", { count: "exact", head: true })

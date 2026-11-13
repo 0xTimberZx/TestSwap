@@ -4,8 +4,17 @@
 // the newcomers the testnet is for. This board lets a newcomer post their
 // address; anyone can send them test ETH on Arbitrum Sepolia and paste the
 // transaction hash, which is verified ON CHAIN here before the request is marked
-// filled. Requests still open after 6 hours are filled by the team's fallback
-// keeper (scripts/gas-board-fallback.js); requests expire after 48 hours.
+// filled (0.001 ETH, a third of the 0.003 ask, counts as resolved).
+//
+// Guards (rules in check.ts, tested by check.test.ts):
+//   - Turnstile; one open request per address; refused if the wallet already has gas
+//   - one post per address per 24 h, counted from its last post or resolution
+//   - an address can be helped at most 3 times, ever
+//   - 3 posts per network (salted IP hash) per 24 h
+//   - the public board holds at most 30 open requests and shows the oldest 5
+//   - after 6 hours a request leaves the public board for the team queue, which
+//     the fallback keeper (scripts/gas-board-fallback.js) reads with its own
+//     secret; unresolved requests expire after 24 hours
 // Nothing here awards points: sending test ETH is a thank-you, not a score.
 //
 // Reached through the same-origin Worker route POST /api/gas-board
@@ -16,6 +25,7 @@
 // Body: { action: "list" }
 //       { action: "request", address, cfTurnstileToken }
 //       { action: "fill", id, txHash }
+//       { action: "queue" }   keeper only: needs X-Keeper-Secret
 //
 // Secrets (Supabase → Edge Functions):
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   (auto-injected)
@@ -23,6 +33,8 @@
 //   GAS_BOARD_PROXY_SECRET optional; if set, only calls carrying X-Proxy-Secret are accepted
 //   GAS_BOARD_IP_SALT     salts the stored IP hash (the raw IP is never stored)
 //   TURNSTILE_SECRET      shared with faucet-claim / waitlist; unset skips the check
+//   GAS_BOARD_KEEPER_SECRET required for action "queue" (the fallback keeper sends it
+//                         as X-Keeper-Secret); unset disables the queue
 //   GAS_TEAM_RESOLVERS    comma-separated team wallet addresses (fills from them are
 //                         marked filled_by_team, and the sybil review treats them as neutral)
 //
@@ -30,12 +42,16 @@
 // Table: supabase/migrations/20261114000000_gas_board.sql
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { ADDR_RE, AMOUNT_WEI, EXPIRE_HOURS, HASH_RE, HAS_GAS_WEI, MAX_PER_IP_DAY, checkFill } from "./check.ts";
+import {
+  ADDR_RE, EXPIRE_HOURS, HASH_RE, HAS_GAS_WEI, MAX_PER_IP_DAY, PUBLIC_HOURS, SHOW_MAX,
+  checkFill, checkRequest,
+} from "./check.ts";
 
 const SB_URL       = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const PROXY_SECRET = Deno.env.get("GAS_BOARD_PROXY_SECRET") ?? "";
 const IP_SALT      = Deno.env.get("GAS_BOARD_IP_SALT") ?? "timbswap-gas-board";
+const KEEPER_SECRET = Deno.env.get("GAS_BOARD_KEEPER_SECRET") ?? "";
 const TS_SECRET    = (Deno.env.get("TURNSTILE_SECRET") ?? "").trim();
 const TEAM = new Set((Deno.env.get("GAS_TEAM_RESOLVERS") ?? "")
   .split(",").map((a) => a.trim().toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a)));
@@ -51,7 +67,7 @@ const ALLOWED_ORIGINS = new Set(["https://timbswap.xyz", "https://www.timbswap.x
 function cors(origin: string) {
   return {
     "Access-Control-Allow-Origin": ALLOWED_ORIGINS.has(origin) ? origin : "https://timbswap.xyz",
-    "Access-Control-Allow-Headers": "content-type, x-proxy-secret, x-real-ip",
+    "Access-Control-Allow-Headers": "content-type, x-proxy-secret, x-real-ip, x-ts-client-ip, x-keeper-secret",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };
@@ -110,27 +126,48 @@ Deno.serve(async (req) => {
   const cutoff = new Date(Date.now() - EXPIRE_HOURS * 3600_000).toISOString();
   await sb.from("gas_requests").update({ status: "expired" }).eq("status", "open").lt("created_at", cutoff);
 
+  const publicSince = new Date(Date.now() - PUBLIC_HOURS * 3600_000).toISOString();
+
   if (action === "list") {
-    const { data: open } = await sb.from("gas_requests")
-      .select("id,address,created_at").eq("status", "open").order("created_at", { ascending: true }).limit(50);
+    // Public board: open and younger than 6 h, oldest first, only the first SHOW_MAX shown.
+    const { data: open, count: openCount } = await sb.from("gas_requests")
+      .select("id,address,created_at", { count: "exact" }).eq("status", "open").gt("created_at", publicSince)
+      .order("created_at", { ascending: true }).limit(SHOW_MAX);
     const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
     const { data: filled } = await sb.from("gas_requests")
       .select("filled_by_team").eq("status", "filled").gte("filled_at", weekAgo);
     const total = filled?.length ?? 0;
     const community = (filled ?? []).filter((r: any) => !r.filled_by_team).length;
-    return json({ ok: true, open: open ?? [], filledThisWeek: total, filledByCommunity: community, amountEth: "0.003" }, 200, origin);
+    return json({ ok: true, open: open ?? [], openCount: openCount ?? 0, filledThisWeek: total, filledByCommunity: community, amountEth: "0.003" }, 200, origin);
+  }
+
+  if (action === "queue") {
+    // Team queue for the fallback keeper: open requests past the public window.
+    if (!KEEPER_SECRET || req.headers.get("X-Keeper-Secret") !== KEEPER_SECRET) return json({ ok: false, error: "forbidden" }, 401, origin);
+    const { data: queue } = await sb.from("gas_requests")
+      .select("id,address,created_at").eq("status", "open").lte("created_at", publicSince)
+      .order("created_at", { ascending: true }).limit(50);
+    const dayAgo = new Date(Date.now() - 86400_000).toISOString();
+    const { count: teamFilled24h } = await sb.from("gas_requests").select("id", { count: "exact", head: true })
+      .eq("status", "filled").eq("filled_by_team", true).gte("filled_at", dayAgo);
+    return json({ ok: true, open: queue ?? [], teamFilled24h: teamFilled24h ?? 0 }, 200, origin);
   }
 
   if (action === "request") {
     const raw = String(body?.address ?? "").trim();
     if (!ADDR_RE.test(raw)) return json({ ok: false, error: "Enter a valid wallet address (0x… 42 characters)." }, 422, origin);
     const address = raw.toLowerCase();
-    const ip = req.headers.get("X-Real-IP") || "";
+    const ip = req.headers.get("X-TS-Client-IP") || req.headers.get("X-Real-IP") || "";
     if (!(await verifyTurnstile(String(body?.cfTurnstileToken ?? ""), ip))) {
       return json({ ok: false, error: "Human check failed — please retry the challenge." }, 403, origin);
     }
-    const { data: existing } = await sb.from("gas_requests").select("id").eq("address", address).eq("status", "open").maybeSingle();
+    const { data: history } = await sb.from("gas_requests").select("id,status,created_at,filled_at").eq("address", address);
+    const existing = (history ?? []).find((r: any) => r.status === "open");
     if (existing) return json({ ok: true, status: "already_open", id: existing.id }, 200, origin);
+    const { count: openCount } = await sb.from("gas_requests").select("id", { count: "exact", head: true })
+      .eq("status", "open").gt("created_at", publicSince);
+    const refused = checkRequest(history ?? [], Date.now(), openCount ?? 0);
+    if (refused) return json({ ok: false, error: refused }, 429, origin);
     try {
       const bal = BigInt(await rpc("eth_getBalance", [address, "latest"]));
       if (bal >= HAS_GAS_WEI) return json({ ok: false, error: "This wallet already has enough test ETH to play." }, 409, origin);
