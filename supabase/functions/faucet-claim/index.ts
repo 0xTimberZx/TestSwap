@@ -144,7 +144,7 @@ function cors(origin: string) {
   const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://timbswap.xyz";
   return {
     "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "content-type, x-proxy-secret, x-real-ip",
+    "Access-Control-Allow-Headers": "content-type, x-proxy-secret, x-real-ip, x-ts-client-ip",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };
@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
   try { address = ethers.getAddress(raw); } catch { return json({ ok: false, error: "Enter a valid wallet address." }, 422, origin); }
 
   // ── Turnstile ──
-  const ip = req.headers.get("X-Real-IP") || req.headers.get("CF-Connecting-IP") || "";
+  const ip = req.headers.get("X-TS-Client-IP") || req.headers.get("X-Real-IP") || "";
   const token = String(body?.cfTurnstileToken ?? body?.turnstileToken ?? "");
   if (!(await verifyTurnstile(token, ip))) {
     return json({ ok: false, error: "Human check failed — please retry the challenge." }, 403, origin);

@@ -1150,7 +1150,7 @@ async function pickNewest(){
 $("newest").onclick = pickNewest;
 $("loadTable").onclick = async () => { tid = Number($("tableId").value||"0")||null; if(tid) await refreshChain(); };
 $("withdraw").onclick = async () => {
-  if(await send("withdraw my credit", ledger, "withdraw")){ rail('<span class="win">Credit withdrawn.</span>'); await refreshChain(); }
+  if(await send("withdraw credit", ledger, "withdraw")){ rail('<span class="win">Credit withdrawn.</span>'); await refreshChain(); }
 };
 
 /// The gate: an active Compete ticket is what makes the letters YOURS at

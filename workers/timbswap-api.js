@@ -6,6 +6,9 @@
 // under /api/*, they are first-party — Brave never touches them. Same-origin also
 // means the browser skips CORS entirely.
 //
+// Client IP: Supabase does not pass X-Real-IP through to the function, so every
+// route also sends the caller's IP as X-TS-Client-IP, which the functions read first.
+//
 // Routes (POST):
 //   /api/rpc              → Alchemy JSON-RPC (single + batch). Env: ALCHEMY_RPC_URL
 //   /api/waitlist         → Supabase `waitlist` edge fn. Var: WAITLIST_UPSTREAM;
@@ -152,6 +155,7 @@ export default {
 
       const headers = {
         "X-Real-IP": request.headers.get("CF-Connecting-IP") || "",
+        "X-TS-Client-IP": request.headers.get("CF-Connecting-IP") || "",
         "X-Client-Country": (request.cf && request.cf.country) || "",
       };
       if (env.WAITLIST_PROXY_SECRET) headers["X-Proxy-Secret"] = env.WAITLIST_PROXY_SECRET;
@@ -182,7 +186,8 @@ export default {
       const { text, err } = await readBody(request, origin);
       if (err) return err;
 
-      const headers = { "X-Real-IP": request.headers.get("CF-Connecting-IP") || "" };
+      const ip = request.headers.get("CF-Connecting-IP") || "";
+      const headers = { "X-Real-IP": ip, "X-TS-Client-IP": ip };
       if (env.FAUCET_PROXY_SECRET) headers["X-Proxy-Secret"] = env.FAUCET_PROXY_SECRET;
       return relay(env.FAUCET_UPSTREAM, text, origin, headers);
     }
@@ -199,7 +204,8 @@ export default {
       const { text, err } = await readBody(request, origin);
       if (err) return err;
 
-      const headers = { "X-Real-IP": request.headers.get("CF-Connecting-IP") || "" };
+      const ip = request.headers.get("CF-Connecting-IP") || "";
+      const headers = { "X-Real-IP": ip, "X-TS-Client-IP": ip };
       if (env.PRESENCE_PROXY_SECRET) headers["X-Proxy-Secret"] = env.PRESENCE_PROXY_SECRET;
       return relay(env.PRESENCE_UPSTREAM, text, origin, headers);
     }
@@ -215,7 +221,8 @@ export default {
       const { text, err } = await readBody(request, origin);
       if (err) return err;
 
-      const headers = { "X-Real-IP": request.headers.get("CF-Connecting-IP") || "" };
+      const ip = request.headers.get("CF-Connecting-IP") || "";
+      const headers = { "X-Real-IP": ip, "X-TS-Client-IP": ip };
       if (env.GAS_BOARD_PROXY_SECRET) headers["X-Proxy-Secret"] = env.GAS_BOARD_PROXY_SECRET;
       return relay(env.GAS_BOARD_UPSTREAM, text, origin, headers);
     }

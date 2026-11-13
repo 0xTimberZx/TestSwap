@@ -113,7 +113,7 @@ function cors(origin: string) {
   const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://timbswap.xyz";
   return {
     "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "content-type, x-proxy-secret, x-real-ip, x-client-country",
+    "Access-Control-Allow-Headers": "content-type, x-proxy-secret, x-real-ip, x-ts-client-ip, x-client-country",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };
@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
   const utmCampaign = String(utm?.campaign ?? "").slice(0, 120);
 
   const country = String(req.headers.get("X-Client-Country") ?? "").slice(0, 8);
-  const rawIp   = req.headers.get("X-Real-IP") || req.headers.get("CF-Connecting-IP") || "";
+  const rawIp   = req.headers.get("X-TS-Client-IP") || req.headers.get("X-Real-IP") || "";
 
   // Human check before anything is stored, pinged, or mailed.
   const tsToken = String(body?.cfTurnstileToken ?? "");
