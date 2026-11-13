@@ -1,0 +1,64 @@
+name: TimbSwap Gas Board Fallback
+
+# Team fallback for the gas request board on /start (testnet only):
+# scripts/gas-board-fallback.js sends 0.003 test ETH to any request still open
+# after 6 hours, then submits the hash to the board, which verifies it on chain.
+# Stateless (the board is the record), so a missed or doubled run is harmless:
+# a filled request leaves the open list and a reused hash is refused.
+
+on:
+  schedule:
+    - cron: "41 * * * *"   # hourly, off the top of the hour
+  workflow_dispatch:
+
+concurrency:
+  group: timbswap-gas-board-fallback
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fallback:
+    name: Fill requests open over 6 hours
+    runs-on: ubuntu-latest
+    # Same host gate as the rest of the keeper fleet: runs only while the repo
+    # variable KEEPERS_HOST is 'actions'.
+    if: vars.KEEPERS_HOST == 'actions'
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.23.4"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: scripts
+
+      - name: Self-test the selection logic
+        working-directory: scripts
+        run: node gas-board-fallback.js --self-test
+
+      - name: Fill due requests
+        working-directory: scripts
+        env:
+          GAS_BOARD_URL:            ${{ vars.GAS_BOARD_URL }}
+          GAS_BOARD_PROXY_SECRET:   ${{ secrets.GAS_BOARD_PROXY_SECRET }}
+          GAS_FALLBACK_PRIVATE_KEY: ${{ secrets.GAS_FALLBACK_PRIVATE_KEY }}
+          ARB_SEPOLIA_RPC:          ${{ secrets.ARB_SEPOLIA_RPC }}
+          GAS_FALLBACK_MAX_PER_RUN: ${{ vars.GAS_FALLBACK_MAX_PER_RUN }}
+          TELEGRAM_BOT_TOKEN:       ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:         ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_OPS_BOT_TOKEN:   ${{ secrets.TELEGRAM_OPS_BOT_TOKEN }}
+          TELEGRAM_OPS_CHAT_ID:     ${{ secrets.TELEGRAM_OPS_CHAT_ID }}
+          TELEGRAM_CRITICAL_BOT_TOKEN: ${{ secrets.TELEGRAM_CRITICAL_BOT_TOKEN }}
+          TELEGRAM_CRITICAL_CHAT_ID:   ${{ secrets.TELEGRAM_CRITICAL_CHAT_ID }}
+          TELEGRAM_OPS_MODE:        ${{ vars.TELEGRAM_OPS_MODE }}
+        run: node gas-board-fallback.js

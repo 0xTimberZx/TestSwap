@@ -20,6 +20,10 @@
 //                           /compete). Var: PRESENCE_UPSTREAM; optional secret:
 //                           PRESENCE_PROXY_SECRET. Adds the caller's real IP as
 //                           X-Real-IP (hashed upstream, to cap tabs per IP).
+//   /api/gas-board        → Supabase `gas-board` edge fn (testnet gas request board on
+//                           /start). Var: GAS_BOARD_UPSTREAM; optional secret:
+//                           GAS_BOARD_PROXY_SECRET. Adds the caller's real IP as
+//                           X-Real-IP (Turnstile remoteip + per-network rate limit).
 // Anything else falls through to the origin (GitHub Pages).
 //
 // The /api/debughub_events telemetry sink was REMOVED for the capped beta: the
@@ -37,6 +41,8 @@
 //   FAUCET_PROXY_SECRET         (secret, optional) shared with the faucet-claim fn
 //   PRESENCE_UPSTREAM           (var) Supabase presence function URL
 //   PRESENCE_PROXY_SECRET       (secret, optional) shared with the presence fn
+//   GAS_BOARD_UPSTREAM          (var) Supabase gas-board function URL
+//   GAS_BOARD_PROXY_SECRET      (secret, optional) shared with the gas-board fn
 //
 // Route + deploy: see workers/README.md.
 
@@ -196,6 +202,22 @@ export default {
       const headers = { "X-Real-IP": request.headers.get("CF-Connecting-IP") || "" };
       if (env.PRESENCE_PROXY_SECRET) headers["X-Proxy-Secret"] = env.PRESENCE_PROXY_SECRET;
       return relay(env.PRESENCE_UPSTREAM, text, origin, headers);
+    }
+
+    // ── /api/gas-board → relay to the Supabase `gas-board` edge function (the
+    // testnet gas request board). Same pattern as the faucet: real IP for
+    // Turnstile and the per-network limit, optional shared secret. ──
+    if (path === "/api/gas-board") {
+      if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
+      if (request.method !== "POST")    return json({ error: "POST only" }, 405, origin);
+      if (!env.GAS_BOARD_UPSTREAM)      return json({ error: "gas board unavailable" }, 503, origin);
+
+      const { text, err } = await readBody(request, origin);
+      if (err) return err;
+
+      const headers = { "X-Real-IP": request.headers.get("CF-Connecting-IP") || "" };
+      if (env.GAS_BOARD_PROXY_SECRET) headers["X-Proxy-Secret"] = env.GAS_BOARD_PROXY_SECRET;
+      return relay(env.GAS_BOARD_UPSTREAM, text, origin, headers);
     }
 
     // Only /api/rpc remains; everything else (incl. the removed /api/debughub_events)

@@ -126,7 +126,28 @@
     .step.is-done { border-color: rgba(20, 241, 149, 0.45); }
     .step.is-done .step-num { background: var(--green); color: #062015; }
     .step.is-done .step-done-btn { color: var(--green); border-color: rgba(20, 241, 149, 0.45); }
+    /* Gas request board (step 2, testnet). */
+    .gas-board { margin-top: 14px; padding: 14px; border-radius: var(--radius); border: var(--bw) solid var(--border); background: var(--bg3); }
+    .gb-head { font-weight: 700; margin-bottom: 4px; }
+    .gb-sub { font-size: 13px; color: var(--text-2); margin: 0 0 10px; }
+    .gb-form { display: flex; flex-direction: column; gap: 8px; }
+    .gb-input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 12px; border-radius: var(--radius); border: var(--bw) solid var(--border); background: var(--bg2); color: var(--text); font-family: var(--mono); font-size: 13px; }
+    .gb-btn { min-height: 44px; border: 0; border-radius: var(--radius); background: var(--green); color: #062015; font-weight: 700; font-size: 14px; cursor: pointer; }
+    .gb-btn[disabled] { opacity: .6; cursor: default; }
+    .gb-msg { font-size: 13px; margin: 8px 0 0; min-height: 1em; color: var(--text-2); }
+    .gb-msg.ok { color: var(--green); } .gb-msg.err { color: #ff7a7a; }
+    .gb-list-head { margin: 14px 0 6px; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--text-3); text-transform: uppercase; }
+    .gb-stats { text-transform: none; letter-spacing: 0; }
+    .gb-row { padding: 10px 0; border-top: var(--bw) solid var(--border); }
+    .gb-row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .gb-addr { font-family: var(--mono); font-size: 13px; word-break: break-all; flex: 1 1 200px; }
+    .gb-age { font-size: 12px; color: var(--text-3); }
+    .gb-small { min-height: 34px; padding: 0 12px; border-radius: var(--radius); border: var(--bw) solid var(--border); background: transparent; color: var(--text-2); font-size: 12px; cursor: pointer; }
+    .gb-fill { display: flex; gap: 6px; margin-top: 8px; }
+    .gb-fill .gb-input { min-height: 36px; font-size: 12px; }
+    .gb-empty { font-size: 13px; color: var(--text-3); padding: 6px 0; }
   </style>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 </head>
 <body>
 
@@ -198,6 +219,20 @@
             <a class="step-link tap" href="https://faucet.quicknode.com/arbitrum/sepolia" target="_blank" rel="noopener">QuickNode faucet<span class="ext">&#8599;</span></a>
           </div>
           <p class="step-hint">Testnet ETH has no value — it just covers network fees so your trades go through.</p>
+          <!-- Gas request board: for newcomers the public faucets refuse (they want a mainnet balance). -->
+          <div class="gas-board" id="gas-board">
+            <div class="gb-head">Faucet wants mainnet ETH? Ask the community.</div>
+            <p class="gb-sub">Post your address and someone sends you 0.003 test ETH. Still waiting after 6 hours? The team sends it.</p>
+            <form class="gb-form" id="gb-form" novalidate>
+              <input id="gb-addr" class="gb-input" placeholder="0x… your wallet address" autocomplete="off" spellcheck="false" maxlength="42" aria-label="Your wallet address" />
+              <div id="gb-turnstile" class="gb-turnstile"></div>
+              <button type="submit" class="gb-btn tap" id="gb-submit">Request 0.003 test ETH</button>
+            </form>
+            <div class="gb-msg" id="gb-msg" role="status" aria-live="polite"></div>
+            <div class="gb-list-head">Open requests <span class="gb-stats" id="gb-stats"></span></div>
+            <div class="gb-list" id="gb-list"><div class="gb-empty">Loading…</div></div>
+            <p class="step-hint">Have spare test ETH? Send 0.003 to an address above on Arbitrum Sepolia, then paste the transaction hash. We check it on chain. No points, just thanks.</p>
+          </div>
         </div>
       </li>
       <li class="step" data-net="mainnet">
@@ -333,5 +368,6 @@
       if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
     })();
   </script>
+  <script src="gas-board.js?v=20261114a"></script>
 </body>
 </html>
