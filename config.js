@@ -98,6 +98,24 @@ const TIMBS_LIVE = _NET.timbsLive !== undefined ? !!_NET.timbsLive : true;
 // so both must be set together to enforce it). window.* so faucet.js can read it.
 window.TURNSTILE_SITE_KEY = "0x4AAAAAAEyu8wJ7X6AVFLlS";
 
+// Referral capture: ?r=CODE on any page is kept (first touch, refreshed after 30
+// days) for the confirm step after the visitor's first ticket (assets/referral.js),
+// then dropped from the address bar so a shared link doesn't carry it on.
+(function () {
+  try {
+    var m = /[?&]r=([0-9A-Za-z]{7,8})(?=&|#|$)/.exec(location.search);
+    if (!m) return;
+    var code = m[1].toUpperCase();
+    if (/^[0-9A-HJKMNP-TV-Z]{7,8}$/.test(code)) {
+      var cur = null;
+      try { cur = JSON.parse(localStorage.getItem("timbswap_ref") || "null"); } catch (e) {}
+      if (!cur || !cur.at || Date.now() - cur.at > 30 * 864e5) localStorage.setItem("timbswap_ref", JSON.stringify({ code: code, at: Date.now() }));
+    }
+    var u = new URL(location.href); u.searchParams.delete("r");
+    history.replaceState(history.state, "", u.pathname + u.search + u.hash);
+  } catch (e) {}
+})();
+
 // Privy app ID (PUBLIC — safe in client JS) for "Continue with email": email
 // one-time-code sign-in that yields an embedded Ethereum wallet (a normal EOA),
 // see assets/email-login.js. Leave "" to hide the option entirely — every page

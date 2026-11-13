@@ -23,6 +23,9 @@
 //                           /compete). Var: PRESENCE_UPSTREAM; optional secret:
 //                           PRESENCE_PROXY_SECRET. Adds the caller's real IP as
 //                           X-Real-IP (hashed upstream, to cap tabs per IP).
+//   /api/referrals        → Supabase `referrals` edge fn (season cards + referral
+//                           confirm). Var: REFERRALS_UPSTREAM; optional secret:
+//                           REFERRALS_PROXY_SECRET. Adds X-TS-Client-IP.
 //   /api/gas-board        → Supabase `gas-board` edge fn (testnet gas request board on
 //                           /start). Var: GAS_BOARD_UPSTREAM; optional secret:
 //                           GAS_BOARD_PROXY_SECRET. Adds the caller's real IP as
@@ -46,6 +49,8 @@
 //   PRESENCE_PROXY_SECRET       (secret, optional) shared with the presence fn
 //   GAS_BOARD_UPSTREAM          (var) Supabase gas-board function URL
 //   GAS_BOARD_PROXY_SECRET      (secret, optional) shared with the gas-board fn
+//   REFERRALS_UPSTREAM          (var) Supabase referrals function URL
+//   REFERRALS_PROXY_SECRET      (secret, optional) shared with the referrals fn
 //
 // Route + deploy: see workers/README.md.
 
@@ -225,6 +230,22 @@ export default {
       const headers = { "X-Real-IP": ip, "X-TS-Client-IP": ip };
       if (env.GAS_BOARD_PROXY_SECRET) headers["X-Proxy-Secret"] = env.GAS_BOARD_PROXY_SECRET;
       return relay(env.GAS_BOARD_UPSTREAM, text, origin, headers);
+    }
+
+    // ── /api/referrals → relay to the Supabase `referrals` edge function (season
+    // cards, referral confirm). Real IP for the 3-per-network cap, optional secret. ──
+    if (path === "/api/referrals") {
+      if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
+      if (request.method !== "POST")    return json({ error: "POST only" }, 405, origin);
+      if (!env.REFERRALS_UPSTREAM)      return json({ error: "referrals unavailable" }, 503, origin);
+
+      const { text, err } = await readBody(request, origin);
+      if (err) return err;
+
+      const ip = request.headers.get("CF-Connecting-IP") || "";
+      const headers = { "X-Real-IP": ip, "X-TS-Client-IP": ip };
+      if (env.REFERRALS_PROXY_SECRET) headers["X-Proxy-Secret"] = env.REFERRALS_PROXY_SECRET;
+      return relay(env.REFERRALS_UPSTREAM, text, origin, headers);
     }
 
     // Only /api/rpc remains; everything else (incl. the removed /api/debughub_events)

@@ -290,6 +290,9 @@
         </div>
       </div>
 
+      <!-- Referral confirm (assets/referral.js): shown after the first ticket when the visitor arrived with ?r=CODE. -->
+      <div id="ref-bind" hidden></div>
+
       <!-- ─── My Entries ──────────────────────────────────────────────────── -->
       <div class="compete-card">
         <h2 class="card-title">Your Tickets</h2>
@@ -420,6 +423,7 @@
   <script>document.write('<script src="../config.js?t=' + Date.now() + '"><\/script>');</script>
   <script src="compete.js?v=20261114h"></script>
   <script src="presence.js?v=20261102c"></script>
+  <script src="../assets/referral.js?v=20261116a"></script>
   <script>
     function toggleMobileNav() {
       document.getElementById("mobile-nav").classList.toggle("open");

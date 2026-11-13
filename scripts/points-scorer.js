@@ -128,6 +128,9 @@ async function main() {
     // always sits in an earlier scan window than the activation.
     "function tickets(uint256) view returns (uint256 id, address owner, bytes6 string6, uint256 playRound, uint256 lastEligibleRound, uint256 escrowAmount, address escrowToken, uint8 status, uint256 supersedes, uint256 supersededBy, uint256 createdAt, uint256 forfeitRound, uint256 generation)",
     "event TicketActivated(uint256 indexed ticketId, uint256 indexed round)",
+    // Referral credit needs the referrer's ticket to be Active (status 1).
+    "function activeTicketOf(address wallet) view returns (uint256)",
+    "function effectiveStatus(uint256 ticketId) view returns (uint8)",
   ], provider);
   // Swaps are read from the router, not one pair: the meter can be nudged
   // through any designated pool (on mainnet TIMBS/WETH is not one), and a
@@ -419,6 +422,25 @@ async function main() {
       await sbRpc("points_fold_faucet", { p_season: s.id, p_until: until });
     } catch (e) { console.warn("[points] faucet pass:", e.shortMessage || e.message); }
   }
+
+  // ── Referrals (before the recompute, which adds the tier bonus) ──
+  // A referral qualifies once its referee has played 5 rounds; it is credited
+  // only while the referrer is on the board with an Active ticket, otherwise it
+  // is held for a later run (supabase/migrations/20261116000000_referrals.sql).
+  // Best effort: a failure here never blocks scoring.
+  try {
+    const waiting = await sbGet(`referrals?season_id=eq.${s.id}&status=in.(pending,held)&select=referrer`);
+    const referrers = [...new Set(waiting.map((r) => r.referrer))];
+    const active = [];
+    for (const a of referrers) {
+      try {
+        const id = await REGISTRY.activeTicketOf(a);
+        if (id !== 0n && Number(await REGISTRY.effectiveStatus(id)) === 1) active.push(a);
+      } catch (e) { console.warn(`[points] referral ticket read ${a}:`, e.shortMessage || e.message); }
+    }
+    const r = await sbRpc("referrals_apply", { p_season: s.id, p_active: active });
+    console.log(`[points] referrals: ${referrers.length} referrer(s) waiting, ${active.length} active; ${JSON.stringify(r)}`);
+  } catch (e) { console.warn("[points] referrals pass:", e.shortMessage || e.message); }
 
   // ── 3) Recompute display_tp + advance cursors ──
   const walletsTotal = await sbRpc("points_recompute", { p_season: s.id });
