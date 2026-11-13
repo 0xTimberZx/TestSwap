@@ -258,7 +258,7 @@
 
   <script>
     // Set this to the entry form URL when it exists; until then the buttons stay inactive.
-    var CAMPAIGN_FORM_URL = "";
+    var CAMPAIGN_FORM_URL = "https://tally.so/r/OQ4VoA";
     (function () {
       var start = Date.UTC(2026, 10, 20, 0, 0, 0), end = Date.UTC(2026, 11, 20, 12, 0, 0), now = Date.now();
       var st = document.getElementById("camp-status");
@@ -266,9 +266,10 @@
       ["camp-submit", "camp-submit2"].forEach(function (id) {
         var a = document.getElementById(id);
         if (!a || !CAMPAIGN_FORM_URL) return;
+        if (now < start) { a.textContent = "Entry form opens Fri 20 Nov"; return; }
+        if (now > end) { a.textContent = "Entries closed"; a.removeAttribute("href"); return; }
         a.href = CAMPAIGN_FORM_URL; a.target = "_blank"; a.rel = "noopener"; a.removeAttribute("aria-disabled");
-        a.textContent = now > end ? "Entries closed" : "Submit an entry";
-        if (now > end) { a.removeAttribute("href"); a.setAttribute("aria-disabled", "true"); }
+        a.textContent = "Submit an entry";
       });
     })();
   </script>
