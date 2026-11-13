@@ -17,6 +17,7 @@
   var msgEl = document.getElementById("gb-msg");
   var listEl = document.getElementById("gb-list");
   var statsEl = document.getElementById("gb-stats");
+  var countEl = document.getElementById("gb-count");
   var ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
   var HASH_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -42,7 +43,11 @@
   }
   function tsToken() { try { return tsWidget !== null ? window.turnstile.getResponse(tsWidget) || "" : ""; } catch (e) { return ""; } }
   function tsReset() { try { if (tsWidget !== null) window.turnstile.reset(tsWidget); } catch (e) {} }
-  (function waitTs(n) { if (window.turnstile) renderTurnstile(); else if (n > 0) setTimeout(function () { waitTs(n - 1); }, 300); })(40);
+  function startTs() { (function waitTs(n) { if (window.turnstile) renderTurnstile(); else if (n > 0) setTimeout(function () { waitTs(n - 1); }, 300); })(40); }
+  // Minimized by default: a closed <details> leaves the widget no layout, so
+  // Turnstile renders the first time the board is opened.
+  board.addEventListener("toggle", function () { if (board.open) startTs(); });
+  if (board.open) startTs();
 
   function row(r) {
     var div = document.createElement("div");
@@ -84,6 +89,7 @@
       listEl.innerHTML = "";
       if (!res.open.length) { var none = document.createElement("div"); none.className = "gb-empty"; none.textContent = "The board is currently empty."; listEl.appendChild(none); }
       res.open.forEach(function (r) { listEl.appendChild(row(r)); });
+      countEl.textContent = res.open.length ? res.open.length + " waiting" : "";
       statsEl.textContent = res.filledThisWeek ? "· filled this week: " + res.filledThisWeek + (res.filledByCommunity ? " (" + res.filledByCommunity + " by the community)" : "") : "";
     });
   }

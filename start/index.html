@@ -128,7 +128,15 @@
     .step.is-done .step-done-btn { color: var(--green); border-color: rgba(20, 241, 149, 0.45); }
     /* Gas request board (step 2, testnet). */
     .gas-board { margin-top: 14px; padding: 14px; border-radius: var(--radius); border: var(--bw) solid var(--border); background: var(--bg3); }
-    .gb-head { font-weight: 700; margin-bottom: 4px; }
+    .gb-summary { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; list-style: none; -webkit-tap-highlight-color: transparent; }
+    .gb-summary::-webkit-details-marker { display: none; }
+    .gb-sumtext { flex: 1 1 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+    .gb-head { font-weight: 700; }
+    .gb-count { font-family: var(--mono); font-size: 11px; color: var(--green); border: var(--bw) solid rgba(20, 241, 149, 0.45); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+    .gb-count:empty { display: none; }
+    .gb-chev { color: var(--text-3); transition: transform .2s ease; }
+    .gas-board[open] .gb-chev { transform: rotate(180deg); }
+    .gb-body { margin-top: 6px; }
     .gb-sub { font-size: 13px; color: var(--text-2); margin: 0 0 10px; }
     .gb-form { display: flex; flex-direction: column; gap: 8px; }
     .gb-input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 12px; border-radius: var(--radius); border: var(--bw) solid var(--border); background: var(--bg2); color: var(--text); font-family: var(--mono); font-size: 13px; }
@@ -220,8 +228,9 @@
           </div>
           <p class="step-hint">Testnet ETH has no value — it just covers network fees so your trades go through.</p>
           <!-- Gas request board: for newcomers the public faucets refuse (they want a mainnet balance). -->
-          <div class="gas-board" id="gas-board">
-            <div class="gb-head">Something in your way? Ask the community.</div>
+          <details class="gas-board" id="gas-board">
+            <summary class="gb-summary"><span class="gb-sumtext"><span class="gb-head">Something in your way? Ask the community.</span><span class="gb-count" id="gb-count"></span></span><span class="gb-chev" aria-hidden="true">&#9662;</span></summary>
+            <div class="gb-body">
             <p class="gb-sub">Post your address and someone sends you 0.003 test ETH.</p>
             <form class="gb-form" id="gb-form" novalidate>
               <input id="gb-addr" class="gb-input" placeholder="0x… your wallet address" autocomplete="off" spellcheck="false" maxlength="42" aria-label="Your wallet address" />
@@ -232,7 +241,8 @@
             <div class="gb-list-head">Open requests <span class="gb-stats" id="gb-stats"></span></div>
             <div class="gb-list" id="gb-list"><div class="gb-empty">Loading…</div></div>
             <p class="step-hint">Have spare test ETH? Send 0.003 to an address above on Arbitrum Sepolia, then paste the transaction hash. We check it on chain. No points, just thanks.</p>
-          </div>
+            </div>
+          </details>
         </div>
       </li>
       <li class="step" data-net="mainnet">
@@ -368,6 +378,6 @@
       if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
     })();
   </script>
-  <script src="gas-board.js?v=20261114b"></script>
+  <script src="gas-board.js?v=20261114c"></script>
 </body>
 </html>
