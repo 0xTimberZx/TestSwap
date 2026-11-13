@@ -508,7 +508,7 @@ function updateNudgeHint() {
   const sub = document.querySelector("#influence-row .influence-sub");
   if (!sub) return;
   const row  = document.getElementById("influence-row");
-  const base = "This pair is eligible. Toggle to nudge the scroll on swap.";
+  const base = "Nudges the live segment.";
   if (!nudgeFloorWei || !tokenIn) {
     sub.textContent = base;
     if (row) row.classList.remove("below-floor");
@@ -522,8 +522,8 @@ function updateNudgeHint() {
   const min = trimAmount(ethers.utils.formatUnits(nudgeFloorWei, tokenIn.decimals));
   const below = !!(amt && amt.lt(nudgeFloorWei));
   sub.textContent = below
-    ? `Below the nudge minimum: swap at least ${min} ${tokenIn.symbol} to move the scroll.`
-    : `Nudges the scroll on swaps of ${min} ${tokenIn.symbol} or more.`;
+    ? `Swap at least ${min} ${tokenIn.symbol} to nudge.`
+    : `Nudges the live segment (min ${min} ${tokenIn.symbol}).`;
   // Grey the whole block out while under the floor: this swap won't nudge
   // (and won't ask to), whatever the toggle says.
   if (row) row.classList.toggle("below-floor", below);
