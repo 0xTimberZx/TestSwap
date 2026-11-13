@@ -16,6 +16,7 @@ QUESTS_UPSTREAM   = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/quest
 FAUCET_UPSTREAM   = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/faucet-claim"
 PRESENCE_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/presence"
 GAS_BOARD_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/gas-board"
+REFERRALS_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/referrals"
 
 # Secrets are NOT set here — add them with `wrangler secret put`:
 #   ALCHEMY_RPC_URL        (for POST /api/rpc)
@@ -27,3 +28,5 @@ GAS_BOARD_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/gas-
 #                           presence edge function's PRESENCE_PROXY_SECRET)
 #   GAS_BOARD_PROXY_SECRET (optional; for POST /api/gas-board — must match the
 #                           gas-board edge function's GAS_BOARD_PROXY_SECRET)
+#   REFERRALS_PROXY_SECRET (optional; for POST /api/referrals — must match the
+#                           referrals edge function's REFERRALS_PROXY_SECRET)
