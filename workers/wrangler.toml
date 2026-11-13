@@ -15,6 +15,7 @@ WAITLIST_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/waitl
 QUESTS_UPSTREAM   = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/quests"
 FAUCET_UPSTREAM   = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/faucet-claim"
 PRESENCE_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/presence"
+GAS_BOARD_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/gas-board"
 
 # Secrets are NOT set here — add them with `wrangler secret put`:
 #   ALCHEMY_RPC_URL        (for POST /api/rpc)
@@ -24,3 +25,5 @@ PRESENCE_UPSTREAM = "https://ipyfodnidwsdvwqrcjrl.supabase.co/functions/v1/prese
 #                           faucet-claim edge function's FAUCET_PROXY_SECRET)
 #   PRESENCE_PROXY_SECRET  (optional; for POST /api/presence — must match the
 #                           presence edge function's PRESENCE_PROXY_SECRET)
+#   GAS_BOARD_PROXY_SECRET (optional; for POST /api/gas-board — must match the
+#                           gas-board edge function's GAS_BOARD_PROXY_SECRET)
