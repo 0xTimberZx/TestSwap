@@ -39,9 +39,10 @@ so the public Supabase functions can trust only proxied calls. See `dev-docs/WAI
    cd workers
    npx wrangler login
    npx wrangler secret put ALCHEMY_RPC_URL            # the keyed Alchemy Arb-Sepolia URL
-   # Upstreams (WAITLIST_UPSTREAM / QUESTS_UPSTREAM / FAUCET_UPSTREAM) live in wrangler.toml [vars]; then
+   # Upstreams (WAITLIST_ / QUESTS_ / FAUCET_ / PRESENCE_ / GAS_BOARD_UPSTREAM) live in wrangler.toml [vars]; then
    npx wrangler secret put WAITLIST_PROXY_SECRET      # optional; must match the waitlist fn
    npx wrangler secret put FAUCET_PROXY_SECRET        # optional; must match the faucet-claim fn
+   npx wrangler secret put GAS_BOARD_PROXY_SECRET     # optional; must match the gas-board fn
    npx wrangler deploy
    ```
    `wrangler.toml` already pins the route `timbswap.xyz/api/*` and the entrypoint.
