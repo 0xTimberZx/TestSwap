@@ -49,9 +49,25 @@ import {
 
 const SB_URL       = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const PROXY_SECRET = (Deno.env.get("GAS_BOARD_PROXY_SECRET") ?? "").trim();
+// proxy-gate:start — identical in every function (supabase/tests/proxy_gate.test.mjs checks)
+// Secrets pasted from a phone can carry spaces, a newline or wrapping quotes
+// (straight or curly). Both sides are cleaned the same way before comparing, and
+// the Worker cleans before sending. A secret that is set but holds characters a
+// header can't carry fails closed: every call is refused until it is re-saved.
+function cleanSecretValue(v: string | null | undefined): string {
+  return String(v ?? "").trim().replace(/^["'\u2018\u2019\u201c\u201d]+|["'\u2018\u2019\u201c\u201d]+$/g, "").trim();
+}
+function proxyGate(name: string): (got: string | null) => "ok" | "forbidden" | "misconfigured" {
+  const raw = (Deno.env.get(name) ?? "").trim();
+  const want = cleanSecretValue(raw);
+  if (!raw) return () => "ok";                                         // not set: gate off
+  if (!want || !/^[\x21-\x7e]+$/.test(want)) return () => "misconfigured";
+  return (got) => (cleanSecretValue(got) === want ? "ok" : "forbidden");
+}
+// proxy-gate:end
+const PROXY_GATE   = proxyGate("GAS_BOARD_PROXY_SECRET");
 const IP_SALT      = Deno.env.get("GAS_BOARD_IP_SALT") ?? "timbswap-gas-board";
-const KEEPER_SECRET = (Deno.env.get("GAS_BOARD_KEEPER_SECRET") ?? "").trim();
+const KEEPER_GATE = proxyGate("GAS_BOARD_KEEPER_SECRET");
 const TS_SECRET    = (Deno.env.get("TURNSTILE_SECRET") ?? "").trim();
 const TEAM = new Set((Deno.env.get("GAS_TEAM_RESOLVERS") ?? "")
   .split(",").map((a) => a.trim().toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a)));
@@ -115,7 +131,9 @@ Deno.serve(async (req) => {
   const origin = req.headers.get("Origin") || "";
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
   if (req.method !== "POST") return json({ ok: false, error: "POST only" }, 405, origin);
-  if (PROXY_SECRET && (req.headers.get("X-Proxy-Secret") ?? "").trim() !== PROXY_SECRET) return json({ ok: false, error: "forbidden" }, 401, origin);
+  const gate = PROXY_GATE(req.headers.get("X-Proxy-Secret"));
+  if (gate === "misconfigured") return json({ ok: false, error: "unavailable" }, 503, origin);
+  if (gate === "forbidden") return json({ ok: false, error: "forbidden" }, 401, origin);
 
   let body: any;
   try { body = await req.json(); } catch { return json({ ok: false, error: "bad request" }, 400, origin); }
@@ -143,7 +161,10 @@ Deno.serve(async (req) => {
 
   if (action === "queue") {
     // Team queue for the fallback keeper: open requests past the public window.
-    if (!KEEPER_SECRET || (req.headers.get("X-Keeper-Secret") ?? "").trim() !== KEEPER_SECRET) return json({ ok: false, error: "forbidden" }, 401, origin);
+    // The queue is closed when the keeper secret is unset (unlike the proxy gate).
+    if (!(Deno.env.get("GAS_BOARD_KEEPER_SECRET") ?? "").trim() || KEEPER_GATE(req.headers.get("X-Keeper-Secret")) !== "ok") {
+      return json({ ok: false, error: "forbidden" }, 401, origin);
+    }
     const { data: queue } = await sb.from("gas_requests")
       .select("id,address,created_at").eq("status", "open").lte("created_at", publicSince)
       .order("created_at", { ascending: true }).limit(50);
@@ -158,6 +179,9 @@ Deno.serve(async (req) => {
     if (!ADDR_RE.test(raw)) return json({ ok: false, error: "Enter a valid wallet address (0x… 42 characters)." }, 422, origin);
     const address = raw.toLowerCase();
     const ip = req.headers.get("X-TS-Client-IP") || req.headers.get("X-Real-IP") || "";
+    // No network means the call didn't come through the site's Worker, and the
+    // per-network limit can't apply: refuse rather than post uncapped.
+    if (!ip) return json({ ok: false, error: "Open timbswap.xyz to post a request." }, 403, origin);
     if (!(await verifyTurnstile(String(body?.cfTurnstileToken ?? ""), ip))) {
       return json({ ok: false, error: "Human check failed — please retry the challenge." }, 403, origin);
     }

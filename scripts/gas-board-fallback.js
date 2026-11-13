@@ -80,11 +80,13 @@ async function main() {
   const { opsTelegram } = require("./lib/telegram");
   const tg = opsTelegram({ tag: "gas-board" });
   const url = process.env.GAS_BOARD_URL;
-  // Secrets pasted from a phone often carry trailing spaces or a newline; trim them.
-  const secret = (process.env.GAS_BOARD_PROXY_SECRET || "").trim();
+  // Secrets pasted from a phone often carry spaces, a newline or wrapping quotes
+  // (straight or curly); clean them the way the board function does.
+  const clean = (v) => String(v || "").trim().replace(/^["'\u2018\u2019\u201c\u201d]+|["'\u2018\u2019\u201c\u201d]+$/g, "").trim();
+  const secret = clean(process.env.GAS_BOARD_PROXY_SECRET);
   const key = (process.env.GAS_FALLBACK_PRIVATE_KEY || "").trim();
   const rpcUrl = (process.env.ARB_SEPOLIA_RPC || "").trim();
-  const keeperSecret = (process.env.GAS_BOARD_KEEPER_SECRET || "").trim();
+  const keeperSecret = clean(process.env.GAS_BOARD_KEEPER_SECRET);
   const maxPerRun = Number(process.env.GAS_FALLBACK_MAX_PER_RUN || 5);
   const maxPerDay = Number(process.env.GAS_FALLBACK_MAX_PER_DAY || 20);
   if (!url || !key || !rpcUrl || !keeperSecret) { console.log("gas-board-fallback: GAS_BOARD_URL, GAS_BOARD_KEEPER_SECRET, GAS_FALLBACK_PRIVATE_KEY or ARB_SEPOLIA_RPC not set; nothing to do."); return; }
