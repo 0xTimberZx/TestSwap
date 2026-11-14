@@ -5,6 +5,13 @@ name: TimbSwap Gas Board Fallback
 # after 6 hours, then submits the hash to the board, which verifies it on chain.
 # Stateless (the board is the record), so a missed or doubled run is harmless:
 # a filled request leaves the open list and a reused hash is refused.
+#
+# Pacing: GitHub delivers this repo's cron at roughly one tick in four to six
+# (on 13-14 Nov 2026 only two scheduled runs landed in ten hours, and request
+# #2 sat open past its due time). Like the rest of the fleet this job now
+# self-chains: fill, sleep GAS_FALLBACK_LINGER_MINUTES, dispatch the next run.
+# Cron is only the backstop that restarts a broken chain. The fleet heartbeat
+# watches it (cadence 60 min).
 
 on:
   schedule:
@@ -25,7 +32,8 @@ jobs:
     # Same host gate as the rest of the keeper fleet: runs only while the repo
     # variable KEEPERS_HOST is 'actions'.
     if: vars.KEEPERS_HOST == 'actions'
-    timeout-minutes: 15
+    # Fill (a few minutes) + linger (default 50) + dispatch.
+    timeout-minutes: 75
 
     steps:
       - name: Checkout repo
@@ -63,3 +71,36 @@ jobs:
           TELEGRAM_CRITICAL_CHAT_ID:   ${{ secrets.TELEGRAM_CRITICAL_CHAT_ID }}
           TELEGRAM_OPS_MODE:        ${{ vars.TELEGRAM_OPS_MODE }}
         run: node gas-board-fallback.js
+
+      # ── Linger, then self-chain ─────────────────────────────────────────────
+      # Only after a successful fill step (default `if: success()`): a crash
+      # falls back to cron rather than looping on a failure. Default branch
+      # only, so a branch-dispatched test run never hands the chain over.
+      - name: Linger until the next run is due
+        if: github.ref == 'refs/heads/main'
+        env:
+          GAS_FALLBACK_LINGER_MINUTES: ${{ vars.GAS_FALLBACK_LINGER_MINUTES }}
+        run: |
+          MIN="${GAS_FALLBACK_LINGER_MINUTES:-50}"
+          echo "Lingering ${MIN} min before dispatching the next run."
+          sleep "$(( MIN * 60 ))"
+
+      # Token: a fine-grained PAT with Actions read/write on this repo (the
+      # default GITHUB_TOKEN cannot trigger workflow runs). Same fallback chain
+      # as the other self-chaining keepers, so no new secret is needed.
+      - name: Dispatch next run
+        if: github.ref == 'refs/heads/main'
+        env:
+          DISPATCH_TOKEN: ${{ secrets.GAS_FALLBACK_DISPATCH_TOKEN || secrets.FAUCET_DISPATCH_TOKEN || secrets.SETTLER_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "No dispatch token secret — relying on cron for the next run."
+            exit 0
+          fi
+          curl -fsS --retry 4 --retry-delay 15 --retry-connrefused -X POST \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/gas-board-fallback.yml/dispatches" \
+            -d '{"ref":"main"}' \
+            && echo "Next gas-board fallback run dispatched." \
+            || echo "::warning::Dispatch rejected by the API — the self-chain is broken until cron restarts it. Check the dispatch token secret."

@@ -70,6 +70,7 @@ const FLEET = [
   { file: "points-recon.yml",      cadenceMin: 60,  label: "points reconciliation" },
   { file: "dead-man.yml",          cadenceMin: 30,  label: "dead-man switch" },
   { file: "solvency-watch.yml",    cadenceMin: 15,  label: "solvency watchdog" },
+  { file: "gas-board-fallback.yml", cadenceMin: 60, label: "gas board fallback" },
 ];
 
 const OPTS = {
