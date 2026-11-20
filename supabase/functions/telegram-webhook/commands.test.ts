@@ -49,7 +49,7 @@ test("fmtUnits / fmtUsd / fmtDuration", () => {
   assert.equal(fmtUnits(550_000_000_000n, 8), "0.00000055");
   assert.equal(fmtUnits(5n, 8), "0.000000000000000005"); // tiny stays non-zero
   assert.equal(fmtUnits(18_252_490n * E / 1000n, 2), "18,252.49");
-  assert.equal(fmtUsd(46_670_000_000_000_000n), "$140.01");
+  assert.equal(fmtUsd(46_670_000_000_000_000n), "$84.01");   // 0.04667 ETH at ETH_USD 1800
   assert.equal(fmtUsd(0n), "$0");
   assert.equal(fmtDuration(41 * 60 + 5), "41 min");
   assert.equal(fmtDuration(3 * 3600 + 120), "3h 2m");
@@ -71,7 +71,7 @@ test("windowView: locked + live shown, future dotted, classes", () => {
 test("pot and round replies", () => {
   const s = state();
   const pot = potReply(s, 550_000_000_000n, 1_000_000 + 18 * 60 + 40);
-  assert.match(pot, /Prize pot: 0\.0466 ETH \(≈ \$140\.01\)/);
+  assert.match(pot, /Prize pot: 0\.0466 ETH \(≈ \$84\.01\)/);
   assert.match(pot, /Round 15 · segment 3 of 6 · next segment in 41 min/);
   assert.match(pot, /\+0\.00000055 ETH/);
   assert.match(pot, /No principal at risk/);

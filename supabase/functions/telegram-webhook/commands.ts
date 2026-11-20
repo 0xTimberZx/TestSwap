@@ -19,7 +19,7 @@ export const ADDR = {
 export const CHAIN_ID = 421614;
 export const NET_TAG = "🧪 Testnet";
 // Same fixed anchor the site quotes the pot in (config.js ETH_USD_PRICE).
-export const ETH_USD = 3000;
+export const ETH_USD = 1800;
 export const SITE = "https://timbswap.xyz";
 
 export const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";

@@ -302,8 +302,10 @@ function _withReadRetry(provider) {
 // ─── Display pricing ──────────────────────────────────────────────────────────
 // Fixed USD-per-ETH for the marketing "Win the Pot" USD figure on the landing.
 // Testnet ETH has no market price, so we value it as if it were real ETH at
-// this rate rather than reading a meaningless testnet pool. Adjust to track ETH.
-const ETH_USD_PRICE = 3000;
+// this rate rather than reading a meaningless testnet pool. Adjust to track ETH
+// (set to 1800 on 2026-11-20, near the market rate; keep the Telegram bot's
+// ETH_USD in supabase/functions/telegram-webhook/commands.ts the same).
+const ETH_USD_PRICE = 1800;
 
 // ─── Contract Addresses ───────────────────────────────────────────────────────
 
@@ -1356,7 +1358,7 @@ async function _priceViaPair(prov, factory, token, quote, quoteUsd) {
 //
 // It used to read the USDC/WETH pool. On a testnet that pool is unarbitraged,
 // and it had drifted to imply ETH ≈ $700 — while landing.js and compete.js were
-// using the fixed ETH_USD_PRICE ($3000) for the same currency. Two anchors ~4x
+// using the fixed ETH_USD_PRICE (then $3000) for the same currency. Two anchors ~4x
 // apart, and which one you saw depended on the page. Testnet ETH has no market
 // price to discover, so reading a pool for it was never buying us anything:
 // take the declared rate, the same one the landing page quotes the pot in.
